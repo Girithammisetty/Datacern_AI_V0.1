@@ -579,6 +579,17 @@ class VersionService(_Base):
                 transition_dataset(dataset, DatasetStatus.READY, has_version=True)
             await uow.datasets.update(dataset)
 
+            # Dataset-URN-keyed status event so the dataset detail page (which
+            # subscribes on run-status:<dataset-urn>) reflects the
+            # DRAFT/FAILED/READY → PROCESSING (or → READY when profiling is
+            # skipped) transition live, without a refetch (task #81). The
+            # version_created event below is version-URN-keyed and never reaches
+            # that subscription.
+            await self._emit(
+                uow, ctx, "dataset.updated", dataset_urn(ctx.tenant_id, dataset_id),
+                {"status": str(dataset.status), "dataset_id": dataset.id},
+            )
+
             v_urn = version_urn(ctx.tenant_id, dataset_id, version_no)
             await self._emit(
                 uow, ctx, "dataset.version_created", v_urn,
@@ -843,6 +854,13 @@ class ProfileService(_Base):
                 transition_dataset(dataset, DatasetStatus.READY, has_version=True)
                 dataset.updated_at = now
                 await uow.datasets.update(dataset)
+                # PROCESSING → READY was previously silent (only the version-URN-
+                # keyed profile event fired). Emit a dataset-URN-keyed status
+                # event so the subscribed detail page flips to READY live (#81).
+                await self._emit(
+                    uow, ctx, "dataset.updated", dataset_urn(ctx.tenant_id, dataset.id),
+                    {"status": str(dataset.status), "dataset_id": dataset.id},
+                )
             if event:
                 await self._emit(
                     uow, ctx, event[0],
