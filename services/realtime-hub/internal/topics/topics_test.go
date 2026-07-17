@@ -13,6 +13,9 @@ func TestParse_SchemesAndGrammar(t *testing.T) {
 		{"chat:sess-999", false, SchemeChat, "sess-999"},
 		{"notifications:u-7", false, SchemeNotifications, "u-7"},
 		{"proposal:pp-3", false, SchemeProposal, "pp-3"},
+		{"list:case", false, SchemeList, "case"},                   // tenant-wide list broadcast (task #80)
+		{"list:pipeline-run", false, SchemeList, "pipeline-run"},
+		{"list:", true, "", ""},                                    // empty type ident
 		{"bogus:x", true, "", ""},          // unknown scheme -> INVALID_TOPIC
 		{"run-status:pr-881", true, "", ""}, // run-status ident must be a URN
 		{"chat:", true, "", ""},            // empty ident

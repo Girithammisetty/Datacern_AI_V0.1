@@ -86,6 +86,16 @@ func (a *OPAAuthorizer) Authorize(ctx context.Context, req Request) Decision {
 		urn := topics.ProposalURN(req.Tenant, req.Topic.Ident)
 		return a.opaCheck(ctx, req, ActionProposalRead, urn)
 
+	case topics.SchemeList:
+		// Tenant-wide list broadcast (task #80). Gated on the same tenant-scoped
+		// realtime.run_status.read capability as run-status (a member who may
+		// watch live run status may watch live list status) — no new RBAC
+		// action/reseed, and the privilege class is identical. There is no
+		// per-resource URN (the ident is a type slug); the tenant subscription
+		// key already isolates cross-tenant, and the payload carries only row
+		// status the caller re-authorizes by refetching its RBAC-scoped list.
+		return a.opaCheck(ctx, req, ActionRunStatusRead, "")
+
 	default:
 		return Decision{Allow: false, Reason: "INVALID_TOPIC"}
 	}

@@ -52,6 +52,13 @@ var Rules = []Rule{
 	// own URN (task #78: this had no rule at all before, every case event
 	// was silently dropped as unroutable).
 	{Name: "case", Match: prefix("case."), Template: "run-status:{resource_urn}"},
+	// dataset lifecycle (created/updated/deprecated) — dataset-service sets
+	// resource_urn to the dataset's own URN, so the dataset detail page can
+	// subscribe on run-status:<dataset-urn> and see DRAFT→PROCESSING→READY/FAILED
+	// live (task #81). version_created/schema_changed are keyed on the *version*
+	// URN instead and route to their own topic — harmless, the detail page isn't
+	// subscribed to those.
+	{Name: "dataset", Match: prefix("dataset."), Template: "run-status:{resource_urn}"},
 	{Name: "notification", Match: oneOf("notification.created"), Template: "notifications:{payload.user_id}"},
 	{Name: "proposal", Match: oneOf("proposal.created", "proposal.approved", "proposal.rejected", "proposal.expired"), Template: "proposal:{resource_id}"},
 	{Name: "agent_run", Match: oneOf("agent.run.status_changed"), Template: "run-status:{resource_urn}"},
@@ -60,6 +67,28 @@ var Rules = []Rule{
 	// "agent.run.status_changed" above — no collision). No rule existed for
 	// these at all before (task #78).
 	{Name: "experiment_run", Match: prefix("run."), Template: "run-status:{resource_urn}"},
+}
+
+// ListTopicFor maps an event_type to the tenant-wide list-broadcast topic for
+// its resource TYPE (task #80), or ("", false) when the type has no list screen
+// that wants live row updates. This is ADDITIVE to Route: a resource event fans
+// out to both its run-status:<urn> topic (detail pages) and its list:<type>
+// topic (list pages). The type slugs match the ui-web patcher event-type
+// prefixes so the existing patchers hydrate the list caches unchanged.
+func ListTopicFor(eventType string) (string, bool) {
+	switch {
+	case strings.HasPrefix(eventType, "case."):
+		return "list:case", true
+	case strings.HasPrefix(eventType, "dataset."):
+		return "list:dataset", true
+	case strings.HasPrefix(eventType, "pipeline.run."):
+		return "list:pipeline-run", true
+	case strings.HasPrefix(eventType, "ingestion."):
+		return "list:ingestion", true
+	case strings.HasPrefix(eventType, "inference.job."):
+		return "list:inference", true
+	}
+	return "", false
 }
 
 // Router routes envelopes to topic strings. Disabled rules (loaded from

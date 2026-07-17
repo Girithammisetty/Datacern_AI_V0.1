@@ -44,7 +44,11 @@ func TestAC15_RoutingTableContract(t *testing.T) {
 		// experiment-service's real event types (task #78: no rule existed;
 		// distinct from agent_run's "agent.run.status_changed" above).
 		{"experiment_run", env("run.status_changed", "wr:t:experiment:run/er-1", nil), "run-status:wr:t:experiment:run/er-1", true},
-		{"unroutable_type", env("dataset.created", "wr:t:dataset:ds/1", nil), "", false},
+		// dataset lifecycle keyed on the dataset's own URN (task #81 — this
+		// fixture used to assert dataset.created was unroutable).
+		{"dataset", env("dataset.updated", "wr:t:dataset:dataset/ds-1", nil), "run-status:wr:t:dataset:dataset/ds-1", true},
+		{"dataset_missing_urn", env("dataset.updated", "", nil), "", false},
+		{"unroutable_type", env("widget.exploded", "wr:t:widget:w/1", nil), "", false},
 		{"chart_missing_op", env("chart.export.completed", "", nil), "", false},
 	}
 	for _, c := range cases {
@@ -64,5 +68,29 @@ func TestRouter_DisabledRuleSkipped(t *testing.T) {
 	r := NewRouter(map[string]bool{"notification": true})
 	if _, ok := r.Route(env("notification.created", "", map[string]any{"user_id": "u-1"})); ok {
 		t.Fatal("disabled rule should not route")
+	}
+}
+
+func TestListTopicFor(t *testing.T) {
+	cases := []struct {
+		eventType string
+		want      string
+		ok        bool
+	}{
+		{"case.assigned", "list:case", true},
+		{"case.disposition_applied", "list:case", true},
+		{"dataset.updated", "list:dataset", true},
+		{"pipeline.run.status_changed", "list:pipeline-run", true},
+		{"ingestion.completed", "list:ingestion", true},
+		{"inference.job.succeeded", "list:inference", true},
+		{"proposal.created", "", false}, // no list screen wants a live broadcast
+		{"notification.created", "", false},
+		{"run.status_changed", "", false}, // experiment runs have their own detail-only stream
+	}
+	for _, c := range cases {
+		got, ok := ListTopicFor(c.eventType)
+		if ok != c.ok || got != c.want {
+			t.Errorf("ListTopicFor(%q) = %q/%v want %q/%v", c.eventType, got, ok, c.want, c.ok)
+		}
 	}
 }

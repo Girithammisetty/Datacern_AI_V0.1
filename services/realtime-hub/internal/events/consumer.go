@@ -106,25 +106,33 @@ func (c *Consumer) Close() {
 // handleFanout routes one envelope to a hub topic and ingests it. It always
 // returns nil: the hub never blocks a Kafka partition on delivery (RTH-FR-020).
 func (c *Consumer) handleFanout(ctx context.Context, env gcevent.Envelope) error {
-	topic, ok := c.Router.Route(env)
-	if !ok {
-		c.skip("unroutable")
-		return nil
-	}
 	data := ClientBody(env)
 	if len(data) > PayloadCap {
 		c.skip("oversize")
 		c.Log.Warn("oversize event skipped", "event_type", env.EventType, "bytes", len(data))
 		return nil
 	}
-	ev := fanout.Event{
-		ID:    env.EventID.String(),
-		Topic: topic,
-		Data:  data,
-		Chat:  false,
+	tenant := env.TenantID.String()
+
+	// Primary per-resource route (detail pages subscribe to run-status:<urn>).
+	if topic, ok := c.Router.Route(env); ok {
+		ev := fanout.Event{ID: env.EventID.String(), Topic: topic, Data: data}
+		if err := c.Sink.IngestKafka(ctx, tenant, topic, ev); err != nil {
+			c.Log.Error("ingest failed", "topic", topic, "err", err)
+		}
+	} else {
+		c.skip("unroutable")
 	}
-	if err := c.Sink.IngestKafka(ctx, env.TenantID.String(), topic, ev); err != nil {
-		c.Log.Error("ingest failed", "topic", topic, "err", err)
+
+	// Additive tenant-wide list broadcast (task #80): list screens subscribe to
+	// list:<type> and get live row-status updates without a detail page open.
+	// A distinct "-l" event id keeps this second copy out of the GLOBAL
+	// event_id dedup (replay.seenKey), which would otherwise drop it.
+	if lt, ok := topics.ListTopicFor(env.EventType); ok {
+		lev := fanout.Event{ID: env.EventID.String() + "-l", Topic: lt, Data: data}
+		if err := c.Sink.IngestKafka(ctx, tenant, lt, lev); err != nil {
+			c.Log.Error("list ingest failed", "topic", lt, "err", err)
+		}
 	}
 	return nil
 }

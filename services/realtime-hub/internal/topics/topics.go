@@ -21,6 +21,12 @@ const (
 	SchemeAgentRun      Scheme = "agent_run"      // agent-run stream (token/tool_call/proposal/run_completed), by run id
 	SchemeNotifications Scheme = "notifications"  // in-app pushes
 	SchemeProposal      Scheme = "proposal"       // proposal decision updates
+	// SchemeList is a tenant-wide broadcast of a resource TYPE's lifecycle
+	// events (ident = the type, e.g. "case"/"dataset"/"pipeline-run"), so LIST
+	// screens get live row-status updates without a detail page open (task #80).
+	// It carries the same ClientBody as run-status; the UI patcher only mutates
+	// rows already in the caller's RBAC-scoped cache (no cross-workspace insert).
+	SchemeList Scheme = "list"
 )
 
 // ErrInvalidTopic is returned by Parse for an unknown scheme or malformed topic
@@ -62,7 +68,7 @@ func Parse(raw string) (Topic, error) {
 	scheme := Scheme(raw[:i])
 	ident := raw[i+1:]
 	switch scheme {
-	case SchemeRunStatus, SchemeChat, SchemeAgentRun, SchemeNotifications, SchemeProposal:
+	case SchemeRunStatus, SchemeChat, SchemeAgentRun, SchemeNotifications, SchemeProposal, SchemeList:
 	default:
 		return Topic{}, ErrInvalidTopic
 	}
