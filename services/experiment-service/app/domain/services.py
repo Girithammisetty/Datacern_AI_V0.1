@@ -280,8 +280,19 @@ class RunService(_Base):
             if existing:
                 return existing  # idempotent
             experiment = await self._resolve_experiment(uow, payload)
-            if experiment is None:
-                raise NotFound("experiment for run not found")
+        if experiment is None:
+            # Agent-launched trainings land in a per-tenant orchestrator MLflow
+            # experiment that was never created through the authoritative endpoint.
+            # Materialise it from MLflow so the run mirrors immediately instead of
+            # parking/retrying/DLQ-ing (which would stall the consumer and delay the
+            # registered-model mirror the ml-engineer agent waits on).
+            experiment = await self._ensure_experiment_from_mlflow(ctx, mlflow_run_id)
+        if experiment is None:
+            raise NotFound("experiment for run not found")
+        async with self.uow(ctx.tenant_id) as uow:
+            existing = await uow.runs.get_by_mlflow_run_id(mlflow_run_id)
+            if existing:
+                return existing
             now = self.clock.now()
             run = Run(
                 id=str(uuid7()), tenant_id=ctx.tenant_id, experiment_id=experiment.id,
@@ -306,6 +317,23 @@ class RunService(_Base):
         if payload.get("mlflow_experiment_id"):
             return await uow.experiments.get_by_mlflow_id(payload["mlflow_experiment_id"])
         return None
+
+    async def _ensure_experiment_from_mlflow(self, ctx: CallCtx, mlflow_run_id: str):
+        """Resolve (creating if needed) the local experiment for a run by reading
+        the run's experiment + windrose tags from MLflow. Returns None when the run
+        is unknown to MLflow or is tagged for a different tenant (never cross the
+        RLS wall) — the caller then parks/retries as before."""
+        mlrun = await self.deps.mlflow.get_run(mlflow_run_id)
+        info = mlrun.get("info", {})
+        mlflow_experiment_id = info.get("experiment_id")
+        if not mlflow_experiment_id:
+            return None
+        tags = {t["key"]: t["value"] for t in mlrun.get("data", {}).get("tags", [])}
+        run_tenant = tags.get("windrose.tenant_id")
+        if run_tenant is not None and run_tenant != ctx.tenant_id:
+            return None
+        return await MirrorService(self.deps)._ensure_mirror_experiment(
+            ctx, mlflow_experiment_id, tags, tags.get("windrose.workspace_id"))
 
     async def transition_status(self, ctx: CallCtx, event_type: str, payload: dict) -> Run | None:
         """Run status transitions come from pipeline events (EXP-FR-003)."""
@@ -636,6 +664,152 @@ class MirrorService(_Base):
             await uow.commit()
         return changed
 
+    async def mirror_registered_model_version(
+            self, ctx: CallCtx, mlflow_name: str, mlflow_version: str) -> bool:
+        """EXP-FR-014: mirror a pipeline-orchestrator-registered MLflow model
+        version into experiment-service's authoritative registry. Idempotent;
+        returns True only when a new model version row is created.
+
+        pipeline-orchestrator registers trained models straight into MLflow's
+        Model Registry (``registered_model_name=wr_<tenant8>_<template>``) and
+        nothing else writes them into experiment-service, so agent-launched
+        trainings had no local version to promote. This closes the gap by
+        pulling the full lineage (version -> run -> experiment) from MLflow and
+        materialising the local experiment + run + registered model + version.
+        Tenant/workspace come from the run's ``windrose.*`` tags (source of
+        truth); a run whose ``windrose.tenant_id`` does not match ``ctx`` is
+        skipped so the mirror never crosses the RLS wall."""
+        mv = await self.deps.mlflow.get_model_version(mlflow_name, str(mlflow_version))
+        mlflow_run_id = mv.get("run_id")
+        if not mlflow_run_id:
+            return False
+        mlrun = await self.deps.mlflow.get_run(mlflow_run_id)
+        info = mlrun.get("info", {})
+        experiment_id = info.get("experiment_id")
+        if not experiment_id:
+            return False
+        tags = {t["key"]: t["value"] for t in mlrun.get("data", {}).get("tags", [])}
+        if tags.get("windrose.tenant_id") != ctx.tenant_id:
+            return False  # not this tenant's run — never mirror across the RLS wall
+        if info.get("status") != "FINISHED":
+            return False  # only a finished run carries a registrable model (EXP-FR-031)
+
+        exp = await self._ensure_mirror_experiment(
+            ctx, experiment_id, tags, tags.get("windrose.workspace_id"))
+        if exp is None:
+            return False
+
+        # materialise the run row (reuses the run mirror; needs the experiment above)
+        await self.apply_mlflow_run(ctx, mlrun)
+        async with self.uow(ctx.tenant_id) as uow:
+            run = await uow.runs.get_by_mlflow_run_id(mlflow_run_id, include_deleted=False)
+            if run is None:
+                return False
+            # idempotency: this run already registered under this model name?
+            existing_model = await uow.models.get_model_by_name(exp.workspace_id, mlflow_name)
+            if existing_model is not None:
+                for v in await uow.models.list_versions(existing_model.id):
+                    if v.source_run_id == run.id:
+                        return False
+
+        flavor = ("mlflow.xgboost"
+                  if "xgb" in (tags.get("windrose.algorithm") or "").lower()
+                  else "mlflow.sklearn")
+        await RegistryService(self.deps).register(ctx, exp.id, run.id, {
+            "model_name": mlflow_name, "flavor": flavor,
+            "mlflow_model_ref": mv.get("source") or mlflow_run_id})
+        logger.info("registry mirror: registered %s v%s (run %s) for tenant %s",
+                    mlflow_name, mlflow_version, mlflow_run_id, ctx.tenant_id)
+        return True
+
+    async def _ensure_mirror_experiment(
+            self, ctx: CallCtx, mlflow_experiment_id: str, tags: dict,
+            workspace_id: str | None) -> Experiment | None:
+        """Get-or-create the local experiment container a mirrored run/model
+        hangs off. Agent-launched trainings land in the shared orchestrator
+        MLflow experiment, which was never created through experiment-service,
+        so the mirror synthesizes a lightweight container. Workspace comes from
+        the run's ``windrose.workspace_id`` tag (falling back to an existing
+        tenant experiment's workspace); without one the model cannot be placed
+        and the mirror skips it."""
+        async with self.uow(ctx.tenant_id) as uow:
+            exp = await uow.experiments.get_by_mlflow_id(mlflow_experiment_id)
+        if exp is not None:
+            return exp
+        if not workspace_id:
+            async with self.uow(ctx.tenant_id) as uow:
+                actives = await uow.experiments.all_active()
+            workspace_id = actives[0].workspace_id if actives else None
+        if not workspace_id:
+            logger.warning("registry mirror: no workspace for tenant %s exp %s — skipped",
+                           ctx.tenant_id, mlflow_experiment_id)
+            return None
+
+        template_id = tags.get("windrose.template_id") or mlflow_experiment_id
+        base = f"wr:{ctx.tenant_id}:pipeline:template/{template_id}"
+        try:
+            model_type = model_type_code(tags.get("windrose.family") or "classification")
+        except ValidationFailed:
+            model_type = model_type_code("classification")
+        try:
+            name = (await self.deps.mlflow.get_experiment(mlflow_experiment_id)).get("name")
+        except Exception:  # noqa: BLE001 — MLflow name is cosmetic; fall back below
+            name = None
+        name = name or f"mirror-exp-{mlflow_experiment_id}"
+        now = self.clock.now()
+        exp = Experiment(
+            id=str(uuid7()), tenant_id=ctx.tenant_id, workspace_id=workspace_id,
+            name=name, model_type=model_type, mlflow_experiment_id=mlflow_experiment_id,
+            model_pipeline_urn=f"{base}#model",
+            feature_engineering_pipeline_urn=f"{base}#feature",
+            training_pipeline_urn=f"{base}#training",
+            description="Auto-mirrored from an MLflow training run (registry mirror).",
+            tags={"windrose_mirror": "true"}, created_by="registry-mirror",
+            created_at=now, updated_at=now)
+        async with self.uow(ctx.tenant_id) as uow:
+            existing = await uow.experiments.get_by_mlflow_id(mlflow_experiment_id)
+            if existing is not None:
+                return existing  # lost a race with a concurrent consumer
+            if await uow.experiments.get_by_name(workspace_id, name):
+                exp.name = f"{name} [{mlflow_experiment_id}]"
+            await uow.experiments.add(exp)
+            await uow.watermarks.upsert(mlflow_experiment_id, ctx.tenant_id, now)
+            await self._emit(uow, ctx, "experiment.created",
+                             experiment_urn(ctx.tenant_id, exp.id),
+                             {"experiment_id": exp.id, "name": exp.name,
+                              "model_type": model_type, "workspace_id": workspace_id})
+            await uow.commit()
+        return exp
+
+    async def mirror_tenant_registry(self, ctx: CallCtx) -> list[str]:
+        """Discover this tenant's ``wr_<tenant8>_*`` registered models in MLflow
+        and mirror every version. Returns the model names that gained a new
+        mirrored version. Used by the reconciliation sweep (safety net) and the
+        manual reconcile endpoint."""
+        prefix = f"wr_{ctx.tenant_id[:8]}_"
+        try:
+            models = await self.deps.mlflow.search_registered_models(name_prefix=prefix)
+        except DependencyUnavailable:
+            logger.exception("registry mirror: MLflow search failed for tenant %s",
+                             ctx.tenant_id)
+            return []
+        mirrored: list[str] = []
+        for m in models:
+            name = m.get("name")
+            if not name:
+                continue
+            for v in m.get("latest_versions") or []:
+                version = v.get("version")
+                if version is None:
+                    continue
+                try:
+                    if await self.mirror_registered_model_version(ctx, name, str(version)):
+                        mirrored.append(f"{name} v{version}")
+                except Exception:  # noqa: BLE001 — one bad model must not abort the sweep
+                    logger.exception("registry mirror: failed for %s v%s (tenant %s)",
+                                     name, version, ctx.tenant_id)
+        return mirrored
+
 
 class ReconciliationService(_Base):
     """EXP-FR-013: reconciliation sweep against real MLflow — the safety net that
@@ -655,11 +829,18 @@ class ReconciliationService(_Base):
         drift_count = 0
         repaired_count = 0
         swept: list[str] = []
+        # Registry-first pass: mirror the tenant's MLflow-registered models
+        # (pipeline-orchestrator writes them straight to MLflow). This also
+        # materialises the local experiment + run for agent-launched trainings
+        # that never went through the authoritative create endpoint, so the run
+        # sweep below then sees them too.
+        mirrored_models = await self.mirror.mirror_tenant_registry(ctx)
         async with self.uow(tenant_id) as uow:
             experiments = await uow.experiments.all_active()
         mlflow_ids = [e.mlflow_experiment_id for e in experiments]
         if not mlflow_ids:
-            return {"repaired_count": 0, "drift_count": 0, "swept_experiments": []}
+            return {"repaired_count": 0, "drift_count": 0, "swept_experiments": [],
+                    "mirrored_models": mirrored_models}
         for mlflow_id in mlflow_ids:
             page_token = None
             while True:
@@ -684,10 +865,11 @@ class ReconciliationService(_Base):
             await self._emit(uow, ctx, "experiment.mirror.reconciled",
                              experiment_urn(tenant_id, "sweep"),
                              {"tenant_id": tenant_id, "repaired_count": repaired_count,
-                              "drift_count": drift_count, "swept_experiments": swept})
+                              "drift_count": drift_count, "swept_experiments": swept,
+                              "mirrored_models": mirrored_models})
             await uow.commit()
         return {"repaired_count": repaired_count, "drift_count": drift_count,
-                "swept_experiments": swept}
+                "swept_experiments": swept, "mirrored_models": mirrored_models}
 
 
 # ---------------------------------------------------------------------------
@@ -877,8 +1059,12 @@ class RegistryService(_Base):
             if not model:
                 raise NotFound("model not found")
             versions = await uow.models.list_versions(model_id)
+            run_ids = [v.source_run_id for v in versions if v.source_run_id]
+            runs = await uow.runs.get_many(run_ids) if run_ids else []
+        mlflow_by_run = {r.id: r.mlflow_run_id for r in runs}
         return {"model": _model_payload(ctx, model),
-                "versions": [_version_payload(ctx, v) for v in versions]}
+                "versions": [_version_payload(ctx, v, mlflow_by_run.get(v.source_run_id))
+                             for v in versions]}
 
     async def get_version(self, ctx: CallCtx, model_id: str, version: int) -> dict:
         async with self.uow(ctx.tenant_id) as uow:
@@ -887,7 +1073,8 @@ class RegistryService(_Base):
             v = await uow.models.get_version(model_id, version)
             if not v:
                 raise NotFound("model version not found")
-        return _version_payload(ctx, v)
+            run = await uow.runs.get(v.source_run_id) if v.source_run_id else None
+        return _version_payload(ctx, v, run.mlflow_run_id if run else None)
 
     async def list_models(self, ctx: CallCtx, workspace_id: str | None, stage: str | None,
                           limit: int, cursor: str | None, ids: list[str] | None = None):
@@ -920,10 +1107,14 @@ def _model_payload(ctx: CallCtx, model: RegisteredModel) -> dict:
             "created_at": model.created_at.isoformat() if model.created_at else None}
 
 
-def _version_payload(ctx: CallCtx, v: ModelVersion) -> dict:
+def _version_payload(ctx: CallCtx, v: ModelVersion, mlflow_run_id: str | None = None) -> dict:
+    # mlflow_run_id (the source run's MLflow id) lets consumers — notably the
+    # ml-engineer agent — match a registry version back to the training run that
+    # produced it. source_run_id is the experiment-service run id, not MLflow's.
     return {"model_id": v.model_id, "version": v.version,
             "urn": model_version_urn(ctx.tenant_id, v.model_id, v.version),
-            "source_run_id": v.source_run_id, "stage": STAGE_LABELS[v.stage],
+            "source_run_id": v.source_run_id, "mlflow_run_id": mlflow_run_id,
+            "stage": STAGE_LABELS[v.stage],
             "mlflow_model_ref": v.mlflow_model_ref, "flavor": v.flavor,
             "input_schema": v.input_schema, "output_schema": v.output_schema,
             "stage_updated_at": v.stage_updated_at.isoformat() if v.stage_updated_at else None}

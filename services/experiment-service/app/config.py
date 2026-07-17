@@ -34,6 +34,9 @@ class Settings(BaseSettings):
         "spiffe://windrose/ns/ml/sa/pipeline-orchestrator",
         "spiffe://windrose/ns/ml/sa/inference-service",
         "spiffe://windrose/ns/platform/sa/operator",
+        # tool-plane's MCP gateway federates approved experiment.model.promote
+        # proposals to /internal/v1/mcp/invoke (BRD 52).
+        "spiffe://windrose/ns/tools/sa/mcp-gateway",
     ]
 
     # Adapter selection. True (the DEFAULT) wires the shared windrose_common

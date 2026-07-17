@@ -127,6 +127,19 @@ class MlflowClient:
             "model-versions/get", {"name": name, "version": str(version)}
         )).get("model_version", {})
 
+    async def search_registered_models(
+        self, *, name_prefix: str | None = None, max_results: int = 200,
+    ) -> list[dict]:
+        """Registry discovery for the mirror (EXP-FR-014). ``name_prefix`` filters
+        server-side (``name LIKE 'prefix%'``) so a tenant only pulls its own
+        ``wr_<tenant8>_*`` models. Returns the registered_models list (may be
+        paged; the dev registry is small, so a single page is taken)."""
+        params: dict = {"max_results": max_results}
+        if name_prefix:
+            params["filter"] = f"name LIKE '{name_prefix}%'"
+        return (await self._get("registered-models/search", params)).get(
+            "registered_models", [])
+
 
 class LocalMlflowClient:
     """In-memory unit-tier double (never wired from app.main)."""
@@ -210,3 +223,12 @@ class LocalMlflowClient:
 
     async def get_model_version(self, name, version) -> dict:
         return self._registry.get(name, {}).get(str(version), {})
+
+    async def search_registered_models(self, *, name_prefix=None, max_results=200) -> list[dict]:
+        names = [n for n in self._registry
+                 if name_prefix is None or n.startswith(name_prefix)]
+        out = []
+        for n in names:
+            versions = self._registry.get(n, {})
+            out.append({"name": n, "latest_versions": list(versions.values())})
+        return out

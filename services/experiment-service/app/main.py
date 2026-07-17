@@ -75,7 +75,8 @@ async def _lifespan(app: FastAPI):
             await producer.start()
 
             pipeline_consumer = KafkaPipelineConsumer(
-                PipelineEventHandler(container.run_service, container.dedup),
+                PipelineEventHandler(container.run_service, container.dedup,
+                                     container.mirror_service),
                 container.dedup, producer,
                 bootstrap_servers=settings.kafka_bootstrap_servers)
             await pipeline_consumer.start()

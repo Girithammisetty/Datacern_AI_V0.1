@@ -25,9 +25,13 @@ IDENTITY_TOPIC = "identity.events.v1"
 class PipelineEventHandler:
     """Drives run creation + status transitions from pipeline-orchestrator."""
 
-    def __init__(self, run_service: RunService, dedup):
+    def __init__(self, run_service: RunService, dedup, mirror_service=None):
         self.runs = run_service
         self.dedup = dedup
+        # MirrorService lets output_registered materialise the registered model
+        # version in real time (reconcile is the safety net). Optional so unit
+        # tests can drive the handler without the registry mirror.
+        self.mirror = mirror_service
 
     def _ctx(self, envelope: dict) -> CallCtx:
         return CallCtx(
@@ -54,6 +58,17 @@ class PipelineEventHandler:
                             "pipeline.run.failed", "pipeline.run.cancelled"):
             await self.runs.transition_status(ctx, event_type, payload)
         elif event_type == "pipeline.run.output_registered":
+            # A model output carries registered_model_name/model_version — mirror
+            # it into the local registry first (this also materialises the run for
+            # agent-launched trainings), then append the output URN to the run.
+            if self.mirror is not None and payload.get("registered_model_name"):
+                try:
+                    await self.mirror.mirror_registered_model_version(
+                        ctx, payload["registered_model_name"],
+                        str(payload.get("model_version")))
+                except Exception:  # noqa: BLE001 — reconcile is the safety net
+                    logger.exception("real-time registry mirror failed for %s",
+                                     payload.get("registered_model_name"))
             await self.runs.append_output_dataset(ctx, payload)
 
 

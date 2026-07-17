@@ -11,11 +11,13 @@ import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
-from app.api.auth import require_internal
+from app.api.auth import Principal, require_internal
 from app.api.errors import error_response
-from app.domain.errors import ValidationFailed
+from app.domain.errors import AppError, ValidationFailed
 from app.utils import hmac_verify
 
 logger = logging.getLogger(__name__)
@@ -63,6 +65,71 @@ async def _safe_apply(container, tenant_id: str) -> None:
         await container.mirror_service.apply_inbox_once(tenant_id)
     except Exception:  # noqa: BLE001
         logger.exception("inbox apply failed for tenant %s", tenant_id)
+
+
+class McpInvokeRequest(BaseModel):
+    tool_id: str
+    version: str | None = None
+    args: dict = {}
+    tenant: str
+    obo_sub: str | None = None
+    agent_id: str | None = None
+
+
+# tool_id -> the action the EFFECTIVE HUMAN must hold. Mirrors the REST route
+# exposing the same capability (`POST /models/{id}/versions/{v}/promote` gates
+# on experiment.model.update) — an agent's proposal-execution grant is not a
+# permission bypass, just a durable record of a human's APPROVE.
+_MCP_TOOL_ACTIONS = {
+    "experiment.model.promote": "experiment.model.update",
+}
+
+
+def _mcp_output(status: int, output: dict) -> JSONResponse:
+    return JSONResponse(status_code=status, content={"output": output})
+
+
+@router.post("/internal/v1/mcp/invoke")
+async def mcp_invoke(request: Request, body: McpInvokeRequest,
+                     spiffe: str = Depends(require_internal)):
+    """The MCP backend facade tool-plane federates write-proposal tool execution
+    to (TPL-FR-012) — the missing half of EXP-FR-052's write tools. Reached only
+    after tool-plane's full enforcement pipeline (OPA + signed proposal grant
+    bound to this tenant/tool/tier/args digest); this handler still re-checks
+    authorization for the EFFECTIVE HUMAN (obo_sub) against the real OPA
+    sidecar (defense-in-depth: the backend never blindly trusts the gateway).
+    The promotion it creates is PENDING — experiment-service's own four-eyes
+    (SelfApprovalForbidden) still governs the actual stage change."""
+    c = _c(request)
+    action = _MCP_TOOL_ACTIONS.get(body.tool_id)
+    if action is None:
+        return _mcp_output(404, {"error": f"unknown tool_id {body.tool_id!r}"})
+
+    principal = Principal(
+        sub=f"agent:{body.agent_id}" if body.agent_id else "svc:mcp-gateway",
+        tenant_id=body.tenant, typ="agent_obo" if body.agent_id else "service",
+        agent_id=body.agent_id, obo_sub=body.obo_sub,
+        workspace_id=body.args.get("workspace_id"))
+    if not await request.app.state.authz.allow(principal, action, None):
+        return _mcp_output(403, {"error": f"not allowed: {action}"})
+
+    ctx = principal.ctx(getattr(request.state, "trace_id", None))
+    try:
+        if body.tool_id == "experiment.model.promote":
+            args = body.args
+            out = await c.mcp.model_promote(
+                ctx, model_id=args["model_id"], version=int(args["version"]),
+                payload={"target_stage": args["target_stage"],
+                         "rationale": args.get("rationale")})
+        else:
+            return _mcp_output(404, {"error": f"unknown tool_id {body.tool_id!r}"})
+    except AppError as exc:
+        return _mcp_output(exc.status, {"error": exc.message, "code": exc.code})
+    except KeyError as exc:
+        return _mcp_output(422, {"error": f"missing required arg {exc}"})
+    except (TypeError, ValueError) as exc:
+        return _mcp_output(422, {"error": str(exc)})
+    return {"output": out}
 
 
 @router.post("/internal/reconcile")
