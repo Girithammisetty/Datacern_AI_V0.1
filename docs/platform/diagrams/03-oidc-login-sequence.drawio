@@ -1,0 +1,42 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="OIDC Login Sequence" id="oidc">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="Workflow: Real OIDC SSO Login (Authorization Code + PKCE)" style="text;html=1;fontSize=18;fontStyle=1;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="16" width="760" height="28" as="geometry"/></mxCell>
+        <mxCell id="sub" value="The web tier runs the OAuth dance; identity-service verifies the ID token and mints the platform session — signing stays server-side." style="text;html=1;fontSize=12;fontColor=#666666;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="44" width="1000" height="24" as="geometry"/></mxCell>
+
+        <!-- Actor headers -->
+        <mxCell id="a1" value="Browser / User" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="60" y="90" width="160" height="40" as="geometry"/></mxCell>
+        <mxCell id="a2" value="ui-web&#10;/api/auth/oidc/*" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="360" y="90" width="160" height="40" as="geometry"/></mxCell>
+        <mxCell id="a3" value="OIDC IdP&#10;Keycloak / Okta / Auth0 / Entra" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="660" y="90" width="200" height="40" as="geometry"/></mxCell>
+        <mxCell id="a4" value="identity-service&#10;/token/oidc" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="1000" y="90" width="180" height="40" as="geometry"/></mxCell>
+
+        <!-- Lifelines -->
+        <mxCell id="ll1" style="endArrow=none;dashed=1;html=1;strokeColor=#9db8d9;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="140" y="130" as="sourcePoint"/><mxPoint x="140" y="780" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="ll2" style="endArrow=none;dashed=1;html=1;strokeColor=#9db8d9;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="440" y="130" as="sourcePoint"/><mxPoint x="440" y="780" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="ll3" style="endArrow=none;dashed=1;html=1;strokeColor=#c0a6cf;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="760" y="130" as="sourcePoint"/><mxPoint x="760" y="780" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="ll4" style="endArrow=none;dashed=1;html=1;strokeColor=#c0a6cf;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="1090" y="130" as="sourcePoint"/><mxPoint x="1090" y="780" as="targetPoint"/></mxGeometry></mxCell>
+
+        <!-- Messages -->
+        <mxCell id="m1" value="1 · click &quot;Sign in with SSO&quot;" style="html=1;endArrow=block;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="140" y="170" as="sourcePoint"/><mxPoint x="440" y="170" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m2" value="2 · discover IdP · mint PKCE verifier+challenge · set state cookie" style="html=1;endArrow=none;strokeColor=#6c8ebf;dashed=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="440" y="210" as="sourcePoint"/><mxPoint x="440" y="230" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m2b" value="" style="html=1;endArrow=block;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="440" y="250" as="sourcePoint"/><mxPoint x="140" y="250" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m2lbl" value="302 → IdP authorize URL (code_challenge, state)" style="text;html=1;fontSize=11;align=left;fontColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="150" y="256" width="280" height="20" as="geometry"/></mxCell>
+        <mxCell id="m3" value="3 · authenticate at IdP" style="html=1;endArrow=block;strokeColor=#9673a6;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="140" y="300" as="sourcePoint"/><mxPoint x="760" y="300" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m4" value="4 · 302 → /api/auth/callback?code&amp;state" style="html=1;endArrow=block;strokeColor=#9673a6;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="760" y="340" as="sourcePoint"/><mxPoint x="440" y="340" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m5" value="5 · validate state · exchange code + PKCE verifier" style="html=1;endArrow=block;strokeColor=#9673a6;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="440" y="390" as="sourcePoint"/><mxPoint x="760" y="390" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m6" value="6 · ID token (JWT)" style="html=1;endArrow=block;strokeColor=#9673a6;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="760" y="430" as="sourcePoint"/><mxPoint x="440" y="430" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m7" value="7 · POST /token/oidc { id_token }" style="html=1;endArrow=block;strokeColor=#9673a6;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="440" y="480" as="sourcePoint"/><mxPoint x="1090" y="480" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m8" value="8 · verify ID token vs IdP JWKS · resolve user by email in tenant · mint session JWT" style="html=1;endArrow=none;strokeColor=#9673a6;dashed=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="1090" y="520" as="sourcePoint"/><mxPoint x="1090" y="540" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m9" value="9 · session JWT (iss=identity.windrose.ai, typ=user)" style="html=1;endArrow=block;strokeColor=#9673a6;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="1090" y="570" as="sourcePoint"/><mxPoint x="440" y="570" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m10" value="10 · set wr_session httpOnly cookie · 302 → /" style="html=1;endArrow=block;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="440" y="610" as="sourcePoint"/><mxPoint x="140" y="610" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m11" value="11 · authenticated · downstream authz from RBAC projection (not scopes)" style="text;html=1;fontSize=11;align=left;fontColor=#82b366;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="60" y="640" width="600" height="20" as="geometry"/></mxCell>
+
+        <mxCell id="embed" value="Embed federation: /token/embed/oidc reuses steps 7–9 to mint a per-user, workspace-scoped EMBED token from the user's ID token (no shared secret)." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=8;fontSize=11;" vertex="1" parent="1"><mxGeometry x="60" y="690" width="1120" height="50" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

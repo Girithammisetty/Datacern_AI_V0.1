@@ -1,0 +1,194 @@
+[
+  {
+    "name": "Ap Invoice Audit",
+    "file": "Ap_Invoice_Audit_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122873
+  },
+  {
+    "name": "Background Screening",
+    "file": "Background_Screening_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1123028
+  },
+  {
+    "name": "Banking Aml",
+    "file": "Banking_Aml_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122769
+  },
+  {
+    "name": "Benefits Appeals",
+    "file": "Benefits_Appeals_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122968
+  },
+  {
+    "name": "Card Disputes",
+    "file": "Card_Disputes_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122770
+  },
+  {
+    "name": "Chargeback Representment",
+    "file": "Chargeback_Representment_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122960
+  },
+  {
+    "name": "Construction Claims",
+    "file": "Construction_Claims_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1123038
+  },
+  {
+    "name": "Credit Disputes",
+    "file": "Credit_Disputes_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122862
+  },
+  {
+    "name": "Device Complaints",
+    "file": "Device_Complaints_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122949
+  },
+  {
+    "name": "Insurance Claims Payer",
+    "file": "Insurance_Claims_Payer_AGENT_PLAYBOOK.docx",
+    "disp": 7,
+    "roles": 6,
+    "sem": 2,
+    "bytes": 1122468
+  },
+  {
+    "name": "Manufacturing Mrb",
+    "file": "Manufacturing_Mrb_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1123034
+  },
+  {
+    "name": "Mortgage Loss Mitigation",
+    "file": "Mortgage_Loss_Mitigation_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122989
+  },
+  {
+    "name": "Payer Fwa Siu",
+    "file": "Payer_Fwa_Siu_AGENT_PLAYBOOK.docx",
+    "disp": 6,
+    "roles": 5,
+    "sem": 2,
+    "bytes": 1122889
+  },
+  {
+    "name": "Pharmacovigilance",
+    "file": "Pharmacovigilance_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122937
+  },
+  {
+    "name": "Pharmacy Benefit Mgmt",
+    "file": "Pharmacy_Benefit_Mgmt_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 2,
+    "bytes": 1122731
+  },
+  {
+    "name": "Seller Vetting",
+    "file": "Seller_Vetting_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122939
+  },
+  {
+    "name": "Tax Notices",
+    "file": "Tax_Notices_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122985
+  },
+  {
+    "name": "Trade Compliance",
+    "file": "Trade_Compliance_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122924
+  },
+  {
+    "name": "Trucking Claims",
+    "file": "Trucking_Claims_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1123049
+  },
+  {
+    "name": "Trust Safety Appeals",
+    "file": "Trust_Safety_Appeals_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122964
+  },
+  {
+    "name": "Underwriting Intake",
+    "file": "Underwriting_Intake_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1123005
+  },
+  {
+    "name": "Utility Inspections",
+    "file": "Utility_Inspections_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122921
+  },
+  {
+    "name": "Warranty Claims",
+    "file": "Warranty_Claims_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1122986
+  },
+  {
+    "name": "Workers Comp Claims",
+    "file": "Workers_Comp_Claims_AGENT_PLAYBOOK.docx",
+    "disp": 5,
+    "roles": 5,
+    "sem": 1,
+    "bytes": 1123017
+  }
+]
