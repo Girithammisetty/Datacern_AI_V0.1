@@ -108,6 +108,19 @@ allow if {
 	proj.autonomous_enabled == true
 }
 
+# Trusted platform service tokens: honor an EXPLICITLY-scoped action (exact
+# match, NOT "*"). Mirrors decide.go + windrose_authz.rego. A service principal
+# has NO per-request projection here (so action_known is absent and the
+# projection-based user_path rules can't authorize it) — the explicit scope on a
+# platform-signed, code-minted least-privilege service token (e.g.
+# agent-runtime's key-mint token scopes=["ai.key.write"]) IS the authorization
+# signal. A wildcard-only "*" service token is NOT short-circuited here.
+allow if {
+	typ == "service"
+	some s in scopes
+	s == input.action
+}
+
 # Admin flag short-circuit.
 allow if {
 	user_path

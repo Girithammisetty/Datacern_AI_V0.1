@@ -178,6 +178,11 @@ func TestPolicy_MirrorsDecideMatrix(t *testing.T) {
 		{"editor grant denies admin verb", in("u-1", "user", "chart.dashboard.admin", ws1, dashURN, nil, tenantA), false, ""},
 
 		{"wrong tenant denies admin", in("admin-1", "user", "usage.report.read", "", "", nil, tenantB), false, ""},
+
+		// trusted service token: explicit least-privilege scope (task #79)
+		{"service token allowed its explicit scope", in("svc:agent-runtime", "service", "ai.key.write", "", "", []string{"ai.key.write"}, tenantA), true, ""},
+		{"service token denied action not in scopes", in("svc:agent-runtime", "service", "usage.report.read", "", "", []string{"ai.key.write"}, tenantA), false, ""},
+		{"service wildcard not honored by service path", in("svc:mystery", "service", "usage.report.read", "", "", []string{"*"}, tenantA), false, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

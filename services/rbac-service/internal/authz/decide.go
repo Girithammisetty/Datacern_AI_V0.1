@@ -36,6 +36,7 @@ const (
 	ReasonWorkspaceAdmin       = "workspace_admin"
 	ReasonResourceGrant        = "resource_grant"
 	ReasonAutonomousScope      = "autonomous_scope"
+	ReasonServiceScope         = "service_scope"
 	ReasonDenyDefault          = "deny_default"
 	ReasonUnknownAction        = "unknown_action"
 	ReasonScopeExcluded        = "scope_excluded"
@@ -89,6 +90,21 @@ func (in Input) EffectiveUser() string {
 func Decide(ctx context.Context, in Input, r projection.Reader) (Decision, error) {
 	if in.Tenant == "" || in.Subject.ID == "" || in.Action == "" {
 		return deny(ReasonDenyDefault), nil
+	}
+
+	// Trusted platform service tokens (typ=service, platform-signed, verified by
+	// each service) carry code-minted, LEAST-PRIVILEGE explicit scopes — e.g.
+	// agent-runtime's ai-gateway key-mint token scopes=["ai.key.write"]. Honor an
+	// action the token EXPLICITLY scopes (service-to-service authz, symmetric with
+	// the agent_autonomous/OBO scope paths). EXACT match only (contains, not
+	// inScopes) so a wildcard "*" service token is NOT short-circuited here and
+	// still flows through the projection-based user path. Evaluated BEFORE the
+	// catalog lookup on purpose: service principals have no per-principal rbac
+	// projection, and the explicit scope is itself the authorization signal — this
+	// keeps parity with the input-projection Rego variant, which cannot consult
+	// the catalog to establish action_known for a service subject.
+	if in.Subject.Typ == domain.TypService && contains(in.Subject.Scopes, in.Action) {
+		return allow(ReasonServiceScope), nil
 	}
 
 	// Action catalog resolution.

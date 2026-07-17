@@ -139,6 +139,20 @@ allow if {
 	autonomous_enabled
 }
 
+# Trusted platform service tokens: honor an EXPLICITLY-scoped action (exact
+# match, NOT "*"). Mirrors decide.go's service-scope path — code-minted,
+# least-privilege service-to-service tokens (e.g. agent-runtime's key-mint token
+# scopes=["ai.key.write"]). Independent of the catalog/projection: a service
+# principal has no per-principal projection, and the explicit scope is the
+# authorization signal, so this must NOT require action_known (keeps parity with
+# the input-projection variant, which cannot see the catalog). A wildcard-only
+# "*" service token is NOT short-circuited here; it flows through the user path.
+allow if {
+	typ == "service"
+	some s in scopes
+	s == input.action
+}
+
 # Admin flag short-circuit (tenant-bound; archived write block still applies).
 allow if {
 	user_path

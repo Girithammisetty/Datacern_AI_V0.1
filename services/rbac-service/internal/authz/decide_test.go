@@ -133,6 +133,23 @@ func TestDecide_Matrix(t *testing.T) {
 			Subject: Subject{ID: "admin-1", Typ: domain.TypUser},
 			Action:  "usage.report.read", Tenant: tenantB.String(),
 		}, false, ReasonProjectionMiss},
+
+		// -- trusted service token: explicit least-privilege scope (task #79) --
+		{"service token allowed its explicit scope", Input{
+			Subject: Subject{ID: "svc:agent-runtime", Typ: domain.TypService,
+				Scopes: []string{"ai.key.write"}},
+			Action: "ai.key.write", Tenant: tenantA.String(),
+		}, true, ReasonServiceScope},
+		{"service token denied an action not in its scopes", Input{
+			Subject: Subject{ID: "svc:agent-runtime", Typ: domain.TypService,
+				Scopes: []string{"ai.key.write"}},
+			Action: "usage.report.read", Tenant: tenantA.String(),
+		}, false, ReasonProjectionMiss},
+		{"service wildcard '*' NOT honored by the service-scope path", Input{
+			Subject: Subject{ID: "svc:mystery", Typ: domain.TypService,
+				Scopes: []string{"*"}},
+			Action: "usage.report.read", Tenant: tenantA.String(),
+		}, false, ReasonProjectionMiss},
 	}
 
 	for _, tc := range cases {

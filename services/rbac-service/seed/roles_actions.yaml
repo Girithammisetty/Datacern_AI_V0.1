@@ -530,6 +530,10 @@ roles:
       - case.disposition.read
       - case.disposition.create
       - case.disposition.update
+      # Evidence attachments (task #77): an analyst reviews + attaches evidence
+      # (photos/PDFs/reports) on the cases they triage.
+      - case.evidence.read
+      - case.evidence.create
       # Inbox + approvals: a Case Analyst triages the AI proposal queue
       # (registry NAV_ITEMS "inbox" -> ai.proposal.read; FEATURE_GATES
       # .approveProposal -> ai.proposal.approve).
@@ -590,6 +594,11 @@ roles:
       - case.disposition.approve
       - case.bulk.execute
       - case.bulk.approve
+      # Evidence attachments (task #77): a manager reviews, attaches, and may
+      # remove case evidence.
+      - case.evidence.read
+      - case.evidence.create
+      - case.evidence.delete
       # Inbox + four-eyes approvals (registry "inbox" -> ai.proposal.read;
       # FEATURE_GATES.approveProposal -> ai.proposal.approve).
       - ai.proposal.read

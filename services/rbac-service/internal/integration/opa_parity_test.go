@@ -126,6 +126,19 @@ func TestOPAContainerParityWithGoDecide(t *testing.T) {
 			flat: func() projection.Flat { f := base(); f.Flags = projection.Flags{Admin: true}; return f }(),
 			in:   authz.Input{Subject: sub(user, domain.TypUser, ""), Action: "dataset.dataset.read", Tenant: tenant.String()},
 		},
+		// trusted service token: explicit least-privilege scope (task #79). The
+		// service subject has NO projection facts (base) — parity must hold on
+		// the scope path alone.
+		{
+			name: "service_explicit_scope_allow",
+			flat: base(),
+			in:   authz.Input{Subject: sub("svc:agent-runtime", domain.TypService, "", "rbac.group.list"), Action: "rbac.group.list", Tenant: tenant.String()},
+		},
+		{
+			name: "service_scope_absent_denies",
+			flat: base(),
+			in:   authz.Input{Subject: sub("svc:agent-runtime", domain.TypService, "", "rbac.role.list"), Action: "rbac.group.list", Tenant: tenant.String()},
+		},
 	}
 
 	for _, c := range cases {
