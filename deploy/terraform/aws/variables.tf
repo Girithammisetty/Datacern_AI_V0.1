@@ -303,3 +303,28 @@ variable "secrets" {
   sensitive   = true
   default     = {}
 }
+
+# --- Optional GPU node group for SLM distillation training (task #45 / §M3) ---
+variable "enable_gpu_training_pool" {
+  description = "Provision a scale-to-zero GPU node group for SLM LoRA training jobs."
+  type        = bool
+  default     = false
+}
+
+variable "gpu_training_instance_types" {
+  description = "GPU instance types for the training node group (e.g. g5.xlarge, p4d.24xlarge)."
+  type        = list(string)
+  default     = ["g5.xlarge"]
+}
+
+variable "gpu_training_max_count" {
+  description = "Max GPU nodes the training group autoscales to (min/desired are 0)."
+  type        = number
+  default     = 2
+}
+
+variable "gpu_training_spot" {
+  description = "Use SPOT GPU nodes to cut training cost."
+  type        = bool
+  default     = true
+}

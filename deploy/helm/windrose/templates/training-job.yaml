@@ -1,0 +1,67 @@
+{{- /*
+SLM distillation training Job (task #45 / design §M3). Renders ONLY when
+`training.enabled=true` — off by default so a normal install schedules nothing
+on GPUs. The Job runs the LoRA trainer on the GPU node pool (tolerating the
+`nvidia.com/gpu` taint the terraform GPU pool sets) against a versioned SFT
+dataset exported by agent-runtime (milestone 2). The actual training image /
+compute is the GPU-gated leg; this manifest is the scheduling contract and is
+`helm lint` / `helm template` valid with no GPU present.
+*/}}
+{{- if .Values.training.enabled }}
+{{- $root := . -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: slm-training-{{ .Values.training.jobSuffix | default "run" }}
+  labels:
+    {{- include "windrose.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: slm-training
+spec:
+  backoffLimit: {{ default 0 .Values.training.backoffLimit }}
+  ttlSecondsAfterFinished: {{ default 3600 .Values.training.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "windrose.labels" $root | nindent 8 }}
+        app.kubernetes.io/component: slm-training
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "windrose.serviceAccountName" $root }}
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Land only on the tainted GPU pool the terraform module provisions.
+      nodeSelector:
+        windrose.ai/workload: slm-training
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Equal
+          value: present
+          effect: NoSchedule
+      securityContext:
+        {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: trainer
+          image: {{ .Values.training.image | default (printf "%s/slm-trainer:%s" $root.Values.global.registry $root.Values.global.imageTag) }}
+          imagePullPolicy: {{ default "IfNotPresent" $root.Values.global.imagePullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: windrose-config
+            - secretRef:
+                name: {{ $root.Values.secrets.name }}
+          env:
+            - name: SLM_TENANT_ID
+              value: {{ .Values.training.tenantId | quote }}
+            - name: SLM_ARCHETYPE
+              value: {{ .Values.training.archetype | quote }}
+            - name: SLM_SFT_DATASET_ID
+              value: {{ .Values.training.sftDatasetId | quote }}
+            - name: SLM_BASE_MODEL
+              value: {{ .Values.training.baseModel | quote }}
+          resources:
+            limits:
+              nvidia.com/gpu: {{ .Values.training.gpuCount | default 1 }}
+          securityContext:
+            {{- toYaml $root.Values.securityContext | nindent 12 }}
+{{- end }}

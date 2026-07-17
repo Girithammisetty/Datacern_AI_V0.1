@@ -340,3 +340,46 @@ variable "secrets" {
   default     = {}
   sensitive   = true
 }
+
+# --- Optional GPU node pool for SLM distillation training (task #45 / §M3) ---
+variable "enable_gpu_training_pool" {
+  description = "Provision a scale-to-zero GPU node pool for SLM LoRA training jobs."
+  type        = bool
+  default     = false
+}
+
+variable "gpu_training_machine_type" {
+  description = "GPU node machine type (e.g. g2-standard-8 for L4, a2-highgpu-1g for A100)."
+  type        = string
+  default     = "g2-standard-8"
+}
+
+variable "gpu_training_accelerator_type" {
+  description = "GPU accelerator type (e.g. nvidia-l4, nvidia-tesla-a100)."
+  type        = string
+  default     = "nvidia-l4"
+}
+
+variable "gpu_training_accelerator_count" {
+  description = "GPUs per training node."
+  type        = number
+  default     = 1
+}
+
+variable "gpu_training_max_count" {
+  description = "Max GPU nodes the training pool autoscales to (min is always 0)."
+  type        = number
+  default     = 2
+}
+
+variable "gpu_training_disk_size_gb" {
+  description = "Boot disk size for GPU training nodes."
+  type        = number
+  default     = 200
+}
+
+variable "gpu_training_spot" {
+  description = "Use spot/preemptible GPU nodes to cut training cost."
+  type        = bool
+  default     = true
+}

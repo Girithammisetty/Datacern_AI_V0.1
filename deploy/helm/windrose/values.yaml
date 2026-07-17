@@ -386,3 +386,22 @@ services:
       readOnlyRootFilesystem: false
       capabilities:
         drop: [ALL]
+
+# --- SLM distillation training Job (task #45 / design §M3) --------------------
+# OFF by default: a normal install renders no training Job and schedules nothing
+# on GPUs. Enable + provision the terraform GPU node pool
+# (enable_gpu_training_pool=true) to run a LoRA distillation against a versioned
+# SFT dataset (exported by agent-runtime milestone 2). The trainer image/compute
+# is the GPU-gated leg.
+training:
+  enabled: false
+  image: ""            # defaults to <registry>/slm-trainer:<imageTag>
+  jobSuffix: "run"
+  gpuCount: 1
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  # The distillation target — populate before enabling.
+  tenantId: ""
+  archetype: ""        # the agent_key the SLM specializes on
+  sftDatasetId: ""     # the versioned SFT dataset to train against
+  baseModel: "meta-llama/Llama-3.2-3B-Instruct"

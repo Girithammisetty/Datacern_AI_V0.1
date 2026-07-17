@@ -47,20 +47,48 @@ module "eks" {
     instance_types = var.node_instance_types
   }
 
-  eks_managed_node_groups = {
-    default = {
-      instance_types = var.node_instance_types
-      capacity_type  = var.node_capacity_type
+  # An OPTIONAL scale-from-zero GPU node group for SLM distillation LoRA
+  # training (task #45 / §M3) is merged in when enable_gpu_training_pool=true;
+  # it is tainted so only the training Job schedules on it.
+  eks_managed_node_groups = merge(
+    {
+      default = {
+        instance_types = var.node_instance_types
+        capacity_type  = var.node_capacity_type
 
-      min_size     = var.node_min_size
-      max_size     = var.node_max_size
-      desired_size = var.node_desired_size
+        min_size     = var.node_min_size
+        max_size     = var.node_max_size
+        desired_size = var.node_desired_size
 
-      labels = {
-        "windrose.io/nodegroup" = "default"
+        labels = {
+          "windrose.io/nodegroup" = "default"
+        }
       }
-    }
-  }
+    },
+    var.enable_gpu_training_pool ? {
+      gpu_training = {
+        ami_type       = "AL2023_x86_64_NVIDIA"
+        instance_types = var.gpu_training_instance_types # e.g. g5.xlarge / p4d.24xlarge
+        capacity_type  = var.gpu_training_spot ? "SPOT" : "ON_DEMAND"
+
+        min_size     = 0 # scale to zero when no training job is queued
+        max_size     = var.gpu_training_max_count
+        desired_size = 0
+
+        labels = {
+          "windrose.io/nodegroup" = "gpu-training"
+          "windrose.ai/workload"  = "slm-training"
+        }
+        taints = {
+          gpu = {
+            key    = "nvidia.com/gpu"
+            value  = "present"
+            effect = "NO_SCHEDULE"
+          }
+        }
+      }
+    } : {}
+  )
 }
 
 # IRSA role for the EBS CSI driver addon (needs to create/attach EBS volumes).
