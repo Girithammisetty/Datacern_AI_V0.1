@@ -59,6 +59,7 @@ export const qk = {
   proposals: (filters: unknown) => ["agentic", "proposals", filters] as const,
   proposal: (id: string) => ["agentic", "proposal", id] as const,
   agentRun: (id: string) => ["agentic", "run", id] as const,
+  learningLoop: () => ["agentic", "learningLoop"] as const,
 
   experiments: (filters: unknown) => ["ml", "experiments", filters] as const,
   experiment: (id: string) => ["ml", "experiment", id] as const,
@@ -83,6 +84,8 @@ export const qk = {
   dashboards: (workspaceId: string, filters: unknown) =>
     ["dashboards", "list", workspaceId, filters] as const,
   dashboard: (id: string) => ["dashboards", "dashboard", id] as const,
+  chartDrillTarget: (chartId: string, dimension: string) =>
+    ["dashboards", "chartDrillTarget", chartId, dimension] as const,
   archivedDashboards: (workspaceId: string) => ["dashboards", "archived", workspaceId] as const,
   chartTypes: () => ["dashboards", "chartTypes"] as const,
   semanticModels: (workspaceId: string) => ["dashboards", "semanticModels", workspaceId] as const,
@@ -108,6 +111,7 @@ export const qk = {
 
   // admin
   users: (filters: unknown) => ["admin", "users", filters] as const,
+  assignableUsers: () => ["assignableUsers"] as const,
   workspaces: (filters: unknown) => ["admin", "workspaces", filters] as const,
   groups: (filters: unknown) => ["admin", "groups", filters] as const,
   groupMembers: (groupId: string) => ["admin", "groupMembers", groupId] as const,

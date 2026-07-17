@@ -1175,6 +1175,9 @@ export interface Case {
   assignee?: User | null;
   sourceDataset?: Dataset | null;
   proposals: Proposal[];
+  /** Pack/dataset-provided evidence summary (key -> value; 'note' carries the
+   * investigator briefing). Present on list rows AND detail. */
+  displayProjection?: Record<string, string> | null;
   // Tier 4b: caseView detail fields (null on search-projection list rows).
   description?: string | null;
   dispositionId?: ID | null;
@@ -1183,6 +1186,19 @@ export interface Case {
   closedAt?: string | null;
   caseVersion?: number | null;
   reassignCount?: number | null;
+  /** Uploaded evidence attachments (task #77); resolved on the detail path. */
+  evidence?: CaseEvidence[] | null;
+}
+
+/** One uploaded evidence file on a case (task #77). */
+export interface CaseEvidence {
+  id: ID;
+  caseId: ID;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedBy?: string | null;
+  createdAt?: string | null;
 }
 
 // ---- Tier 4b: case ops (case-service lifecycle/comments/export/catalog) ----

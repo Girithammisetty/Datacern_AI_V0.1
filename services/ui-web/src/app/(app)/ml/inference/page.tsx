@@ -15,15 +15,18 @@ import { InferenceSchedulesPanel } from "@/components/ml/InferenceSchedulesPanel
 import { FEATURE_GATES } from "@/lib/authz/registry";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { useInferenceJobs } from "@/lib/graphql/hooks";
+import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import { formatLocal } from "@/lib/utils";
 import type { InferenceJob } from "@/lib/graphql/types";
 
 export default function MlInferencePage() {
   const router = useRouter();
   const query = useInferenceJobs();
-  // Task #78: list-wide "inference.status" isn't a valid topic (grammar is
-  // scheme:identifier, and there's no "all jobs" broadcast scheme). Removed;
-  // the detail page (ml/inference/[id]) keeps a real per-job subscription.
+  // Task #80 adds the "all jobs" broadcast the task-#78 comment here noted was
+  // missing: the hub fans every inference.job.* event to list:inference and the
+  // inferencePatcher patches the visible rows in place (detail page keeps its
+  // own per-job run-status subscription).
+  useHubTopics(["list:inference"]);
   const rows = useMemo(() => query.data?.pages.flatMap((p) => p.nodes) ?? [], [query.data]);
   // Tier 4b: ml ops — the Schedules tab appears only for schedule readers.
   const { can } = useCapabilities();

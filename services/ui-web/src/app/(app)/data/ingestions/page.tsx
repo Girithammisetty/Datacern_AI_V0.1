@@ -21,6 +21,7 @@ import {
 } from "@/lib/graphql/hooks";
 import type { Ingestion } from "@/lib/graphql/types";
 import { SchedulesPanel } from "@/components/ingestions/SchedulesPanel";
+import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import { formatLocal, formatNumber } from "@/lib/utils";
 import { t } from "@/lib/i18n/messages";
 
@@ -32,9 +33,10 @@ const TERMINAL = new Set(["completed", "failed", "cancelled", "expired"]);
 export default function DataIngestionsPage() {
   const router = useRouter();
   const query = useIngestions();
-  // Task #78: list-wide "ingestion.status"/"ingestion.progress" aren't valid
-  // topics (grammar is scheme:identifier; there's no "all ingestions" scheme).
-  // Removed rather than left silently 422ing.
+  // Task #80 supplies the "all ingestions" broadcast the task-#78 comment here
+  // said was missing: the hub fans every ingestion.* event to list:ingestion
+  // and the ingestionPatcher patches the visible rows' status in place.
+  useHubTopics(["list:ingestion"]);
   const rows = useMemo(() => query.data?.pages.flatMap((p) => p.nodes) ?? [], [query.data]);
   const [showForm, setShowForm] = useState(false);
   const [tab, setTab] = useState<"runs" | "schedules">("runs");

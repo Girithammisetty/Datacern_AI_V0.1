@@ -169,6 +169,25 @@ export function useDatasetRows(
   });
 }
 
+/** Resolve a dashboard chart selection to its backing dataset + physical column
+ * (drill-through → dataset browse → create cases). Enabled only when a chart +
+ * dimension are set (i.e. a segment/cross-filter was chosen). */
+export function useChartDrillTarget(
+  chartId: string | null,
+  dimension: string | null,
+  opts?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: qk.chartDrillTarget(chartId ?? "", dimension ?? ""),
+    queryFn: () =>
+      graphqlRequest<ops.ChartDrillTargetResult>(ops.CHART_DRILL_TARGET, {
+        chartId,
+        dimension,
+      }),
+    enabled: (opts?.enabled ?? true) && !!chartId && !!dimension,
+  });
+}
+
 /** Quick-chart aggregation over a raw dataset (warehouse GROUP BY via the BFF).
  * Enabled only once a dimension is chosen. */
 export function useDatasetAggregate(
@@ -1306,6 +1325,15 @@ export function useDispositions() {
   return useQuery({
     queryKey: qk.dispositions(),
     queryFn: () => graphqlRequest<ops.DispositionsResult>(ops.DISPOSITIONS).then((r) => r.dispositions),
+  });
+}
+
+/** Correction->retrain loop stats (agent-runtime M1/M2) for the home widget. */
+export function useLearningLoop(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.learningLoop(),
+    queryFn: () => graphqlRequest<ops.LearningLoopResult>(ops.LEARNING_LOOP).then((r) => r.learningLoop),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -2616,6 +2644,24 @@ export function useUsers() {
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) =>
       graphqlRequest<ops.UsersResult>(ops.USERS, { first: PAGE, after: pageParam }).then((r) => r.users),
+    getNextPageParam: (last) => (last.pageInfo.hasMore ? last.pageInfo.nextCursor : undefined),
+  });
+}
+
+/**
+ * Member-safe active-user directory for assignee pickers (case assign/reassign,
+ * bulk assign). Unlike useUsers() this hits the member-safe assignableUsers
+ * query, so it works for any role holding case.case.assign — no
+ * identity.user.admin scope. Only id/email/fullName are populated.
+ */
+export function useAssignableUsers() {
+  return useInfiniteQuery({
+    queryKey: qk.assignableUsers(),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      graphqlRequest<ops.AssignableUsersResult>(ops.ASSIGNABLE_USERS, { first: PAGE, after: pageParam }).then(
+        (r) => r.assignableUsers,
+      ),
     getNextPageParam: (last) => (last.pageInfo.hasMore ? last.pageInfo.nextCursor : undefined),
   });
 }

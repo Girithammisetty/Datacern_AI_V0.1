@@ -27,7 +27,7 @@ describe("openHubStream state machine (BR-5, AC-15)", () => {
 
   function open(onState: (s: ConnState) => void, onReconnect?: () => void) {
     return openHubStream({
-      topics: ["case.status"],
+      topics: ["run-status:wr:t:case:case/c1"],
       handlers: { onEvent: () => {}, onState, onReconnect },
       mintTicket: async () => ({ hubUrl: "http://hub", ticket: "tk" }),
       eventSourceFactory: () => {

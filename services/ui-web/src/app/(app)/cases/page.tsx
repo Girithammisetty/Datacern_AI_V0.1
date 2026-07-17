@@ -10,8 +10,10 @@ import { StatusChip } from "@/components/primitives/StatusChip";
 import { Input } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { useCaseSearch } from "@/lib/graphql/hooks";
+import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import { useSelection } from "@/stores/ui";
 import { BulkAssignBar } from "@/components/cases/BulkAssignBar";
+import { CaseTitleCell } from "@/components/cases/projection";
 import { CaseExportButton } from "@/components/cases/CaseExportButton";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { FEATURE_GATES } from "@/lib/authz/registry";
@@ -42,10 +44,12 @@ export default function CasesPage() {
     [status, severity],
   );
   const query = useCaseSearch({ q: q || undefined, filter });
-  // Task #78: this was a list-wide "any case" subscription, but realtime-hub
-  // only routes to a single resource topic (run-status:<case-urn>) — there is
-  // no "all cases in my tenant" scheme, so this always 422'd. Removed; the
-  // detail page (cases/[id]) keeps a real per-case subscription instead.
+  // Task #80 adds the "all cases in my tenant" broadcast the task-#78 comment
+  // here said didn't exist: the hub fans every case.* event to list:case and
+  // the casePatcher patches the visible rows' status/severity in place (a case
+  // for a workspace not in this cache is simply a no-op — no cross-workspace
+  // row is inserted).
+  useHubTopics(["list:case"]);
 
   const rows = useMemo(() => query.data?.pages.flatMap((p) => p.nodes) ?? [], [query.data]);
   const signature = `${q}|${status}|${severity}`;
@@ -63,7 +67,7 @@ export default function CasesPage() {
 
   const columns: Column<Case>[] = [
     { id: "num", header: t("cases.number"), width: 90, cell: (c) => <span className="font-mono">#{c.caseNumber ?? "—"}</span> },
-    { id: "title", header: "Title", cell: (c) => <span className="font-medium">{c.title ?? c.urn}</span> },
+    { id: "title", header: "Title", cell: (c) => <CaseTitleCell c={c} /> },
     { id: "severity", header: t("cases.severity"), width: 110, cell: (c) => <StatusChip status={c.severity} /> },
     { id: "status", header: t("cases.status"), width: 130, cell: (c) => <StatusChip status={c.status} live /> },
     { id: "assignee", header: t("cases.assignee"), width: 160, cell: (c) => c.assignee?.fullName ?? c.assignee?.email ?? "—" },
@@ -74,7 +78,7 @@ export default function CasesPage() {
     <div>
       <PageHeader
         title={t("cases.title")}
-        description="Claim triage over the full case index."
+        description="Every open decision, ranked and searchable."
         actions={
           <div className="flex items-center gap-2">
             <CaseExportButton status={status || undefined} />

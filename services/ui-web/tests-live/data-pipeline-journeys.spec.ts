@@ -312,9 +312,11 @@ test.describe("Data -> Pipeline -> Run -> Schedule lifecycle", () => {
     await expect(page.locator('[role="row"]').filter({ hasText: newName })).toBeVisible({ timeout: 20_000 });
 
     // Immutable-by-design: a system/template pipeline correctly hides Edit.
+    // Match the exact "system" BADGE (not a substring of a row that merely
+    // contains the word — e.g. a pipeline named "…system…").
     const systemRow = page
       .locator('[role="row"]')
-      .filter({ hasText: "system" })
+      .filter({ has: page.getByText("system", { exact: true }) })
       .filter({ hasNotText: "archived" })
       .first();
     if ((await systemRow.count()) === 0) {
@@ -464,7 +466,9 @@ test.describe("Data -> Pipeline -> Run -> Schedule lifecycle", () => {
     await expect(dialog2).toBeHidden({ timeout: 15_000 });
 
     // --- immutable-by-design: a SYSTEM role hides Edit/Delete -------------
-    const systemRow = page.locator('[role="row"]').filter({ hasText: "system" }).first();
+    // Exact "system" badge match, not a substring of a role whose name/actions
+    // merely contain the word.
+    const systemRow = page.locator('[role="row"]').filter({ has: page.getByText("system", { exact: true }) }).first();
     await expect(systemRow).toBeVisible({ timeout: 20_000 });
     await systemRow.click();
     await expect(page.getByText(/immutable/i)).toBeVisible({ timeout: 10_000 });

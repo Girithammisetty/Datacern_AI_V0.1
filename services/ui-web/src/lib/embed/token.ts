@@ -21,10 +21,34 @@ export interface EmbedBody {
   tenantId?: string;
   workspaceId?: string;
   sub?: string;
+  /** Embed-federated SSO (task #84): the END USER's OIDC ID token from the
+   * tenant's IdP, in place of a shared secret + asserted `sub`. */
+  idToken?: string;
   scopes?: string[];
   surface?: string[];
   resourceId?: string;
   ttlSeconds?: number;
+}
+
+/** Sub-less surface/ttl/path resolution shared by the secret and federated
+ * paths (the federated path derives `sub` from the verified ID token instead). */
+export function resolveEmbedTarget(
+  body: EmbedBody,
+): { error: string; status: number } | { surface: string[]; ttl: number; path: string } {
+  if (!body.tenantId || !body.workspaceId) {
+    return { error: "tenantId and workspaceId are required", status: 400 };
+  }
+  const surface = (body.surface ?? ["dashboard"]).filter((s) => KNOWN_SURFACES.has(s));
+  if (surface.length === 0) {
+    return { error: `surface must be one of ${[...KNOWN_SURFACES].join(", ")}`, status: 400 };
+  }
+  const ttl = Math.min(Math.max(body.ttlSeconds ?? DEFAULT_TTL, 60), MAX_TTL);
+  const primary = surface[0];
+  const path =
+    primary === "dashboard" && body.resourceId
+      ? `/embed/dashboard/${encodeURIComponent(body.resourceId)}`
+      : `/embed/${primary}`;
+  return { surface, ttl, path };
 }
 
 export interface ResolvedEmbed {

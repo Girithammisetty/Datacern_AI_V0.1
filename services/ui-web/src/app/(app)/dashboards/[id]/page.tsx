@@ -1,7 +1,8 @@
 "use client";
 import { use, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { Briefcase, Pencil, Plus, Trash2, X } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ProvenanceBadge } from "@/components/primitives/ProvenanceBadge";
@@ -11,8 +12,15 @@ import { Card, CardContent, CardHeader, CardTitle, Badge } from "@/components/ui
 import { Button } from "@/components/ui/button";
 import { ChartView } from "@/components/charts/ChartView";
 import { ChartEditor } from "@/components/charts/ChartEditor";
-import { FEATURE_GATES } from "@/lib/authz/registry";
-import { useDashboard, useDeleteChart, useDeleteDashboard, useArchiveDashboard } from "@/lib/graphql/hooks";
+import { DatasetRowsGrid } from "@/components/data/DatasetRowsGrid";
+import { FEATURE_GATES, cap } from "@/lib/authz/registry";
+import {
+  useDashboard,
+  useDeleteChart,
+  useDeleteDashboard,
+  useArchiveDashboard,
+  useChartDrillTarget,
+} from "@/lib/graphql/hooks";
 import type { Chart } from "@/lib/graphql/types";
 import {
   type CrossFilter,
@@ -45,6 +53,16 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
   const [confirmArchiveDash, setConfirmArchiveDash] = useState(false);
   const deleteDashboard = useDeleteDashboard();
   const archiveDashboard = useArchiveDashboard();
+
+  // Drill-through → create cases: an active chart selection (cross-filter) is
+  // resolved to its backing dataset + column, then the proven dataset-rows grid
+  // opens pre-filtered to that segment so the manager can open cases from the
+  // real underlying records (anchored to dataset_urn + row_pk, dashboard-tagged).
+  const [drill, setDrill] = useState<{ chartId: string; field: string; value: string } | null>(null);
+  const drillQ = useChartDrillTarget(drill?.chartId ?? null, drill?.field ?? null, {
+    enabled: !!drill,
+  });
+  const drillTarget = drillQ.data?.chartDrillTarget ?? null;
 
   return (
     <div>
@@ -109,6 +127,20 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
                 <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setFilters([])}>
                   {t("dashboards.clearFilters")}
                 </Button>
+                {/* Drill the FIRST active selection into its real records and open
+                    cases from them (increment 1: one predicate at a time). */}
+                <Can gate={cap("case.case.create")}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() =>
+                      setDrill({ chartId: filters[0].origin, field: filters[0].field, value: filters[0].value })
+                    }
+                  >
+                    <Briefcase className="size-3" /> {t("dashboards.createCasesFromSelection")}
+                  </Button>
+                </Can>
               </div>
             )}
 
@@ -246,6 +278,48 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
                 });
               }}
             />
+
+            {/* Drill-through → create cases modal. Resolves the selected chart
+                to its backing dataset, then hosts the proven dataset-rows grid
+                pre-filtered to the clicked segment; cases carry dashboard_urn. */}
+            <Dialog.Root open={!!drill} onOpenChange={(o) => !o && setDrill(null)}>
+              <Dialog.Portal>
+                <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
+                <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(1000px,94vw)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border bg-background p-5 shadow-lg">
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <div>
+                      <Dialog.Title className="text-lg font-semibold">
+                        {t("dashboards.createCasesTitle")}
+                      </Dialog.Title>
+                      {drill && (
+                        <Dialog.Description className="text-sm text-muted-foreground">
+                          {(chartNames.get(drill.chartId) ?? drill.field)}: <span className="font-medium">{drill.value}</span>
+                        </Dialog.Description>
+                      )}
+                    </div>
+                    <Dialog.Close asChild>
+                      <Button variant="ghost" size="icon" aria-label={t("dashboards.createCasesClose")}>
+                        <X />
+                      </Button>
+                    </Dialog.Close>
+                  </div>
+                  {drillQ.isFetching && !drillTarget ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">{t("state.loading")}</p>
+                  ) : !drillTarget ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      {t("dashboards.createCasesNotDrillable")}
+                    </p>
+                  ) : (
+                    <DatasetRowsGrid
+                      datasetId={drillTarget.datasetId}
+                      datasetUrn={drillTarget.datasetUrn}
+                      dashboardUrn={dash.urn}
+                      initialFilters={[{ col: drillTarget.column, op: "eq", value: drill?.value ?? "" }]}
+                    />
+                  )}
+                </Dialog.Content>
+              </Dialog.Portal>
+            </Dialog.Root>
           </>
         )}
       </AsyncBoundary>

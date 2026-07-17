@@ -29,18 +29,28 @@ interface GridRow {
 export function DatasetRowsGrid({
   datasetId,
   datasetUrn,
+  dashboardUrn,
+  initialFilters,
 }: {
   datasetId: string;
   /** Passed through to case creation as the row-anchor URN. When absent, the
    * "Create cases" worklist action is hidden (browse-only). */
   datasetUrn?: string;
+  /** Recorded on created cases as dashboard provenance when the grid is opened
+   * from a dashboard chart drill-through (source_query_urns/dashboard_urn). */
+  dashboardUrn?: string;
+  /** Pre-applied column filters — used by the dashboard drill-through to scope
+   * the browse to the clicked chart segment (e.g. payer = Cigna). */
+  initialFilters?: RowFilterInput[];
 }) {
   const [pageSize, setPageSize] = useState<number>(50);
   const [offset, setOffset] = useState(0);
   const [sort, setSort] = useState<{ col: string; dir: SortDir } | null>(null);
   // Draft filter inputs (as typed) and the applied filters (debounced on submit).
-  const [filterDraft, setFilterDraft] = useState<Record<string, string>>({});
-  const [applied, setApplied] = useState<RowFilterInput[]>([]);
+  const [filterDraft, setFilterDraft] = useState<Record<string, string>>(() =>
+    Object.fromEntries((initialFilters ?? []).map((f) => [f.col, f.value])),
+  );
+  const [applied, setApplied] = useState<RowFilterInput[]>(initialFilters ?? []);
   // Selected rows for case creation, keyed by their stable row key (first
   // column value) so a selection survives paging. The value is the full
   // case-row (rowPk + projection) ready to submit.
@@ -292,6 +302,7 @@ export function DatasetRowsGrid({
             if (!o) setSelected(new Map());
           }}
           datasetUrn={datasetUrn}
+          dashboardUrn={dashboardUrn}
           rows={Array.from(selected.values())}
         />
       )}

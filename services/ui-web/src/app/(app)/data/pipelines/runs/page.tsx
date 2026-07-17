@@ -18,6 +18,7 @@ import {
   useRetryPipelineRun,
   usePipelineRunManifest,
 } from "@/lib/graphql/hooks";
+import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import type { PipelineRun } from "@/lib/graphql/types";
 import { formatLocal } from "@/lib/utils";
 import { t } from "@/lib/i18n/messages";
@@ -41,6 +42,9 @@ export default function PipelineRunsPage() {
   const router = useRouter();
   const [status, setStatus] = useState("");
   const filter = useMemo(() => ({ status: status || undefined }), [status]);
+  // Live run status pushed to the list (task #80) — belt-and-suspenders with
+  // the hook's existing poll; pipelineRunPatcher patches rows in place.
+  useHubTopics(["list:pipeline-run"]);
 
   const query = usePipelineRuns(filter);
   // Task #78: "pipeline.run.status" was a list-wide subscription with no

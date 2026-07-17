@@ -9,6 +9,7 @@ import { StatusChip } from "@/components/primitives/StatusChip";
 import { Input, Badge } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { useDatasets } from "@/lib/graphql/hooks";
+import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import type { Dataset } from "@/lib/graphql/types";
 import { formatLocal, formatNumber } from "@/lib/utils";
 
@@ -16,6 +17,10 @@ export default function DataDatasetsPage() {
   const router = useRouter();
   const params = useSearchParams();
   const q = params.get("q") ?? "";
+  // Live status on the list without a detail page open (task #80): the hub
+  // broadcasts every dataset.* lifecycle event to list:dataset, and the
+  // datasetPatcher patches the rows already in this cache in place.
+  useHubTopics(["list:dataset"]);
 
   // URL is the source of truth for shareable view state (UI-FR-043).
   const setParam = (key: string, value: string) => {

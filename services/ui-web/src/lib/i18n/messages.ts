@@ -268,6 +268,11 @@ export const en = {
   "dashboards.activeFilters": "Active cross-filters",
   "dashboards.filteredBy": "Filtered by",
   "dashboards.clearFilters": "Clear all",
+  "dashboards.createCasesFromSelection": "Create cases",
+  "dashboards.createCasesTitle": "Create cases from selection",
+  "dashboards.createCasesClose": "Close",
+  "dashboards.createCasesNotDrillable":
+    "This chart isn't backed by a single dataset, so cases can't be created from it. Only charts built on a semantic model support drill-through to cases.",
   "dashboards.removeFilter": "Remove filter",
   "dashboards.archive": "Archive",
   "dashboards.archiveConfirm": "Archive dashboard “{name}”? It will be hidden from the list but can be restored.",

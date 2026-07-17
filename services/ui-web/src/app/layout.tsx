@@ -4,7 +4,7 @@ import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "Windrose AI",
-  description: "Governed ML backbone for insurance claims.",
+  description: "Decision intelligence for regulated operations.",
 };
 
 // Set the theme class before paint to avoid a flash (UI-FR-016).

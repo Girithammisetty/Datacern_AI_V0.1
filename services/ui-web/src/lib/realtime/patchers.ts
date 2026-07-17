@@ -8,6 +8,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type {
   Case,
   Connection,
+  Dataset,
   Ingestion,
   InferenceJob,
   PipelineRun,
@@ -95,15 +96,17 @@ export const runPatcher: Patcher = {
 };
 
 /**
- * ai.proposal.created / .decided → keep the inbox list and badge live. A created
- * proposal invalidates the pending list (append via refetch-on-focus is wrong;
- * we prepend if present); a decided one drops it from the pending list.
+ * proposal.created / .approved / .rejected / .expired → keep the inbox list and
+ * badge live. A created proposal is prepended to the pending list (if present);
+ * a decided/expired one drops out of the pending list. The event_type is the
+ * dispatch topic (agent-runtime publishes `proposal.*`, routed to
+ * `proposal:<id>` — see realtime-hub routing.go).
  */
 export const proposalPatcher: Patcher = {
-  match: "ai.proposal.",
+  match: "proposal.",
   apply(client, { topic, data }) {
     const id = data?.id;
-    if (topic.endsWith("decided") || topic.endsWith("expired")) {
+    if (topic.endsWith("approved") || topic.endsWith("rejected") || topic.endsWith("expired")) {
       mapInfiniteNodes<Proposal>(client, ["agentic", "proposals"], (nodes) =>
         nodes.filter((p) => p.id !== id),
       );
@@ -199,6 +202,29 @@ export const pipelineRunPatcher: Patcher = {
   },
 };
 
+/**
+ * dataset.updated / dataset.created / dataset.deprecated → patch a dataset's
+ * live status (DRAFT → PROCESSING → READY/FAILED) in the detail cache + the
+ * catalog list without a refetch (task #81). dataset-service keys these events
+ * on the dataset's own URN, so the detail page subscribes to
+ * `run-status:<dataset-urn>`; the id is the URN's trailing segment (injected by
+ * the useHubTopics bridge) or an explicit `dataset_id` in the payload.
+ * `useDataset(id)` caches the WRAPPED `{ dataset }` shape.
+ */
+export const datasetPatcher: Patcher = {
+  match: "dataset.",
+  apply(client, { data }) {
+    const id = (data?.dataset_id ?? data?.id) as string | undefined;
+    if (!id || data?.status == null) return; // version/schema events carry no dataset status
+    mapInfiniteNodes<Dataset>(client, ["data", "datasets"], (nodes) =>
+      nodes.map((n) => (n.id === id ? { ...n, status: data.status } : n)),
+    );
+    client.setQueryData<{ dataset: Dataset | null }>(["data", "dataset", id], (old) =>
+      old?.dataset ? { dataset: { ...old.dataset, status: data.status } } : old,
+    );
+  },
+};
+
 export const REGISTRY: Patcher[] = [
   casePatcher,
   runPatcher,
@@ -207,6 +233,7 @@ export const REGISTRY: Patcher[] = [
   ingestionPatcher,
   inferencePatcher,
   pipelineRunPatcher,
+  datasetPatcher,
 ];
 
 /** Dispatch a hub event to every matching patcher (the EventBridge entrypoint). */

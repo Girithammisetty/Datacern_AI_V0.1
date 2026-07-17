@@ -11,11 +11,11 @@ import { AiLabel } from "@/components/primitives/AiLabel";
 import { DiffView } from "@/components/primitives/DiffView";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
 import { Can } from "@/components/authz/Can";
-import { FEATURE_GATES } from "@/lib/authz/registry";
+import { FEATURE_GATES, cap } from "@/lib/authz/registry";
 import { Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import {
-  useCaseDetail, useUpdateCase, useUsers, useDispositions, useCaseTimeline,
+  useCaseDetail, useUpdateCase, useAssignableUsers, useDispositions, useCaseTimeline,
   useAssignCase, useUnassignCase, useStartCase, useResolveCase, useReopenCase,
   useCloseCase, useEscalateCase, useAddCaseComment, useUpdateCaseComment, useDeleteCaseComment,
   useConnections, useCreateWriteback,
@@ -25,7 +25,8 @@ import { useSession } from "@/lib/session/SessionContext";
 import { useToasts } from "@/stores/ui";
 import { GraphQLRequestError } from "@/lib/graphql/client";
 import { formatLocal } from "@/lib/utils";
-import type { Case, CaseActivity, Severity } from "@/lib/graphql/types";
+import { summarizeProjection, DeadlineChip } from "@/components/cases/projection";
+import type { Case, CaseActivity, CaseEvidence, Severity } from "@/lib/graphql/types";
 
 export default function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -51,10 +52,11 @@ export default function CaseDetailPage({ params }: { params: Promise<{ id: strin
         {c && (
           <>
             <PageHeader
-              title={c.title ?? `Case #${c.caseNumber}`}
+              title={headlineOf(c)}
               description={c.urn}
               actions={
                 <div className="flex items-center gap-2">
+                  <DeadlineChip days={summarizeProjection(c.displayProjection)?.deadlineDays} />
                   <SlaChip due={c.dueDate} />
                   <StatusChip status={c.status} live />
                   <StatusChip status={c.severity} />
@@ -67,7 +69,7 @@ export default function CaseDetailPage({ params }: { params: Promise<{ id: strin
             <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
               <Tabs.Root defaultValue="overview">
                 <Tabs.List className="mb-3 flex gap-1 border-b" aria-label="Case sections">
-                  {["overview", "details", "activity", "proposals"].map((v) => (
+                  {["overview", "details", "activity", "proposals", "attachments"].map((v) => (
                     <Tabs.Trigger
                       key={v}
                       value={v}
@@ -79,11 +81,18 @@ export default function CaseDetailPage({ params }: { params: Promise<{ id: strin
                           {c.proposals.length}
                         </span>
                       )}
+                      {v === "attachments" && (c.evidence?.length ?? 0) > 0 && (
+                        <span className="ml-1 rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
+                          {c.evidence?.length}
+                        </span>
+                      )}
                     </Tabs.Trigger>
                   ))}
                 </Tabs.List>
 
                 <Tabs.Content value="overview">
+                  <EvidenceCard c={c} />
+                  <LatestProposalCard c={c} />
                   <Card>
                     <CardContent className="grid grid-cols-2 gap-4 pt-4 text-sm">
                       <Field label="Case number" value={`#${c.caseNumber ?? "—"}`} />
@@ -117,7 +126,7 @@ export default function CaseDetailPage({ params }: { params: Promise<{ id: strin
                 <Tabs.Content value="proposals">
                   <div className="space-y-3">
                     {c.proposals.length === 0 && (
-                      <p className="text-sm text-muted-foreground">No triage suggestions yet.</p>
+                      <p className="text-sm text-muted-foreground">No AI recommendations yet.</p>
                     )}
                     {c.proposals.map((p) => (
                       <Card key={p.id}>
@@ -139,6 +148,10 @@ export default function CaseDetailPage({ params }: { params: Promise<{ id: strin
                       </Card>
                     ))}
                   </div>
+                </Tabs.Content>
+
+                <Tabs.Content value="attachments">
+                  <AttachmentsPanel caseId={id} evidence={c.evidence ?? []} onChanged={() => query.refetch()} />
                 </Tabs.Content>
               </Tabs.Root>
 
@@ -210,9 +223,11 @@ function CaseActionsBar({ c }: { c: Case }) {
   const reopenExpired =
     canReopen && !!c.resolvedAt && Date.now() - new Date(c.resolvedAt).getTime() > REOPEN_WINDOW_MS;
 
-  // Assign dialog state.
+  // Assign dialog state. Uses the member-safe assignable-users directory (no
+  // identity.user.admin) so a Case Manager holding case.case.assign — but not
+  // the tenant user-admin scope — can still populate the assignee dropdown.
   const [assigneeId, setAssigneeId] = useState("");
-  const usersQuery = useUsers();
+  const usersQuery = useAssignableUsers();
   const users = useMemo(() => usersQuery.data?.pages.flatMap((p) => p.nodes) ?? [], [usersQuery.data]);
 
   // Resolve dialog state — dispositions come from the real workspace catalog.
@@ -628,6 +643,172 @@ function CaseActionsBar({ c }: { c: Case }) {
   );
 }
 
+/** Domain headline: the projection's subject when present, else the title. */
+function headlineOf(c: Case): string {
+  const s = summarizeProjection(c.displayProjection);
+  if (!s?.headline) return c.title ?? `Case #${c.caseNumber}`;
+  return s.reference ? `${s.headline} · ${s.reference}` : s.headline;
+}
+
+/**
+ * The decision cockpit's evidence surface: the pack/dataset display projection
+ * — investigator briefing first, then every projected field. Renders nothing
+ * for cases without a projection (manual/draft cases stay as before).
+ */
+function humanBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const kb = n / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+/** Case evidence attachments (task #77): upload files (PDF/image/report) and
+ * list/download them. Bytes go through the same-origin /api/case-evidence proxy
+ * (which forwards the httpOnly session to case-service); metadata comes from the
+ * CaseDetail query's `evidence` field. Upload is gated on case.evidence.create. */
+function AttachmentsPanel({
+  caseId,
+  evidence,
+  onChanged,
+}: {
+  caseId: string;
+  evidence: CaseEvidence[];
+  onChanged: () => void;
+}) {
+  const toasts = useToasts();
+  const [busy, setBusy] = useState(false);
+
+  async function upload(file: File) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/case-evidence/${encodeURIComponent(caseId)}`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `upload failed (${res.status})`);
+      }
+      toasts.push({ title: `Attached ${file.name}`, variant: "success" });
+      onChanged();
+    } catch (e) {
+      toasts.push({ title: e instanceof Error ? e.message : "upload failed", variant: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Can gate={cap("case.evidence.create")}>
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-3 pt-4">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm hover:bg-accent">
+              <input
+                type="file"
+                className="sr-only"
+                disabled={busy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void upload(f);
+                  e.target.value = "";
+                }}
+              />
+              {busy ? "Uploading…" : "Attach a file"}
+            </label>
+            <span className="text-xs text-muted-foreground">PDF, image, report — up to 25 MB.</span>
+          </CardContent>
+        </Card>
+      </Can>
+
+      {evidence.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No attachments yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {evidence.map((e) => (
+            <Card key={e.id}>
+              <CardContent className="flex items-center gap-3 py-3 text-sm">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium" title={e.filename}>{e.filename}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {humanBytes(e.sizeBytes)} · {e.contentType}
+                    {e.createdAt ? ` · ${formatLocal(e.createdAt)}` : ""}
+                  </p>
+                </div>
+                <Button asChild size="sm" variant="outline">
+                  <a href={`/api/case-evidence/${encodeURIComponent(caseId)}/${encodeURIComponent(e.id)}`}>
+                    Download
+                  </a>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EvidenceCard({ c }: { c: Case }) {
+  const s = summarizeProjection(c.displayProjection);
+  if (!s) return null;
+  const detailFields = s.fields.filter(([k]) => k !== "note");
+  return (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle className="text-sm">Evidence</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {s.note && (
+          <p className="rounded-md border-l-2 border-primary bg-muted/50 p-3 leading-relaxed">{s.note}</p>
+        )}
+        {detailFields.length > 0 && (
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 md:grid-cols-3">
+            {detailFields.map(([k, v]) => (
+              <div key={k} className="min-w-0">
+                <dt className="truncate text-xs text-muted-foreground">{k.replaceAll("_", " ")}</dt>
+                <dd className="truncate font-medium" title={v}>{v}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Surfaces the newest open AI proposal on the overview so the decision-maker
+ * sees the recommendation without hunting through tabs; the full list (and
+ * the four-eyes review path) stays on the Proposals tab / approval inbox.
+ */
+function LatestProposalCard({ c }: { c: Case }) {
+  const pending = c.proposals.filter((p) => p.status === "PENDING");
+  const latest = (pending.length ? pending : c.proposals)[0];
+  if (!latest) return null;
+  return (
+    <Card className="mb-4 border-ai/40">
+      <CardHeader className="flex-row items-center gap-2">
+        <AiLabel />
+        <CardTitle className="text-sm">Recommended: {latest.tool}</CardTitle>
+        <ProvenanceBadge
+          provenance={{ agentKey: latest.agentKey ?? undefined, sourceRunId: undefined, createdAt: latest.createdAt ?? undefined }}
+          className="ml-auto"
+        />
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {latest.rationale && <p className="text-sm text-muted-foreground">{latest.rationale}</p>}
+        <Button asChild size="sm" variant="ai">
+          <a href={`/inbox?p=${latest.id}`}>Review &amp; decide in inbox</a>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -677,7 +858,10 @@ function CaseEditForm({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     update.mutate(
-      { severity: sev, description: desc || undefined, dueDate: due || undefined },
+      // dueDate is a GraphQL DateTime (RFC3339) — the <input type="date"> yields
+      // a bare "YYYY-MM-DD", which case-service rejects with a 422 time-parse
+      // error. Anchor it to end-of-day UTC, matching the createCases convention.
+      { severity: sev, description: desc || undefined, dueDate: due ? `${due}T23:59:59Z` : undefined },
       {
         onError: (err) => {
           const g = err instanceof GraphQLRequestError ? err : null;

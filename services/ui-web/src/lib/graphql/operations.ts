@@ -660,6 +660,19 @@ export const DATASET_ROWS = /* GraphQL */ `
   }
 `;
 
+export const CHART_DRILL_TARGET = /* GraphQL */ `
+  query ChartDrillTarget($chartId: ID!, $dimension: String!) {
+    chartDrillTarget(chartId: $chartId, dimension: $dimension) {
+      datasetId
+      datasetUrn
+      column
+    }
+  }
+`;
+export interface ChartDrillTargetResult {
+  chartDrillTarget: { datasetId: string; datasetUrn: string; column: string } | null;
+}
+
 export const REPROFILE_DATASET = /* GraphQL */ `
   mutation ReprofileDataset($id: ID!, $versionNo: Int, $idempotencyKey: String) {
     reprofileDataset(id: $id, versionNo: $versionNo, idempotencyKey: $idempotencyKey) {
@@ -1088,7 +1101,7 @@ export const CASE_SEARCH = /* GraphQL */ `
   query CaseSearch($q: String, $filter: CaseFilter, $first: Int, $after: String) {
     caseSearch(q: $q, filter: $filter, first: $first, after: $after) {
       nodes {
-        id urn caseNumber title status severity dueDate createdAt
+        id urn caseNumber title status severity dueDate createdAt displayProjection
         assignee { id email fullName }
         sourceDataset { id name }
       }
@@ -1103,13 +1116,14 @@ export interface CaseSearchResult {
 export const CASE_DETAIL = /* GraphQL */ `
   query CaseDetail($id: ID!) {
     case(id: $id) {
-      id urn caseNumber title status severity dueDate createdAt
+      id urn caseNumber title status severity dueDate createdAt displayProjection
       description dispositionId resolutionNote resolvedAt closedAt caseVersion reassignCount
       assignee { id email fullName }
       sourceDataset { id urn name status rowCount }
       proposals {
         id urn agentKey tool riskTier rationale predictedEffect status affectedUrns argsDiff createdAt
       }
+      evidence { id caseId filename contentType sizeBytes uploadedBy createdAt }
     }
   }
 `;
@@ -1293,6 +1307,28 @@ export const DISPOSITIONS = /* GraphQL */ `
 `;
 export interface DispositionsResult {
   dispositions: Disposition[];
+}
+
+export const LEARNING_LOOP = /* GraphQL */ `
+  query LearningLoop {
+    learningLoop {
+      transcriptsCaptured correctionsCaptured datasetCount
+      latestDatasetAgentKey latestDatasetVersion latestDatasetExamples latestDatasetAt
+      capped
+    }
+  }
+`;
+export interface LearningLoopResult {
+  learningLoop: {
+    transcriptsCaptured: number;
+    correctionsCaptured: number;
+    datasetCount: number;
+    latestDatasetAgentKey?: string | null;
+    latestDatasetVersion?: number | null;
+    latestDatasetExamples?: number | null;
+    latestDatasetAt?: string | null;
+    capped: boolean;
+  };
 }
 
 export const CREATE_DISPOSITION = /* GraphQL */ `
@@ -2242,6 +2278,20 @@ export const USERS = /* GraphQL */ `
 `;
 export interface UsersResult {
   users: Connection<User>;
+}
+
+/** Member-safe active-user directory for assignee/mention pickers — no admin
+ * scope (unlike USERS). Only id/email/fullName are populated. */
+export const ASSIGNABLE_USERS = /* GraphQL */ `
+  query AssignableUsers($first: Int, $after: String) {
+    assignableUsers(first: $first, after: $after) {
+      nodes { id urn email fullName }
+      pageInfo { nextCursor hasMore }
+    }
+  }
+`;
+export interface AssignableUsersResult {
+  assignableUsers: Connection<User>;
 }
 
 export const INVITE_USER = /* GraphQL */ `

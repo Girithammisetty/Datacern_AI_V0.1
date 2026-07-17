@@ -25,18 +25,25 @@ export default function LoginPage() {
  * emails — the default is a real, provisioned persona (was a dead @acme.com
  * address that failed sign-in). */
 const DEMO_PERSONAS = [
-  { label: "Adjuster", email: "adjuster@demo.windrose" },
+  { label: "Analyst", email: "adjuster@demo.windrose" },
   { label: "Manager", email: "manager@demo.windrose" },
   { label: "Data scientist", email: "datascientist@demo.windrose" },
   { label: "Admin", email: "admin@demo.windrose" },
 ];
+
+/** SSO is offered when the deployment is wired to an OIDC IdP (BYO-P4). Gated
+ * on a public flag so the button only shows when the OIDC routes are live. */
+const OIDC_ENABLED = process.env.NEXT_PUBLIC_OIDC_ENABLED === "true";
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState(DEMO_PERSONAS[0].email);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Surface an OIDC callback failure (redirects to /login?error=...).
+  const [error, setError] = useState<string | null>(
+    params.get("error") ? `SSO sign-in failed: ${params.get("error")}` : null,
+  );
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -103,6 +110,25 @@ function LoginForm() {
             <Button type="submit" className="w-full" disabled={pending}>
               {pending ? t("state.loading") : t("action.signIn")}
             </Button>
+            {OIDC_ENABLED && (
+              <>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  or
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    window.location.href = "/api/auth/oidc/start";
+                  }}
+                >
+                  Sign in with SSO
+                </Button>
+              </>
+            )}
             <p className="text-center text-xs text-muted-foreground">
               New here?{" "}
               <Link href="/welcome" className="underline underline-offset-2 hover:text-foreground">

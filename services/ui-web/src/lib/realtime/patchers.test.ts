@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import { dispatchEvent, casePatcher, proposalPatcher, runPatcher } from "./patchers";
-import type { Case, Connection, Proposal, Run } from "@/lib/graphql/types";
+import { dispatchEvent, casePatcher, datasetPatcher, proposalPatcher, runPatcher } from "./patchers";
+import type { Case, Connection, Dataset, Proposal, Run } from "@/lib/graphql/types";
 
 function conn<T>(nodes: T[]): Connection<T> {
   return { nodes, pageInfo: { nextCursor: null, hasMore: false } };
@@ -34,7 +34,7 @@ describe("EventBridge patchers (UI-FR-044) — pure cache mutations, no refetch"
       affectedUrns: [], predictedEffect: null, status: "PENDING", decision: null, createdAt: null,
     };
     client.setQueryData(["agentic", "proposals", { status: "PENDING" }], infinite([p]));
-    dispatchEvent(client, { topic: "ai.proposal.decided", data: { id: "p1", status: "APPROVED" } });
+    dispatchEvent(client, { topic: "proposal.approved", data: { id: "p1", status: "APPROVED" } });
     const after = client.getQueryData<{ pages: Connection<Proposal>[] }>([
       "agentic", "proposals", { status: "PENDING" },
     ]);
@@ -47,7 +47,7 @@ describe("EventBridge patchers (UI-FR-044) — pure cache mutations, no refetch"
       id: "p2", urn: "u", agentKey: "a", tool: "tag", argsDiff: {}, rationale: null,
       affectedUrns: [], predictedEffect: null, status: "PENDING", decision: null, createdAt: null,
     };
-    dispatchEvent(client, { topic: "ai.proposal.created", data: { proposal: np } });
+    dispatchEvent(client, { topic: "proposal.created", data: { proposal: np } });
     const after = client.getQueryData<{ pages: Connection<Proposal>[] }>([
       "agentic", "proposals", { status: "PENDING" },
     ]);
@@ -103,6 +103,30 @@ describe("EventBridge patchers (UI-FR-044) — pure cache mutations, no refetch"
       [runPatcher],
     );
     expect(handled).toBe(0);
+  });
+
+  it("datasetPatcher patches a dataset status in the list and wrapped detail (task #81)", () => {
+    const ds: Dataset = {
+      id: "ds1", urn: "wr:t:dataset:dataset/ds1", name: "claims", status: "processing",
+      rowCount: 0, createdAt: null, tags: [], description: null, profile: null,
+    } as unknown as Dataset;
+    client.setQueryData(["data", "datasets", {}], infinite([ds]));
+    client.setQueryData(["data", "dataset", "ds1"], { dataset: ds });
+    // The useHubTopics bridge injects `id` from the URN's trailing segment.
+    dispatchEvent(client, { topic: "dataset.updated", data: { id: "ds1", status: "ready" } });
+    expect(
+      client.getQueryData<{ pages: Connection<Dataset>[] }>(["data", "datasets", {}])
+        ?.pages[0].nodes[0].status,
+    ).toBe("ready");
+    expect(client.getQueryData<{ dataset: Dataset }>(["data", "dataset", "ds1"])?.dataset.status).toBe("ready");
+  });
+
+  it("datasetPatcher ignores version/schema events that carry no dataset status", () => {
+    client.setQueryData(["data", "dataset", "ds1"], { dataset: { id: "ds1", status: "processing" } });
+    const handled = dispatchEvent(client, { topic: "dataset.version_created", data: { id: "ds1" } }, [datasetPatcher]);
+    // Patcher runs (prefix match) but no-ops without a status, leaving cache intact.
+    expect(handled).toBe(1);
+    expect(client.getQueryData<{ dataset: { status: string } }>(["data", "dataset", "ds1"])?.dataset.status).toBe("processing");
   });
 
   it("dispatch routes only to matching patchers", () => {

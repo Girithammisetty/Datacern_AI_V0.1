@@ -6,7 +6,7 @@ import { useSelection, useToasts } from "@/stores/ui";
 import { BULK_APPROVE_CAP } from "@/lib/agentic/proposals";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { FEATURE_GATES } from "@/lib/authz/registry";
-import { useUsers, useBulkAssignCases } from "@/lib/graphql/hooks";
+import { useAssignableUsers, useBulkAssignCases } from "@/lib/graphql/hooks";
 import { t } from "@/lib/i18n/messages";
 
 /**
@@ -23,7 +23,9 @@ export function BulkAssignBar({ caseCount }: { caseCount: number }) {
   const { can } = useCapabilities();
   const [confirm, setConfirm] = useState(false);
   const [assigneeId, setAssigneeId] = useState("");
-  const usersQuery = useUsers();
+  // Member-safe assignee directory (no identity.user.admin) — bulk assign is
+  // gated on case.case.assign, which does not imply the user-admin scope.
+  const usersQuery = useAssignableUsers();
   const users = useMemo(() => usersQuery.data?.pages.flatMap((p) => p.nodes) ?? [], [usersQuery.data]);
   const bulkAssign = useBulkAssignCases();
   // Bulk assign is a write the server gates on case.case.assign; hide the

@@ -170,7 +170,7 @@ function DispositionsPanel() {
           }
         }}
         title="New disposition"
-        description="Code is the stable identifier (duplicates are rejected by the service); label is what adjusters pick."
+        description="Code is the stable identifier (duplicates are rejected by the service); label is what decision-makers pick."
         confirmLabel={create.isPending ? "Creating…" : "Create"}
         onConfirm={() => {
           if (!code.trim() || !label.trim() || create.isPending) return;

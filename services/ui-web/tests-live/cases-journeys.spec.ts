@@ -93,9 +93,12 @@ const CASE_SEARCH_QUERY = /* GraphQL */ `
   }
 `;
 
+// The manager persona holds case.case.assign but NOT identity.user.admin, so it
+// must use the member-safe assignableUsers directory (the admin `users` query
+// 403s for it) — exactly the path the assign dialog itself uses.
 const USERS_QUERY = /* GraphQL */ `
   query UsersForCasesE2E($first: Int) {
-    users(first: $first) { nodes { id email fullName } }
+    assignableUsers(first: $first) { nodes { id email fullName } }
   }
 `;
 
@@ -214,9 +217,11 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
     await page.getByRole("tab", { name: "data", exact: true }).click();
 
     const grid = page.getByRole("grid", { name: "Dataset rows" });
-    await expect(grid.getByRole("checkbox", { name: "Select 0" })).toBeVisible({ timeout: 20_000 });
-    await grid.getByRole("checkbox", { name: "Select 0" }).click();
-    await grid.getByRole("checkbox", { name: "Select 1" }).click();
+    // exact:true — the accessible-name match is a substring by default, so
+    // "Select 1" also matches "Select 10".."Select 13" (strict-mode violation).
+    await expect(grid.getByRole("checkbox", { name: "Select 0", exact: true })).toBeVisible({ timeout: 20_000 });
+    await grid.getByRole("checkbox", { name: "Select 0", exact: true }).click();
+    await grid.getByRole("checkbox", { name: "Select 1", exact: true }).click();
 
     const createBtn = page.getByRole("button", { name: /^Create 2 cases$/ });
     await expect(createBtn).toBeVisible();
@@ -371,13 +376,14 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
       description: `seed ${tag}`,
     });
 
-    const { users } = await graphql<{ users: { nodes: { id: string; email: string; fullName?: string }[] } }>(
-      page,
-      USERS_QUERY,
-      { first: 10 },
-    );
-    expect(users.nodes.length, "live stack must have at least 2 users to exercise reassignment").toBeGreaterThanOrEqual(2);
-    const [userA, userB] = users.nodes;
+    const { assignableUsers } = await graphql<{
+      assignableUsers: { nodes: { id: string; email: string; fullName?: string }[] };
+    }>(page, USERS_QUERY, { first: 10 });
+    expect(
+      assignableUsers.nodes.length,
+      "live stack must have at least 2 users to exercise reassignment",
+    ).toBeGreaterThanOrEqual(2);
+    const [userA, userB] = assignableUsers.nodes;
 
     await page.goto(`/cases/${caseId}`);
     await expectPageHealthy(page, { notRedirectedFrom: `/cases/${caseId}` });
@@ -453,9 +459,10 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
       await expectPageHealthy(page, { notRedirectedFrom: "/cases" });
 
       const grid = page.getByRole("grid", { name: "Cases" });
-      await expect(grid.getByRole("checkbox", { name: `Select ${caseA.id}` })).toBeVisible({ timeout: 20_000 });
-      await grid.getByRole("checkbox", { name: `Select ${caseA.id}` }).click();
-      await grid.getByRole("checkbox", { name: `Select ${caseB.id}` }).click();
+      // exact:true — a case id can be a substring-prefix of another id's label.
+      await expect(grid.getByRole("checkbox", { name: `Select ${caseA.id}`, exact: true })).toBeVisible({ timeout: 20_000 });
+      await grid.getByRole("checkbox", { name: `Select ${caseA.id}`, exact: true }).click();
+      await grid.getByRole("checkbox", { name: `Select ${caseB.id}`, exact: true }).click();
 
       await page.getByRole("button", { name: "Bulk assign" }).click();
       const dialog = page.getByRole("dialog");
@@ -533,8 +540,8 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
       await expectPageHealthy(page, { notRedirectedFrom: `/data/datasets/${dataset.id}` });
       await page.getByRole("tab", { name: "data", exact: true }).click();
       const grid = page.getByRole("grid", { name: "Dataset rows" });
-      await expect(grid.getByRole("checkbox", { name: "Select 0" })).toBeVisible({ timeout: 20_000 });
-      await grid.getByRole("checkbox", { name: "Select 0" }).click();
+      await expect(grid.getByRole("checkbox", { name: "Select 0", exact: true })).toBeVisible({ timeout: 20_000 });
+      await grid.getByRole("checkbox", { name: "Select 0", exact: true }).click();
       await expect(page.getByRole("button", { name: /^Create \d+ cases?$/ })).toHaveCount(0);
     });
 

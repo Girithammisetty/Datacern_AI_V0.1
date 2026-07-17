@@ -24,6 +24,7 @@ import {
   useReprofileDataset,
 } from "@/lib/graphql/hooks";
 import type { DatasetVersion } from "@/lib/graphql/types";
+import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import { formatBytes, formatLocal, formatNumber } from "@/lib/utils";
 import { t } from "@/lib/i18n/messages";
 
@@ -32,15 +33,14 @@ const TABS = ["overview", "data", "chart", "profile", "lineage", "consumers", "v
 export default function DatasetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const query = useDataset(id);
-  // Task #78: "ingestion.status" was doubly wrong here — invalid grammar, AND
-  // the wrong resource (this page has no ingestion-job id/urn in scope, only
-  // the dataset's own urn/id; dataset.* events aren't fanned out by
-  // realtime-hub at all — see routing_test.go's "unroutable_type" case).
-  // Removed rather than left silently failing. A real live-status feature for
-  // this page needs a routing rule keyed on the dataset's own urn plus a
-  // dataset-service resource_urn convention — tracked as a follow-up to #78,
-  // not part of this grammar fix.
   const d = query.data?.dataset;
+  // Task #81 (the follow-up promised by the task #78 comment that used to live
+  // here): dataset-service now emits dataset-status events keyed on the
+  // dataset's own URN, realtime-hub routes `dataset.*` → run-status:<urn>, and
+  // the datasetPatcher patches this page's cache. Subscribing here makes the
+  // DRAFT → PROCESSING → READY/FAILED transition + the `<StatusChip … live>`
+  // update without a refetch.
+  useHubTopics(d?.urn ? [`run-status:${d.urn}`] : []);
   const [banner, setBanner] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const reprofile = useReprofileDataset();
