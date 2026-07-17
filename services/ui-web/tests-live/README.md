@@ -81,8 +81,15 @@ non-admin used to prove RBAC gating.
 
 Wired into `.github/workflows/ci.yml` (the repo's one GitHub Actions CI workflow — see
 `deploy/CONFIG.md` for the registry/tag conventions it shares with the `cd-*.yml` deploy
-workflows) as two jobs, added alongside the existing `test-go`/`test-python`/`test-node`/
-`no-stub-gate`/`build-push` lanes:
+workflows). Alongside `test-go`/`test-python`/`test-node`/`no-stub-gate`/`build-push`,
+the full lane list is now: `test-go`/`test-python` (each run BOTH the unit tier and the
+Testcontainers-backed integration tier, mirroring each service's own `make test`/`make
+test-integration`), `test-go-libs`/`test-python-libs` (`libs/go-common`/`libs/py-common`
+— shared plumbing that isn't in `deploy/services.yaml`'s build matrix but still needs
+real test coverage), `test-packs` (`packs/packctl`'s hermetic offline unit tests),
+`e2e-contract` (ui-web's fast Playwright suite against the `tests-e2e/` contract-server
+stand-in — the cheap, always-on e2e signal for every PR), and the two live-stack jobs
+below:
 
 - **`live-e2e-paths`** — a `dorny/paths-filter@v3` gate. `ci.yml` otherwise runs its full
   matrix on every push/PR with no path filtering; this job scopes the (expensive) live

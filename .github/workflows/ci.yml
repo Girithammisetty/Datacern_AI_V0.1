@@ -113,11 +113,24 @@ jobs:
         with:
           go-version: "1.26"
           cache-dependency-path: ${{ matrix.path }}/go.sum
-      - name: go vet & test
+      - name: go vet & test (unit)
         working-directory: ${{ matrix.path }}
         run: |
           go vet ./...
           go test ./...
+
+      # Tier 2 (CONVENTIONS.md `make test-integration`): Testcontainers-backed,
+      # gated behind the `integration` build tag so unit runs above never pay
+      # for it. Guarded on the dir existing (rbac-service ships none today).
+      # Needs the runner's Docker daemon — present by default on ubuntu-latest.
+      - name: go test (integration)
+        working-directory: ${{ matrix.path }}
+        run: |
+          if [ -d test/integration ]; then
+            go test -tags integration -timeout 600s ./test/integration/...
+          else
+            echo "no test/integration dir — skipping integration tier for ${{ matrix.name }}"
+          fi
 
   # ---------------------------------------------------------------------------
   # Python lane — ruff + unit tests via uv. Tests are skipped only when a service
@@ -156,6 +169,18 @@ jobs:
             echo "no tests/unit dir — skipping unit tests for ${{ matrix.name }}"
           fi
 
+      # Tier 2 (CONVENTIONS.md `make test-integration`): Testcontainers-backed.
+      # Guarded on the dir existing. Needs the runner's Docker daemon — present
+      # by default on ubuntu-latest.
+      - name: Pytest (integration)
+        working-directory: ${{ matrix.path }}
+        run: |
+          if [ -d tests/integration ]; then
+            uv run pytest tests/integration -q -m integration
+          else
+            echo "no tests/integration dir — skipping integration tier for ${{ matrix.name }}"
+          fi
+
   # ---------------------------------------------------------------------------
   # Node lane — pnpm typecheck + lint + test for bff-graphql and ui-web.
   # ---------------------------------------------------------------------------
@@ -188,6 +213,104 @@ jobs:
       - name: Test
         working-directory: ${{ matrix.path }}
         run: pnpm test
+
+  # ---------------------------------------------------------------------------
+  # test-go-libs / test-python-libs — libs/go-common and libs/py-common are
+  # shared plumbing every service imports but are deliberately NOT entries in
+  # deploy/services.yaml (they're libraries, not deployable/Dockerized
+  # services, so they don't belong in the build-push image matrix). Without a
+  # dedicated job they'd only ever be swept by security-scan.yml's gosec/
+  # bandit loops — never unit-tested in CI.
+  # ---------------------------------------------------------------------------
+  test-go-libs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache-dependency-path: libs/go-common/go.sum
+      - name: go vet & test
+        working-directory: libs/go-common
+        run: |
+          go vet ./...
+          go test ./...
+
+  test-python-libs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: libs/py-common/uv.lock
+      - name: Sync deps
+        working-directory: libs/py-common
+        run: uv sync --group dev || uv sync
+      - name: Ruff
+        working-directory: libs/py-common
+        run: uv run ruff check .
+      - name: Pytest
+        working-directory: libs/py-common
+        run: uv run pytest tests -q
+
+  # ---------------------------------------------------------------------------
+  # test-packs — packs/packctl (the vertical-pack authoring/install CLI) ships
+  # real, hermetic, offline unit tests (a recording fake for the install-time
+  # PlatformClient — no network) but has no pyproject.toml/venv of its own and
+  # isn't referenced by deploy/services.yaml, so it's never run in CI otherwise.
+  # ---------------------------------------------------------------------------
+  test-packs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test deps
+        run: pip install -q pytest pyyaml
+      - name: Pytest (packctl)
+        run: python -m pytest packs/packctl/tests -q
+
+  # ---------------------------------------------------------------------------
+  # e2e-contract — ui-web's fast, hermetic Playwright suite (tests-e2e/) drives
+  # the real UI against a lightweight contract-server stand-in for the BFF
+  # (tests-e2e/contract-server.mjs), not the full live platform. Cheap enough
+  # to run on every PR — unlike e2e-live (path-gated, needs the real 22-service
+  # stack + Ollama), this is the suite that should catch UI-contract
+  # regressions on every change.
+  # ---------------------------------------------------------------------------
+  e2e-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: services/ui-web/pnpm-lock.yaml
+      - name: Install deps + Playwright chromium
+        working-directory: services/ui-web
+        run: |
+          pnpm install --frozen-lockfile || pnpm install
+          pnpm exec playwright install --with-deps chromium
+      - name: Run contract e2e suite (pnpm e2e)
+        working-directory: services/ui-web
+        run: pnpm e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-contract-report
+          path: services/ui-web/playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   # no-stub-gate — mirrors the platform's no-stub rule. Advisory-but-FAILING:
@@ -401,9 +524,9 @@ jobs:
   # push-to-main / tags, and only after all test lanes + the no-stub gate pass.
   # ---------------------------------------------------------------------------
   build-push:
-    needs: [setup, test-go, test-python, test-node, no-stub-gate]
+    needs: [setup, test-go, test-python, test-node, test-go-libs, test-python-libs, test-packs, e2e-contract, no-stub-gate]
     # Run even if a language lane was skipped (empty matrix), but not if one failed.
-    if: ${{ always() && needs.setup.result == 'success' && needs.no-stub-gate.result == 'success' && !contains(fromJSON('["failure","cancelled"]'), needs.test-go.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-python.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-node.result) }}
+    if: ${{ always() && needs.setup.result == 'success' && needs.no-stub-gate.result == 'success' && !contains(fromJSON('["failure","cancelled"]'), needs.test-go.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-python.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-node.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-go-libs.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-python-libs.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-packs.result) && !contains(fromJSON('["failure","cancelled"]'), needs.e2e-contract.result) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
