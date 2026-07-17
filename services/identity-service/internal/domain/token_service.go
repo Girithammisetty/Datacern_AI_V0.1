@@ -16,6 +16,14 @@ type TokenService struct {
 	Limiter  RateLimiter
 	Denylist Denylist
 	Clock    func() time.Time
+
+	// BYO-P4 real OIDC login: IDP verifies an external OIDC ID token and
+	// OIDCTenantID is the tenant this deployment's IdP serves (the interactive
+	// login → Windrose-user resolution is scoped to it). Both nil/zero when
+	// AUTH_OIDC is not configured, in which case OIDCLogin returns a clear
+	// "not enabled" error. Per-tenant IdP config is a documented follow-up.
+	IDP          IdentityProvider
+	OIDCTenantID uuid.UUID
 }
 
 func (s *TokenService) now() time.Time { return s.Clock().UTC() }

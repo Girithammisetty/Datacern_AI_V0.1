@@ -441,6 +441,10 @@ func (s *Store) ListUsers(ctx context.Context, tenantID uuid.UUID, f domain.User
 			args = append(args, f.IDs)
 			q += fmt.Sprintf(` AND id = ANY($%d)`, len(args))
 		}
+		if f.Status != "" { // active-only for the assignable-users listing
+			args = append(args, f.Status)
+			q += fmt.Sprintf(` AND status = $%d`, len(args))
+		}
 		if page.AfterID != nil {
 			args = append(args, *page.AfterID)
 			q += fmt.Sprintf(` AND id > $%d`, len(args))

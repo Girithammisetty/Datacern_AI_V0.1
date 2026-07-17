@@ -26,7 +26,10 @@ import (
 	"github.com/windrose-ai/identity-service/internal/adapters/azurekeyvault"
 	"github.com/windrose-ai/identity-service/internal/adapters/denylist"
 	"github.com/windrose-ai/identity-service/internal/adapters/gcpkms"
+	"github.com/google/uuid"
+
 	"github.com/windrose-ai/identity-service/internal/adapters/keycloak"
+	"github.com/windrose-ai/identity-service/internal/adapters/oidc"
 	"github.com/windrose-ai/identity-service/internal/adapters/localinfra"
 	"github.com/windrose-ai/identity-service/internal/adapters/vault"
 	"github.com/windrose-ai/identity-service/internal/api"
@@ -184,6 +187,24 @@ func main() {
 	tokens := &domain.TokenService{
 		Store: store, Issuer: issuer, Verifier: issuer, Denylist: deny,
 		Limiter: domain.NewSlidingWindowLimiter(domain.OBORateLimit, domain.OBORateWindow), Clock: clock,
+	}
+
+	// BYO-P4 real OIDC login: enable POST /token/oidc when a generic OIDC IdP is
+	// configured (deployment-level; Keycloak/Okta/Auth0/Entra are all just a
+	// different OIDC_ISSUER). Off by default — the dev/persona login path is
+	// untouched. Per-tenant IdP config is a documented follow-up.
+	if iss := os.Getenv("OIDC_ISSUER"); iss != "" {
+		if tid, err := uuid.Parse(os.Getenv("OIDC_TENANT_ID")); err == nil {
+			tokens.IDP = oidc.New(oidc.Config{
+				Issuer:       iss,
+				ClientID:     os.Getenv("OIDC_CLIENT_ID"),
+				DiscoveryURL: os.Getenv("OIDC_DISCOVERY_URL"),
+			})
+			tokens.OIDCTenantID = tid
+			log.Info("oidc login enabled", "issuer", iss, "client_id", os.Getenv("OIDC_CLIENT_ID"), "tenant", tid.String())
+		} else {
+			log.Warn("OIDC_ISSUER set but OIDC_TENANT_ID missing/invalid — oidc login disabled", "err", err)
+		}
 	}
 
 	trusted := map[string]bool{}

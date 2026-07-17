@@ -163,6 +163,38 @@ func (s *Server) handleUserProfiles(w http.ResponseWriter, r *http.Request) {
 	writePage(w, profiles, info)
 }
 
+// GET /api/v1/users/assignable — member-visible directory of the tenant's
+// ACTIVE users, returning only the {id,email,full_name} profile subset for
+// assignment / mention pickers (e.g. the case assign dialog). Deliberately NOT
+// gated on identity.user.admin: it is the same member-safe display tier as
+// GET /users/profiles and GET /tenants/self — a case worker who can assign a
+// case (case.case.assign) must be able to choose an assignee without holding
+// the tenant user-directory admin scope. Unlike GET /users it omits every
+// admin-tier field (status/idp_subject/last_login_at/timestamps); unlike
+// GET /users/profiles (id-batch hydration only) it is an intentional listing,
+// so it is cursor-paginated and filtered to active users only (a deactivated
+// or still-invited user is never offered as an assignee). Tenant-scoped by the
+// verified JWT (MASTER-FR-001/003) — it can never enumerate another tenant.
+func (s *Server) handleAssignableUsers(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFrom(r.Context())
+	page, err := domain.ParsePage(r.URL.Query().Get("limit"), r.URL.Query().Get("cursor"))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	items, info, err := s.Store.ListUsers(r.Context(), claims.TenantID,
+		domain.UserFilter{Status: string(domain.UserActive)}, page)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	profiles := make([]userProfile, 0, len(items))
+	for _, u := range items {
+		profiles = append(profiles, userProfile{ID: u.ID, Email: u.Email, FullName: u.FullName})
+	}
+	writePage(w, profiles, info)
+}
+
 func (s *Server) handleGetUser(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFrom(r.Context())
 	id, err := parseID(r)

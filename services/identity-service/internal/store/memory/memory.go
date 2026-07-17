@@ -337,6 +337,9 @@ func (s *Store) ListUsers(_ context.Context, tenantID uuid.UUID, f domain.UserFi
 		if len(idSet) > 0 && !idSet[u.ID] {
 			continue
 		}
+		if f.Status != "" && string(u.Status) != f.Status {
+			continue
+		}
 		cp := *u
 		all = append(all, &cp)
 	}

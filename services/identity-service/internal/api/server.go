@@ -75,7 +75,9 @@ func (s *Server) Router() http.Handler {
 		r.Post("/invitations/{token}/accept", s.handleAcceptInvitation)
 		r.Post("/token/obo", s.handleOBO) // subject_token carries the auth
 		r.Post("/token/apikey", s.handleAPIKeyExchange)
-		r.Post("/token/embed", s.handleEmbedToken) // tenant embed secret in body
+		r.Post("/token/embed", s.handleEmbedToken)       // tenant embed secret in body
+		r.Post("/token/embed/oidc", s.handleEmbedOIDC)   // embed-federated SSO: user OIDC id_token (task #84)
+		r.Post("/token/oidc", s.handleOIDCLogin)         // external OIDC id_token in body (BYO-P4)
 		r.Post("/token/agent", s.handleAgentToken) // SPIFFE-gated
 
 		// Authenticated API.
@@ -97,6 +99,14 @@ func (s *Server) Router() http.Handler {
 			// as a static route ahead of the ActUserAdmin-gated group below (and
 			// ahead of /users/{id}) so "profiles" never parses as an {id}.
 			r.Get("/users/profiles", s.handleUserProfiles)
+			// GET /users/assignable — member-visible directory of ACTIVE users
+			// (id/email/full_name only) for assignment/mention pickers. Same
+			// member-safe tier as /users/profiles and /tenants/self: no admin
+			// scope, so a case worker holding case.case.assign can pick an
+			// assignee without the tenant user-directory admin scope. Registered
+			// as a static route ahead of the ActUserAdmin-gated /users/{id} below
+			// so "assignable" never parses as an {id}.
+			r.Get("/users/assignable", s.handleAssignableUsers)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}", s.handleGetTenant)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/embed-config", s.handleGetEmbedConfig)
 			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/{id}/embed-config", s.handleSetEmbedConfig)

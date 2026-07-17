@@ -314,3 +314,72 @@ func TestListUsersFilterByID(t *testing.T) {
 		t.Fatalf("malformed filter[id]: want 422 VALIDATION_FAILED, got %d %s", r.status, string(r.raw))
 	}
 }
+
+// GET /users/assignable is the member-safe assignee directory: a zero-scope
+// member (a case worker holding case.case.assign but NOT identity.user.admin)
+// can list ACTIVE users with only the {id,email,full_name} profile subset, and
+// it never enumerates another tenant or exposes admin-tier fields.
+func TestAssignableUsersMemberSafe(t *testing.T) {
+	f := newFixture(t)
+	tn := f.activeTenant("assignco")
+	u1 := f.activeUser(tn, "worker1@assignco.com")
+	u2 := f.activeUser(tn, "worker2@assignco.com")
+
+	// A still-invited (not activated) user must NOT be assignable.
+	if r := f.do(http.MethodPost, "/api/v1/users/invite", f.adminToken(tn.ID),
+		map[string]any{"email": "pending@assignco.com"}); r.status != http.StatusCreated {
+		t.Fatalf("invite pending: %d %s", r.status, string(r.raw))
+	}
+	// A deactivated user must NOT be assignable either.
+	u3 := f.activeUser(tn, "gone@assignco.com")
+	if r := f.do(http.MethodPost, "/api/v1/users/"+u3.ID.String()+"/deactivate", f.adminToken(tn.ID), nil); r.status != http.StatusOK {
+		t.Fatalf("deactivate: %d %s", r.status, string(r.raw))
+	}
+
+	// Zero-scope MEMBER token (no identity.user.admin) — the whole point.
+	member := f.userToken(u1)
+	r := f.do(http.MethodGet, "/api/v1/users/assignable", member, nil)
+	if r.status != http.StatusOK {
+		t.Fatalf("member GET /users/assignable: want 200, got %d %s", r.status, string(r.raw))
+	}
+	data, ok := r.body["data"].([]any)
+	if !ok {
+		t.Fatalf("no data array: %s", string(r.raw))
+	}
+	got := map[string]bool{}
+	for _, it := range data {
+		m := it.(map[string]any)
+		got[m["id"].(string)] = true
+		// Member-safe subset only: admin-tier fields must be absent.
+		for _, forbidden := range []string{"status", "idp_subject", "last_login_at", "created_at", "updated_at", "tenant_id"} {
+			if _, present := m[forbidden]; present {
+				t.Errorf("assignable user leaked admin-tier field %q: %v", forbidden, m)
+			}
+		}
+		if m["email"] == nil || m["id"] == nil {
+			t.Errorf("assignable user missing id/email: %v", m)
+		}
+	}
+	// Both active workers present; the invited and deactivated users absent.
+	if !got[u1.ID.String()] || !got[u2.ID.String()] {
+		t.Fatalf("active workers not both present: %v", got)
+	}
+	if got[u3.ID.String()] {
+		t.Errorf("deactivated user was offered as assignable: %v", got)
+	}
+
+	// Tenant isolation: a member of another tenant sees only its own directory,
+	// never assignco's users (MASTER-FR-003).
+	tn2 := f.activeTenant("assignco2")
+	other := f.activeUser(tn2, "outsider@assignco2.com")
+	r2 := f.do(http.MethodGet, "/api/v1/users/assignable", f.userToken(other), nil)
+	if r2.status != http.StatusOK {
+		t.Fatalf("other-tenant member GET: want 200, got %d %s", r2.status, string(r2.raw))
+	}
+	data2, _ := r2.body["data"].([]any)
+	for _, it := range data2 {
+		if id := it.(map[string]any)["id"].(string); id == u1.ID.String() || id == u2.ID.String() {
+			t.Fatalf("cross-tenant leak: assignco2 member saw assignco user %s", id)
+		}
+	}
+}

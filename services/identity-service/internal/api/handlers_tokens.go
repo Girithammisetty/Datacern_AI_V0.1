@@ -39,6 +39,44 @@ func (s *Server) handleEmbedToken(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// handleEmbedOIDC implements POST /token/embed/oidc (task #84, embed-federated
+// SSO): the tenant posts the END USER's OIDC ID token (from the tenant's IdP)
+// instead of a shared embed secret; identity-service verifies it, binds it to a
+// real user in the tenant, and mints a per-user workspace-scoped embed token.
+func (s *Server) handleEmbedOIDC(w http.ResponseWriter, r *http.Request) {
+	var req domain.EmbedOIDCRequest
+	if err := decodeBody(r, &req); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	resp, err := s.Tokens.EmbedOIDCExchange(r.Context(), req, TraceIDFrom(r.Context()))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleOIDCLogin implements POST /token/oidc (BYO-P4): the web tier posts the
+// ID token it obtained from the tenant's OIDC IdP (after the code+PKCE
+// exchange), identity-service verifies it against the IdP's JWKS, resolves the
+// Windrose user, and returns a platform session JWT. Unauthenticated by design
+// — the ID token IS the credential (like /token/embed is gated by the embed
+// secret, not a bearer).
+func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
+	var req domain.OIDCLoginRequest
+	if err := decodeBody(r, &req); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	resp, err := s.Tokens.OIDCLogin(r.Context(), req, TraceIDFrom(r.Context()))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 // POST /token/agent (IDN-FR-042): only agent-runtime, SPIFFE-verified.
 func (s *Server) handleAgentToken(w http.ResponseWriter, r *http.Request) {
 	spiffe, _ := r.Context().Value(ctxSpiffeID).(string)

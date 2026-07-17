@@ -100,8 +100,12 @@ type Store interface {
 // filter (comma-separated ids on the wire): empty means "no id filter";
 // non-empty returns only users whose id is in the set (bff-graphql sends up
 // to 100 ids per call to hydrate nested User fields, BFF-FR-030/031).
+// Status, when set (e.g. "active"), returns only users in that lifecycle
+// state — used by the member-safe assignable-users listing so a deactivated
+// or not-yet-activated user is never offered as a case assignee.
 type UserFilter struct {
-	IDs []uuid.UUID
+	IDs    []uuid.UUID
+	Status string
 }
 
 // TenantFilter per MASTER-FR-023 (only indexed fields are filterable).
