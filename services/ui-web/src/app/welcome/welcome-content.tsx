@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -356,17 +355,9 @@ export default function WelcomeContent() {
             <a href="#solutions" className="transition-colors hover:text-foreground">Solutions</a>
             <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
           </nav>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/login"
-              className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:block"
-            >
-              Sign in
-            </Link>
-            <Button asChild>
-              <a href={DEMO_HREF}>Request a demo</a>
-            </Button>
-          </div>
+          <Button asChild>
+            <a href={DEMO_HREF}>Request a demo</a>
+          </Button>
         </div>
       </header>
 
@@ -661,9 +652,6 @@ export default function WelcomeContent() {
               Request a demo <ArrowRight className="size-4" />
             </a>
           </Button>
-          <Link href="/login" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-            Already a customer? Sign in
-          </Link>
         </div>
       </section>
 
