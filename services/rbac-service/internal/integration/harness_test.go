@@ -1,3 +1,5 @@
+//go:build integration
+
 // Package integration holds the Docker-backed test tier (Testcontainers:
 // Postgres + Redis). It auto-skips with a clear message when Docker is
 // unavailable, and is excluded from `make test-unit` via -short.

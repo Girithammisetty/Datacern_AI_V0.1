@@ -194,12 +194,14 @@ jobs:
     name: test-node (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v4
-      - name: Enable corepack + pin pnpm (Node 20 compatible)
-        # Pin to the version both services declare in packageManager. Without an
-        # explicit pin, corepack downloads its latest default (pnpm 11.x), which
-        # requires Node >=22.13 (uses node:sqlite) and crashes on the Node 20
-        # runner this repo targets (ui-web engines: node >=20 <21).
-        run: corepack prepare pnpm@9.15.9 --activate
+      - name: Install pnpm 9.15.9 (Node 20 compatible)
+        # Use pnpm/action-setup, NOT corepack: corepack's default is pnpm 11.x,
+        # which needs Node >=22.13 (node:sqlite) and crashes on this Node 20 runner
+        # (ui-web engines: node >=20 <21). This installs pnpm before setup-node so
+        # its `cache: pnpm` step resolves the pinned version, not corepack's latest.
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -294,12 +296,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Enable corepack + pin pnpm (Node 20 compatible)
-        # Pin to the version both services declare in packageManager. Without an
-        # explicit pin, corepack downloads its latest default (pnpm 11.x), which
-        # requires Node >=22.13 (uses node:sqlite) and crashes on the Node 20
-        # runner this repo targets (ui-web engines: node >=20 <21).
-        run: corepack prepare pnpm@9.15.9 --activate
+      - name: Install pnpm 9.15.9 (Node 20 compatible)
+        # Use pnpm/action-setup, NOT corepack: corepack's default is pnpm 11.x,
+        # which needs Node >=22.13 (node:sqlite) and crashes on this Node 20 runner
+        # (ui-web engines: node >=20 <21). This installs pnpm before setup-node so
+        # its `cache: pnpm` step resolves the pinned version, not corepack's latest.
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -450,12 +454,14 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Enable corepack + pin pnpm (Node 20 compatible)
-        # Pin to the version both services declare in packageManager. Without an
-        # explicit pin, corepack downloads its latest default (pnpm 11.x), which
-        # requires Node >=22.13 (uses node:sqlite) and crashes on the Node 20
-        # runner this repo targets (ui-web engines: node >=20 <21).
-        run: corepack prepare pnpm@9.15.9 --activate
+      - name: Install pnpm 9.15.9 (Node 20 compatible)
+        # Use pnpm/action-setup, NOT corepack: corepack's default is pnpm 11.x,
+        # which needs Node >=22.13 (node:sqlite) and crashes on this Node 20 runner
+        # (ui-web engines: node >=20 <21). This installs pnpm before setup-node so
+        # its `cache: pnpm` step resolves the pinned version, not corepack's latest.
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
       - uses: actions/setup-node@v4
         with:
           node-version: "20"

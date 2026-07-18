@@ -79,22 +79,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Install the trivy BINARY instead of aquasecurity/trivy-action: that action
+      # runs trivy in a Docker container, and pulling that image at "Set up job"
+      # was failing the job in seconds. The binary install has no Docker pull.
+      - name: Install trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
       - name: trivy dependency/CVE scan (lockfiles)
-        uses: aquasecurity/trivy-action@0.28.0
         env:
-          # Anonymous ghcr.io pulls of the trivy vuln DB are rate-limited and fail
-          # the job within seconds (TOOMANYREQUESTS) — pull from the AWS ECR public
-          # mirror, which isn't rate-limited. (A local scan finds 0 HIGH/CRITICAL,
-          # so the CI red was the DB download, not real CVEs.)
+          # Anonymous ghcr.io pulls of the vuln DB are rate-limited; use the AWS
+          # ECR public mirror. A local scan finds 0 HIGH/CRITICAL, so this gate
+          # passes once it can actually run.
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
           TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db:1
-        with:
-          scan-type: fs
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          format: sarif
-          output: trivy.sarif
+        run: |
+          trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
+            --format sarif --output trivy.sarif .
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with: { sarif_file: trivy.sarif, category: trivy }

@@ -14,8 +14,11 @@ from __future__ import annotations
 import csv
 import json
 import tempfile
-import xml.etree.ElementTree as ET  # nosemgrep: use-defused-xml  # DOCTYPE/entity-expansion rejected by _guard (NFR XML hardening)
-import xml.parsers.expat as expat  # nosemgrep: use-defused-xml  # single expat pass bails at first DOCTYPE; no external entities
+
+# DOCTYPE/entity-expansion is rejected by _guard below (NFR XML hardening), so the
+# stdlib parsers are safe here despite semgrep's use-defused-xml recommendation.
+import xml.etree.ElementTree as ET  # nosemgrep: use-defused-xml
+import xml.parsers.expat as expat  # nosemgrep: use-defused-xml
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
