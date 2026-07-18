@@ -81,6 +81,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: trivy dependency/CVE scan (lockfiles)
         uses: aquasecurity/trivy-action@0.28.0
+        env:
+          # Anonymous ghcr.io pulls of the trivy vuln DB are rate-limited and fail
+          # the job within seconds (TOOMANYREQUESTS) — pull from the AWS ECR public
+          # mirror, which isn't rate-limited. (A local scan finds 0 HIGH/CRITICAL,
+          # so the CI red was the DB download, not real CVEs.)
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
+          TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db:1
         with:
           scan-type: fs
           scanners: vuln
