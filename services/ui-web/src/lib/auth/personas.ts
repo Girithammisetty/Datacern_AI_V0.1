@@ -18,6 +18,8 @@ export interface Persona {
   tenantId?: string;
   workspaceId?: string;
   scopes?: string[];
+  /** First-class cross-tenant platform operator — mints the platform_admin claim. */
+  platformAdmin?: boolean;
 }
 
 export type LoginResolution =

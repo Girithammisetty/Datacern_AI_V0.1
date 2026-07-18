@@ -216,7 +216,7 @@ import type {
 
 export const ME = /* GraphQL */ `
   query Me {
-    me { userId tenantId tenantName workspaceId workspaceName type scopes roles capabilities capsDegraded displayLabels { key value } }
+    me { userId tenantId tenantName workspaceId workspaceName type scopes isPlatformAdmin roles capabilities capsDegraded displayLabels { key value } }
   }
 `;
 export interface MeResult {
@@ -2934,6 +2934,18 @@ export const TENANT = /* GraphQL */ `
 `;
 export interface TenantResult {
   tenant: Tenant | null;
+}
+
+/** All tenants (platform-admin only; identity requireSuperAdmin enforces). */
+export const TENANTS = /* GraphQL */ `
+  query Tenants($limit: Int) {
+    tenants(limit: $limit) {
+      id urn name displayName ownerEmail status tier cloud subdomain createdAt
+    }
+  }
+`;
+export interface TenantsResult {
+  tenants: Tenant[];
 }
 
 export const SET_EMBED_CONFIG = /* GraphQL */ `

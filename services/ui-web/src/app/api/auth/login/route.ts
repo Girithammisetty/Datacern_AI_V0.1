@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
     tenantId: tenantId || p.tenantId || "t-acme",
     workspaceId: workspaceId || p.workspaceId || "ws-claims",
     scopes: p.scopes && p.scopes.length ? p.scopes : DEV_SCOPES,
+    platformAdmin: p.platformAdmin === true,
   });
 
   const res = NextResponse.json({ ok: true, email });

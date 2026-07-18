@@ -55,6 +55,8 @@ export interface DevClaims {
    * still accepts it; the embed route enforces `surface`. */
   embed?: boolean;
   surface?: string[];
+  /** First-class cross-tenant platform operator — mints the platform_admin claim. */
+  platformAdmin?: boolean;
   /** Override the default 8h lifetime (seconds). Embed tokens are short. */
   ttlSeconds?: number;
 }
@@ -70,6 +72,9 @@ export async function mintUserToken(claims: DevClaims): Promise<string> {
   if (claims.embed) {
     payload.embed = true;
     payload.surface = claims.surface ?? [];
+  }
+  if (claims.platformAdmin) {
+    payload.platform_admin = true;
   }
   const jwt = new SignJWT(payload)
     .setProtectedHeader({ alg: "RS256", kid })

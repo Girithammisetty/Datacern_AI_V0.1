@@ -9,7 +9,7 @@
  * enforce every action. Fail-safe: a capability the client cannot confirm HIDES
  * the feature (absent capability → not shown).
  */
-import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties, Fingerprint, Boxes, HelpCircle } from "lucide-react";
+import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties, Fingerprint, HelpCircle } from "lucide-react";
 import type { MessageKey } from "@/lib/i18n/messages";
 
 /** The tenant-admin role short-circuits every action check (rbac BR-7). */
@@ -17,31 +17,44 @@ export const ADMIN_ROLE = "Admin";
 /** The wildcard capability rbac returns for a tenant admin. */
 export const WILDCARD = "*";
 
-/** A gate is satisfied by an action capability, a role, or is always open. */
+/** A gate is satisfied by an action capability, a role, platform-admin, or is
+ * always open. `platform` is ORTHOGONAL to tenant admin: a tenant `Admin` does
+ * NOT pass it — only a first-class platform operator does. */
 export type Gate =
   | { kind: "public" }
   | { kind: "capability"; action: string }
-  | { kind: "role"; role: string };
+  | { kind: "role"; role: string }
+  | { kind: "platform" }
+  | { kind: "anyOf"; gates: Gate[] };
 
 export const publicGate: Gate = { kind: "public" };
 export const cap = (action: string): Gate => ({ kind: "capability", action });
 export const role = (r: string): Gate => ({ kind: "role", role: r });
+/** Gate for cross-tenant platform-operator surfaces (operator ceilings, AI-gateway
+ * provider catalog, tool registry, all-tenants list). */
+export const platformGate: Gate = { kind: "platform" };
+/** Passes when ANY of the given gates passes. Used for the /admin hub, reachable
+ * by a tenant admin OR a platform admin. */
+export const anyOf = (...gates: Gate[]): Gate => ({ kind: "anyOf", gates });
 
 /** The viewer's effective capability view (derived from bff `viewer`). */
 export interface CapabilitySet {
   capabilities: ReadonlySet<string>;
   roles: ReadonlySet<string>;
   isAdmin: boolean;
+  /** First-class cross-tenant platform operator (viewer.isPlatformAdmin). */
+  isPlatform: boolean;
 }
 
 export function toCapabilitySet(input: {
   capabilities?: string[] | null;
   roles?: string[] | null;
+  isPlatformAdmin?: boolean | null;
 }): CapabilitySet {
   const capabilities = new Set(input.capabilities ?? []);
   const roles = new Set(input.roles ?? []);
   const isAdmin = capabilities.has(WILDCARD) || roles.has(ADMIN_ROLE);
-  return { capabilities, roles, isAdmin };
+  return { capabilities, roles, isAdmin, isPlatform: input.isPlatformAdmin === true };
 }
 
 /** The empty (fail-safe) capability set: nothing is allowed. */
@@ -49,9 +62,11 @@ export const EMPTY_CAPABILITIES: CapabilitySet = {
   capabilities: new Set(),
   roles: new Set(),
   isAdmin: false,
+  isPlatform: false,
 };
 
-/** Whether a viewer with `caps` may pass `gate`. Admin passes everything. */
+/** Whether a viewer with `caps` may pass `gate`. Tenant admin passes capability
+ * and role gates; the platform gate is orthogonal (platform operators only). */
 export function allows(gate: Gate, caps: CapabilitySet): boolean {
   switch (gate.kind) {
     case "public":
@@ -60,6 +75,10 @@ export function allows(gate: Gate, caps: CapabilitySet): boolean {
       return caps.isAdmin || caps.capabilities.has(gate.action);
     case "role":
       return caps.isAdmin || caps.roles.has(gate.role);
+    case "platform":
+      return caps.isPlatform;
+    case "anyOf":
+      return gate.gates.some((g) => allows(g, caps));
   }
 }
 
@@ -109,17 +128,16 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "decisions", href: "/decisions", icon: TableProperties, label: "nav.decisions", gate: cap("case.disposition.read"), group: "casework" },
   { key: "inbox", href: "/inbox", icon: Inbox, label: "nav.inbox", gate: cap("ai.proposal.read"), group: "casework" },
 
-  // ── Data ──
-  { key: "data", href: "/data", icon: Database, label: "nav.datasets", gate: cap("dataset.dataset.list"), group: "data" },
+  // ── Data ── (ordered by the data lifecycle: bring it in → shape it → explore it)
   { key: "sources", href: "/data/connections", icon: Plug, label: "nav.sources", gate: cap("ingestion.connection.read"), group: "data" },
   { key: "ingestions", href: "/data/ingestions", icon: DownloadCloud, label: "nav.ingestions", gate: cap("ingestion.ingestion.read"), group: "data" },
-  { key: "queries", href: "/data/queries", icon: Terminal, label: "nav.queries", gate: cap("query.query.read"), group: "data" },
-  { key: "pipelines", href: "/data/pipelines", icon: Workflow, label: "nav.pipelines", gate: cap("pipeline.template.read"), group: "data" },
+  { key: "data", href: "/data", icon: Database, label: "nav.datasets", gate: cap("dataset.dataset.list"), group: "data" },
   { key: "semanticModels", href: "/data/semantic-models", icon: LineChart, label: "nav.semanticModels", gate: cap("semantic.model.list"), group: "data" },
   { key: "entityResolution", href: "/data/entity-resolution", icon: Fingerprint, label: "nav.entityResolution", gate: cap("dataset.entity.read"), group: "data" },
-  { key: "packs", href: "/packs", icon: Boxes, label: "nav.packs", gate: cap("pack.pack.read"), group: "data" },
+  { key: "queries", href: "/data/queries", icon: Terminal, label: "nav.queries", gate: cap("query.query.read"), group: "data" },
 
-  // ── Machine Learning ──
+  // ── Machine Learning ── (Pipelines train the models experiments/eval track)
+  { key: "pipelines", href: "/data/pipelines", icon: Workflow, label: "nav.pipelines", gate: cap("pipeline.template.read"), group: "ml" },
   { key: "ml", href: "/ml", icon: FlaskConical, label: "nav.ml", gate: cap("experiment.experiment.read"), group: "ml" },
   /** Eval flywheel (eval-service, Tier 2a): suites/runs/gates/canaries/trends —
    * model scorecards + promotion-gate status. Sits alongside experiments/models
@@ -145,7 +163,10 @@ export const NAV_ITEMS: NavItem[] = [
   // Help Center — pack-scoped end-user + admin guides. Public so every persona
   // sees it; the page auto-scopes content to the tenant's installed pack.
   { key: "help", href: "/help", icon: HelpCircle, label: "nav.help", gate: publicGate },
-  { key: "admin", href: "/admin", icon: Shield, label: "nav.admin", gate: role(ADMIN_ROLE) },
+  // Packs now lives inside the Admin hub (Administration → Capability packs).
+  // Reachable by a tenant admin OR a platform admin (the hub shows each the
+  // sections they're allowed).
+  { key: "admin", href: "/admin", icon: Shield, label: "nav.admin", gate: anyOf(role(ADMIN_ROLE), platformGate) },
 ];
 
 /**
@@ -160,7 +181,15 @@ interface RouteRule {
 }
 
 const ROUTE_RULES: RouteRule[] = [
-  { prefix: "/admin", gate: role(ADMIN_ROLE) },
+  // Platform-operator surfaces sit under /admin but are cross-tenant, so they
+  // need the platform gate — NOT the per-tenant Admin role. Longer prefixes win
+  // the longest-match resolution below, overriding the /admin tenant-admin rule.
+  { prefix: "/admin/tenants", gate: platformGate },
+  { prefix: "/admin/ai-gateway", gate: platformGate },
+  { prefix: "/admin/tools", gate: platformGate },
+  { prefix: "/admin/platform", gate: platformGate },
+  // The hub itself is reachable by tenant admins OR platform admins.
+  { prefix: "/admin", gate: anyOf(role(ADMIN_ROLE), platformGate) },
   // Data Sources sits under /data but needs the ingestion capability, not the
   // dataset one — the longer prefix wins the longest-match resolution below.
   { prefix: "/data/connections", gate: cap("ingestion.connection.read") },

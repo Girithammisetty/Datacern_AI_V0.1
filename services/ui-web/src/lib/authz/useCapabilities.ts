@@ -23,6 +23,8 @@ export interface Capabilities {
   roles: string[];
   capabilities: string[];
   isAdmin: boolean;
+  /** First-class cross-tenant platform operator (viewer.isPlatformAdmin). */
+  isPlatform: boolean;
   /** True when the backend's rbac lookup failed and the (empty) capabilities are
    * a fail-closed fallback: the nav stays fail-closed but the shell shows a
    * "permissions unavailable" notice instead of a silently empty menu. */
@@ -43,7 +45,11 @@ export function useCapabilities(): Capabilities {
   const set = useMemo<CapabilitySet>(
     () =>
       viewer
-        ? toCapabilitySet({ capabilities: viewer.capabilities, roles: viewer.roles })
+        ? toCapabilitySet({
+            capabilities: viewer.capabilities,
+            roles: viewer.roles,
+            isPlatformAdmin: viewer.isPlatformAdmin,
+          })
         : EMPTY_CAPABILITIES,
     [viewer],
   );
@@ -58,6 +64,7 @@ export function useCapabilities(): Capabilities {
       roles: viewer?.roles ?? [],
       capabilities: viewer?.capabilities ?? [],
       isAdmin: set.isAdmin,
+      isPlatform: set.isPlatform,
       capsDegraded: viewer?.capsDegraded ?? false,
     }),
     [set, me.isLoading, me.isError, viewer],

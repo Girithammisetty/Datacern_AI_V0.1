@@ -33,8 +33,14 @@ export function Sidebar({ pendingCount }: { pendingCount?: number }) {
       </div>
       {items.map(({ key, href, icon: Icon, label, group }, i) => {
         const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        const prevGroup = items[i - 1]?.group;
         // Section header: the first visible item of a new group opens a section.
-        const showHeader = group && group !== items[i - 1]?.group;
+        const showHeader = group && group !== prevGroup;
+        // Divider: an ungrouped item that follows a grouped section starts the
+        // bottom "utility" cluster (Copilot, Notifications, Help, Packs, Admin).
+        // Without this they'd render headerless and look like part of the last
+        // section (e.g. Insights).
+        const showDivider = !group && !!prevGroup;
         return (
           <div key={key} className="contents">
             {showHeader && (
@@ -45,6 +51,7 @@ export function Sidebar({ pendingCount }: { pendingCount?: number }) {
                 {t(NAV_GROUP_LABEL[group])}
               </div>
             )}
+            {showDivider && <div className="my-2 border-t border-border/60" aria-hidden />}
             <Link
               href={href}
               aria-current={active ? "page" : undefined}

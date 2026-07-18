@@ -93,6 +93,8 @@ export interface Viewer {
   workspaceName: string | null;
   type: string;
   scopes: string[];
+  /** First-class cross-tenant platform operator (distinct from tenant Admin). */
+  isPlatformAdmin: boolean;
   /** Role display names from rbac's projection (UI gate display data). */
   roles: string[];
   /** Allowed action names (e.g. "case.case.read"); "*" == tenant admin. */

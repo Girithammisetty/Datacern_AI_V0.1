@@ -8,6 +8,7 @@ import {
   cap,
   role,
   publicGate,
+  platformGate,
   ADMIN_ROLE,
 } from "./registry";
 
@@ -204,6 +205,36 @@ describe("route guard gates", () => {
   it("home and copilot are public (every persona)", () => {
     expect(gateForPath("/")).toEqual(publicGate);
     expect(gateForPath("/copilot")).toEqual(publicGate);
+  });
+});
+
+describe("platform gate (orthogonal to tenant admin)", () => {
+  const tenantAdmin = toCapabilitySet({ roles: [ADMIN_ROLE], capabilities: ["*"] });
+  const platformAdmin = toCapabilitySet({ roles: [], capabilities: [], isPlatformAdmin: true });
+
+  it("toCapabilitySet reflects isPlatformAdmin", () => {
+    expect(platformAdmin.isPlatform).toBe(true);
+    expect(tenantAdmin.isPlatform).toBe(false);
+  });
+
+  it("a tenant Admin does NOT pass the platform gate", () => {
+    expect(tenantAdmin.isAdmin).toBe(true);
+    expect(allows(platformGate, tenantAdmin)).toBe(false);
+  });
+
+  it("a platform admin passes the platform gate", () => {
+    expect(allows(platformGate, platformAdmin)).toBe(true);
+  });
+
+  it("platform-only /admin routes require the platform gate, not tenant admin", () => {
+    for (const path of ["/admin/tenants", "/admin/ai-gateway", "/admin/tools"]) {
+      expect(allows(gateForPath(path), tenantAdmin)).toBe(false);
+      expect(allows(gateForPath(path), platformAdmin)).toBe(true);
+    }
+    // The /admin hub itself is reachable by EITHER a tenant admin or a platform
+    // admin (anyOf) — the per-card gates split what each one sees inside.
+    expect(allows(gateForPath("/admin/users"), tenantAdmin)).toBe(true);
+    expect(allows(gateForPath("/admin/users"), platformAdmin)).toBe(true);
   });
 });
 

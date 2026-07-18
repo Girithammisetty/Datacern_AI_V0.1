@@ -17,8 +17,8 @@ import { RouteGuard } from "@/components/authz/RouteGuard";
 import { Can } from "@/components/authz/Can";
 import { FEATURE_GATES } from "@/lib/authz/registry";
 
-function viewer(roles: string[], capabilities: string[]): Viewer {
-  return { userId: "u", tenantId: "t", tenantName: "Tenant T", workspaceId: "w", workspaceName: "Default use case", type: "user", scopes: [], roles, capabilities, capsDegraded: false };
+function viewer(roles: string[], capabilities: string[], isPlatformAdmin = false): Viewer {
+  return { userId: "u", tenantId: "t", tenantName: "Tenant T", workspaceId: "w", workspaceName: "Default use case", type: "user", scopes: [], isPlatformAdmin, roles, capabilities, capsDegraded: false };
 }
 
 const ADJUSTER = viewer(

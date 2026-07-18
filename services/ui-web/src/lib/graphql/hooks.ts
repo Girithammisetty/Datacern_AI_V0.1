@@ -123,6 +123,17 @@ export function useMe() {
   });
 }
 
+/** All tenants — platform-admin only (identity's requireSuperAdmin enforces;
+ * a tenant admin's query 403s downstream). */
+export function useTenants(enabled = true) {
+  return useQuery({
+    queryKey: qk.tenants(),
+    queryFn: () => graphqlRequest<ops.TenantsResult>(ops.TENANTS, { limit: 500 }).then((r) => r.tenants),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 /* ------- data ------- */
 export function useDatasets(vars: { q?: string; filter?: DatasetFilter } = {}) {
   return useInfiniteQuery({
