@@ -36,7 +36,7 @@ components:
   dispositions:
     - { file: "cases/dispositions.yaml", identity: "dispositions" }
 deferred:
-  - { kind: guardrails, reason: "guardrail-service not shipped in Core yet" }
+  - { kind: ontology, reason: "guardrail-service not shipped in Core yet" }
 """
 
 
@@ -45,7 +45,7 @@ def test_valid_manifest_loads(tmp_path):
     m = load_manifest(pack)
     assert m.name == "test-pack" and m.version == "1.0.0"
     assert len(m.components) == 1 and m.components[0].kind == "dispositions"
-    assert m.deferred[0]["kind"] == "guardrails"
+    assert m.deferred[0]["kind"] == "ontology"
 
 
 def test_missing_manifest_file(tmp_path):
@@ -72,7 +72,7 @@ def test_envelope_validation(tmp_path, field, value, pointer):
 
 
 def test_unknown_kind_rejected_with_deferred_hint(tmp_path):
-    bad = VALID.replace("dispositions:", "guardrails:")
+    bad = VALID.replace("dispositions:", "ontology:")
     pack = _write_pack(tmp_path, bad, {"cases/dispositions.yaml": "[]"})
     with pytest.raises(ManifestError) as e:
         load_manifest(pack)
@@ -101,7 +101,7 @@ def test_duplicate_identity_rejected(tmp_path):
 
 
 def test_installable_kind_cannot_be_deferred(tmp_path):
-    bad = VALID.replace("kind: guardrails", "kind: dashboards")
+    bad = VALID.replace("kind: ontology", "kind: dashboards")
     pack = _write_pack(tmp_path, bad, {"cases/dispositions.yaml": "[]"})
     with pytest.raises(ManifestError) as e:
         load_manifest(pack)

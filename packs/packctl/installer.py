@@ -32,8 +32,9 @@ from .manifest import Manifest, load_component_file
 
 INSTALL_ORDER = (
     "datasets", "semantic_models", "verified_queries", "saved_queries",
-    "dashboards", "dispositions", "decision_models", "cases", "roles",
-    "agent_configs", "memories", "pipelines",
+    "dashboards", "dispositions", "case_fields", "case_schemas",
+    "decision_models", "cases", "roles", "agent_configs", "guardrails",
+    "memories", "pipelines", "display_labels", "eval_sets", "model_archetypes",
 )
 
 

@@ -80,7 +80,7 @@ def _write_pack(tmp_path: Path) -> Path:
           decision_models:
             - { file: "decisions.yaml", identity: "triage_table" }
         deferred:
-          - { kind: guardrails, reason: "not in core" }
+          - { kind: ontology, reason: "not in core" }
     """))
     (tmp_path / "decisions.yaml").write_text(textwrap.dedent("""
         - identity: triage_table
@@ -145,7 +145,7 @@ def test_ledger_records_actions_and_deferred(tmp_path):
     ledger = json.loads(result.ledger_path.read_text())
     assert ledger["result"] == "installed"
     assert ledger["pack"] == "order-test"
-    assert ledger["deferred"][0]["kind"] == "guardrails"
+    assert ledger["deferred"][0]["kind"] == "ontology"
     assert any(a["kind"] == "datasets" and a["action"] == "create"
                for a in ledger["actions"])
 
