@@ -13,6 +13,7 @@ import contextlib
 import logging
 
 from fastapi import FastAPI
+from windrose_common.logging import configure_json_logging
 
 from app.api.errors import TraceMiddleware, install_error_handlers
 from app.api.middleware import AuthMiddleware
@@ -31,7 +32,6 @@ from app.api.routes import (
 from app.config import Settings
 from app.container import Container, build_container
 from app.domain.entities import CallCtx
-from windrose_common.logging import configure_json_logging
 
 configure_json_logging("eval-service")  # MASTER-FR-050: JSON stdout, mirrors Go's slog handler
 logger = logging.getLogger(__name__)

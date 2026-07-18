@@ -75,10 +75,10 @@ class _Registry:
                     f'route="{route}",le="+Inf"}} {cumulative}'
                 )
                 lines.append(
-                    f'http_request_duration_seconds_sum{{method="{method}",route="{route}"}} {total}'
+                    f'http_request_duration_seconds_sum{{method="{method}",route="{route}"}} {total}'  # noqa: E501
                 )
                 lines.append(
-                    f'http_request_duration_seconds_count{{method="{method}",route="{route}"}} {count}'
+                    f'http_request_duration_seconds_count{{method="{method}",route="{route}"}} {count}'  # noqa: E501
                 )
             lines.append("# HELP http_requests_in_flight In-flight HTTP requests.")
             lines.append("# TYPE http_requests_in_flight gauge")

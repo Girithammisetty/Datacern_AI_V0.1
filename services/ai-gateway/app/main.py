@@ -18,13 +18,13 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from windrose_common.logging import configure_json_logging
 
 from app.api.errors import TraceMiddleware, install_error_handlers
 from app.api.middleware import AuthMiddleware
 from app.api.routes import admin, data_plane, health
 from app.config import Settings
 from app.container import Container, build_container
-from windrose_common.logging import configure_json_logging
 
 configure_json_logging("ai-gateway")  # MASTER-FR-050: JSON stdout, mirrors Go's slog handler
 logger = logging.getLogger(__name__)

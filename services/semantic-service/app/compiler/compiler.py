@@ -603,8 +603,10 @@ class Compiler:
         slug = entity.table.rsplit(".", 1)[-1]
         policy = entity.dataset_version_policy or {}
         if policy.get("policy") == "pinned" and policy.get("version_no"):
-            return "{{dataset('%s', version=%d)}}" % (slug, int(policy["version_no"]))
-        return "{{dataset('%s')}}" % slug
+            # %-format is intentional: the literal {{ }} are a downstream template
+            # placeholder, not str.format braces (which would need quadrupling).
+            return "{{dataset('%s', version=%d)}}" % (slug, int(policy["version_no"]))  # noqa: UP031
+        return "{{dataset('%s')}}" % slug  # noqa: UP031
 
     # -- public entry ---------------------------------------------------------
 

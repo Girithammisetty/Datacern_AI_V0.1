@@ -102,11 +102,13 @@ def upgrade() -> None:
                     source_updated_at timestamptz,
                     user_linkage text,
                     created_at timestamptz NOT NULL,
-                    CONSTRAINT ux_chunk UNIQUE (corpus_key, source_urn, chunk_seq, embedding_model_ver)
+                    CONSTRAINT ux_chunk UNIQUE
+                        (corpus_key, source_urn, chunk_seq, embedding_model_ver)
                 )$ddl$, sch);
 
             EXECUTE format(
-                'CREATE INDEX IF NOT EXISTS ix_mem_scope ON %I.memories (scope, scope_ref, status)', sch);
+                'CREATE INDEX IF NOT EXISTS ix_mem_scope '
+                'ON %I.memories (scope, scope_ref, status)', sch);
             EXECUTE format(
                 'CREATE INDEX IF NOT EXISTS ix_mem_ttl ON %I.memories (ttl_expires_at)', sch);
             EXECUTE format(
@@ -115,7 +117,8 @@ def upgrade() -> None:
                 'CREATE INDEX IF NOT EXISTS ix_mem_hnsw ON %I.memories '
                 'USING hnsw (embedding vector_cosine_ops) WHERE status = ''active''', sch);
             EXECUTE format(
-                'CREATE INDEX IF NOT EXISTS ix_chunk_src ON %I.rag_chunks (corpus_key, source_urn)', sch);
+                'CREATE INDEX IF NOT EXISTS ix_chunk_src '
+                'ON %I.rag_chunks (corpus_key, source_urn)', sch);
             EXECUTE format(
                 'CREATE INDEX IF NOT EXISTS ix_chunk_hnsw ON %I.rag_chunks '
                 'USING hnsw (embedding vector_cosine_ops)', sch);
@@ -128,13 +131,15 @@ def upgrade() -> None:
                            AND tablename = 'memories' AND policyname = 'tenant_iso') THEN
                 EXECUTE format(
                     'CREATE POLICY tenant_iso ON %I.memories USING '
-                    '(tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::uuid)', sch);
+                    '(tenant_id = NULLIF('
+                    'current_setting(''app.tenant_id'', true), '''')::uuid)', sch);
             END IF;
             IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = sch
                            AND tablename = 'rag_chunks' AND policyname = 'tenant_iso') THEN
                 EXECUTE format(
                     'CREATE POLICY tenant_iso ON %I.rag_chunks USING '
-                    '(tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''')::uuid)', sch);
+                    '(tenant_id = NULLIF('
+                    'current_setting(''app.tenant_id'', true), '''')::uuid)', sch);
             END IF;
             EXECUTE format(
                 'GRANT SELECT, INSERT, UPDATE, DELETE ON %I.memories TO memory_app', sch);

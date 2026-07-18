@@ -45,7 +45,6 @@ from __future__ import annotations
 
 import socket
 import uuid
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 

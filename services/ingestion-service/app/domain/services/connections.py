@@ -19,9 +19,9 @@ from app.domain.errors import (
     ErrorCategory,
     NotFoundError,
     RequestTimeoutError,
+    UnsupportedConnectorError,
     ValidationFailedError,
 )
-from app.domain.errors import UnsupportedConnectorError
 from app.domain.probers import ProbeResult, UnsupportedConnectorProber
 from app.domain.secrets import connection_secret_path
 from app.domain.services.common import iso, raise_not_found_with_audit
