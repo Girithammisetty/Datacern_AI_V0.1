@@ -276,7 +276,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test deps
-        run: pip install -q pytest pyyaml
+        # packctl's client.py imports requests at module load (installer -> client),
+        # so the test collection needs it even for offline unit tests.
+        run: pip install -q pytest pyyaml requests
       - name: Pytest (packctl)
         run: python -m pytest packs/packctl/tests -q
 
