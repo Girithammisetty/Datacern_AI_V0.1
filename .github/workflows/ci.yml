@@ -349,8 +349,13 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::2) no Fake/Stub/Mock adapter imported from an entrypoint"
-          # Only inspect real entrypoints (main.py / container.py), not tests.
-          hits=$(grep -rEn 'import .*(Fake|Stub|Mock).*Adapter|from .*(fake|stub|mock).* import' \
+          # Only inspect real entrypoints (main.py / container.py), not tests. Anchor
+          # to MODULE-LEVEL imports (column 0) — that is the real footgun: a fake wired
+          # at import time, always loaded. Imports guarded inside a function/else branch
+          # (e.g. container.py's `if real: ... else: from app.adapters.fakes import X`,
+          # only reached when use_real_adapters=False, which check #1 forbids as a
+          # default) never ship at runtime, so they are not flagged.
+          hits=$(grep -rEn '^(import .*(Fake|Stub|Mock).*Adapter|from .*(fake|stub|mock).* import)' \
                    services/*/app/main.py services/*/app/container.py 2>/dev/null || true)
           if [ -n "$hits" ]; then
             echo "$hits"
