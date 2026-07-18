@@ -31,6 +31,7 @@ type Store struct {
 	agents       map[string]*domain.AgentPrincipal
 	signingKeys  map[string]*domain.SigningKey
 	embedConfigs map[uuid.UUID]*domain.TenantEmbedConfig
+	idpConfigs   map[uuid.UUID]*domain.TenantIdpConfig
 	idempotency  map[string]*domain.IdempotencyRecord
 	outbox       []*domain.OutboxEvent
 }
@@ -48,6 +49,7 @@ func New() *Store {
 		agents:       map[string]*domain.AgentPrincipal{},
 		signingKeys:  map[string]*domain.SigningKey{},
 		embedConfigs: map[uuid.UUID]*domain.TenantEmbedConfig{},
+		idpConfigs:   map[uuid.UUID]*domain.TenantIdpConfig{},
 		idempotency:  map[string]*domain.IdempotencyRecord{},
 	}
 }
@@ -243,6 +245,46 @@ func (s *Store) UpsertTenantEmbedConfig(_ context.Context, cfg *domain.TenantEmb
 	defer s.mu.Unlock()
 	cp := *cfg
 	s.embedConfigs[cfg.TenantID] = &cp
+	return nil
+}
+
+// --- per-tenant OIDC IdP config (BYO-P4) ---
+
+func (s *Store) GetTenantIdpConfig(_ context.Context, tenantID uuid.UUID) (*domain.TenantIdpConfig, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.idpConfigs[tenantID]
+	if !ok {
+		return nil, domain.ENotFound("idp config")
+	}
+	cp := *c
+	return &cp, nil
+}
+
+func (s *Store) GetTenantIdpConfigByIssuer(_ context.Context, issuer string) (*domain.TenantIdpConfig, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, c := range s.idpConfigs {
+		if c.Issuer == issuer {
+			cp := *c
+			return &cp, nil
+		}
+	}
+	return nil, domain.ENotFound("idp config")
+}
+
+func (s *Store) UpsertTenantIdpConfig(_ context.Context, cfg *domain.TenantIdpConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *cfg
+	s.idpConfigs[cfg.TenantID] = &cp
+	return nil
+}
+
+func (s *Store) DeleteTenantIdpConfig(_ context.Context, tenantID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.idpConfigs, tenantID)
 	return nil
 }
 

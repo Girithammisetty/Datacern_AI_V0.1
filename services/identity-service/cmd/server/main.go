@@ -189,10 +189,22 @@ func main() {
 		Limiter: domain.NewSlidingWindowLimiter(domain.OBORateLimit, domain.OBORateWindow), Clock: clock,
 	}
 
+	// BYO-P4 per-tenant IdP: build an OIDC provider from a tenant's stored config
+	// (tenant_idp_configs). Injected so the domain layer stays free of the OIDC
+	// adapter; the token service caches the built provider per tenant.
+	tokens.IdpBuild = func(c domain.TenantIdpConfig) domain.IdentityProvider {
+		return oidc.New(oidc.Config{
+			Issuer:       c.Issuer,
+			ClientID:     c.ClientID,
+			DiscoveryURL: c.DiscoveryURL,
+		})
+	}
+
 	// BYO-P4 real OIDC login: enable POST /token/oidc when a generic OIDC IdP is
 	// configured (deployment-level; Keycloak/Okta/Auth0/Entra are all just a
 	// different OIDC_ISSUER). Off by default — the dev/persona login path is
-	// untouched. Per-tenant IdP config is a documented follow-up.
+	// untouched. Per-tenant IdP config (above) routes by the token's issuer;
+	// this env path is the legacy single-IdP fallback.
 	if iss := os.Getenv("OIDC_ISSUER"); iss != "" {
 		if tid, err := uuid.Parse(os.Getenv("OIDC_TENANT_ID")); err == nil {
 			tokens.IDP = oidc.New(oidc.Config{

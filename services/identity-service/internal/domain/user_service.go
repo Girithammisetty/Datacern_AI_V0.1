@@ -154,6 +154,33 @@ func (s *UserService) AcceptInvitation(ctx context.Context, token, idpSubject st
 	return u, nil
 }
 
+// Activate directly promotes a pre-provisioned (invited) or previously
+// deactivated user to active WITHOUT the invitation-accept round trip — the
+// admin equivalent of the user accepting their own invite. Used for
+// operator-provisioned accounts (e.g. seeded working personas) and to
+// re-enable a deactivated user. Idempotent; a soft-deleted user cannot be
+// reactivated.
+func (s *UserService) Activate(ctx context.Context, tenantID, userID uuid.UUID, actor Actor) (*User, error) {
+	u, err := s.Store.GetUser(ctx, tenantID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if u.DeletedAt != nil {
+		return nil, EConflict("cannot activate a deleted user")
+	}
+	if u.Status == UserActive {
+		return u, nil // idempotent
+	}
+	now := s.now()
+	u.Status = UserActive
+	u.UpdatedAt = now
+	if err := s.Store.UpdateUser(ctx, u,
+		NewEvent(EvUserActivated, tenantID, actor, u.URN(), now, nil)); err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
 // Deactivate per IDN-FR-022 + BR-9. Effective for OBO immediately (AC-6).
 func (s *UserService) Deactivate(ctx context.Context, tenant *Tenant, userID uuid.UUID, actor Actor, override bool) (*User, error) {
 	u, err := s.Store.GetUser(ctx, tenant.ID, userID)

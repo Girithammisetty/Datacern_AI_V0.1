@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,13 +18,43 @@ type TokenService struct {
 	Denylist Denylist
 	Clock    func() time.Time
 
-	// BYO-P4 real OIDC login: IDP verifies an external OIDC ID token and
-	// OIDCTenantID is the tenant this deployment's IdP serves (the interactive
-	// login → Windrose-user resolution is scoped to it). Both nil/zero when
-	// AUTH_OIDC is not configured, in which case OIDCLogin returns a clear
-	// "not enabled" error. Per-tenant IdP config is a documented follow-up.
+	// BYO-P4 real OIDC login. Two layers, resolved per login (see OIDCLogin):
+	//   1. PER-TENANT: a tenant's own IdP (tenant_idp_configs) routes by the ID
+	//      token's `iss` claim — each tenant brings their own Okta/Auth0/Entra/
+	//      Keycloak. Built lazily from stored config via IdpBuild + cached here.
+	//   2. LEGACY single-IdP: IDP + OIDCTenantID from deployment env, used only
+	//      when no per-tenant config matches (back-compat; unchanged behavior).
 	IDP          IdentityProvider
 	OIDCTenantID uuid.UUID
+
+	// IdpBuild constructs an IdentityProvider from a stored per-tenant config
+	// (injected in main.go so the domain layer doesn't import the OIDC adapter).
+	IdpBuild func(TenantIdpConfig) IdentityProvider
+	idpMu    sync.Mutex
+	idpCache map[uuid.UUID]cachedIdp
+}
+
+type cachedIdp struct {
+	fingerprint string
+	provider    IdentityProvider
+}
+
+// providerFor returns a cached IdentityProvider for a tenant's IdP config,
+// rebuilding it only when the config (issuer/client/discovery) changed — so a
+// login doesn't re-run OIDC discovery + JWKS fetch every request.
+func (s *TokenService) providerFor(cfg *TenantIdpConfig) IdentityProvider {
+	fp := cfg.Issuer + "|" + cfg.ClientID + "|" + cfg.DiscoveryURL
+	s.idpMu.Lock()
+	defer s.idpMu.Unlock()
+	if s.idpCache == nil {
+		s.idpCache = map[uuid.UUID]cachedIdp{}
+	}
+	if e, ok := s.idpCache[cfg.TenantID]; ok && e.fingerprint == fp {
+		return e.provider
+	}
+	p := s.IdpBuild(*cfg)
+	s.idpCache[cfg.TenantID] = cachedIdp{fingerprint: fp, provider: p}
+	return p
 }
 
 func (s *TokenService) now() time.Time { return s.Clock().UTC() }

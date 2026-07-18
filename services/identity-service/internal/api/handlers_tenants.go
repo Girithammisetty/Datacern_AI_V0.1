@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -155,6 +156,89 @@ func (s *Server) handleGetEmbedConfig(w http.ResponseWriter, r *http.Request) {
 		"allowed_origins": cfg.AllowedOrigins,
 		"updated_at":      cfg.UpdatedAt,
 	})
+}
+
+// --- per-tenant OIDC IdP config (BYO-P4) — self-service for tenant admins ---
+
+// GET /tenants/self/idp: the caller's tenant's OIDC IdP config for the admin
+// SSO screen. 404 = "no IdP configured" (SSO login for this tenant is off).
+func (s *Server) handleGetTenantIdp(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFrom(r.Context())
+	cfg, err := s.Store.GetTenantIdpConfig(r.Context(), claims.TenantID)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, idpConfigView(cfg))
+}
+
+// PUT /tenants/self/idp: register/update the caller's tenant's OIDC IdP. The
+// issuer must be globally unique (it routes inbound ID tokens to this tenant);
+// a collision surfaces as a clean 409-class conflict rather than a raw DB error.
+func (s *Server) handleSetTenantIdp(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFrom(r.Context())
+	var body struct {
+		Issuer       string `json:"issuer"`
+		ClientID     string `json:"client_id"`
+		DiscoveryURL string `json:"discovery_url"`
+		Enabled      *bool  `json:"enabled"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	enabled := true
+	if body.Enabled != nil {
+		enabled = *body.Enabled
+	}
+	cfg := &domain.TenantIdpConfig{
+		TenantID:     claims.TenantID,
+		Issuer:       strings.TrimSpace(body.Issuer),
+		ClientID:     strings.TrimSpace(body.ClientID),
+		DiscoveryURL: strings.TrimSpace(body.DiscoveryURL),
+		Enabled:      enabled,
+	}
+	if err := cfg.Validate(); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	// Guard the unique-issuer invariant with a clear message (another tenant
+	// can't be shadowed by re-registering their issuer).
+	if other, err := s.Store.GetTenantIdpConfigByIssuer(r.Context(), cfg.Issuer); err == nil &&
+		other != nil && other.TenantID != claims.TenantID {
+		writeErr(w, r, domain.EConflict("that issuer is already registered to another tenant"))
+		return
+	}
+	if err := s.Store.UpsertTenantIdpConfig(r.Context(), cfg); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	stored, err := s.Store.GetTenantIdpConfig(r.Context(), claims.TenantID)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, idpConfigView(stored))
+}
+
+// DELETE /tenants/self/idp: turn off SSO for the caller's tenant.
+func (s *Server) handleDeleteTenantIdp(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFrom(r.Context())
+	if err := s.Store.DeleteTenantIdpConfig(r.Context(), claims.TenantID); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func idpConfigView(c *domain.TenantIdpConfig) map[string]any {
+	return map[string]any{
+		"issuer":        c.Issuer,
+		"client_id":     c.ClientID,
+		"discovery_url": c.DiscoveryURL,
+		"enabled":       c.Enabled,
+		"updated_at":    c.UpdatedAt,
+	}
 }
 
 // GET /tenants — filters: status, cell, cloud (MASTER-FR-023).

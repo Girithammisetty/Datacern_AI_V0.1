@@ -110,6 +110,11 @@ func (s *Server) Router() http.Handler {
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}", s.handleGetTenant)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/embed-config", s.handleGetEmbedConfig)
 			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/{id}/embed-config", s.handleSetEmbedConfig)
+			// BYO-P4: a tenant admin registers their OWN OIDC IdP (self-scoped;
+			// keyed on the caller's tenant claim, no {id} to spoof).
+			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/self/idp", s.handleGetTenantIdp)
+			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/self/idp", s.handleSetTenantIdp)
+			r.With(s.requireScope(ActUserAdmin)).Delete("/tenants/self/idp", s.handleDeleteTenantIdp)
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireSuperAdmin)
 				r.Post("/tenants", s.handleCreateTenant)
@@ -133,6 +138,7 @@ func (s *Server) Router() http.Handler {
 				r.Get("/users", s.handleListUsers)
 				r.Get("/users/{id}", s.handleGetUser)
 				r.Patch("/users/{id}", s.handlePatchUser)
+				r.Post("/users/{id}/activate", s.handleActivateUser)
 				r.Post("/users/{id}/deactivate", s.handleDeactivateUser)
 				r.Post("/users/{id}/invite/resend", s.handleResendInvite)
 				r.Delete("/users/{id}", s.handleDeleteUser)

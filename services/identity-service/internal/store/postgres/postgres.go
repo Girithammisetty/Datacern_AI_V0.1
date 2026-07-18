@@ -164,6 +164,51 @@ func (s *Store) UpsertTenantEmbedConfig(ctx context.Context, cfg *domain.TenantE
 	return err
 }
 
+// --- per-tenant OIDC IdP config (BYO-P4) ---
+
+const idpCols = `tenant_id, issuer, client_id, discovery_url, enabled, created_at, updated_at`
+
+func scanIdp(row interface{ Scan(...any) error }) (*domain.TenantIdpConfig, error) {
+	var c domain.TenantIdpConfig
+	if err := row.Scan(&c.TenantID, &c.Issuer, &c.ClientID, &c.DiscoveryURL,
+		&c.Enabled, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ENotFound("idp config")
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (s *Store) GetTenantIdpConfig(ctx context.Context, tenantID uuid.UUID) (*domain.TenantIdpConfig, error) {
+	return scanIdp(s.pool.QueryRow(ctx,
+		`SELECT `+idpCols+` FROM tenant_idp_configs WHERE tenant_id = $1`, tenantID))
+}
+
+func (s *Store) GetTenantIdpConfigByIssuer(ctx context.Context, issuer string) (*domain.TenantIdpConfig, error) {
+	return scanIdp(s.pool.QueryRow(ctx,
+		`SELECT `+idpCols+` FROM tenant_idp_configs WHERE issuer = $1`, issuer))
+}
+
+func (s *Store) UpsertTenantIdpConfig(ctx context.Context, cfg *domain.TenantIdpConfig) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO tenant_idp_configs (tenant_id, issuer, client_id, discovery_url, enabled, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, now())
+		 ON CONFLICT (tenant_id) DO UPDATE SET
+		   issuer = EXCLUDED.issuer,
+		   client_id = EXCLUDED.client_id,
+		   discovery_url = EXCLUDED.discovery_url,
+		   enabled = EXCLUDED.enabled,
+		   updated_at = now()`,
+		cfg.TenantID, cfg.Issuer, cfg.ClientID, cfg.DiscoveryURL, cfg.Enabled)
+	return err
+}
+
+func (s *Store) DeleteTenantIdpConfig(ctx context.Context, tenantID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM tenant_idp_configs WHERE tenant_id = $1`, tenantID)
+	return err
+}
+
 func (s *Store) ListTenants(ctx context.Context, f domain.TenantFilter, page domain.PageRequest) ([]*domain.Tenant, domain.PageInfo, error) {
 	q := `SELECT ` + tenantCols + ` FROM tenants WHERE 1=1`
 	args := []any{}

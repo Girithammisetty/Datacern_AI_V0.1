@@ -66,6 +66,14 @@ type Store interface {
 	GetTenantEmbedConfig(ctx context.Context, tenantID uuid.UUID) (*TenantEmbedConfig, error)
 	UpsertTenantEmbedConfig(ctx context.Context, cfg *TenantEmbedConfig) error
 
+	// --- per-tenant OIDC IdP config (BYO-P4) ---
+	GetTenantIdpConfig(ctx context.Context, tenantID uuid.UUID) (*TenantIdpConfig, error)
+	// GetTenantIdpConfigByIssuer routes an inbound ID token to its tenant by the
+	// token's `iss` claim (issuer is globally unique). Read on the login path.
+	GetTenantIdpConfigByIssuer(ctx context.Context, issuer string) (*TenantIdpConfig, error)
+	UpsertTenantIdpConfig(ctx context.Context, cfg *TenantIdpConfig) error
+	DeleteTenantIdpConfig(ctx context.Context, tenantID uuid.UUID) error
+
 	// ResolveAPIKeyTenant maps a service-account id to its tenant via the
 	// platform-scoped api_key_index table (pre-auth edge exchange).
 	ResolveAPIKeyTenant(ctx context.Context, saID uuid.UUID) (uuid.UUID, error)

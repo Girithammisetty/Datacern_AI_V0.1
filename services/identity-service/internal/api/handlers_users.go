@@ -255,6 +255,23 @@ func (s *Server) handleDeactivateUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, u)
 }
 
+// POST /users/{id}/activate — promote an invited/deactivated user to active
+// (admin equivalent of accepting the invite). Tenant-admin scoped.
+func (s *Server) handleActivateUser(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFrom(r.Context())
+	id, err := parseID(r)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	u, err := s.Users.Activate(r.Context(), claims.TenantID, id, actorFrom(claims))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, u)
+}
+
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	claims := ClaimsFrom(r.Context())
 	id, err := parseID(r)
