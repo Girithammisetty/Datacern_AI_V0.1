@@ -40,7 +40,7 @@ INC1_KINDS = ("dispositions", "case_fields", "display_labels", "guardrails",
 # them in the normal review UI). saved queries create against the ingested
 # datasets. Dashboards depend on the model's PUBLISHED measure projection, so
 # they materialize in the second phase (run_complete), after approval.
-INC2_PHASE1_KINDS = ("datasets", "semantic_models", "verified_queries", "saved_queries")
+INC2_PHASE1_KINDS = ("datasets", "semantic_models", "verified_queries", "saved_queries", "cases")
 INC2_PHASE2_KINDS = ("dashboards",)
 
 # Kinds whose Core service exposes a real revert (delete) verb → reversible on
@@ -133,6 +133,12 @@ def _existing_names(client) -> dict[str, set[str]]:
     lb = client._req("GET", f"{e.identity}/api/v1/tenants/self/labels", tok)
     out["display_labels"] = set((lb.json().get("labels") or {}).keys()) \
         if lb.status_code == 200 else set()
+    # NOTE: cases are deliberately NOT prefetched here. The case-service LIST
+    # projection omits row_pk (it is only on the detail view), and idempotency is
+    # enforced SERVER-SIDE anyway — case creation dedups on (dataset_urn, row_pk)
+    # via the case dedup_key, so re-installing never duplicates a seed case. The
+    # plan therefore shows cases as "create" (a materialize intent) and the apply
+    # is safe. Verified: 6 installs of ap-invoice-audit → exactly 6 seed cases.
     out["roles"] = names(client._req("GET", f"{e.rbac}/api/v1/roles?limit=200", tok), "name")
     out["saved_queries"] = names(
         client._req("GET", f"{e.query}/api/v1/queries?workspace_id={ws}", tok), "name")
@@ -184,6 +190,8 @@ def _component_names(manifest, comp) -> list[str]:
         return [gd["agent_key"] for gd in doc]
     if comp.kind == "agent_configs":
         return [ac["agent_key"] for ac in doc]
+    if comp.kind == "cases":
+        return [r["row_pk"] for r in doc.get("rows", [])]
     if comp.kind == "roles":
         return [r["name"] for r in doc]
     if comp.kind == "saved_queries":
@@ -497,6 +505,27 @@ def run_data_chain(client, manifest, origin_of):
                                 target_id=qid, urn=act.get("urn"),
                                 reversible=(act.get("action") == "create" and bool(qid)),
                                 detail=act.get("detail", "")))
+
+    # seeded case queue — one OPEN case per row, so an analyst sees a real
+    # worklist on day one. Needs the pack's dataset ingested above (the cases
+    # reference its URN); create_cases is idempotent per row_pk. NOT reversible:
+    # cases are operational records an analyst works (dispositions get applied),
+    # and case-service has no delete verb — uninstall tombstones them honestly.
+    for comp in manifest.components_of("cases"):
+        doc = load_component_file(manifest, comp)
+        ref = doc.get("dataset")
+        urn = dataset_urns.get(ref)
+        if not urn:
+            records.append(_rec("cases", comp.identity, origin_of, action="failed",
+                                detail=f"unknown dataset ref {ref!r} (dataset not ingested)"))
+            continue
+        # create_cases dedups server-side per (dataset_urn, row_pk), so a
+        # re-install returns the existing case ids rather than duplicating.
+        ids = client.create_cases(comp.identity, urn, doc["rows"], doc.get("due_days", 7))
+        records.append(_rec("cases", comp.identity, origin_of,
+                            action="create" if ids else "noop", urn=urn,
+                            detail=f"{len(ids)} seed cases materialized (reindexed)" if ids
+                            else "no seed cases materialized"))
 
     pending_dashboards = len(manifest.components_of("dashboards")) > 0
     return records, pending_dashboards

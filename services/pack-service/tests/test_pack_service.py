@@ -157,3 +157,8 @@ def test_plan_materializes_case_fields(tmp_path):
     cfg_ops = [o for o in ops if o["kind"] == "agent_configs"]
     assert cfg_ops and all(o["action"] == "create" for o in cfg_ops)
     assert {"case-triage", "analytics"} <= {o["name"] for o in cfg_ops}
+    # cases (inc6) — the seeded worklist, one op per row_pk, materializable (was
+    # deferred). Depends on the dataset URN, so it runs in the data chain.
+    case_ops = [o for o in ops if o["kind"] == "cases"]
+    assert case_ops and all(o["action"] == "create" for o in case_ops)
+    assert any(o["name"] == "EX-7001" for o in case_ops)  # a real seed row_pk
