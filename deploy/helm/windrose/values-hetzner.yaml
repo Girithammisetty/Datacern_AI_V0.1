@@ -45,6 +45,11 @@ secrets:
 config:
   WINDROSE_ENV: staging
 
+  # Auth: verifiers fetch JWKS live from identity-service (its dev LocalSigner
+  # self-generates the keypair each boot). No static JWT secret — see
+  # deploy/k8s/data-tier/create-secrets.sh.
+  JWKS_URL: http://identity-service:8301/api/v1/.well-known/jwks.json
+
   # Object store = in-cluster MinIO (S3-compatible). The warehouse bucket lives
   # in MinIO; services reach it via the S3 endpoint below.
   ICEBERG_WAREHOUSE: s3://windrose-warehouse/

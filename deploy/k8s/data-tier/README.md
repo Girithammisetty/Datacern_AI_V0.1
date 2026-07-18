@@ -53,10 +53,23 @@ kubectl -n windrose get pods -w
 
 # 4) Pull a small model for CPU Ollama.
 kubectl -n windrose exec deploy/ollama -- ollama pull llama3.2:3b
+
+# 5) Create windrose-secrets (compose dev defaults, pointed at this data tier).
+#    Idempotent; override any value via env (PG_PASSWORD=... OBJ_SECRET=... etc.).
+./create-secrets.sh
 ```
 
-Then create `windrose-secrets` and install the app chart with
-`values-hetzner.yaml` (see `deploy/terraform/hetzner/README.md`).
+Then install the app chart with `values-hetzner.yaml` (see
+`deploy/terraform/hetzner/README.md`).
+
+### About `windrose-secrets` (`create-secrets.sh`)
+Builds the Secret from `deploy/CONFIG.md`'s key contract with the in-cluster
+data-tier values. **Auth is dynamic:** `JWKS_URL` in `values-hetzner.yaml` points
+verifiers at identity-service's live JWKS (its dev signer self-generates the
+keypair each boot), so `JWT_SIGNING_KEY_PEM` / `JWT_JWKS` are deliberately *not*
+in the dev secret — those belong to the production KMS/ESO path only. For
+production, don't run this script: sync `windrose-secrets` from your cloud secret
+manager via External Secrets with real, rotated values.
 
 ## Notes
 - **StorageClass** is `hcloud-volumes` throughout — change it (`sed -i
