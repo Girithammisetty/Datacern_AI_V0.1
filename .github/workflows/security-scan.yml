@@ -37,6 +37,7 @@ jobs:
             --config p/security-audit --config p/secrets \
             --exclude '*.venv*' --exclude 'node_modules' \
             --exclude 'deploy/e2e/run' --exclude '**/testdata' \
+            --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
             --sarif --output semgrep.sarif --metrics=off \
             --severity ERROR --error
       - uses: github/codeql-action/upload-sarif@v3

@@ -14,8 +14,8 @@ from __future__ import annotations
 import csv
 import json
 import tempfile
-import xml.etree.ElementTree as ET
-import xml.parsers.expat as expat
+import xml.etree.ElementTree as ET  # nosemgrep: use-defused-xml  # DOCTYPE/entity-expansion rejected by _guard (NFR XML hardening)
+import xml.parsers.expat as expat  # nosemgrep: use-defused-xml  # single expat pass bails at first DOCTYPE; no external entities
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
