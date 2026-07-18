@@ -420,6 +420,31 @@ start_eval() {
   wait_ready eval "$EVAL_URL" || { warn "eval-service not ready — SKIPPED"; SKIPPED+=("eval"); return 1; }
 }
 
+start_pack() {
+  # pack-service (BRD 23): capability-pack catalog + governed install lifecycle.
+  # Materializes pack components INTO Core AS the installing user (forwards the
+  # user JWT), so it needs every downstream Core URL.
+  export PACK_USE_REAL_ADAPTERS=true
+  export PACK_DATABASE_URL="postgresql+asyncpg://pack_app:pack_app@localhost:5432/pack"
+  export PACK_MIGRATE_URL="${PG_SYNC_BASE}/pack"
+  export PACK_REDIS_URL="$REDIS_URL" PACK_OPA_URL="$OPA_URL"
+  export PACK_JWKS_URL="$WR_JWKS_URL" PACK_JWT_ISSUER="$WR_ISS" PACK_JWT_AUDIENCE="$WR_AUD"
+  # Action-catalog registration (RBC-FR-022) so OPA recognises pack.* actions.
+  export PACK_RBAC_URL="$RBAC_URL" PACK_RBAC_SVC_URL="$RBAC_URL"
+  export PACK_REGISTER_SIGNING_KEY_PEM="$(cat "$E2E_DIR/keys/idp_private.pem")"
+  export PACK_REGISTER_SIGNING_KID="e2e-harness-key-1" PACK_REGISTER_TENANT_ID="$TENANT_ID"
+  # The on-disk pack catalog + the Core services the installer materializes into.
+  export PACK_PACKS_DIR="$REPO_DIR/packs"
+  export PACK_INGESTION_URL="$INGESTION_URL" PACK_DATASET_URL="$DATASET_URL"
+  export PACK_SEMANTIC_URL="$SEMANTIC_URL" PACK_QUERY_URL="$QUERY_URL"
+  export PACK_CHART_URL="$CHART_URL" PACK_CASE_URL="$CASE_URL"
+  export PACK_AGENT_URL="$AGENT_RUNTIME_URL" PACK_MEMORY_URL="$MEMORY_URL"
+  export PACK_PIPELINE_URL="$PIPELINE_URL"
+  py_migrate pack-service
+  say "boot pack-service"; py_boot pack pack-service "$PORT_PACK"
+  wait_ready pack "$PACK_URL" || { warn "pack-service not ready — SKIPPED"; SKIPPED+=("pack"); return 1; }
+}
+
 start_chart() {
   build_go chart-service chart-e2e cmd/server
   mkdir -p "$E2E_DIR/run/chart-exports"
@@ -537,6 +562,7 @@ boot_all() {
   start_pipeline
   start_experiment
   start_inference
+  start_pack
   echo; ok "all money-path services up (front half + retrain tail)"
 }
 

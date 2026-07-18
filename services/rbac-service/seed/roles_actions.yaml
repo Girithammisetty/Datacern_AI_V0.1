@@ -140,6 +140,10 @@ roles:
       - dataset.entity.execute
       - dataset.entity.read
       - dataset.entity.merge
+      # BRD 23: browse the pack catalog + install/uninstall a vertical pack.
+      - pack.pack.read
+      - pack.install.read
+      - pack.install.execute
       - query.query.read
       - query.query.list
       - query.query.create

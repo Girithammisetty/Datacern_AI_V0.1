@@ -149,7 +149,7 @@ fi
 say "ensuring per-service databases + pgvector extensions"
 for db in identity rbac tool_plane case_svc realtimehub dataset ingestion ai_gateway \
           agent_runtime memory pipeline experiment inference query semantic eval \
-          chart usage notification; do
+          chart usage notification pack; do
   psql_q -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 \
     || psql_q -d postgres -c "CREATE DATABASE $db" >/dev/null
 done

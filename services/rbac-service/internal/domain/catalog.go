@@ -201,6 +201,9 @@ var canonicalSpecs = []resourceSpec{
 	{"notification", "preference", []string{VerbRead, VerbUpdate}, false, "notification preferences"},
 	// scheduled dashboard report subscriptions (NOTIF-FR-060, "Team Reports")
 	{"notification", "report", []string{VerbCreate, VerbRead, VerbUpdate, VerbDelete}, false, "scheduled dashboard report subscriptions"},
+	// pack (pack-service, BRD 23: capability-pack catalog + governed install lifecycle)
+	{"pack", "pack", []string{VerbRead}, true, "capability pack catalog"},
+	{"pack", "install", []string{VerbRead, VerbExecute}, true, "pack installs into a workspace"},
 }
 
 // CanonicalCatalog returns the canonical platform action list (RBC-FR-022),

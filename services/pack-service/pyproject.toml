@@ -1,0 +1,47 @@
+[project]
+name = "pack-service"
+version = "0.1.0"
+description = "Windrose pack-service: capability-pack registry + governed install lifecycle (BRD 23)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "pyjwt[crypto]>=2.8",
+    "httpx>=0.27",
+    "psycopg[binary]>=3.1",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+    "windrose-common",
+]
+
+[tool.uv.sources]
+windrose-common = { path = "../../libs/py-common", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["B008"]
