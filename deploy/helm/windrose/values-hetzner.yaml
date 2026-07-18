@@ -61,6 +61,9 @@ config:
   OPENSEARCH_URL: http://opensearch:9200
   OLLAMA_BASE_URL: http://ollama:11434
 
+  # query-service "default_large" engine -> in-cluster Trino coordinator.
+  TRINO_ENDPOINT: http://trino:8080
+
   # CPU-only Ollama for dev/staging — pull a small model to keep RAM modest:
   #   kubectl exec deploy/ollama -- ollama pull llama3.2:3b
   # (7B-Q4 also fits ~6-8GB; latency on CPU is tolerable for staging.)

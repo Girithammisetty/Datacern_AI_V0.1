@@ -16,6 +16,7 @@ resources:
   - objectstore.yaml
   - search-audit.yaml
   - platform-deps.yaml
+  - trino.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: windrose-data-tier

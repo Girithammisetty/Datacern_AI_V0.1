@@ -1,0 +1,75 @@
+# Trino — the "default_large" query engine (task #66). Reads the shared Iceberg
+# REST catalog DIRECTLY (no per-execution materialization). The official image
+# ships a working single-node coordinator+worker config; only the Iceberg
+# catalog needs mounting (compose mounts ./trino/catalog -> /etc/trino/catalog).
+#
+# query-service reaches it via TRINO_ENDPOINT=http://trino:8080 (set in
+# values-hetzner.yaml). Trino is JVM-heap-hungry — if it OOMKills on a small
+# node, raise the memory limit or mount a jvm.config with a smaller -Xmx.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trino-catalog
+  namespace: windrose
+data:
+  iceberg.properties: |
+    connector.name=iceberg
+    iceberg.catalog.type=rest
+    iceberg.rest-catalog.uri=http://iceberg-rest:8181
+    iceberg.rest-catalog.warehouse=s3://windrose-warehouse/
+    fs.s3.enabled=true
+    s3.endpoint=http://minio:9000
+    s3.region=us-east-1
+    s3.path-style-access=true
+    s3.aws-access-key=windrose
+    s3.aws-secret-key=windrose_dev
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trino
+  namespace: windrose
+spec:
+  selector: { app: trino }
+  ports:
+    - { name: http, port: 8080, targetPort: 8080 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trino
+  namespace: windrose
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: trino }
+  template:
+    metadata:
+      labels: { app: trino }
+    spec:
+      containers:
+        - name: trino
+          image: trinodb/trino:482
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            # Mount ONLY the catalog subdir so the image's default config
+            # (config.properties, jvm.config, node.properties) stays intact.
+            - { name: catalog, mountPath: /etc/trino/catalog, readOnly: true }
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "curl -sf http://localhost:8080/v1/info | grep -q '\"starting\":false'"
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            failureThreshold: 40
+          resources:
+            requests: { cpu: "250m", memory: 1Gi }
+            limits: { memory: 3Gi } # Trino is heap-hungry; raise if it OOMKills
+      volumes:
+        - name: catalog
+          configMap:
+            name: trino-catalog

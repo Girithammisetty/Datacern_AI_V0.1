@@ -24,14 +24,15 @@ production** (move to a Secret + rotate).
 | Temporal | `temporal:7233` | Deployment | — (uses Postgres) |
 | MLflow | `mlflow:5000` | Deployment | — (Postgres + MinIO) |
 | Ollama (CPU LLM) | `ollama:11434` | StatefulSet | 20Gi |
+| Trino (large-query engine) | `trino:8080` | Deployment | — (catalog ConfigMap) |
 
 `+` two bootstrap Jobs (`minio-createbuckets`, `mlflow-createdb`) and the
-`clickhouse-config` ConfigMap.
+`clickhouse-config` / `trino-catalog` ConfigMaps.
 
-> Trino, Vault, otel-collector, mailpit, and temporal-ui from the compose file
-> are **not** included — they're optional for the core data plane. Add them the
-> same way if you need the Trino large-query engine, BYO-secrets, in-cluster
-> tracing, an email sink, or the Temporal web UI.
+> Vault, otel-collector, mailpit, and temporal-ui from the compose file are
+> **not** included — they're optional for the core data plane. Add them the same
+> way if you need BYO-secrets, in-cluster tracing, an email sink, or the
+> Temporal web UI.
 
 ## Apply
 
