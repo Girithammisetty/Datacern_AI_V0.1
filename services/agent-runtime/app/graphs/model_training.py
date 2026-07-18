@@ -30,6 +30,7 @@ from langgraph.graph import END, StateGraph
 from app.adapters.memory import GroundingDegraded
 from app.domain.urn import pipeline_training_urn
 from app.graphs.base import GraphDeps, GraphOutcome, WriteIntent, register
+from app.prompts import system_prompt
 
 # The single self-contained governed write: instantiate a train-mode pipeline from
 # the algorithm with the filled params (pipeline-orchestrator McpFacade
@@ -52,19 +53,7 @@ _ALGO_HINTS = {
 }
 _DEFAULT_ALGORITHM = "random_forest"
 
-_SYS = (
-    "You are Windrose's model-training agent. Given a training request, the chosen "
-    "algorithm's PARAMETER SCHEMA, prior experiment history for that algorithm, and "
-    "similar prior training decisions, fill the pipeline-template parameters. "
-    "Respond with ONLY a JSON object: "
-    '{"hyperparameters": {schema_param_name: value, ...} using ONLY names present in '
-    "the schema and values within their min/max (favour values that did well in "
-    'history, else the schema default), '
-    '"label_column": the target column to predict, '
-    '"feature_columns": array of feature column names or null for all-but-label, '
-    '"rationale": one concise sentence citing the schema/history that justifies the '
-    "choices}. No prose outside JSON."
-)
+_SYS = system_prompt("model_training.system")
 
 
 def _extract_json(text: str) -> dict:

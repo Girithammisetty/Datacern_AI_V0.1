@@ -26,6 +26,7 @@ from langgraph.graph import END, StateGraph
 
 from app.adapters.memory import GroundingDegraded
 from app.graphs.base import GraphDeps, GraphOutcome, WriteIntent, register
+from app.prompts import system_prompt
 
 INFERENCE_TOOL_ID = "inference.submit"
 INFERENCE_TOOL_VERSION = "1.0.0"
@@ -44,12 +45,7 @@ _STOP = {"run", "batch", "inference", "inferences", "with", "the", "a", "an", "o
          "data", "latest", "newest", "recent", "production", "prod", "please",
          "score", "scoring", "predict", "predictions", "against", "over", "to"}
 
-_SYS = (
-    "You are Windrose's batch-inference agent. Given a registered model's production "
-    "version, its declared input features, and an input dataset's schema plus a "
-    "deterministic compatibility verdict, write ONE concise sentence justifying "
-    "running (or not running) batch inference. Respond with ONLY that sentence."
-)
+_SYS = system_prompt("inference.system")
 
 
 def _canon_type(t: str | None) -> str | None:

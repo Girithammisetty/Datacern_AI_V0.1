@@ -13,15 +13,12 @@ import json
 from langgraph.graph import END, StateGraph
 
 from app.graphs.base import GraphDeps, GraphOutcome, WriteIntent, register
+from app.prompts import system_prompt
 
 RETRAIN_TOOL_ID = "mlops.open_retrain"
 RETRAIN_TOOL_VERSION = "1.0.0"
 
-_SYS = (
-    "You are Windrose's ML governance agent. Given drift metrics and human "
-    "correction signals for a deployed claims model, write ONE concise sentence "
-    "justifying whether a retrain is warranted. Respond with ONLY that sentence."
-)
+_SYS = system_prompt("governance.system")
 
 
 def build_governance_graph(deps: GraphDeps):

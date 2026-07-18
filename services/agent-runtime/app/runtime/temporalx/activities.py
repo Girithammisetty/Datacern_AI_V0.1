@@ -30,7 +30,8 @@ class AgentActivities:
         await self._c.run_engine.emit_run(run, "agent_run.started")
         outcome = await self._c.run_engine.run_graph(
             run, req["inputs"], obo_token=req.get("obo_token"),
-            prompt_params=req.get("prompt_params", {}))
+            prompt_params=req.get("prompt_params", {}),
+            guardrail_policy=req.get("guardrail_policy", {}))
         # checkpoint the super-step (ART-FR-010)
         await self._c.store.save_checkpoint(
             tenant_id=run.tenant_id, run_id=run.run_id, checkpoint_id="graph-final",

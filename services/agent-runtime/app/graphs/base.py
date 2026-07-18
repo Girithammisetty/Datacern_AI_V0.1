@@ -34,6 +34,10 @@ class GraphDeps:
     semantic_reader: Any = None
     catalog_reader: Any = None
     prompt_params: dict = field(default_factory=dict)
+    # BRD 53 inc2: the per-agent security envelope (data_scope / budget / pii),
+    # loaded from the tenant agent config. The shared persona_copilot graph
+    # enforces it independent of the prompt (PA-FR-040/budget/PII-egress).
+    guardrail_policy: dict = field(default_factory=dict)
     obo_token: str | None = None
     # Replay / no-side-effect mode (ART-FR-015): when True the run reproduces what
     # the agent WOULD have done — write tools are captured-not-executed and memory

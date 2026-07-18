@@ -95,6 +95,7 @@ class Orchestrator:
         cfg = await c.store.get_tenant_config(session.tenant_id, agent_key)
         prompt_params = cfg.prompt_params if cfg else {}
         auto_policy = cfg.auto_execute_policy if cfg else {}
+        guardrail_policy = cfg.guardrail_policy if cfg else {}
         obo_token = _obo_token(c, principal, session, agent_key)
         inputs = {**inputs, "tenant_id": session.tenant_id}
 
@@ -106,6 +107,7 @@ class Orchestrator:
                 "tenant_id": session.tenant_id, "run_id": run.run_id, "inputs": inputs,
                 "obo_token": obo_token, "obo_user": (principal.sub if principal else None),
                 "prompt_params": prompt_params, "auto_execute_policy": auto_policy,
+                "guardrail_policy": guardrail_policy,
                 "proposal_ttl_seconds": c.settings.proposal_default_ttl_seconds,
             }
             await c.extras["temporal_client"].start_workflow(
@@ -115,7 +117,8 @@ class Orchestrator:
         summary = await c.run_engine.execute(
             run, inputs, obo_token=obo_token,
             obo_user=(principal.sub if principal else None),
-            prompt_params=prompt_params, auto_execute_policy=auto_policy)
+            prompt_params=prompt_params, auto_execute_policy=auto_policy,
+            guardrail_policy=guardrail_policy)
         return run, {"mode": "inline", **summary}
 
 

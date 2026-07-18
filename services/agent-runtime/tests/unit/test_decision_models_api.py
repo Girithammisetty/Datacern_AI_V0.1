@@ -61,13 +61,24 @@ _VALID = {"name": "Reg E fraud table",
           "default_outcome": {"disposition_code": "deny_no_error_found", "severity": "medium"}}
 
 
-async def test_create_validates_and_publishes(client_and_container):
+async def _publish(client, body=_VALID, author="u-author", approver="u-approver") -> str:
+    """Create a draft then four-eyes-approve it → a live (published) table id."""
+    mid = (await client.post("/api/v1/decision-models", json=body,
+                             headers=_auth(sub=author))).json()["data"]["id"]
+    r = await client.post(f"/api/v1/decision-models/{mid}/approve",
+                          headers=_auth(sub=approver))
+    assert r.status_code == 200, r.text
+    return mid
+
+
+async def test_create_lands_draft(client_and_container):
     client, _ = client_and_container
     r = await client.post("/api/v1/decision-models", json=_VALID, headers=_auth())
     assert r.status_code == 201, r.text
     d = r.json()["data"]
-    assert d["status"] == "published" and d["version"] == 1
-    assert len(d["rules"]) == 1
+    # governance (inc3): create does NOT go live — it lands draft, unapproved.
+    assert d["status"] == "draft" and d["version"] == 1
+    assert d["approved_by"] is None and len(d["rules"]) == 1
 
 
 async def test_create_rejects_unknown_disposition_code(client_and_container):
@@ -88,8 +99,7 @@ async def test_create_rejects_empty_rules(client_and_container):
 
 async def test_evaluate_dry_run_makes_no_proposal(client_and_container):
     client, c = client_and_container
-    mid = (await client.post("/api/v1/decision-models", json=_VALID,
-                             headers=_auth())).json()["data"]["id"]
+    mid = await _publish(client)
     r = await client.post(f"/api/v1/decision-models/{mid}/evaluate?dry_run=true",
                           json={"case_id": "c-91"}, headers=_auth())
     assert r.status_code == 200, r.text
@@ -102,8 +112,7 @@ async def test_evaluate_dry_run_makes_no_proposal(client_and_container):
 
 async def test_evaluate_creates_governed_proposal(client_and_container):
     client, c = client_and_container
-    mid = (await client.post("/api/v1/decision-models", json=_VALID,
-                             headers=_auth())).json()["data"]["id"]
+    mid = await _publish(client)
     r = await client.post(f"/api/v1/decision-models/{mid}/evaluate",
                           json={"case_id": "c-91"}, headers=_auth())
     assert r.status_code == 200, r.text
@@ -116,12 +125,16 @@ async def test_evaluate_creates_governed_proposal(client_and_container):
     assert prop.args["disposition_id"] == "disp-1"      # resolved from catalog
     assert prop.args["severity"] == "high"
     assert "Decision model" in prop.args["resolution_note"]
+    # per-decision trace (inc3): version + inputs + fired rule captured on the proposal
+    trace = prop.predicted_effect["decision_trace"]
+    assert trace["model_version"] == 1 and trace["rule_index"] == 0
+    assert trace["inputs"]["dispute_type"] == "fraud_unauthorized"  # referenced col snapshot
+    assert trace["outcome"]["disposition_code"] == "escalate_fraud_review"
 
 
 async def test_tenant_isolation(client_and_container):
     client, _ = client_and_container
-    mid = (await client.post("/api/v1/decision-models", json=_VALID,
-                             headers=_auth())).json()["data"]["id"]
+    mid = await _publish(client)
     # TENANT_B cannot fetch or evaluate TENANT_A's model.
     g = await client.get(f"/api/v1/decision-models/{mid}", headers=_auth(tenant=TENANT_B))
     assert g.status_code == 404
@@ -130,12 +143,66 @@ async def test_tenant_isolation(client_and_container):
     assert e.status_code == 404
 
 
+# ---- inc3 lifecycle governance (DM-FR-071/072) ------------------------------
+
+async def test_draft_cannot_be_evaluated(client_and_container):
+    client, _ = client_and_container
+    mid = (await client.post("/api/v1/decision-models", json=_VALID,
+                             headers=_auth())).json()["data"]["id"]
+    # a draft is not live — evaluate + batch are refused until approved
+    e = await client.post(f"/api/v1/decision-models/{mid}/evaluate",
+                          json={"case_id": "c-91"}, headers=_auth())
+    assert e.status_code >= 400 and "published" in e.text
+    b = await client.post(f"/api/v1/decision-models/{mid}/batch-evaluate",
+                          json={"workspace_id": "ws-1"}, headers=_auth())
+    assert b.status_code >= 400 and "published" in b.text
+
+
+async def test_four_eyes_author_cannot_approve_own(client_and_container):
+    client, _ = client_and_container
+    mid = (await client.post("/api/v1/decision-models", json=_VALID,
+                             headers=_auth(sub="u-author"))).json()["data"]["id"]
+    # the author approving their own table is refused (four-eyes on the logic)
+    r = await client.post(f"/api/v1/decision-models/{mid}/approve",
+                          headers=_auth(sub="u-author"))
+    assert r.status_code == 403 and "four-eyes" in r.text
+    # a different user can
+    ok = await client.post(f"/api/v1/decision-models/{mid}/approve",
+                           headers=_auth(sub="u-approver"))
+    assert ok.status_code == 200
+    d = ok.json()["data"]
+    assert d["status"] == "published" and d["approved_by"] == "u-approver"
+
+
+async def test_new_version_is_draft_and_prior_immutable(client_and_container):
+    client, _ = client_and_container
+    mid = await _publish(client)  # v1 published
+    # edit → v2 draft; v1 stays published (what you approve is what runs)
+    v2 = await client.post(f"/api/v1/decision-models/{mid}/versions",
+                           json={"rules": [{"when": [{"column": "amount", "op": "gt", "value": 5000}],
+                                            "then": {"disposition_code": "escalate_fraud_review",
+                                                     "severity": "critical"}}]},
+                           headers=_auth(sub="u-author"))
+    assert v2.status_code == 201, v2.text
+    dv2 = v2.json()["data"]
+    assert dv2["version"] == 2 and dv2["status"] == "draft"
+    v1 = (await client.get(f"/api/v1/decision-models/{mid}", headers=_auth())).json()["data"]
+    assert v1["status"] == "published" and v1["version"] == 1
+    # approving v2 archives v1 → exactly one live version
+    await client.post(f"/api/v1/decision-models/{dv2['id']}/approve", headers=_auth(sub="u-approver"))
+    v1b = (await client.get(f"/api/v1/decision-models/{mid}", headers=_auth())).json()["data"]
+    assert v1b["status"] == "archived"
+    # the change log lists both, newest first
+    hist = (await client.get(f"/api/v1/decision-models/{dv2['id']}/versions",
+                             headers=_auth())).json()["data"]
+    assert [h["version"] for h in hist] == [2, 1]
+
+
 # ---- inc2 batch evaluation (DM-FR-060) --------------------------------------
 
 async def test_batch_preview_is_dry_run(client_and_container):
     client, c = client_and_container
-    mid = (await client.post("/api/v1/decision-models", json=_VALID,
-                             headers=_auth())).json()["data"]["id"]
+    mid = await _publish(client)
     r = await client.post(f"/api/v1/decision-models/{mid}/batch-evaluate",
                           json={"workspace_id": "ws-1"}, headers=_auth())
     assert r.status_code == 200, r.text
@@ -158,8 +225,7 @@ async def test_batch_preview_is_dry_run(client_and_container):
 
 async def test_batch_propose_creates_one_proposal_per_match(client_and_container):
     client, c = client_and_container
-    mid = (await client.post("/api/v1/decision-models", json=_VALID,
-                             headers=_auth())).json()["data"]["id"]
+    mid = await _publish(client)
     r = await client.post(f"/api/v1/decision-models/{mid}/batch-evaluate?propose=true",
                           json={"case_ids": ["c-1", "c-2"]}, headers=_auth())
     assert r.status_code == 200, r.text
@@ -173,8 +239,7 @@ async def test_batch_propose_creates_one_proposal_per_match(client_and_container
 
 async def test_batch_isolation(client_and_container):
     client, _ = client_and_container
-    mid = (await client.post("/api/v1/decision-models", json=_VALID,
-                             headers=_auth())).json()["data"]["id"]
+    mid = await _publish(client)
     r = await client.post(f"/api/v1/decision-models/{mid}/batch-evaluate",
                           json={"workspace_id": "ws-1"}, headers=_auth(tenant=TENANT_B))
     assert r.status_code == 404

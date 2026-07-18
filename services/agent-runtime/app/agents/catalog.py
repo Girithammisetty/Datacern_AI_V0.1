@@ -5,6 +5,7 @@ agent is a definition + graph module — no runtime fork.
 
 from __future__ import annotations
 
+from app import prompts
 from app.domain.entities import AgentDefinition, AgentVersion
 from app.graphs.base import graph_digest
 from app.signing import build_card, sign_card
@@ -79,6 +80,41 @@ CATALOG = {
 }
 
 
+def _prompt_refs(key: str) -> list[dict]:
+    """Real immutability ref for the agent's system prompt from the prompt
+    registry (id + semantic version + sha256 content digest) — replaces the old
+    faked ``digest: "seed"``. An agent with no registered prompt (should not
+    happen for a published catalog agent) falls back to an explicit unregistered
+    marker rather than a silent fake."""
+    pid = prompts.AGENT_SYSTEM_PROMPT.get(key)
+    if pid is None:
+        return [{"id": f"{key}-sys", "version": 0, "digest": "unregistered"}]
+    return [prompts.get(pid).ref]
+
+
+def _toolset_ids(toolset) -> set[str]:
+    return {str(t.get("tool_id")) for t in (toolset or []) if t.get("tool_id")}
+
+
+async def _publish_agent_version(store, signing_key, key, version, display, desc,
+                                 wmode, graph_ref, skills, toolset, endpoint_base) -> None:
+    """Publish one fixed-agent version (v1 seed OR a toolset-bump v(N+1))."""
+    card = build_card(agent_key=key, version=version, display_name=display, description=desc,
+                      write_mode=wmode, skills=skills, endpoint=f"{endpoint_base}/a2a/{key}")
+    signature = sign_card(signing_key, card)
+    card["signature"] = {"alg": "RS256", "kid": signing_key.kid, "value": signature}
+    await store.create_agent_version(AgentVersion(
+        agent_key=key, version=version, graph_ref=graph_ref, graph_digest=graph_digest(graph_ref),
+        prompt_refs=_prompt_refs(key), toolset=toolset,
+        model_config={"request_class": "chat", "max_rung": 1, "temperature": 0.2},
+        memory_policy={"scopes_readable": ["workspace", "tenant"], "scopes_writable": []},
+        eval_gate={"suite_id": f"{key}-suite", "baseline_version": 0,
+                   "thresholds": {"min_score": 0.6}},
+        eval_gate_result_id="seed-gate-pass",
+        a2a_card=card, card_signature=signature,
+        principal_ref=f"spiffe://windrose/ns/ai/agent/{key}", status="published"))
+
+
 async def seed_catalog(store, signing_key, *,
                        endpoint_base: str = "https://agent-runtime.internal") -> None:
     for key, (display, desc, wmode, graph_ref, skills) in CATALOG.items():
@@ -88,13 +124,6 @@ async def seed_catalog(store, signing_key, *,
             status="published" if graph_ref else "draft"))
         if graph_ref is None:
             continue
-        if await store.get_agent_version(key, 1) is not None:
-            continue
-        card = build_card(agent_key=key, version=1, display_name=display, description=desc,
-                          write_mode=wmode, skills=skills,
-                          endpoint=f"{endpoint_base}/a2a/{key}")
-        signature = sign_card(signing_key, card)
-        card["signature"] = {"alg": "RS256", "kid": signing_key.kid, "value": signature}
         toolset = ([{"tool_id": "case.apply_disposition", "version_range": ">=1.0.0"}]
                    if key == "case-triage" else
                    [{"tool_id": "mlops.open_retrain", "version_range": ">=1.0.0"}]
@@ -106,7 +135,10 @@ async def seed_catalog(store, signing_key, *,
                    [{"tool_id": "pipeline.template.create_from_algorithm",
                      "version_range": ">=1.0.0"}]
                    if key == "model-training" else
-                   [{"tool_id": "experiment.model.promote", "version_range": ">=1.0.0"}]
+                   # ml-engineer promotes models AND (BRD 52 inc2) may initiate an
+                   # ingestion from an existing connection to refresh training data.
+                   [{"tool_id": "experiment.model.promote", "version_range": ">=1.0.0"},
+                    {"tool_id": "ingestion.create", "version_range": ">=1.0.0"}]
                    if key == "ml-engineer" else
                    [{"tool_id": "inference.submit", "version_range": ">=1.0.0"}]
                    if key == "inference" else
@@ -120,13 +152,20 @@ async def seed_catalog(store, signing_key, *,
                     {"tool_id": "inference.submit", "version_range": ">=1.0.0"},
                     {"tool_id": "mlops.open_retrain", "version_range": ">=1.0.0"}]
                    if key == "meta-router" else [])
-        await store.create_agent_version(AgentVersion(
-            agent_key=key, version=1, graph_ref=graph_ref, graph_digest=graph_digest(graph_ref),
-            prompt_refs=[{"id": f"{key}-sys", "digest": "seed"}], toolset=toolset,
-            model_config={"request_class": "chat", "max_rung": 1, "temperature": 0.2},
-            memory_policy={"scopes_readable": ["workspace", "tenant"], "scopes_writable": []},
-            eval_gate={"suite_id": f"{key}-suite", "baseline_version": 0,
-                       "thresholds": {"min_score": 0.6}},
-            eval_gate_result_id="seed-gate-pass",
-            a2a_card=card, card_signature=signature,
-            principal_ref=f"spiffe://windrose/ns/ai/agent/{key}", status="published"))
+
+        # A published agent_version is IMMUTABLE (DB-enforced). To change a fixed
+        # agent's enforced toolset (e.g. BRD 52 inc2 adds ingestion.create to
+        # ml-engineer) we publish a NEW version carrying the updated toolset —
+        # never mutate a published one. Runs resolve the latest published version,
+        # so the change takes effect for new sessions. Idempotent: once the latest
+        # version's toolset matches the code, no further versions are minted.
+        latest_v = await store.latest_published_version(key)
+        if latest_v is not None:
+            latest = await store.get_agent_version(key, latest_v)
+            if latest is not None and _toolset_ids(latest.toolset) != _toolset_ids(toolset):
+                await _publish_agent_version(store, signing_key, key, latest_v + 1,
+                                             display, desc, wmode, graph_ref, skills,
+                                             toolset, endpoint_base)
+            continue
+        await _publish_agent_version(store, signing_key, key, 1, display, desc, wmode,
+                                     graph_ref, skills, toolset, endpoint_base)

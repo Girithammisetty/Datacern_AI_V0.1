@@ -22,6 +22,7 @@ from app.adapters.memory import GroundingDegraded
 from app.domain.urn import case_urn
 from app.graphs.base import GraphDeps, GraphOutcome, WriteIntent, register
 from app.graphs.persona import caller_persona
+from app.prompts import system_prompt
 
 SEVERITIES = ("low", "medium", "high", "critical")
 
@@ -32,19 +33,7 @@ TRIAGE_TOOL_ID = "case.apply_disposition"
 # tool-plane only had 1.2.0 published while this was still pinned to 1.0.0).
 TRIAGE_TOOL_VERSION = "1.2.0"
 
-_SYS = (
-    "You are Windrose's insurance claims triage copilot. Given a claim case, "
-    "similar resolved cases, the ACTUAL text of documents attached to the case "
-    "(evidence), and the tenant's real disposition catalog, decide a "
-    "disposition. Treat the attached evidence documents as primary evidence: "
-    "when a document's content drives your decision, cite it by filename in the "
-    "rationale (e.g. \"per discharge_summary.pdf\"). Respond with ONLY a JSON "
-    'object: {"severity": one of ["low","medium","high","critical"], '
-    '"disposition_code": the "code" of ONE entry from the given disposition '
-    "catalog (copy it exactly — inventing a code is not allowed), "
-    '"rationale": one concise sentence citing the specific evidence used}. '
-    "No prose outside JSON."
-)
+_SYS = system_prompt("triage.system")
 
 
 def _extract_json(text: str) -> dict:

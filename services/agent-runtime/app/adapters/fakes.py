@@ -18,7 +18,8 @@ class FakeLlm:
 
     async def chat(self, *, messages, tenant_id, response_format=None, temperature=None,
                    max_tokens=None) -> LlmResult:
-        self.calls.append({"messages": messages, "tenant_id": tenant_id})
+        self.calls.append({"messages": messages, "tenant_id": tenant_id,
+                           "max_tokens": max_tokens, "temperature": temperature})
         content = self._content or (
             '{"severity":"high","disposition_code":"duplicate_invoice",'
             '"assignee_hint":"u-dana","rationale":"Vendor pattern matches 14 resolved '
@@ -86,7 +87,8 @@ class FakeCaseReader:
 
 class FakeIngestionReader:
     def __init__(self, connector_types: list[dict] | None = None,
-                 preview: dict | None = None) -> None:
+                 preview: dict | None = None,
+                 connections: list[dict] | None = None) -> None:
         self._types = connector_types or [
             {"connector_type": "s3", "display_name": "Amazon S3",
              "category": "object-store", "secret_fields": ["access_key_id",
@@ -94,11 +96,16 @@ class FakeIngestionReader:
             {"connector_type": "postgres", "display_name": "PostgreSQL",
              "category": "database", "secret_fields": ["password"]}]
         self._preview = preview or {}
+        self._connections = connections if connections is not None else []
         self.calls: list[dict] = []
 
     async def connector_types(self, *, tenant_id, auth_token) -> list[dict]:
         self.calls.append({"op": "connector_types", "tenant_id": tenant_id})
         return self._types
+
+    async def list_connections(self, *, tenant_id, auth_token) -> list[dict]:
+        self.calls.append({"op": "list_connections", "tenant_id": tenant_id})
+        return self._connections
 
     async def preview(self, *, tenant_id, connection_id, auth_token, table=None,
                       path=None, query=None, limit=50) -> dict:

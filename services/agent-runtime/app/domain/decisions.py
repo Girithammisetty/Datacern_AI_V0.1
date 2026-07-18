@@ -58,6 +58,8 @@ class DecisionModel:
     dataset_urn: str | None = None
     status: str = "draft"
     created_by: str | None = None
+    approved_by: str | None = None
+    approved_at: str | None = None
 
 
 @dataclass(slots=True)

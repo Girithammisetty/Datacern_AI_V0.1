@@ -27,6 +27,7 @@ from langgraph.graph import END, StateGraph
 from app.adapters.memory import GroundingDegraded
 from app.domain.urn import dashboard_urn
 from app.graphs.base import GraphDeps, GraphOutcome, WriteIntent, register
+from app.prompts import system_prompt
 
 DASHBOARD_TOOL_ID = "chart.dashboard.create"
 DASHBOARD_TOOL_VERSION = "1.0.0"
@@ -36,18 +37,7 @@ DASHBOARD_TOOL_VERSION = "1.0.0"
 # dimension-only config the resolver can map (BR: never invent a family).
 _KNOWN_FAMILIES = ("axis", "grid", "single")
 
-_SYS = (
-    "You are Windrose's dashboard-designer agent. You draft ONE dashboard over a "
-    "GOVERNED semantic layer. You may ONLY reference measures, dimensions and "
-    "chart types that are given to you — never invent a metric, dimension or chart "
-    "type. Choose a chart type appropriate to each metric (e.g. a time dimension "
-    "-> line chart; a categorical breakdown -> bar chart; a single headline metric "
-    "-> big number; a tabular breakdown -> grid). Respond with ONLY a JSON object: "
-    '{"title": string, "rationale": one concise sentence, "charts": [ '
-    '{"name": string, "chart_type": one of the given chart_type names, '
-    '"measures": [given measure names], "dimensions": [given dimension names], '
-    '"filters": [] } ]}. Between 2 and 6 charts. No prose outside the JSON.'
-)
+_SYS = system_prompt("dashboard_designer.system")
 
 
 def _extract_json(text: str) -> dict:
@@ -141,9 +131,9 @@ def build_dashboard_designer_graph(deps: GraphDeps):
         verified_queries = state.get("verified_queries", [])
         user = (
             f"Request: {state.get('query') or 'Design a claims overview dashboard'}\n"
-            f"Available measures (name: agg — description):\n"
-            f"{_fmt_metrics(metrics)}\n"
-            f"Available dimensions (name: type):\n{_fmt_dims(dimensions)}\n"
+            "Semantic layer (grouped by MODEL — a chart uses measures and "
+            "dimensions from ONE model only):\n"
+            f"{_fmt_catalog_by_model(metrics, dimensions)}\n"
             f"Available chart_type names: {json.dumps(type_names)}\n"
             f"Approved verified queries (proven NL->SQL conventions to reuse "
             f"where relevant):\n{_fmt_verified_queries(verified_queries)}\n"
@@ -233,6 +223,45 @@ def _fmt_dims(dimensions: list[dict]) -> str:
     return "\n".join(lines) or "(none available)"
 
 
+def _fmt_catalog_by_model(metrics: list[dict], dimensions: list[dict]) -> str:
+    """Present the semantic layer GROUPED BY MODEL. The workspace can hold many
+    models whose measure/dimension names overlap (e.g. ``claim_count`` exists in
+    several claims models); a flat list lets the designer mix measures from two
+    models into one chart, which can never compile (each chart resolves against a
+    single model). Grouping makes the one-model-per-chart boundary explicit."""
+    models: dict[str, dict[str, list[str]]] = {}
+    for m in metrics:
+        nm, mdl = m.get("name"), m.get("model")
+        if nm and mdl:
+            models.setdefault(mdl, {"measures": [], "dimensions": []})["measures"].append(
+                f"{nm} ({m.get('agg') or '?'})")
+    for d in dimensions:
+        nm, mdl = d.get("name"), d.get("model")
+        if nm and mdl:
+            models.setdefault(mdl, {"measures": [], "dimensions": []})["dimensions"].append(
+                f"{nm}:{d.get('type') or '?'}")
+    if not models:
+        return "(no governed models available)"
+    blocks = []
+    for mdl in sorted(models):
+        cat = models[mdl]
+        blocks.append(
+            f"MODEL {mdl}\n"
+            f"  measures: {', '.join(cat['measures']) or '(none)'}\n"
+            f"  dimensions: {', '.join(cat['dimensions']) or '(none)'}")
+    return "\n".join(blocks)
+
+
+def _model_index(items: list[dict]) -> dict[str, set]:
+    """name-set per model from grounded metrics or dimensions."""
+    idx: dict[str, set] = {}
+    for it in items:
+        nm, mdl = it.get("name"), it.get("model")
+        if nm and mdl:
+            idx.setdefault(mdl, set()).add(nm)
+    return idx
+
+
 def _fmt_verified_queries(verified_queries: list[dict]) -> str:
     lines = []
     for vq in verified_queries:
@@ -249,36 +278,75 @@ def _normalise_spec(parsed: dict, state: dict, metric_names: list[str],
     title = str(parsed.get("title") or "Claims Overview").strip()[:120]
     rationale = str(parsed.get("rationale")
                     or "Draft dashboard grounded in the governed semantic layer.")
-    mset, dset, tset = set(metric_names), set(dim_names), set(type_names)
+    tset = set(type_names)
     default_type = type_names[0] if type_names else "grid_chart"
+
+    # A chart resolves against exactly ONE semantic model at render time — every
+    # measure and dimension it carries must belong to that model, or the compile
+    # fails (UNKNOWN_METRIC / "workspace_id required"). Names collide across
+    # models (``claim_count`` lives in several claims models), so we can't pick a
+    # model by looking up a single measure name. Instead, for each chart we score
+    # every grounded model by how many of the chart's proposed refs it actually
+    # contains, pick the best-fit model, and keep only that model's refs.
+    measures_by_model = _model_index(state.get("metrics", []))
+    dims_by_model = _model_index(state.get("dimensions", []))
+    all_models = set(measures_by_model) | set(dims_by_model)
+
+    def _resolve(raw_measures: list[str], raw_dims: list[str],
+                 declared: str | None) -> tuple[str, list[str], list[str]]:
+        rm, rd = set(raw_measures), set(raw_dims)
+        # Declared model gets first look on ties (strict >), so a valid explicit
+        # model wins when scores are equal.
+        order = ([declared] if declared in all_models else []) + sorted(all_models)
+        best_mdl, best_score = "", 0
+        for mdl in dict.fromkeys(order):
+            # Measures drive the compile, so weight them above dimensions.
+            score = len(rm & measures_by_model.get(mdl, set())) * 2 + \
+                len(rd & dims_by_model.get(mdl, set()))
+            if score > best_score:
+                best_score, best_mdl = score, mdl
+        if best_score == 0:
+            return "", [], []
+        measures = [m for m in raw_measures if m in measures_by_model.get(best_mdl, set())]
+        dims = [d for d in raw_dims if d in dims_by_model.get(best_mdl, set())]
+        return best_mdl, measures, dims
 
     charts: list[dict] = []
     for raw in (parsed.get("charts") or []):
         if not isinstance(raw, dict):
             continue
-        # Keep ONLY grounded references — the designer must not invent refs.
-        measures = [m for m in _as_list(raw.get("measures")) if m in mset]
-        dims = [d for d in _as_list(raw.get("dimensions")) if d in dset]
-        if not measures and not dims:
-            continue  # a chart with no real semantic ref is dropped
+        model, measures, dims = _resolve(
+            _as_list(raw.get("measures")), _as_list(raw.get("dimensions")),
+            raw.get("model"))
+        # Drop a chart that isn't a single-model-coherent, plottable unit: it must
+        # resolve to one model AND keep at least one real measure. A chart with no
+        # measure has nothing to resolve at render time ("chart has no measures to
+        # resolve"), so a dimension-only chart is dropped rather than emitted broken.
+        if not model or not measures:
+            continue
         ctype = raw.get("chart_type")
         if ctype not in tset:
             ctype = default_type
         charts.append({
             "name": str(raw.get("name") or "Chart").strip()[:120],
             "chart_type": ctype,
+            "model": model,
             "measures": measures,
             "dimensions": dims,
             "filters": _as_list(raw.get("filters")),
         })
 
     # Deterministic grounded fallback: if the model produced nothing usable but we
-    # DID ground real refs, propose a single grid chart over them so the proposal
-    # still references real semantic refs (never a hallucinated one).
-    if not charts and (metric_names or dim_names):
-        charts.append({
-            "name": "Overview", "chart_type": default_type,
-            "measures": metric_names[:3], "dimensions": dim_names[:1], "filters": []})
+    # DID ground real refs, propose a single grid chart from the richest model so
+    # the proposal still references real, model-coherent semantic refs.
+    if not charts and all_models:
+        best = max(all_models, key=lambda m: len(measures_by_model.get(m, set())))
+        ms = sorted(measures_by_model.get(best, set()))[:3]
+        ds = sorted(dims_by_model.get(best, set()))[:1]
+        if ms:
+            charts.append({
+                "name": "Overview", "chart_type": default_type, "model": best,
+                "measures": ms, "dimensions": ds, "filters": []})
 
     return {"title": title, "rationale": rationale[:4000], "charts": charts[:6]}
 

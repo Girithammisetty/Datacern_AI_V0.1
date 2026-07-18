@@ -42,7 +42,8 @@ class RunEngine:
         self._catalog_reader = catalog_reader
         self._settings = settings
 
-    def _deps(self, run: Run, obo_token: str | None, prompt_params: dict) -> GraphDeps:
+    def _deps(self, run: Run, obo_token: str | None, prompt_params: dict,
+              guardrail_policy: dict | None = None) -> GraphDeps:
         return GraphDeps(llm=self._llm, memory=self._memory, case_reader=self._case_reader,
                          evidence_reader=self._evidence_reader,
                          ingestion_reader=self._ingestion_reader,
@@ -52,10 +53,11 @@ class RunEngine:
                          pipeline_writer=self._pipeline_writer,
                          semantic_reader=self._semantic_reader,
                          catalog_reader=self._catalog_reader,
-                         prompt_params=prompt_params or {}, obo_token=obo_token)
+                         prompt_params=prompt_params or {},
+                         guardrail_policy=guardrail_policy or {}, obo_token=obo_token)
 
     async def run_graph(self, run: Run, inputs: dict, *, obo_token: str | None,
-                        prompt_params: dict):
+                        prompt_params: dict, guardrail_policy: dict | None = None):
         # Fixed agents dispatch by agent_key; tenant CUSTOM agents (BRD 53) have
         # their own agent_key that isn't in RUNNERS, so fall back to the shared
         # graph their AgentVersion.graph_ref points at (GRAPH_RUNNERS — only
@@ -71,7 +73,7 @@ class RunEngine:
             runner = GRAPH_RUNNERS.get(version.graph_ref) if version else None
             if runner is None:
                 raise NotFound(f"agent {run.agent_key} has no runnable graph")
-        deps = self._deps(run, obo_token, prompt_params)
+        deps = self._deps(run, obo_token, prompt_params, guardrail_policy)
         return await runner(deps, inputs)
 
     async def replay(self, *, agent_key: str, inputs: dict, obo_token: str | None,
@@ -147,14 +149,15 @@ class RunEngine:
 
     async def execute(self, run: Run, inputs: dict, *, obo_token: str | None,
                       obo_user: str | None, prompt_params: dict,
-                      auto_execute_policy: dict) -> dict:
+                      auto_execute_policy: dict, guardrail_policy: dict | None = None) -> dict:
         """Full non-Temporal run: graph -> (proposal|final). Returns a summary."""
         run.status = "running"
         await self._store.update_run(run)
         await self.emit_run(run, "agent_run.started")
 
         outcome = await self.run_graph(run, inputs, obo_token=obo_token,
-                                       prompt_params=prompt_params)
+                                       prompt_params=prompt_params,
+                                       guardrail_policy=guardrail_policy)
         run.usage = outcome.usage or {}
         run.final_text = outcome.final_text
         summary: dict = {"final_text": outcome.final_text, "usage": run.usage,

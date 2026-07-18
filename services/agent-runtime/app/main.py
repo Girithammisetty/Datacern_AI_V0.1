@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -26,6 +27,7 @@ from app.api.routes import (
     a2a,
     chat,
     decisions,
+    entity_merges,
     health,
     jwks,
     outcomes,
@@ -99,6 +101,22 @@ async def _lifespan(app: FastAPI):
             c.extras["outbox_relay"] = False
             logger.exception("outbox relay FAILED to start — events will pile up unpublished")
 
+    # Scheduled drift-driven retrain loop (BRD 52 inc3): tick due retrain-watches,
+    # compute the correction-rate drift signal, and open governance retrain
+    # proposals over threshold. Only proposes — a human approves every retrain.
+    if c.settings.use_real_adapters:
+        try:
+            from app.runtime.retrain_scheduler import RetrainScheduler
+
+            interval = float(os.getenv("AR_RETRAIN_SCHEDULER_INTERVAL_S", "300"))
+            scheduler = RetrainScheduler(c, interval_seconds=interval)
+            tasks.append(asyncio.create_task(scheduler.run()))
+            c.extras["retrain_scheduler"] = True
+            logger.info("retrain scheduler started (interval=%ss)", interval)
+        except Exception:
+            c.extras["retrain_scheduler"] = False
+            logger.exception("retrain scheduler FAILED to start")
+
     yield
 
     for t in tasks:
@@ -135,6 +153,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(training.router)
     app.include_router(decisions.router)
     app.include_router(outcomes.router)
+    app.include_router(entity_merges.router)
     return app
 
 

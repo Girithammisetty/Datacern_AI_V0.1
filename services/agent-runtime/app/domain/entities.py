@@ -76,6 +76,34 @@ class TenantAgentConfig:
     prompt_params: dict = field(default_factory=dict)
     auto_execute_policy: dict = field(default_factory=dict)
     self_approval: bool = False
+    # BRD 53 inc2 (PA-FR-001): the per-agent SECURITY envelope, machine-enforced
+    # in the shared graph independent of the prompt:
+    #   {"data_scope": {"workspaces": [uuid], "dataset_urns": [urn]},
+    #    "budget": {"max_tokens_per_session": int},
+    #    "pii": {"block_pii_egress": bool, "redact": bool}}
+    guardrail_policy: dict = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class RetrainWatch:
+    """BRD 52 inc3: a standing, scheduled watch on a deployed model. The scheduler
+    computes a drift signal (human corrections to watched_agent_key's proposals in
+    a window) on the cadence and, when it crosses the threshold, invokes the
+    governance agent — which opens a four-eyes retrain proposal."""
+    id: str
+    tenant_id: str
+    model_urn: str
+    watched_agent_key: str
+    workspace_id: str | None = None
+    cadence_seconds: int = 86400
+    correction_window_hours: int = 168
+    drift_threshold: float = 0.3
+    min_corrections: int = 20
+    enabled: bool = True
+    last_checked_at: datetime | None = None
+    last_signal: dict = field(default_factory=dict)
+    created_by: str | None = None
+    created_at: datetime = field(default_factory=now)
 
 
 @dataclass(slots=True)

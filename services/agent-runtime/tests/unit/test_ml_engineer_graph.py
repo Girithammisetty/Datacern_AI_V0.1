@@ -8,12 +8,13 @@ from __future__ import annotations
 from app.adapters.fakes import (
     FakeDatasetReader,
     FakeExperimentReader,
+    FakeIngestionReader,
     FakeLlm,
     FakePipelineReader,
     FakePipelineWriter,
 )
 from app.graphs.base import GraphDeps
-from app.graphs.ml_engineer import PROMOTE_TOOL_ID, run_ml_engineer
+from app.graphs.ml_engineer import INGEST_TOOL_ID, PROMOTE_TOOL_ID, run_ml_engineer
 from tests.conftest import TENANT_A
 
 _PLAN_JSON = (
@@ -134,3 +135,49 @@ async def test_ml_engineer_resolves_when_mirror_catches_up(monkeypatch):
     assert outcome.write_intent.args["model_id"] == "m-scorer"
     assert outcome.write_intent.args["version"] == 1
     assert not outcome.structured["failed"]
+
+
+# ---- BRD 52 inc2 (Phase 2): agent-initiated ingestion from existing conns ----
+
+_CONNS = [{"id": "conn-1", "name": "Claims warehouse", "connector_type": "postgres"}]
+
+
+async def test_ml_engineer_ingests_from_existing_connection():
+    deps = _deps(ingestion_reader=FakeIngestionReader(connections=_CONNS))
+    outcome = await run_ml_engineer(deps, {
+        "tenant_id": TENANT_A, "workspace_id": "ws-1",
+        "refresh_from_connection": {"connection_id": "conn-1", "table": "claims",
+                                    "target_dataset_name": "claims-refresh"}})
+
+    wi = outcome.write_intent
+    assert wi is not None
+    assert wi.tool_id == INGEST_TOOL_ID                     # ingestion.create, not promote
+    assert wi.tier == "write-proposal"                      # same governed tiering
+    assert wi.required_action == "ingestion.ingestion.create"
+    assert wi.args["connection_id"] == "conn-1"             # the EXISTING connection
+    assert wi.args["new_dataset"]["name"] == "claims-refresh"
+    assert wi.args["table"] == "claims"
+    assert not outcome.structured["failed"]
+    # It did NOT train — the ingestion path short-circuits the promote loop.
+    assert outcome.structured["candidates"] == []
+
+
+async def test_ml_engineer_refuses_unknown_connection():
+    """Fail closed: the agent may never invent/provision a connection — an id that
+    is not an existing admin-created connection yields NO proposal + a refusal."""
+    deps = _deps(ingestion_reader=FakeIngestionReader(connections=_CONNS))
+    outcome = await run_ml_engineer(deps, {
+        "tenant_id": TENANT_A, "workspace_id": "ws-1",
+        "refresh_from_connection": {"connection_id": "conn-DOES-NOT-EXIST"}})
+
+    assert outcome.write_intent is None
+    assert outcome.structured["failed"] is True
+    assert "not an existing" in outcome.final_text
+    assert any(t.get("event") == "ingest_refused" for t in outcome.trace)
+
+
+async def test_ml_engineer_without_refresh_directive_still_trains():
+    # No refresh_from_connection -> the normal train -> promote loop runs.
+    outcome = await run_ml_engineer(_deps(), dict(_INPUTS))
+    assert outcome.write_intent is not None
+    assert outcome.write_intent.tool_id == PROMOTE_TOOL_ID

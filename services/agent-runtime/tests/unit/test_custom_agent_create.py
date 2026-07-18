@@ -32,6 +32,10 @@ def _auth(sub="u-admin", tenant=TENANT_A):
     return {"Authorization": f"Bearer {make_token(sub=sub, tenant_id=tenant, scopes=[])}"}
 
 
+def _op_auth(sub="u-op", tenant=TENANT_A):
+    return {"Authorization": f"Bearer {make_token(sub=sub, tenant_id=tenant, scopes=['operator'])}"}
+
+
 _VALID = {"display_name": "Reg E Disposition Copilot",
           "persona": "Dispute Intake Analyst",
           "system_prompt": "Prioritise Reg E deadlines; be conservative.",
@@ -96,6 +100,145 @@ async def test_rejects_foreign_graph_ref(client_and_container):
     bad = {**_VALID, "graph_ref": "triage.v1"}
     r = await client.post("/api/v1/registry/tenants/self/agents", json=bad, headers=_auth())
     assert r.status_code >= 400
+
+
+async def test_guardrail_policy_persisted_and_clamped(client_and_container):
+    """BRD 53 inc2: the security envelope (data_scope/budget/pii) is validated,
+    the budget is clamped to the platform ceiling, and it is stored on the tenant
+    config for the graph to enforce."""
+    client, c = client_and_container
+    body = {**_VALID,
+            "data_scope": {"workspaces": ["019f62c1-0f5e-7af0-b9be-cbe343ea0ad4"]},
+            "budget": {"max_tokens_per_session": 10_000_000},  # over the ceiling
+            "pii": {"block_pii_egress": True}}
+    r = await client.post("/api/v1/registry/tenants/self/agents", json=body, headers=_auth())
+    assert r.status_code == 200, r.text
+    gp = r.json()["data"]["guardrail_policy"]
+    assert gp["data_scope"]["workspaces"] == ["019f62c1-0f5e-7af0-b9be-cbe343ea0ad4"]
+    assert gp["budget"]["max_tokens_per_session"] == 200_000  # clamped DOWN (BR-8)
+    assert gp["pii"]["block_pii_egress"] is True
+
+    key = r.json()["data"]["agent_key"]
+    cfg = await c.store.get_tenant_config(TENANT_A, key)
+    assert cfg.guardrail_policy["budget"]["max_tokens_per_session"] == 200_000
+
+
+async def test_rejects_non_uuid_workspace_scope(client_and_container):
+    client, _ = client_and_container
+    bad = {**_VALID, "data_scope": {"workspaces": ["not-a-uuid"]}}
+    r = await client.post("/api/v1/registry/tenants/self/agents", json=bad, headers=_auth())
+    assert r.status_code >= 400
+    assert "workspaces" in r.text
+
+
+async def test_rejects_budget_below_floor(client_and_container):
+    client, _ = client_and_container
+    bad = {**_VALID, "budget": {"max_tokens_per_session": 10}}
+    r = await client.post("/api/v1/registry/tenants/self/agents", json=bad, headers=_auth())
+    assert r.status_code >= 400
+    assert "max_tokens_per_session" in r.text
+
+
+async def test_autobind_persona_copilots_is_idempotent(client_and_container):
+    """PA-FR-010: binding a set of roles provisions one persona copilot each;
+    re-running only fills gaps (idempotent by deterministic key)."""
+    client, c = client_and_container
+    r = await client.post("/api/v1/registry/tenants/self/personas/autobind",
+                          json={"roles": ["Claims Analyst", "SIU Investigator"]}, headers=_auth())
+    assert r.status_code == 200, r.text
+    d = r.json()["data"]
+    assert {x["role"] for x in d["created"]} == {"Claims Analyst", "SIU Investigator"}
+    assert d["skipped"] == []
+
+    # Each bound copilot exists, is persona-grounded, advisory (no propose tool).
+    for x in d["created"]:
+        cfg = await c.store.get_tenant_config(TENANT_A, x["agent_key"])
+        assert cfg.enabled
+        assert cfg.prompt_params["propose_tool"] is None       # advisory by default
+    defn = await c.store.get_agent_definition(d["created"][0]["agent_key"])
+    assert defn.owner_tenant == TENANT_A                        # tenant-scoped
+
+    # Re-run with an overlapping set: existing ones are skipped, new one created.
+    r2 = await client.post("/api/v1/registry/tenants/self/personas/autobind",
+                           json={"roles": ["Claims Analyst", "Auditor"]}, headers=_auth())
+    d2 = r2.json()["data"]
+    assert [x["role"] for x in d2["created"]] == ["Auditor"]
+    assert [x["role"] for x in d2["skipped"]] == ["Claims Analyst"]
+
+
+async def test_autobind_requires_agent_admin_and_roles(client_and_container):
+    client, _ = client_and_container
+    # non-admin
+    r = await client.post("/api/v1/registry/tenants/self/personas/autobind",
+                          json={"roles": ["X"]}, headers=_auth(sub="u-user"))
+    assert r.status_code == 403
+    # empty roles
+    r2 = await client.post("/api/v1/registry/tenants/self/personas/autobind",
+                           json={"roles": []}, headers=_auth())
+    assert r2.status_code >= 400 and "roles" in r2.text
+
+
+async def test_operator_ceiling_clamps_custom_agent_budget(client_and_container):
+    """BRD 53 inc3 / BR-8: an operator lowers the platform budget ceiling; a
+    subsequent tenant custom agent is clamped DOWN to it (not the 200k default)."""
+    client, _ = client_and_container
+    # Operator tightens the ceiling to 5,000 tokens.
+    rc = await client.put("/api/v1/registry/platform/agent-ceilings",
+                          json={"max_budget_tokens": 5000, "max_tier": "write-proposal"},
+                          headers=_op_auth())
+    assert rc.status_code == 200, rc.text
+
+    # A tenant asks for 50,000 — it is clamped to the operator ceiling.
+    body = {**_VALID, "budget": {"max_tokens_per_session": 50000}}
+    r = await client.post("/api/v1/registry/tenants/self/agents", json=body, headers=_auth())
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["guardrail_policy"]["budget"]["max_tokens_per_session"] == 5000
+
+
+async def test_agent_ceilings_are_operator_only(client_and_container):
+    client, _ = client_and_container
+    # tenant admin (not operator) cannot read or set ceilings
+    r = await client.get("/api/v1/registry/platform/agent-ceilings", headers=_auth())
+    assert r.status_code == 403
+    r2 = await client.put("/api/v1/registry/platform/agent-ceilings",
+                          json={"max_budget_tokens": 5000}, headers=_auth())
+    assert r2.status_code == 403
+    # operator can read defaults
+    r3 = await client.get("/api/v1/registry/platform/agent-ceilings", headers=_op_auth())
+    assert r3.status_code == 200
+    assert r3.json()["data"]["max_budget_tokens"] == 200000
+
+
+async def test_retrain_watch_crud(client_and_container):
+    """BRD 52 inc3: register a scheduled drift watch, list it, delete it."""
+    client, c = client_and_container
+    body = {"model_urn": "wr:t:experiment:model/m-scorer", "watched_agent_key": "case-triage",
+            "drift_threshold": 0.25, "min_corrections": 15, "cadence_seconds": 3600}
+    r = await client.post("/api/v1/registry/retrain-watches", json=body, headers=_auth())
+    assert r.status_code == 200, r.text
+    w = r.json()["data"]
+    assert w["model_urn"] == "wr:t:experiment:model/m-scorer"
+    assert w["drift_threshold"] == 0.25 and w["min_corrections"] == 15
+
+    lr = await client.get("/api/v1/registry/retrain-watches", headers=_auth())
+    assert any(x["id"] == w["id"] for x in lr.json()["data"])
+
+    dr = await client.delete(f"/api/v1/registry/retrain-watches/{w['id']}", headers=_auth())
+    assert dr.status_code == 200 and dr.json()["data"]["deleted"] is True
+    lr2 = await client.get("/api/v1/registry/retrain-watches", headers=_auth())
+    assert not any(x["id"] == w["id"] for x in lr2.json()["data"])
+
+
+async def test_retrain_watch_requires_fields_and_cap(client_and_container):
+    client, _ = client_and_container
+    # non-admin
+    r = await client.post("/api/v1/registry/retrain-watches",
+                          json={"model_urn": "x", "watched_agent_key": "y"}, headers=_auth(sub="u-user"))
+    assert r.status_code == 403
+    # missing watched_agent_key
+    r2 = await client.post("/api/v1/registry/retrain-watches",
+                           json={"model_urn": "x"}, headers=_auth())
+    assert r2.status_code >= 400 and "watched_agent_key" in r2.text
 
 
 async def test_isolation_other_tenant_cannot_see_it(client_and_container):

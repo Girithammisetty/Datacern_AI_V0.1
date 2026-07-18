@@ -22,6 +22,7 @@ from langgraph.graph import END, StateGraph
 
 from app.adapters.memory import GroundingDegraded
 from app.graphs.base import GraphDeps, GraphOutcome, WriteIntent, register
+from app.prompts import system_prompt
 
 ONBOARDING_TOOL_ID = "ingestion.create"
 ONBOARDING_TOOL_VERSION = "1.0.0"
@@ -29,22 +30,7 @@ ONBOARDING_TOOL_VERSION = "1.0.0"
 INGESTION_MODES = ("file_upload", "query", "scheduled_run", "webhook_batch")
 FILE_FORMATS = ("csv", "tsv", "json", "jsonl", "parquet", "avro")
 
-_SYS = (
-    "You are Windrose's data-onboarding agent. Given a user's request to onboard a "
-    "data source, the catalog of available connector types, and (when available) a "
-    "preview of the source's columns, draft an ingestion config and a column "
-    "mapping. Respond with ONLY a JSON object: "
-    '{"connector_type": one connector_type id from the catalog, '
-    '"ingestion_mode": one of ["file_upload","query","scheduled_run","webhook_batch"], '
-    '"file_format": one of ["csv","tsv","json","jsonl","parquet","avro"] or null, '
-    '"target_dataset_name": short_snake_case dataset name, '
-    '"column_mapping": [{"source": string, "target": snake_case string, '
-    '"type": one of ["string","integer","number","boolean","timestamp","date"], '
-    '"nullable": boolean}], '
-    '"rationale": one concise sentence citing the grounding evidence}. '
-    "Ground the column types/nullability in the previewed schema when present. "
-    "No prose outside JSON."
-)
+_SYS = system_prompt("onboarding.system")
 
 
 def _extract_json(text: str) -> dict:

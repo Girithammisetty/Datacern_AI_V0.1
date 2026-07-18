@@ -198,14 +198,99 @@ class SqlStore:
             await s.execute(text(
                 """INSERT INTO tenant_agent_configs
                    (tenant_id, agent_key, enabled, pinned_version, prompt_params,
-                    auto_execute_policy, self_approval)
+                    auto_execute_policy, self_approval, guardrail_policy)
                    VALUES (cast(:t as uuid), :k, :en, :pv, cast(:pp as jsonb),
-                           cast(:ap as jsonb), :sa)
+                           cast(:ap as jsonb), :sa, cast(:gp as jsonb))
                    ON CONFLICT (tenant_id, agent_key) DO UPDATE SET
                      enabled=:en, pinned_version=:pv, prompt_params=cast(:pp as jsonb),
-                     auto_execute_policy=cast(:ap as jsonb), self_approval=:sa, updated_at=now()"""),
+                     auto_execute_policy=cast(:ap as jsonb), self_approval=:sa,
+                     guardrail_policy=cast(:gp as jsonb), updated_at=now()"""),
                 {"t": c.tenant_id, "k": c.agent_key, "en": c.enabled, "pv": c.pinned_version,
-                 "pp": _j(c.prompt_params), "ap": _j(c.auto_execute_policy), "sa": c.self_approval})
+                 "pp": _j(c.prompt_params), "ap": _j(c.auto_execute_policy), "sa": c.self_approval,
+                 "gp": _j(c.guardrail_policy)})
+
+    # ---- platform agent ceilings (BRD 53 inc3, operator-only) ---------------
+    async def get_platform_ceilings(self) -> dict:
+        async with self._plain() as s:
+            r = (await s.execute(text(
+                "SELECT max_budget_tokens, max_tier, updated_at, updated_by "
+                "FROM platform_agent_ceilings WHERE id = true"))).mappings().first()
+        if not r:
+            return {"max_budget_tokens": 200000, "max_tier": "write-proposal"}
+        return {"max_budget_tokens": int(r["max_budget_tokens"]), "max_tier": r["max_tier"],
+                "updated_at": r["updated_at"], "updated_by": r["updated_by"]}
+
+    async def set_platform_ceilings(self, *, max_budget_tokens: int, max_tier: str,
+                                    updated_by: str | None = None) -> None:
+        async with self._plain() as s:
+            await s.execute(text(
+                """INSERT INTO platform_agent_ceilings (id, max_budget_tokens, max_tier, updated_by, updated_at)
+                   VALUES (true, :b, :t, :u, now())
+                   ON CONFLICT (id) DO UPDATE SET
+                     max_budget_tokens = :b, max_tier = :t, updated_by = :u, updated_at = now()"""),
+                {"b": max_budget_tokens, "t": max_tier, "u": updated_by})
+
+    # ---- retrain watches (BRD 52 inc3, scheduled drift-driven retrain) -------
+    async def create_retrain_watch(self, w) -> None:
+        async with self._plain() as s:
+            await s.execute(text(
+                """INSERT INTO retrain_watches
+                   (id, tenant_id, model_urn, workspace_id, watched_agent_key,
+                    cadence_seconds, correction_window_hours, drift_threshold,
+                    min_corrections, enabled, created_by)
+                   VALUES (cast(:id as uuid), cast(:t as uuid), :mu, cast(:ws as uuid),
+                           :wak, :cad, :cwh, :dt, :mc, :en, :cb)"""),
+                {"id": w.id, "t": w.tenant_id, "mu": w.model_urn,
+                 "ws": w.workspace_id, "wak": w.watched_agent_key,
+                 "cad": w.cadence_seconds, "cwh": w.correction_window_hours,
+                 "dt": w.drift_threshold, "mc": w.min_corrections,
+                 "en": w.enabled, "cb": w.created_by})
+
+    async def list_retrain_watches(self, tenant_id: str) -> list:
+        async with self._plain() as s:
+            rows = (await s.execute(text(
+                "SELECT * FROM retrain_watches WHERE tenant_id=cast(:t as uuid) "
+                "ORDER BY created_at DESC"), {"t": tenant_id})).mappings().all()
+        return [_retrain_watch(r) for r in rows]
+
+    async def delete_retrain_watch(self, tenant_id: str, watch_id: str) -> bool:
+        async with self._plain() as s:
+            r = await s.execute(text(
+                "DELETE FROM retrain_watches WHERE id=cast(:id as uuid) "
+                "AND tenant_id=cast(:t as uuid)"), {"id": watch_id, "t": tenant_id})
+        return (r.rowcount or 0) > 0
+
+    async def list_due_retrain_watches(self, now_ts, limit: int = 100) -> list:
+        """Cross-tenant scan for the scheduler: enabled watches never checked or
+        whose cadence has elapsed. Unscoped by design (the ONLY unscoped read)."""
+        async with self._plain() as s:
+            rows = (await s.execute(text(
+                """SELECT * FROM retrain_watches
+                   WHERE enabled = true
+                     AND (last_checked_at IS NULL
+                          OR last_checked_at + (cadence_seconds || ' seconds')::interval <= :now)
+                   ORDER BY last_checked_at ASC NULLS FIRST LIMIT :lim"""),
+                {"now": now_ts, "lim": limit})).mappings().all()
+        return [_retrain_watch(r) for r in rows]
+
+    async def touch_retrain_watch(self, watch_id: str, checked_at, signal: dict) -> None:
+        async with self._plain() as s:
+            await s.execute(text(
+                "UPDATE retrain_watches SET last_checked_at=:at, "
+                "last_signal=cast(:sig as jsonb), updated_at=now() WHERE id=cast(:id as uuid)"),
+                {"at": checked_at, "sig": _j(signal), "id": watch_id})
+
+    async def count_corrections(self, tenant_id: str, agent_key: str, since) -> tuple[int, int]:
+        """(corrections, total) for an agent's DECIDED proposals since `since`:
+        corrections = rejected + edited_approved (a human overrode the agent)."""
+        async with self._tenant(tenant_id) as s:
+            row = (await s.execute(text(
+                """SELECT
+                     count(*) FILTER (WHERE status IN ('rejected','edited_approved')) AS corr,
+                     count(*) FILTER (WHERE status IN ('rejected','edited_approved','approved')) AS total
+                   FROM proposals WHERE agent_key=:k AND updated_at >= :since"""),
+                {"k": agent_key, "since": since})).mappings().first()
+        return (int(row["corr"] or 0), int(row["total"] or 0))
 
     # ---- decision models (BRD 54) ------------------------------------------
     async def create_decision_model(self, m) -> None:
@@ -235,6 +320,40 @@ class SqlStore:
                 "SELECT * FROM decision_models WHERE tenant_id=:t ORDER BY name, version DESC"),
                 {"t": tenant_id})).mappings().all()
         return [_decision_model(r) for r in rows]
+
+    async def list_decision_model_versions(self, tenant_id: str, name: str,
+                                           workspace_id: str | None) -> list:
+        """All versions of one logical table (grouped by name + workspace),
+        newest version first — the change log."""
+        async with self._plain() as s:
+            rows = (await s.execute(text(
+                "SELECT * FROM decision_models WHERE tenant_id=:t AND name=:n "
+                "AND workspace_id IS NOT DISTINCT FROM :ws ORDER BY version DESC"),
+                {"t": tenant_id, "n": name, "ws": workspace_id})).mappings().all()
+        return [_decision_model(r) for r in rows]
+
+    async def approve_decision_model(self, tenant_id: str, model_id: str,
+                                     approver: str) -> None:
+        """Publish a draft (four-eyes checked in the route) and ARCHIVE any
+        currently-published version of the same logical table — so exactly one
+        version is live and it is the one that was approved."""
+        async with self._plain() as s:
+            row = (await s.execute(text(
+                "SELECT name, workspace_id FROM decision_models "
+                "WHERE id=cast(:id as uuid) AND tenant_id=:t"),
+                {"id": model_id, "t": tenant_id})).mappings().first()
+            if row is None:
+                return
+            await s.execute(text(
+                "UPDATE decision_models SET status='archived', updated_at=now() "
+                "WHERE tenant_id=:t AND name=:n "
+                "AND workspace_id IS NOT DISTINCT FROM :ws AND status='published'"),
+                {"t": tenant_id, "n": row["name"], "ws": row["workspace_id"]})
+            await s.execute(text(
+                "UPDATE decision_models SET status='published', approved_by=:ab, "
+                "approved_at=now(), updated_at=now() "
+                "WHERE id=cast(:id as uuid) AND tenant_id=:t"),
+                {"id": model_id, "t": tenant_id, "ab": approver})
 
     # ---- outcome labels (BRD 55) -------------------------------------------
     async def upsert_outcome_label(self, lab) -> None:
@@ -771,12 +890,15 @@ def _outcome_label(r):
 
 def _decision_model(r):
     from app.domain.decisions import DecisionModel, parse_outcome, rules_from_json
+    ap = r.get("approved_at")
     return DecisionModel(
         model_id=str(r["id"]), tenant_id=r["tenant_id"], name=r["name"],
         version=int(r["version"]), rules=rules_from_json(r["rules"]),
         default_outcome=parse_outcome(r["default_outcome"]),
         workspace_id=r.get("workspace_id"), dataset_urn=r.get("dataset_urn"),
-        status=r["status"])
+        status=r["status"], created_by=r.get("created_by"),
+        approved_by=r.get("approved_by"),
+        approved_at=ap.isoformat() if ap is not None else None)
 
 
 def _def(r) -> AgentDefinition:
@@ -801,7 +923,21 @@ def _cfg(r) -> TenantAgentConfig:
     return TenantAgentConfig(
         tenant_id=str(r["tenant_id"]), agent_key=r["agent_key"], enabled=r["enabled"],
         pinned_version=r["pinned_version"], prompt_params=_load(r["prompt_params"]) or {},
-        auto_execute_policy=_load(r["auto_execute_policy"]) or {}, self_approval=r["self_approval"])
+        auto_execute_policy=_load(r["auto_execute_policy"]) or {}, self_approval=r["self_approval"],
+        guardrail_policy=_load(r.get("guardrail_policy")) or {})
+
+
+def _retrain_watch(r):
+    from app.domain.entities import RetrainWatch
+    return RetrainWatch(
+        id=str(r["id"]), tenant_id=str(r["tenant_id"]), model_urn=r["model_urn"],
+        watched_agent_key=r["watched_agent_key"],
+        workspace_id=str(r["workspace_id"]) if r["workspace_id"] else None,
+        cadence_seconds=r["cadence_seconds"], correction_window_hours=r["correction_window_hours"],
+        drift_threshold=float(r["drift_threshold"]), min_corrections=r["min_corrections"],
+        enabled=r["enabled"], last_checked_at=r["last_checked_at"],
+        last_signal=_load(r.get("last_signal")) or {}, created_by=r.get("created_by"),
+        created_at=r["created_at"])
 
 
 def _rollout(r) -> Rollout:

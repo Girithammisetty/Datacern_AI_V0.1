@@ -46,6 +46,7 @@ class InMemoryStore:
         self._checkpoints: dict[str, list[dict]] = {}
         self._decision_models: dict[str, object] = {}  # BRD 54
         self._outcome_labels: dict[tuple, object] = {}  # BRD 55
+        self._retrain_watches: dict[str, object] = {}  # BRD 52 inc3
         self.outbox: list[dict] = []
 
     # ---- decision models (BRD 54) ------------------------------------------
@@ -59,6 +60,28 @@ class InMemoryStore:
 
     async def list_decision_models(self, tenant_id: str) -> list:
         return [m for m in self._decision_models.values() if m.tenant_id == tenant_id]
+
+    async def list_decision_model_versions(self, tenant_id: str, name: str,
+                                           workspace_id: str | None) -> list:
+        out = [m for m in self._decision_models.values()
+               if m.tenant_id == tenant_id and m.name == name
+               and m.workspace_id == workspace_id]
+        return sorted(out, key=lambda m: m.version, reverse=True)
+
+    async def approve_decision_model(self, tenant_id: str, model_id: str,
+                                     approver: str) -> None:
+        from datetime import UTC, datetime
+        m = self._decision_models.get(model_id)
+        if m is None or m.tenant_id != tenant_id:
+            return
+        for other in self._decision_models.values():
+            if (other.tenant_id == tenant_id and other.name == m.name
+                    and other.workspace_id == m.workspace_id
+                    and other.status == "published"):
+                other.status = "archived"
+        m.status = "published"
+        m.approved_by = approver
+        m.approved_at = datetime.now(UTC).isoformat()
 
     # ---- outcome labels (BRD 55) -------------------------------------------
     async def upsert_outcome_label(self, lab) -> None:
@@ -93,6 +116,50 @@ class InMemoryStore:
     async def get_agent_version(self, agent_key: str, version: int) -> AgentVersion | None:
         return self._versions.get((agent_key, version))
 
+    # ---- retrain watches (BRD 52 inc3) -------------------------------------
+    async def create_retrain_watch(self, w) -> None:
+        self._retrain_watches[w.id] = copy.copy(w)
+
+    async def list_retrain_watches(self, tenant_id: str) -> list:
+        return [w for w in self._retrain_watches.values() if w.tenant_id == tenant_id]
+
+    async def delete_retrain_watch(self, tenant_id: str, watch_id: str) -> bool:
+        w = self._retrain_watches.get(watch_id)
+        if w is not None and w.tenant_id == tenant_id:
+            del self._retrain_watches[watch_id]
+            return True
+        return False
+
+    async def list_due_retrain_watches(self, now_ts, limit: int = 100) -> list:
+        from datetime import timedelta
+        due = []
+        for w in self._retrain_watches.values():
+            if not w.enabled:
+                continue
+            if w.last_checked_at is None or (
+                    w.last_checked_at + timedelta(seconds=w.cadence_seconds) <= now_ts):
+                due.append(w)
+        return due[:limit]
+
+    async def touch_retrain_watch(self, watch_id: str, checked_at, signal: dict) -> None:
+        w = self._retrain_watches.get(watch_id)
+        if w is not None:
+            w.last_checked_at = checked_at
+            w.last_signal = dict(signal)
+
+    async def count_corrections(self, tenant_id: str, agent_key: str, since) -> tuple[int, int]:
+        corr = total = 0
+        for p in self._proposals.values():
+            if getattr(p, "tenant_id", None) != tenant_id or getattr(p, "agent_key", None) != agent_key:
+                continue
+            st = getattr(p, "status", None)
+            if st in ("rejected", "edited_approved"):
+                corr += 1
+                total += 1
+            elif st == "approved":
+                total += 1
+        return corr, total
+
     async def list_agent_versions(self, agent_key: str) -> list[AgentVersion]:
         return [v for (k, _), v in self._versions.items() if k == agent_key]
 
@@ -110,6 +177,16 @@ class InMemoryStore:
 
     async def put_tenant_config(self, c: TenantAgentConfig) -> None:
         self._configs[(c.tenant_id, c.agent_key)] = copy.copy(c)
+
+    # ---- platform agent ceilings (BRD 53 inc3) -----------------------------
+    async def get_platform_ceilings(self) -> dict:
+        return dict(getattr(self, "_ceilings", None)
+                    or {"max_budget_tokens": 200000, "max_tier": "write-proposal"})
+
+    async def set_platform_ceilings(self, *, max_budget_tokens: int, max_tier: str,
+                                    updated_by: str | None = None) -> None:
+        self._ceilings = {"max_budget_tokens": max_budget_tokens, "max_tier": max_tier,
+                          "updated_by": updated_by}
 
     # ---- rollouts ----------------------------------------------------------
     async def create_rollout(self, r: Rollout) -> None:

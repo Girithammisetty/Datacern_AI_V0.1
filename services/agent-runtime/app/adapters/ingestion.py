@@ -47,6 +47,28 @@ class IngestionServiceClient:
         data = resp.json().get("data")
         return data if isinstance(data, list) else []
 
+    async def list_connections(self, *, tenant_id: str, auth_token: str) -> list[dict]:
+        """The tenant's EXISTING (admin-created) connections (ING GET /connections,
+        needs ingestion.connection.read). BRD 52 inc2: an agent may only initiate
+        an ingestion FROM one of these — it can never create a connection or see a
+        credential. Returns [] on any failure (grounding degrades to empty)."""
+        url = f"{self._base}/api/v1/connections"
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.get(url, headers=headers)
+        except httpx.HTTPError as exc:
+            logger.warning("ingestion list-connections read failed (grounding "
+                           "degraded to empty): err=%r", exc)
+            return []
+        if resp.status_code != 200:
+            logger.warning("ingestion list-connections read failed (grounding "
+                           "degraded to empty): status=%s body=%s",
+                           resp.status_code, resp.text[:300])
+            return []
+        data = resp.json().get("data")
+        return data if isinstance(data, list) else []
+
     async def preview(self, *, tenant_id: str, connection_id: str, auth_token: str,
                       table: str | None = None, path: str | None = None,
                       query: str | None = None, limit: int = 50) -> dict:

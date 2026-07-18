@@ -10,6 +10,7 @@ from app.domain.entities import (
     AgentDefinition,
     AgentVersion,
     KillSwitch,
+    RetrainWatch,
     Rollout,
     TenantAgentConfig,
     new_uuid,
@@ -211,6 +212,105 @@ _CUSTOM_GRAPH_REF = "persona_copilot.v1"
 # Custom agents cap at write-proposal; higher tiers are operator-fixed-agent only.
 _TIER_RANK = {"read": 0, "write-proposal": 1, "write-direct": 2, "admin": 3}
 
+# Platform ceilings for the per-agent guardrail budget (BR-8: a tenant setting can
+# never exceed these). The floor is the minimum a single reasoned decision needs;
+# a budget below it would make every run refuse, so we reject it at author time.
+_BUDGET_TOKENS_CEILING = 200_000
+_BUDGET_TOKENS_FLOOR = 128
+_UUID_RE = _re.compile(r"^[0-9a-fA-F-]{36}$")
+
+
+def _validate_guardrail_policy(body: dict, *, budget_ceiling: int = _BUDGET_TOKENS_CEILING) -> dict:
+    """Validate + normalize the author-supplied security envelope (PA-FR-060).
+
+    Rejects structurally with the offending field. Cross-tenant data-scope is
+    impossible via RLS regardless, so author-time we validate shape (UUID
+    workspaces, string dataset urns) and clamp the budget to the operator-set
+    platform ceiling (BR-8). Returns the stored guardrail_policy dict ({} when
+    nothing was supplied).
+    """
+    policy: dict = {}
+
+    ds = body.get("data_scope")
+    if ds is not None:
+        if not isinstance(ds, dict):
+            raise EvalGateFailed("data_scope must be an object {workspaces?, dataset_urns?}")
+        scope: dict = {}
+        ws = ds.get("workspaces")
+        if ws is not None:
+            if not isinstance(ws, list) or not all(isinstance(w, str) and _UUID_RE.match(w) for w in ws):
+                raise EvalGateFailed("data_scope.workspaces must be a list of workspace UUIDs")
+            scope["workspaces"] = [str(w) for w in ws]
+        durns = ds.get("dataset_urns")
+        if durns is not None:
+            if not isinstance(durns, list) or not all(isinstance(u, str) and u for u in durns):
+                raise EvalGateFailed("data_scope.dataset_urns must be a list of dataset URNs")
+            scope["dataset_urns"] = [str(u) for u in durns]
+        if scope:
+            policy["data_scope"] = scope
+
+    budget = body.get("budget")
+    if budget is not None:
+        if not isinstance(budget, dict):
+            raise EvalGateFailed("budget must be an object {max_tokens_per_session}")
+        mt = budget.get("max_tokens_per_session")
+        if mt is not None:
+            if not isinstance(mt, int) or isinstance(mt, bool) or mt < _BUDGET_TOKENS_FLOOR:
+                raise EvalGateFailed(
+                    f"budget.max_tokens_per_session must be an integer >= {_BUDGET_TOKENS_FLOOR}")
+            # BR-8: clamp DOWN to the operator-set platform ceiling, never up.
+            policy["budget"] = {"max_tokens_per_session": min(mt, budget_ceiling)}
+
+    pii = body.get("pii")
+    if pii is not None:
+        if not isinstance(pii, dict):
+            raise EvalGateFailed("pii must be an object {block_pii_egress?, redact?}")
+        policy["pii"] = {
+            "block_pii_egress": bool(pii.get("block_pii_egress", False)),
+            "redact": bool(pii.get("redact", False)),
+        }
+
+    return policy
+
+
+async def _provision_custom_agent(
+    c, tenant: str, *, agent_key: str, display_name: str, description: str,
+    persona: str, system_prompt: str, allowed_tools: list[str],
+    propose_tool: str | None, guardrail_policy: dict,
+) -> None:
+    """Materialize a tenant custom agent on the shared safe graph: definition +
+    v1 (allow-list -> enforced toolset) + tenant config (persona/prompt/propose +
+    guardrail envelope). Shared by the interactive author route and persona
+    auto-binding (PA-FR-010). The caller owns key derivation + idempotency."""
+    await c.store.upsert_agent_definition(AgentDefinition(
+        agent_key=agent_key, display_name=display_name, description=description,
+        owner_team=f"tenant:{tenant}", default_write_mode="proposal",
+        status="published", owner_tenant=tenant))
+
+    toolset = [{"tool_id": t, "version_range": ">=1.0.0"} for t in allowed_tools]
+    card = build_card(agent_key=agent_key, version=1, display_name=display_name,
+                      description=description, write_mode="proposal",
+                      skills=[], endpoint=f"https://agent-runtime.internal/a2a/{agent_key}",
+                      eval_score_ref="persona-copilot-shared-gate")
+    sig = sign_card(c.signing_key, card)
+    card["signature"] = {"alg": "RS256", "kid": c.signing_key.kid, "value": sig}
+    await c.store.create_agent_version(AgentVersion(
+        agent_key=agent_key, version=1, graph_ref=_CUSTOM_GRAPH_REF,
+        graph_digest=graph_digest(_CUSTOM_GRAPH_REF), toolset=toolset,
+        model_config={"request_class": "chat", "max_rung": 1, "temperature": 0.2},
+        memory_policy={"scopes_readable": ["workspace", "tenant"], "scopes_writable": []},
+        eval_gate={"suite_id": "persona-copilot-suite"},
+        eval_gate_result_id="persona-copilot-shared-gate",
+        a2a_card=card, card_signature=sig,
+        principal_ref=f"spiffe://windrose/ns/ai/agent/{agent_key}", status="published"))
+
+    await c.store.put_tenant_config(TenantAgentConfig(
+        tenant_id=tenant, agent_key=agent_key, enabled=True,
+        prompt_params={"persona": persona, "system_prompt": system_prompt[:2000],
+                       "propose_tool": propose_tool},
+        auto_execute_policy={}, self_approval=False,
+        guardrail_policy=guardrail_policy))
+
 
 @router.post("/tenants/self/agents")
 async def create_custom_agent(request: Request, body: dict = Body(...)):
@@ -238,57 +338,208 @@ async def create_custom_agent(request: Request, body: dict = Body(...)):
     propose_tool = body.get("propose_tool")
     if propose_tool is not None and propose_tool not in allowed_tools:
         raise EvalGateFailed(f"propose_tool {propose_tool!r} must be in allowed_tools")
+    # The tier ceiling is operator-set (BRD 53 inc3), but never above the hard
+    # write-proposal cap for custom agents (destructive/admin stay fixed-agent).
+    ceilings = await c.store.get_platform_ceilings()
+    tier_ceiling = str(ceilings.get("max_tier") or "write-proposal")
+    if _TIER_RANK.get(tier_ceiling, 99) > _TIER_RANK["write-proposal"]:
+        tier_ceiling = "write-proposal"
     max_tier = str(body.get("max_tier") or "write-proposal")
-    if _TIER_RANK.get(max_tier, 99) > _TIER_RANK["write-proposal"]:
+    if _TIER_RANK.get(max_tier, 99) > _TIER_RANK.get(tier_ceiling, 1):
         raise EvalGateFailed(
-            f"max_tier {max_tier!r} exceeds the custom-agent ceiling (write-proposal)")
+            f"max_tier {max_tier!r} exceeds the platform ceiling ({tier_ceiling})")
     # A tenant may NEVER name another graph_ref — it is forced to the shared one.
     if body.get("graph_ref") and body["graph_ref"] != _CUSTOM_GRAPH_REF:
         raise EvalGateFailed(
             f"custom agents run only on {_CUSTOM_GRAPH_REF} (graph_ref is not configurable)")
+
+    # BRD 53 inc2: the per-agent security envelope (data-scope / budget / pii),
+    # validated + clamped to the operator ceiling (PA-FR-060) and enforced in the
+    # shared graph.
+    guardrail_policy = _validate_guardrail_policy(
+        body, budget_ceiling=int(ceilings.get("max_budget_tokens") or _BUDGET_TOKENS_CEILING))
 
     slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "agent"
     agent_key = f"cust-{str(tenant).replace('-', '')[:8]}-{slug}"
     if await c.store.get_agent_definition(agent_key) is not None:
         raise Conflict(f"a custom agent named {name!r} already exists")
 
-    await c.store.upsert_agent_definition(AgentDefinition(
-        agent_key=agent_key, display_name=name,
+    await _provision_custom_agent(
+        c, tenant, agent_key=agent_key, display_name=name,
         description=body.get("description", f"Tenant custom copilot for {persona}"),
-        owner_team=f"tenant:{tenant}", default_write_mode="proposal",
-        status="published", owner_tenant=tenant))
-
-    toolset = [{"tool_id": t, "version_range": ">=1.0.0"} for t in allowed_tools]
-    card = build_card(agent_key=agent_key, version=1, display_name=name,
-                      description=body.get("description", ""), write_mode="proposal",
-                      skills=[], endpoint=f"https://agent-runtime.internal/a2a/{agent_key}",
-                      eval_score_ref="persona-copilot-shared-gate")
-    sig = sign_card(c.signing_key, card)
-    card["signature"] = {"alg": "RS256", "kid": c.signing_key.kid, "value": sig}
-    await c.store.create_agent_version(AgentVersion(
-        agent_key=agent_key, version=1, graph_ref=_CUSTOM_GRAPH_REF,
-        graph_digest=graph_digest(_CUSTOM_GRAPH_REF), toolset=toolset,
-        model_config={"request_class": "chat", "max_rung": 1, "temperature": 0.2},
-        memory_policy={"scopes_readable": ["workspace", "tenant"], "scopes_writable": []},
-        # The SHARED graph is what carries the platform eval gate — every custom
-        # agent reuses it, so a passing shared-gate marker satisfies publish.
-        eval_gate={"suite_id": "persona-copilot-suite"},
-        eval_gate_result_id="persona-copilot-shared-gate",
-        a2a_card=card, card_signature=sig,
-        principal_ref=f"spiffe://windrose/ns/ai/agent/{agent_key}", status="published"))
-
-    # Enable it for the tenant and carry the persona/prompt/propose_tool that the
-    # shared graph reads at runtime (prompt_params is the config channel).
-    await c.store.put_tenant_config(TenantAgentConfig(
-        tenant_id=tenant, agent_key=agent_key, enabled=True,
-        prompt_params={"persona": persona,
-                       "system_prompt": str(body.get("system_prompt") or "")[:2000],
-                       "propose_tool": propose_tool},
-        auto_execute_policy={}, self_approval=False))
+        persona=persona, system_prompt=str(body.get("system_prompt") or ""),
+        allowed_tools=allowed_tools, propose_tool=propose_tool,
+        guardrail_policy=guardrail_policy)
 
     return {"data": {"agent_key": agent_key, "status": "published",
                      "graph_ref": _CUSTOM_GRAPH_REF, "allowed_tools": allowed_tools,
-                     "persona": persona, "owner_tenant": tenant}}
+                     "persona": persona, "owner_tenant": tenant,
+                     "guardrail_policy": guardrail_policy}}
+
+
+@router.post("/tenants/self/personas/autobind")
+async def autobind_persona_copilots(request: Request, body: dict = Body(...)):
+    """PA-FR-010: bind persona copilots for a tenant's (pack-shipped) roles. For
+    each role name that does not already have a persona copilot, provision one on
+    the shared safe graph, grounded in that persona. Idempotent by a deterministic
+    key (persona-<tenant8>-<roleslug>) so re-running after a pack update only fills
+    the gaps. Advisory by default (no propose tool) unless propose_tool is given
+    (which must be a governed tool the shared graph supports). Needs ai.agent.admin."""
+    principal = await principal_of(request)
+    await _require_agent_cap(request, principal, "ai.agent.admin")
+    c = request.app.state.container
+    tenant = principal.tenant_id
+
+    roles = body.get("roles") or []
+    if not isinstance(roles, list) or not all(isinstance(r, str) and r.strip() for r in roles):
+        raise EvalGateFailed("roles must be a non-empty list of role names")
+    roles = [r.strip() for r in roles if r.strip()]
+    if not roles:
+        raise EvalGateFailed("roles must be a non-empty list of role names")
+
+    propose_tool = body.get("propose_tool")  # None = advisory persona copilot
+    # The shared graph knows how to safely propose only its supported tools; a
+    # persona copilot's allow-list is that one tool (advisory ones keep it on the
+    # list but never propose — propose_tool stays null).
+    default_tool = "case.apply_disposition"
+    if propose_tool is not None and not isinstance(propose_tool, str):
+        raise EvalGateFailed("propose_tool must be a tool id string or omitted")
+
+    created: list[dict] = []
+    skipped: list[dict] = []
+    t8 = str(tenant).replace("-", "")[:8]
+    for role in roles:
+        rslug = _re.sub(r"[^a-z0-9]+", "-", role.lower()).strip("-")[:40] or "role"
+        agent_key = f"persona-{t8}-{rslug}"
+        if await c.store.get_agent_definition(agent_key) is not None:
+            skipped.append({"role": role, "agent_key": agent_key})
+            continue
+        await _provision_custom_agent(
+            c, tenant, agent_key=agent_key, display_name=f"{role} Copilot",
+            description=f"Role-grounded copilot for the {role} persona (auto-bound).",
+            persona=role,
+            system_prompt=(f"You are the copilot for the {role}. Ground every "
+                           "recommendation in what that role is permitted to do, and "
+                           "only ever recommend governed outcomes a human approves."),
+            allowed_tools=[propose_tool or default_tool],
+            propose_tool=propose_tool, guardrail_policy={})
+        created.append({"role": role, "agent_key": agent_key})
+
+    return {"data": {"created": created, "skipped": skipped}}
+
+
+@router.get("/platform/agent-ceilings")
+async def get_agent_ceilings(request: Request):
+    """Read the platform ceilings that clamp every tenant custom agent (BRD 53
+    inc3). Operator-only — these are the maximums no tenant setting can exceed."""
+    principal = await principal_of(request)
+    _require_operator(principal)
+    c = request.app.state.container
+    ce = await c.store.get_platform_ceilings()
+    return {"data": {"max_budget_tokens": int(ce.get("max_budget_tokens") or 200000),
+                     "max_tier": ce.get("max_tier") or "write-proposal",
+                     "updated_at": (ce.get("updated_at").isoformat()
+                                    if ce.get("updated_at") else None),
+                     "updated_by": ce.get("updated_by")}}
+
+
+@router.put("/platform/agent-ceilings")
+async def put_agent_ceilings(request: Request, body: dict = Body(...)):
+    """Set the platform ceilings (operator-only). Budget must be a positive int
+    within the hard maximum; tier can never be set above write-proposal for
+    custom agents. Tightening applies to every subsequent author/clamp."""
+    principal = await principal_of(request)
+    _require_operator(principal)
+    c = request.app.state.container
+
+    mb = body.get("max_budget_tokens")
+    if not isinstance(mb, int) or isinstance(mb, bool) or mb < _BUDGET_TOKENS_FLOOR or mb > _BUDGET_TOKENS_CEILING:
+        raise EvalGateFailed(
+            f"max_budget_tokens must be an integer in [{_BUDGET_TOKENS_FLOOR}, {_BUDGET_TOKENS_CEILING}]")
+    mt = str(body.get("max_tier") or "write-proposal")
+    if _TIER_RANK.get(mt, 99) > _TIER_RANK["write-proposal"]:
+        raise EvalGateFailed(f"max_tier {mt!r} cannot exceed write-proposal for custom agents")
+
+    await c.store.set_platform_ceilings(
+        max_budget_tokens=mb, max_tier=mt,
+        updated_by=(principal.sub if principal else None))
+    return {"data": {"max_budget_tokens": mb, "max_tier": mt}}
+
+
+def _watch_view(w: RetrainWatch) -> dict:
+    return {"id": w.id, "model_urn": w.model_urn, "watched_agent_key": w.watched_agent_key,
+            "workspace_id": w.workspace_id, "cadence_seconds": w.cadence_seconds,
+            "correction_window_hours": w.correction_window_hours,
+            "drift_threshold": w.drift_threshold, "min_corrections": w.min_corrections,
+            "enabled": w.enabled,
+            "last_checked_at": w.last_checked_at.isoformat() if w.last_checked_at else None,
+            "last_signal": w.last_signal, "created_by": w.created_by}
+
+
+@router.get("/retrain-watches")
+async def list_retrain_watches(request: Request):
+    """The caller-tenant's scheduled retrain watches (BRD 52 inc3). ai.agent.admin."""
+    principal = await principal_of(request)
+    await _require_agent_cap(request, principal, "ai.agent.admin")
+    c = request.app.state.container
+    rows = await c.store.list_retrain_watches(principal.tenant_id)
+    return {"data": [_watch_view(w) for w in rows]}
+
+
+@router.post("/retrain-watches")
+async def create_retrain_watch(request: Request, body: dict = Body(...)):
+    """Register a scheduled drift watch on a deployed model. The scheduler counts
+    human corrections to watched_agent_key's proposals on the cadence and, over
+    the threshold, opens a four-eyes retrain proposal via the governance agent.
+    Needs ai.agent.admin."""
+    principal = await principal_of(request)
+    await _require_agent_cap(request, principal, "ai.agent.admin")
+    c = request.app.state.container
+
+    model_urn = str(body.get("model_urn") or "").strip()
+    if not model_urn:
+        raise EvalGateFailed("model_urn is required")
+    watched = str(body.get("watched_agent_key") or "").strip()
+    if not watched:
+        raise EvalGateFailed("watched_agent_key is required (whose proposals reflect this model)")
+
+    def _pos_int(v, default, lo=1):
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            return default
+        return n if n >= lo else default
+
+    threshold = body.get("drift_threshold")
+    try:
+        threshold = float(threshold) if threshold is not None else 0.3
+    except (TypeError, ValueError):
+        threshold = 0.3
+    if not 0.0 <= threshold <= 1.0:
+        raise EvalGateFailed("drift_threshold must be between 0 and 1")
+
+    w = RetrainWatch(
+        id=new_uuid(), tenant_id=principal.tenant_id, model_urn=model_urn,
+        watched_agent_key=watched, workspace_id=body.get("workspace_id"),
+        cadence_seconds=_pos_int(body.get("cadence_seconds"), 86400, 60),
+        correction_window_hours=_pos_int(body.get("correction_window_hours"), 168),
+        drift_threshold=threshold,
+        min_corrections=_pos_int(body.get("min_corrections"), 20, 0),
+        enabled=bool(body.get("enabled", True)),
+        created_by=(principal.sub if principal else None))
+    await c.store.create_retrain_watch(w)
+    return {"data": _watch_view(w)}
+
+
+@router.delete("/retrain-watches/{watch_id}")
+async def delete_retrain_watch(request: Request, watch_id: str):
+    principal = await principal_of(request)
+    await _require_agent_cap(request, principal, "ai.agent.admin")
+    c = request.app.state.container
+    ok = await c.store.delete_retrain_watch(principal.tenant_id, watch_id)
+    if not ok:
+        raise NotFound("retrain watch not found")
+    return {"data": {"id": watch_id, "deleted": True}}
 
 
 @router.post("/rollouts")

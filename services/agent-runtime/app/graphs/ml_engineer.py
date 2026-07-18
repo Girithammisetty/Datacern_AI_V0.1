@@ -30,9 +30,14 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 
 from app.graphs.base import GraphDeps, GraphOutcome, WriteIntent, register
+from app.prompts import system_prompt
 
 PROMOTE_TOOL_ID = "experiment.model.promote"
 PROMOTE_TOOL_VERSION = "1.0.0"
+# BRD 52 inc2 (Phase 2): the agent may INITIATE an ingestion from an EXISTING,
+# admin-created connection — never create a connection, never see a credential.
+INGEST_TOOL_ID = "ingestion.create"
+INGEST_TOOL_VERSION = "1.0.0"
 
 # Candidate preference order: runnable, supervised, and proven in this
 # platform's catalog. The plan intersects this with the live catalog.
@@ -58,16 +63,7 @@ _METRIC_PREFERENCE: list[tuple[str, bool]] = [
     ("r2", True), ("rmse", False), ("mae", False),
 ]
 
-_SYS = (
-    "You are Windrose's ml-engineer agent. Given a dataset schema, a target "
-    "column, and the parameter schemas of candidate algorithms, fill sensible "
-    "hyperparameters for EACH candidate. Respond with ONLY a JSON object: "
-    '{"candidates": {algorithm_name: {schema_param: value, ...}, ...}, '
-    '"feature_columns": array of feature column names or null for all-but-target, '
-    '"rationale": one concise sentence justifying the choices}. Use ONLY '
-    "parameter names present in each algorithm's schema and values within their "
-    "min/max. No prose outside JSON."
-)
+_SYS = system_prompt("ml_engineer.system")
 
 
 def _extract_json(text: str) -> dict:
@@ -78,6 +74,26 @@ def _extract_json(text: str) -> dict:
         return json.loads(m.group(0))
     except json.JSONDecodeError:
         return {}
+
+
+def _hints_from_query(query: str) -> dict:
+    """Extract structured ML hints (dataset, target column, target stage) from the
+    free-text copilot request so the agent runs from natural language — not only
+    from metadata.inputs. Matches `key=value` / `key: value` (the exact form the
+    agent's own prompt suggests, e.g. ``target_column=disposition``). Explicit
+    metadata.inputs still take precedence (these only fill what's missing)."""
+    q = query or ""
+    out: dict[str, str] = {}
+    m = re.search(r"(?:target_column|label_column|label|target)\s*[=:]\s*([A-Za-z0-9_]+)", q, re.I)
+    if m:
+        out["label_column"] = m.group(1)
+    m = re.search(r"dataset(?:_name|_urn)?\s*[=:]\s*([A-Za-z0-9_./:-]+)", q, re.I)
+    if m:
+        out["dataset"] = m.group(1)
+    m = re.search(r"(?:target_stage|stage)\s*[=:]\s*([A-Za-z0-9_]+)", q, re.I)
+    if m:
+        out["target_stage"] = m.group(1)
+    return out
 
 
 def _coerce_hyperparameters(schema: dict, filled: dict) -> dict:
@@ -151,6 +167,10 @@ def build_ml_engineer_graph(deps: GraphDeps):
     async def ground(state: dict) -> dict:
         tenant_id = state["tenant_id"]
         token = deps.obo_token or ""
+        # Fill missing hints from the free-text request (the copilot passes the
+        # user message as `query`); explicit metadata.inputs win via setdefault.
+        for _k, _v in _hints_from_query(str(state.get("query") or "")).items():
+            state.setdefault(_k, _v)
         label = str(state.get("label_column") or state.get("target")
                     or state.get("target_column") or "").strip()
         if not label:
@@ -401,16 +421,27 @@ def build_ml_engineer_graph(deps: GraphDeps):
 
         model_version_urn = (f"wr:{tenant_id}:experiment:model_version/"
                              f"{model_id}:{version_no}")
+        # workspace_id MUST ride in the tool args, not just the intent: on
+        # approval, experiment-service's MCP facade re-checks the deciding human's
+        # experiment.model.update capability, and that grant is WORKSPACE-SCOPED
+        # (perm projection key ...:experiment.model.update:{workspace_id}). The
+        # model version lives in this workspace, so omitting it makes the facade
+        # check at workspace=None and miss the ws-scoped grant -> 403. The run's
+        # workspace is the model's workspace (the agent trains+registers here).
+        workspace_id = state.get("workspace_id")
+        promote_args = {"model_id": model_id, "version": version_no,
+                        "model_version_urn": model_version_urn,
+                        "target_stage": target_stage, "rationale": rationale}
+        if workspace_id:
+            promote_args["workspace_id"] = workspace_id
         state["write_intent"] = WriteIntent(
             tool_id=PROMOTE_TOOL_ID, tool_version=PROMOTE_TOOL_VERSION,
             tier="write-proposal", side_effects="reversible",
-            args={"model_id": model_id, "version": version_no,
-                  "model_version_urn": model_version_urn,
-                  "target_stage": target_stage, "rationale": rationale},
+            args=promote_args,
             rationale=rationale,
             affected_urns=[model_version_urn],
             required_action="experiment.model.update",
-            workspace_id=state.get("workspace_id"),
+            workspace_id=workspace_id,
             predicted_effect={
                 "summary": (f"Request promotion of {state.get('model_name') or model_id} "
                             f"v{version_no} to {target_stage} "
@@ -423,16 +454,93 @@ def build_ml_engineer_graph(deps: GraphDeps):
              "model_id": model_id, "version": version_no})
         return state
 
+    async def ingest(state: dict) -> dict:
+        """BRD 52 inc2 (Phase 2): agent-initiated ingestion from an EXISTING
+        connection. The agent lists the tenant's admin-created connections and may
+        ONLY ingest from one of them — it can never provision a connection or
+        handle a credential. An unknown/absent connection fails CLOSED (no
+        proposal, logged refusal). A valid one becomes an ``ingestion.create``
+        four-eyes proposal (same tiering as promote)."""
+        req = state.get("refresh_from_connection") or {}
+        conn_id = str(req.get("connection_id") or "").strip()
+        tenant = state["tenant_id"]
+
+        connections: list[dict] = []
+        if deps.ingestion_reader is not None and hasattr(deps.ingestion_reader, "list_connections"):
+            connections = await deps.ingestion_reader.list_connections(
+                tenant_id=tenant, auth_token=deps.obo_token or "")
+        known = {str(c.get("id")): c for c in connections if c.get("id")}
+        state.setdefault("trace", []).append(
+            {"event": "tool_call_result", "tool_id": "ingestion.connections.list",
+             "count": len(known)})
+
+        if not conn_id or conn_id not in known:
+            state["failed"] = True
+            state["report"] = (
+                f"Ingestion refused: connection {conn_id or '(none)'} is not an existing, "
+                "admin-created connection for this tenant. The agent may only ingest from "
+                "connections an administrator has already provisioned.")
+            state.setdefault("trace", []).append(
+                {"event": "ingest_refused", "connection_id": conn_id,
+                 "reason": "connection_not_found"})
+            return state
+
+        conn = known[conn_id]
+        target = str(req.get("target_dataset_name")
+                     or f"agent-refresh-{conn.get('name') or conn_id}")[:120]
+        workspace = state.get("workspace_id") or "00000000-0000-0000-0000-000000000000"
+        args: dict[str, Any] = {
+            "ingestion_mode": str(req.get("ingestion_mode") or "full_refresh"),
+            "connection_id": conn_id,
+            "connector_type": conn.get("connector_type"),
+            "new_dataset": {"name": target,
+                            "description": "Refreshed by the ML-engineer agent (BRD 52 Phase 2)."},
+            "workspace_id": workspace,
+        }
+        # Source selector travels through (facade records extras on the proposal;
+        # only the create contract fields are applied at execution).
+        for k in ("table", "path", "file_format"):
+            if req.get(k):
+                args[k] = req[k]
+        if req.get("query"):
+            args["statement"] = req["query"]
+
+        state["write_intent"] = WriteIntent(
+            tool_id=INGEST_TOOL_ID, tool_version=INGEST_TOOL_VERSION,
+            tier="write-proposal", side_effects="reversible", args=args,
+            rationale=(f"Refresh training data from existing connection "
+                       f"'{conn.get('name') or conn_id}' into dataset '{target}'."),
+            affected_urns=[f"wr:{tenant}:dataset:dataset/{target}",
+                           f"wr:{tenant}:ingestion:connection/{conn_id}"],
+            workspace_id=workspace,
+            required_action="ingestion.ingestion.create",
+            predicted_effect={
+                "summary": (f"Ingest from the {conn.get('connector_type')} connection "
+                            f"'{conn.get('name') or conn_id}' into a new dataset '{target}'."),
+                "reversibility": "reversible", "blast_radius": 1})
+        state["report"] = (f"Proposed an ingestion from connection "
+                           f"'{conn.get('name') or conn_id}' into dataset '{target}' for approval.")
+        state.setdefault("trace", []).append(
+            {"event": "proposal_created", "tool_id": INGEST_TOOL_ID, "connection_id": conn_id})
+        return state
+
+    def _route_entry(state: dict) -> str:
+        # A refresh directive routes to the ingestion path; otherwise the normal
+        # train -> evaluate -> propose-promote loop.
+        return "ingest" if (state.get("refresh_from_connection") or {}).get("connection_id") else "ground"
+
     g = StateGraph(dict)
     g.add_node("ground", ground)
     g.add_node("plan", plan)
     g.add_node("train", train)
     g.add_node("propose", propose)
-    g.set_entry_point("ground")
+    g.add_node("ingest", ingest)
+    g.set_conditional_entry_point(_route_entry, {"ingest": "ingest", "ground": "ground"})
     g.add_edge("ground", "plan")
     g.add_edge("plan", "train")
     g.add_edge("train", "propose")
     g.add_edge("propose", END)
+    g.add_edge("ingest", END)
     return g.compile()
 
 

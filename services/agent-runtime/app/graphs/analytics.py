@@ -13,10 +13,9 @@ from langgraph.graph import END, StateGraph
 
 from app.graphs.base import GraphDeps, GraphOutcome, register
 from app.graphs.persona import role_directive
+from app.prompts import system_prompt
 
-_SYS = ("You are Windrose's conversational analytics agent. Answer the user's "
-        "data question concisely and cite that the answer is grounded in the "
-        "governed semantic layer. Read-only.")
+_SYS = system_prompt("analytics.system")
 
 
 def build_analytics_graph(deps: GraphDeps):

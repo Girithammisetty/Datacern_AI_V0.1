@@ -123,6 +123,69 @@ async def test_drops_hallucinated_refs_and_still_proposes():
                                     "grid_chart", "big_number"}
 
 
+async def test_chart_resolves_to_one_model_despite_colliding_names():
+    # Regression: the workspace holds TWO models whose measure names collide
+    # (``claim_count`` exists in both). The designer draws a coherent set from
+    # ``claims_core`` (claim_count + total_amount over claim_type). The chart must
+    # be labelled model=claims_core and keep only claims_core refs — never inherit
+    # rcm_claims (whose measures/dims are entirely different) off the shared name,
+    # which would fail render-time compile with UNKNOWN_METRIC.
+    semantic = FakeSemanticReader(
+        metrics=[
+            {"name": "claim_count", "agg": "count", "model": "claims_core"},
+            {"name": "total_amount", "agg": "sum", "model": "claims_core"},
+            {"name": "claim_count", "agg": "count", "model": "rcm_claims"},
+            {"name": "clean_claim_rate", "agg": "ratio", "model": "rcm_claims"},
+        ],
+        dimensions=[
+            {"name": "claim_type", "type": "categorical", "model": "claims_core"},
+            {"name": "payer_name", "type": "categorical", "model": "rcm_claims"},
+        ])
+    good = ('{"title":"Claims Overview","rationale":"x","charts":[{"name":"By type",'
+            '"model":"claims_core","chart_type":"vertical_bar_chart",'
+            '"measures":["claim_count","total_amount"],"dimensions":["claim_type"],'
+            '"filters":[]}]}')
+    deps = _deps(FakeLlm(content=good), semantic=semantic)
+    outcome = await run_dashboard_designer(
+        deps, {"tenant_id": TENANT_A, "workspace_id": WS})
+    charts = outcome.write_intent.args["charts"]
+    assert len(charts) == 1
+    ch = charts[0]
+    assert ch["model"] == "claims_core"
+    assert set(ch["measures"]) == {"claim_count", "total_amount"}
+    assert ch["dimensions"] == ["claim_type"]
+
+
+async def test_mixed_model_refs_are_filtered_to_the_best_fit_model():
+    # If the model mistakenly mixes refs from two models in one chart, only the
+    # best-fit model's refs survive (measures weighted over dimensions) so the
+    # chart still compiles.
+    semantic = FakeSemanticReader(
+        metrics=[
+            {"name": "claim_count", "agg": "count", "model": "claims_core"},
+            {"name": "total_amount", "agg": "sum", "model": "claims_core"},
+            {"name": "clean_claim_rate", "agg": "ratio", "model": "rcm_claims"},
+        ],
+        dimensions=[
+            {"name": "claim_type", "type": "categorical", "model": "claims_core"},
+            {"name": "payer_name", "type": "categorical", "model": "rcm_claims"},
+        ])
+    mixed = ('{"title":"Mixed","rationale":"x","charts":[{"name":"c1",'
+             '"model":"rcm_claims","chart_type":"vertical_bar_chart",'
+             '"measures":["claim_count","total_amount","clean_claim_rate"],'
+             '"dimensions":["claim_type","payer_name"],"filters":[]}]}')
+    deps = _deps(FakeLlm(content=mixed), semantic=semantic)
+    outcome = await run_dashboard_designer(
+        deps, {"tenant_id": TENANT_A, "workspace_id": WS})
+    ch = outcome.write_intent.args["charts"][0]
+    # claims_core wins (2 measures vs rcm_claims' 1); its refs only.
+    assert ch["model"] == "claims_core"
+    assert set(ch["measures"]) == {"claim_count", "total_amount"}
+    assert "clean_claim_rate" not in ch["measures"]
+    assert ch["dimensions"] == ["claim_type"]
+    assert "payer_name" not in ch["dimensions"]
+
+
 async def test_defensive_on_bad_json():
     deps = _deps(FakeLlm(content="not json at all"))
     outcome = await run_dashboard_designer(

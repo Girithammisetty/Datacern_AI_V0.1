@@ -20,6 +20,7 @@ import json
 from langgraph.graph import END, StateGraph
 
 from app.graphs.base import GraphDeps, GraphOutcome, register
+from app.prompts import system_prompt
 
 _CANDIDATES = [
     ("analytics", "Conversational analytics over the governed semantic layer. "
@@ -41,14 +42,7 @@ _CANDIDATES = [
 _ALLOWED = {k for k, _ in _CANDIDATES}
 _DEFAULT = "analytics"
 
-_SYS = (
-    "You are Windrose's meta-router. Given a user's request, choose the ONE "
-    "specialist agent best suited to handle it from this list:\n"
-    + "\n".join(f"- {k}: {d}" for k, d in _CANDIDATES)
-    + "\n\nRespond with ONLY a JSON object: "
-    '{"agent_key": "<one of the keys above>", "confidence": <0..1 number>, '
-    '"rationale": "<one sentence>"}. If uncertain, choose "analytics".'
-)
+_SYS = system_prompt("meta_router.system")
 
 # Keys the router itself adds to state; everything else in the original input
 # (tenant_id/query/workspace_id/case_id, plus any caller-supplied extra fields
