@@ -18,7 +18,9 @@ class GrantOboUpdate:
     itself carries no scopes (as in production)."""
 
     async def allow(self, principal, action, resource_urn):
-        return action == "experiment.model.update" and principal.obo_sub == "user-1"
+        # The facade re-evaluates the effective human as a plain USER
+        # (sub=obo_sub, typ="user"), so match on .sub — obo_sub is unset there.
+        return action == "experiment.model.update" and principal.sub == "user-1"
 
 
 async def _registered_model(container):
