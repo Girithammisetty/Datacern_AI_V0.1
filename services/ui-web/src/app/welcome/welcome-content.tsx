@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BarChart3,
@@ -14,13 +14,10 @@ import {
   ShieldCheck,
   Sparkles,
   Workflow,
+  X,
 } from "lucide-react";
 import { WindroseLogo } from "@/components/brand/WindroseLogo";
 import { Button } from "@/components/ui/button";
-
-/* Demo request destination. Opens the visitor's mail client — swap the address
- * for your real sales/demo inbox (or point at a demo-request form route). */
-const DEMO_HREF = "mailto:hello@windrose.ai?subject=Windrose%20AI%20%E2%80%94%20demo%20request";
 
 /* ------------------------------------------------------------------ */
 /* scroll-reveal (dependency-free)                                     */
@@ -329,6 +326,7 @@ export default function WelcomeContent() {
   const [tab, setTab] = useState(0);
   const [auto, setAuto] = useState(true);
   const [faq, setFaq] = useState<number | null>(0);
+  const [demoOpen, setDemoOpen] = useState(false);
 
   useEffect(() => {
     if (!auto) return;
@@ -355,9 +353,7 @@ export default function WelcomeContent() {
             <a href="#solutions" className="transition-colors hover:text-foreground">Solutions</a>
             <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
           </nav>
-          <Button asChild>
-            <a href={DEMO_HREF}>Request a demo</a>
-          </Button>
+          <Button onClick={() => setDemoOpen(true)}>Request a demo</Button>
         </div>
       </header>
 
@@ -382,10 +378,8 @@ export default function WelcomeContent() {
               assists, your people decide, and every correction trains the next model.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Button asChild size="lg">
-                <a href={DEMO_HREF}>
-                  Request a demo <ArrowRight className="size-4" />
-                </a>
+              <Button size="lg" onClick={() => setDemoOpen(true)}>
+                Request a demo <ArrowRight className="size-4" />
               </Button>
               <Button asChild size="lg" variant="outline">
                 <a href="#capabilities">See the capabilities</a>
@@ -647,10 +641,8 @@ export default function WelcomeContent() {
             Put an AI operation to work on the calls that matter — with your experts in command and a
             record that speaks for itself when anyone asks.
           </p>
-          <Button asChild size="lg" className="mt-2">
-            <a href={DEMO_HREF}>
-              Request a demo <ArrowRight className="size-4" />
-            </a>
+          <Button size="lg" className="mt-2" onClick={() => setDemoOpen(true)}>
+            Request a demo <ArrowRight className="size-4" />
           </Button>
         </div>
       </section>
@@ -661,7 +653,182 @@ export default function WelcomeContent() {
           <span>AI proposes. People decide. The platform remembers.</span>
         </div>
       </footer>
+
+      {demoOpen && <DemoDialog onClose={() => setDemoOpen(false)} />}
     </main>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* demo-request modal (posts to /api/request-demo)                     */
+/* ------------------------------------------------------------------ */
+const Field = forwardRef<
+  HTMLInputElement,
+  { label: string; name: string; type?: string; autoComplete?: string; bad?: boolean }
+>(function Field({ label, name, type = "text", autoComplete, bad }, ref) {
+  return (
+    <div>
+      <label htmlFor={name} className="text-xs font-medium">
+        {label}
+      </label>
+      <input
+        ref={ref}
+        id={name}
+        name={name}
+        type={type}
+        required
+        autoComplete={autoComplete}
+        className={`mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:ring-2 focus:ring-primary/40 ${
+          bad ? "border-destructive" : "border-border"
+        }`}
+      />
+    </div>
+  );
+});
+
+function DemoDialog({ onClose }: { onClose: () => void }) {
+  const [state, setState] = useState<"idle" | "submitting" | "done" | "error">("idle");
+  const [err, setErr] = useState("");
+  const [bad, setBad] = useState<string[]>([]);
+  const firstRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    firstRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setState("submitting");
+    setErr("");
+    setBad([]);
+    const payload = Object.fromEntries(new FormData(e.currentTarget).entries());
+    try {
+      const res = await fetch("/api/request-demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        fields?: string[];
+      };
+      if (res.ok && json.ok) {
+        setState("done");
+        return;
+      }
+      setBad(Array.isArray(json.fields) ? json.fields : []);
+      setErr(
+        json.error === "validation"
+          ? "Please check the highlighted fields."
+          : "Something went wrong. Please try again.",
+      );
+      setState("error");
+    } catch {
+      setErr("Couldn't reach the server. Please try again.");
+      setState("error");
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Request a demo"
+    >
+      <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="wr-swap relative w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <X className="size-5" />
+        </button>
+
+        {state === "done" ? (
+          <div className="py-6 text-center">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Check className="size-6" />
+            </div>
+            <h3 className="mt-4 text-lg font-bold tracking-tight">Thanks — we&apos;ll be in touch.</h3>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Your request is in. Someone from our team will reach out to set up your demo.
+            </p>
+            <Button className="mt-5" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        ) : (
+          <>
+            <h3 className="text-lg font-bold tracking-tight">Request a demo</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              See Windrose AI on your kind of decisions. Tell us a little about you.
+            </p>
+            <form onSubmit={onSubmit} className="mt-5 space-y-3.5">
+              {/* honeypot — hidden from real users; bots fill it */}
+              <input
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                className="hidden"
+              />
+              <Field label="Full name" name="name" autoComplete="name" ref={firstRef} bad={bad.includes("name")} />
+              <Field label="Work email" name="email" type="email" autoComplete="email" bad={bad.includes("email")} />
+              <Field label="Company" name="company" autoComplete="organization" bad={bad.includes("company")} />
+              <div>
+                <label htmlFor="teamSize" className="text-xs font-medium">
+                  Team size <span className="text-muted-foreground">(optional)</span>
+                </label>
+                <select
+                  id="teamSize"
+                  name="teamSize"
+                  defaultValue=""
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="">Select…</option>
+                  <option>1–10</option>
+                  <option>11–50</option>
+                  <option>51–200</option>
+                  <option>200+</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="message" className="text-xs font-medium">
+                  What are you looking to solve? <span className="text-muted-foreground">(optional)</span>
+                </label>
+                <textarea
+                  id="message"
+                  name="message"
+                  rows={3}
+                  className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+              {err && <p className="text-sm text-destructive">{err}</p>}
+              <Button type="submit" className="w-full" disabled={state === "submitting"}>
+                {state === "submitting" ? "Sending…" : "Request a demo"}
+              </Button>
+              <p className="text-center text-[11px] text-muted-foreground">
+                We&apos;ll only use your details to arrange your demo.
+              </p>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
