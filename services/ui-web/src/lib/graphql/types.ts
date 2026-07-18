@@ -313,6 +313,22 @@ export interface SetEmbedConfigResult {
   allowedOrigins: string[];
 }
 
+/** BYO-P4: the caller tenant's own OIDC IdP (configured=false when SSO off). */
+export interface TenantIdpConfig {
+  configured: boolean;
+  issuer?: string | null;
+  clientId?: string | null;
+  discoveryUrl?: string | null;
+  enabled: boolean;
+  updatedAt?: string | null;
+}
+export interface SetTenantIdpInput {
+  issuer: string;
+  clientId?: string;
+  discoveryUrl?: string;
+  enabled?: boolean;
+}
+
 export interface AuditEvent {
   eventId: ID;
   urn: string;
@@ -1506,6 +1522,46 @@ export interface Writeback {
   deliveredAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+}
+
+// ---- BRD 54 inc2: governed decision tables ---------------------------------
+export interface DecisionCondition { column: string; op: string; value?: JSONValue }
+export interface DecisionOutcome { dispositionCode: string; severity: string }
+export interface DecisionRule { when: DecisionCondition[]; then: DecisionOutcome | null; note?: string | null }
+export interface DecisionModel {
+  id: ID;
+  name: string;
+  version: number;
+  status: string;
+  workspaceId?: string | null;
+  datasetUrn?: string | null;
+  createdBy?: string | null;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  rules: DecisionRule[];
+  defaultOutcome?: DecisionOutcome | null;
+}
+export interface CreateDecisionModelInput {
+  name: string;
+  workspaceId?: string;
+  rules: Array<{ when: DecisionCondition[]; then: DecisionOutcome; note?: string }>;
+  defaultOutcome?: DecisionOutcome | null;
+}
+export interface BatchEvaluateRow {
+  caseId: ID;
+  matched: boolean;
+  ruleIndex: number | null;
+  explanation: string;
+  outcome: DecisionOutcome | null;
+  proposalId?: string | null;
+  proposalStatus?: string | null;
+  executed?: boolean | null;
+}
+export interface BatchEvaluateResult {
+  modelId: ID;
+  proposed: boolean;
+  summary: { cases: number; matched: number; unmatched: number; proposalsCreated: number; byOutcome: Record<string, number> };
+  results: BatchEvaluateRow[];
 }
 
 export interface CreateWritebackInput {

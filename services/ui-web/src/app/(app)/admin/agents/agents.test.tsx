@@ -51,6 +51,9 @@ beforeEach(() => {
     if (doc.includes("mutation DeleteAgentKillSwitch")) return { deleteAgentKillSwitch: { id: "k-1", active: false } };
     if (doc.includes("mutation CreateToolKillSwitch")) return { createToolKillSwitch: toolKill };
     if (doc.includes("mutation DeleteToolKillSwitch")) return { deleteToolKillSwitch: { id: "tk-1", active: false } };
+    if (doc.includes("query AgentDefinitions")) return { agentDefinitions: [] };
+    // AgentCatalogCard's persona auto-bind reads the tenant roles (infinite query).
+    if (doc.includes("query Roles")) return { roles: { nodes: [], pageInfo: { hasMore: false, nextCursor: null } } };
     return {};
   };
 });

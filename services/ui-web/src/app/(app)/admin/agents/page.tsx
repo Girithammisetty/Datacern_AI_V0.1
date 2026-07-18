@@ -7,6 +7,7 @@ import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
 import { Can } from "@/components/authz/Can";
 import { AgentCatalogCard } from "@/components/admin/AgentCatalogCard";
+import { OperatorCeilingsCard } from "@/components/admin/OperatorCeilingsCard";
 import { Badge, Card, CardHeader, CardTitle, CardContent, Input } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { FEATURE_GATES, type Gate } from "@/lib/authz/registry";
@@ -33,6 +34,11 @@ export default function AdminAgentsPage() {
           registry). Lives with the kill switches — one agent control plane page. */}
       <div className="mt-4">
         <AgentCatalogCard />
+      </div>
+      {/* Operator-only: platform ceilings that clamp all custom agents (renders
+          nothing for non-operators). */}
+      <div className="mt-4">
+        <OperatorCeilingsCard />
       </div>
     </div>
   );

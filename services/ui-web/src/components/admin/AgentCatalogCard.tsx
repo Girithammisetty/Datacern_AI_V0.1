@@ -7,10 +7,13 @@ import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
 import { Can } from "@/components/authz/Can";
 import { Badge, Card, CardHeader, CardTitle, CardDescription, CardContent, Input } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
+import { CreateCustomAgentDialog } from "@/components/admin/CreateCustomAgentDialog";
+import { useToasts } from "@/stores/ui";
 import { FEATURE_GATES } from "@/lib/authz/registry";
 import {
   useAgentDefinitions, useAgentVersions, usePublishAgentVersion,
   useTenantAgentConfig, usePutTenantAgentConfig,
+  useRoles, useAutobindPersonaCopilots,
 } from "@/lib/graphql/hooks";
 import type { AgentDefinition, AgentVersionInfo, TenantAgentConfig } from "@/lib/graphql/types";
 import { t } from "@/lib/i18n/messages";
@@ -24,8 +27,37 @@ import { t } from "@/lib/i18n/messages";
 export function AgentCatalogCard() {
   const query = useAgentDefinitions();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [confirmAutobind, setConfirmAutobind] = useState(false);
+  const push = useToasts((s) => s.push);
   const rows = query.data ?? [];
   const selected = rows.find((d) => d.agentKey === selectedKey) ?? null;
+
+  // Persona auto-binding (BRD 53 inc3): bind an advisory copilot for each of the
+  // tenant's own (non-system) roles that doesn't already have one. Idempotent.
+  const rolesQuery = useRoles();
+  const bindableRoles = (rolesQuery.data?.pages.flatMap((p) => p.nodes) ?? [])
+    .filter((r) => !r.system)
+    .map((r) => r.name);
+  const autobind = useAutobindPersonaCopilots();
+  const runAutobind = () =>
+    autobind.mutate(
+      { roles: bindableRoles },
+      {
+        onSuccess: (d) => {
+          setConfirmAutobind(false);
+          query.refetch();
+          push({
+            title: `Bound ${d.created.length} persona copilot(s), ${d.skipped.length} already existed`,
+            variant: "success",
+          });
+        },
+        onError: () => {
+          setConfirmAutobind(false);
+          push({ title: "Auto-bind failed", variant: "error" });
+        },
+      },
+    );
 
   const columns: Column<AgentDefinition>[] = [
     { id: "key", header: "Agent", cell: (d) => <span className="font-mono text-xs font-medium">{d.agentKey}</span> },
@@ -43,11 +75,26 @@ export function AgentCatalogCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <Bot className="size-4" aria-hidden /> {t("agentCatalog.title")}
-        </CardTitle>
-        <CardDescription>{t("agentCatalog.subtitle")}</CardDescription>
+      <CardHeader className="flex-row items-start justify-between space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Bot className="size-4" aria-hidden /> {t("agentCatalog.title")}
+          </CardTitle>
+          <CardDescription>{t("agentCatalog.subtitle")}</CardDescription>
+        </div>
+        <Can gate={FEATURE_GATES.createCustomAgent}>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={bindableRoles.length === 0 || autobind.isPending}
+              onClick={() => setConfirmAutobind(true)}
+            >
+              Auto-bind persona copilots
+            </Button>
+            <Button size="sm" onClick={() => setCreating(true)}>New custom agent</Button>
+          </div>
+        </Can>
       </CardHeader>
       <CardContent>
         <div className="grid gap-3 xl:grid-cols-[1fr_440px]">
@@ -66,6 +113,28 @@ export function AgentCatalogCard() {
           <AgentDetail definition={selected} onClose={() => setSelectedKey(null)} />
         </div>
       </CardContent>
+      <ConfirmDialog
+        open={confirmAutobind}
+        onOpenChange={setConfirmAutobind}
+        title={`Bind persona copilots for ${bindableRoles.length} role(s)?`}
+        description="Creates one advisory, role-grounded copilot per role that doesn't already have one. Existing ones are left unchanged."
+        confirmLabel={autobind.isPending ? "Binding…" : "Bind copilots"}
+        onConfirm={runAutobind}
+      />
+      {/* Mounted only while open so its tool/workspace/role pickers don't fetch
+          (or need providers) until the admin actually authors an agent. */}
+      {creating && (
+        <CreateCustomAgentDialog
+          open
+          onOpenChange={setCreating}
+          onCreated={(agentKey) => {
+            setCreating(false);
+            query.refetch();
+            setSelectedKey(agentKey);
+            push({ title: "Custom agent created", variant: "success" });
+          }}
+        />
+      )}
     </Card>
   );
 }

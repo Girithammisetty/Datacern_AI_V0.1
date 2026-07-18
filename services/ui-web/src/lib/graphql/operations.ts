@@ -121,6 +121,7 @@ import type {
   SemanticModel,
   ServiceAccount,
   SetEmbedConfigResult,
+  TenantIdpConfig,
   Tenant,
   UpdateChartInput,
   UpdateDashboardInput,
@@ -130,6 +131,9 @@ import type {
   Viewer,
   Workspace,
   Writeback,
+  DecisionModel,
+  CreateDecisionModelInput,
+  BatchEvaluateResult,
   DatasetColumn,
   SemanticModelSummary,
   SemanticModelVersion,
@@ -379,6 +383,67 @@ export const RETRY_WRITEBACK = /* GraphQL */ `
 export interface RetryWritebackResult {
   retryWriteback: Writeback;
 }
+
+// ---- BRD 54 inc2: governed decision tables ---------------------------------
+const DECISION_MODEL_FIELDS = `
+  id name version status workspaceId datasetUrn createdBy approvedBy approvedAt
+  rules { when { column op value } then { dispositionCode severity } note }
+  defaultOutcome { dispositionCode severity }
+`;
+
+export const DECISION_MODELS = /* GraphQL */ `
+  query DecisionModels {
+    decisionModels { ${DECISION_MODEL_FIELDS} }
+  }
+`;
+export interface DecisionModelsResult { decisionModels: DecisionModel[] }
+
+export const DECISION_MODEL = /* GraphQL */ `
+  query DecisionModelDetail($id: ID!) {
+    decisionModel(id: $id) { ${DECISION_MODEL_FIELDS} }
+  }
+`;
+export interface DecisionModelResult { decisionModel: DecisionModel | null }
+
+export const CREATE_DECISION_MODEL = /* GraphQL */ `
+  mutation CreateDecisionModel($input: CreateDecisionModelInput!, $idempotencyKey: String!) {
+    createDecisionModel(input: $input, idempotencyKey: $idempotencyKey) { ${DECISION_MODEL_FIELDS} }
+  }
+`;
+export interface CreateDecisionModelResult { createDecisionModel: DecisionModel }
+export type { CreateDecisionModelInput };
+
+export const BATCH_EVALUATE_DECISION_MODEL = /* GraphQL */ `
+  mutation BatchEvaluate($id: ID!, $input: BatchEvaluateInput!, $propose: Boolean!, $idempotencyKey: String!) {
+    batchEvaluateDecisionModel(id: $id, input: $input, propose: $propose, idempotencyKey: $idempotencyKey) {
+      modelId proposed
+      summary { cases matched unmatched proposalsCreated byOutcome }
+      results { caseId matched ruleIndex explanation outcome { dispositionCode severity } proposalId proposalStatus executed }
+    }
+  }
+`;
+export interface BatchEvaluateResultData { batchEvaluateDecisionModel: BatchEvaluateResult }
+
+export const DECISION_MODEL_VERSIONS = /* GraphQL */ `
+  query DecisionModelVersions($id: ID!) {
+    decisionModelVersions(id: $id) { ${DECISION_MODEL_FIELDS} }
+  }
+`;
+export interface DecisionModelVersionsResult { decisionModelVersions: DecisionModel[] }
+
+export const APPROVE_DECISION_MODEL = /* GraphQL */ `
+  mutation ApproveDecisionModel($id: ID!, $idempotencyKey: String!) {
+    approveDecisionModel(id: $id, idempotencyKey: $idempotencyKey) { ${DECISION_MODEL_FIELDS} }
+  }
+`;
+export interface ApproveDecisionModelResult { approveDecisionModel: DecisionModel }
+
+export const NEW_DECISION_MODEL_VERSION = /* GraphQL */ `
+  mutation NewDecisionModelVersion($id: ID!, $input: CreateDecisionModelInput!, $idempotencyKey: String!) {
+    newDecisionModelVersion(id: $id, input: $input, idempotencyKey: $idempotencyKey) { ${DECISION_MODEL_FIELDS} }
+  }
+`;
+export interface NewDecisionModelVersionResult { newDecisionModelVersion: DecisionModel }
 
 export const DELETE_CONNECTION = /* GraphQL */ `
   mutation DeleteConnection($id: ID!) {
@@ -2730,6 +2795,26 @@ export interface SetEmbedConfigResultWrapper {
   setEmbedConfig: SetEmbedConfigResult;
 }
 
+// ---- BYO-P4: per-tenant OIDC IdP config ------------------------------------
+const IDP_FIELDS = `configured issuer clientId discoveryUrl enabled updatedAt`;
+
+export const TENANT_IDP = /* GraphQL */ `
+  query TenantIdp { tenantIdp { ${IDP_FIELDS} } }
+`;
+export interface TenantIdpResult { tenantIdp: TenantIdpConfig }
+
+export const SET_TENANT_IDP = /* GraphQL */ `
+  mutation SetTenantIdp($input: SetTenantIdpInput!, $idempotencyKey: String) {
+    setTenantIdp(input: $input, idempotencyKey: $idempotencyKey) { ${IDP_FIELDS} }
+  }
+`;
+export interface SetTenantIdpResult { setTenantIdp: TenantIdpConfig }
+
+export const DELETE_TENANT_IDP = /* GraphQL */ `
+  mutation DeleteTenantIdp { deleteTenantIdp }
+`;
+export interface DeleteTenantIdpResult { deleteTenantIdp: boolean }
+
 export const AUDIT_EVENTS = /* GraphQL */ `
   query AuditEvents(
     $from: DateTime, $to: DateTime, $eventType: String, $action: String,
@@ -4155,6 +4240,70 @@ export const PUT_TENANT_AGENT_CONFIG = /* GraphQL */ `
 export interface PutTenantAgentConfigResult {
   putTenantAgentConfig: TenantAgentConfig;
 }
+
+// BRD 53 inc2b: author a tenant custom agent + guardrail envelope (inc2).
+export interface CreateCustomAgentInput {
+  displayName: string;
+  persona: string;
+  systemPrompt?: string;
+  allowedTools: string[];
+  proposeTool?: string | null;
+  dataScopeWorkspaces?: string[];
+  budgetMaxTokensPerSession?: number;
+  blockPiiEgress?: boolean;
+  redactPii?: boolean;
+}
+export interface CustomAgentResult {
+  agentKey: string;
+  status: string;
+  graphRef: string;
+  allowedTools: string[];
+  persona: string;
+  ownerTenant: string;
+  guardrailPolicy?: Record<string, unknown>;
+}
+export const CREATE_CUSTOM_AGENT = /* GraphQL */ `
+  mutation CreateCustomAgent($input: CreateCustomAgentInput!) {
+    createCustomAgent(input: $input) {
+      agentKey status graphRef allowedTools persona ownerTenant guardrailPolicy
+    }
+  }
+`;
+export interface CreateCustomAgentResult {
+  createCustomAgent: CustomAgentResult;
+}
+
+// BRD 53 inc3: persona auto-binding + operator ceilings.
+export interface PersonaBinding { role: string; agentKey: string }
+export interface AutobindResult { created: PersonaBinding[]; skipped: PersonaBinding[] }
+export const AUTOBIND_PERSONA_COPILOTS = /* GraphQL */ `
+  mutation AutobindPersonaCopilots($roles: [String!]!, $proposeTool: String) {
+    autobindPersonaCopilots(roles: $roles, proposeTool: $proposeTool) {
+      created { role agentKey }
+      skipped { role agentKey }
+    }
+  }
+`;
+export interface AutobindPersonaCopilotsResult { autobindPersonaCopilots: AutobindResult }
+
+export interface AgentCeilings {
+  maxBudgetTokens: number;
+  maxTier: string;
+  updatedAt?: string | null;
+  updatedBy?: string | null;
+}
+export const AGENT_CEILINGS = /* GraphQL */ `
+  query AgentCeilings { agentCeilings { maxBudgetTokens maxTier updatedAt updatedBy } }
+`;
+export interface AgentCeilingsResult { agentCeilings: AgentCeilings }
+export const SET_AGENT_CEILINGS = /* GraphQL */ `
+  mutation SetAgentCeilings($maxBudgetTokens: Int!, $maxTier: String!) {
+    setAgentCeilings(maxBudgetTokens: $maxBudgetTokens, maxTier: $maxTier) {
+      maxBudgetTokens maxTier updatedAt updatedBy
+    }
+  }
+`;
+export interface SetAgentCeilingsResult { setAgentCeilings: AgentCeilings }
 
 export const AGENT_RUNS = /* GraphQL */ `
   query AgentRuns($agentKey: String, $first: Int) {

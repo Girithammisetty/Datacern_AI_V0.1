@@ -9,7 +9,7 @@
  * enforce every action. Fail-safe: a capability the client cannot confirm HIDES
  * the feature (absent capability → not shown).
  */
-import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell } from "lucide-react";
+import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties } from "lucide-react";
 import type { MessageKey } from "@/lib/i18n/messages";
 
 /** The tenant-admin role short-circuits every action check (rbac BR-7). */
@@ -106,6 +106,7 @@ export const NAV_ITEMS: NavItem[] = [
 
   // ── Casework ──
   { key: "cases", href: "/cases", icon: Briefcase, label: "nav.cases", gate: cap("case.case.read"), group: "casework" },
+  { key: "decisions", href: "/decisions", icon: TableProperties, label: "nav.decisions", gate: cap("case.disposition.read"), group: "casework" },
   { key: "inbox", href: "/inbox", icon: Inbox, label: "nav.inbox", gate: cap("ai.proposal.read"), group: "casework" },
 
   // ── Data ──
@@ -489,6 +490,9 @@ export const FEATURE_GATES = {
   /** Read/write the caller-tenant's per-agent config (GET/PUT
    * /registry/tenants/self/agents/{key} — ai.agent.admin downstream). */
   manageTenantAgentConfig: cap("ai.agent.admin"),
+  /** Author a tenant custom agent + guardrail envelope (BRD 53 inc2b, POST
+   * /registry/tenants/self/agents — ai.agent.admin downstream). */
+  createCustomAgent: cap("ai.agent.admin"),
   /** Run history list (agent-runtime GET /runs) is open to any tenant
    * principal downstream; the browse page reuses the proposal-inbox read
    * gate so it appears exactly for personas who work with agent activity. */

@@ -17,6 +17,9 @@ export const qk = {
   ingestion: (id: string) => ["data", "ingestion", id] as const,
   writebacks: (filters: unknown) => ["data", "writebacks", filters] as const,
   writeback: (id: string) => ["data", "writeback", id] as const,
+  decisionModels: () => ["data", "decisionModels"] as const,
+  decisionModel: (id: string) => ["data", "decisionModel", id] as const,
+  decisionModelVersions: (id: string) => ["data", "decisionModelVersions", id] as const,
   upload: (id: string) => ["data", "upload", id] as const,
   datasetLineage: (urn: string, direction: string) => ["data", "lineage", urn, direction] as const,
 
@@ -162,6 +165,7 @@ export const qk = {
 
   // Tier 2b: agent-runtime catalog/registry
   agentDefinitions: () => ["agentic", "definitions"] as const,
+  agentCeilings: () => ["agentic", "ceilings"] as const,
   agentVersions: (agentKey: string) => ["agentic", "versions", agentKey] as const,
   tenantAgentConfig: (agentKey: string) => ["agentic", "tenantConfig", agentKey] as const,
   agentRuns: (filters: unknown) => ["agentic", "runs", filters] as const,

@@ -24,6 +24,7 @@ import type {
   CreateChartInput,
   CreateConnectionInput,
   CreateWritebackInput,
+  CreateDecisionModelInput,
   Writeback,
   CreateDashboardInput,
   CreateExperimentInput,
@@ -350,6 +351,78 @@ function useWritebackTransition<TResult>(doc: string, pick: (r: TResult) => Writ
       client.invalidateQueries({ queryKey: ["data", "writebacks"] });
       client.invalidateQueries({ queryKey: qk.writeback(wb.id) });
     },
+  });
+}
+
+// ---- BRD 54 inc2: governed decision tables ---------------------------------
+export function useDecisionModels() {
+  return useQuery({
+    queryKey: qk.decisionModels(),
+    queryFn: () => graphqlRequest<ops.DecisionModelsResult>(ops.DECISION_MODELS).then((r) => r.decisionModels),
+  });
+}
+
+export function useDecisionModel(id: string) {
+  return useQuery({
+    queryKey: qk.decisionModel(id),
+    queryFn: () => graphqlRequest<ops.DecisionModelResult>(ops.DECISION_MODEL, { id }).then((r) => r.decisionModel),
+    enabled: !!id,
+  });
+}
+
+export function useCreateDecisionModel() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateDecisionModelInput) =>
+      graphqlRequest<ops.CreateDecisionModelResult>(ops.CREATE_DECISION_MODEL, {
+        input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createDecisionModel),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.decisionModels() }),
+  });
+}
+
+export function useDecisionModelVersions(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.decisionModelVersions(id),
+    queryFn: () => graphqlRequest<ops.DecisionModelVersionsResult>(
+      ops.DECISION_MODEL_VERSIONS, { id }).then((r) => r.decisionModelVersions),
+    enabled: enabled && !!id,
+  });
+}
+
+export function useApproveDecisionModel() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ApproveDecisionModelResult>(ops.APPROVE_DECISION_MODEL, {
+        id, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.approveDecisionModel),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.decisionModels() }),
+  });
+}
+
+export function useNewDecisionModelVersion() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; input: CreateDecisionModelInput }) =>
+      graphqlRequest<ops.NewDecisionModelVersionResult>(ops.NEW_DECISION_MODEL_VERSION, {
+        id: vars.id, input: vars.input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.newDecisionModelVersion),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.decisionModels() }),
+  });
+}
+
+/** Batch-run a decision table over a worklist. propose=false previews (dry-run,
+ * no side effect); propose=true mints one governed proposal per matched case. */
+export function useBatchEvaluateDecisionModel() {
+  return useMutation({
+    mutationFn: (vars: { id: string; workspaceId?: string; caseIds?: string[]; limit?: number; propose: boolean }) =>
+      graphqlRequest<ops.BatchEvaluateResultData>(ops.BATCH_EVALUATE_DECISION_MODEL, {
+        id: vars.id,
+        input: { workspaceId: vars.workspaceId, caseIds: vars.caseIds, limit: vars.limit },
+        propose: vars.propose,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.batchEvaluateDecisionModel),
   });
 }
 
@@ -3136,6 +3209,33 @@ export function useSetEmbedConfig(tenantId: string) {
   });
 }
 
+// ---- BYO-P4: per-tenant OIDC IdP config ------------------------------------
+export function useTenantIdp() {
+  return useQuery({
+    queryKey: ["admin", "tenantIdp"],
+    queryFn: () => graphqlRequest<ops.TenantIdpResult>(ops.TENANT_IDP).then((r) => r.tenantIdp),
+  });
+}
+
+export function useSetTenantIdp() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: import("./types").SetTenantIdpInput) =>
+      graphqlRequest<ops.SetTenantIdpResult>(ops.SET_TENANT_IDP, {
+        input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.setTenantIdp),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["admin", "tenantIdp"] }),
+  });
+}
+
+export function useDeleteTenantIdp() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => graphqlRequest<ops.DeleteTenantIdpResult>(ops.DELETE_TENANT_IDP).then((r) => r.deleteTenantIdp),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["admin", "tenantIdp"] }),
+  });
+}
+
 export function useAuditEvents(vars: AuditEventsFilter = {}) {
   return useInfiniteQuery({
     queryKey: qk.auditEvents(vars),
@@ -4248,6 +4348,48 @@ export function useAgentDefinitions() {
     queryKey: qk.agentDefinitions(),
     queryFn: () =>
       graphqlRequest<ops.AgentDefinitionsResult>(ops.AGENT_DEFINITIONS).then((r) => r.agentDefinitions),
+  });
+}
+
+export function useCreateCustomAgent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ops.CreateCustomAgentInput) =>
+      graphqlRequest<ops.CreateCustomAgentResult>(ops.CREATE_CUSTOM_AGENT, { input }).then(
+        (r) => r.createCustomAgent,
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.agentDefinitions() }),
+  });
+}
+
+export function useAutobindPersonaCopilots() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { roles: string[]; proposeTool?: string | null }) =>
+      graphqlRequest<ops.AutobindPersonaCopilotsResult>(ops.AUTOBIND_PERSONA_COPILOTS, vars).then(
+        (r) => r.autobindPersonaCopilots,
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.agentDefinitions() }),
+  });
+}
+
+export function useAgentCeilings(enabled = true) {
+  return useQuery({
+    queryKey: qk.agentCeilings(),
+    enabled,
+    queryFn: () =>
+      graphqlRequest<ops.AgentCeilingsResult>(ops.AGENT_CEILINGS).then((r) => r.agentCeilings),
+  });
+}
+
+export function useSetAgentCeilings() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { maxBudgetTokens: number; maxTier: string }) =>
+      graphqlRequest<ops.SetAgentCeilingsResult>(ops.SET_AGENT_CEILINGS, vars).then(
+        (r) => r.setAgentCeilings,
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.agentCeilings() }),
   });
 }
 
