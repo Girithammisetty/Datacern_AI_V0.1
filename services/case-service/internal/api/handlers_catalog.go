@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/windrose-ai/case-service/internal/domain"
@@ -361,4 +362,100 @@ func (s *Server) handleReindex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeData(w, http.StatusOK, map[string]any{"reindexed": n})
+}
+
+// ---- Case schemas (typed case types, inc10) ---------------------------------
+
+type schemaReq struct {
+	SchemaKey   string           `json:"schema_key"`
+	Name        string           `json:"name"`
+	Description string            `json:"description"`
+	Fields      []map[string]any `json:"fields"`
+}
+
+func (s *Server) handleCreateSchema(w http.ResponseWriter, r *http.Request) {
+	op, ok := opFrom(r)
+	if !ok {
+		writeErr(w, r, domain.EUnauthenticated("bad claims"))
+		return
+	}
+	ws, ok := workspaceFromClaims(r)
+	if !ok {
+		writeErr(w, r, domain.EValidation("workspace_id claim required", nil))
+		return
+	}
+	var req schemaReq
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	if req.SchemaKey == "" || req.Name == "" {
+		writeErr(w, r, domain.EValidation("schema_key and name are required", nil))
+		return
+	}
+	sc := &domain.CaseSchema{ID: domain.NewID(), TenantID: op.Tenant, WorkspaceID: ws,
+		SchemaKey: req.SchemaKey, Name: req.Name, Description: req.Description, Fields: req.Fields}
+	if err := s.Store.CreateSchema(r.Context(), sc); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeData(w, http.StatusCreated, sc)
+}
+
+func (s *Server) handleListSchemas(w http.ResponseWriter, r *http.Request) {
+	op, ok := opFrom(r)
+	if !ok {
+		writeErr(w, r, domain.EUnauthenticated("bad claims"))
+		return
+	}
+	ws, ok := workspaceFromClaims(r)
+	if !ok {
+		writeErr(w, r, domain.EValidation("workspace_id claim required", nil))
+		return
+	}
+	list, err := s.Store.ListSchemas(r.Context(), op.Tenant, ws)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	if list == nil {
+		list = []*domain.CaseSchema{}
+	}
+	writeData(w, http.StatusOK, list)
+}
+
+func (s *Server) handleGetSchema(w http.ResponseWriter, r *http.Request) {
+	op, ok := opFrom(r)
+	if !ok {
+		writeErr(w, r, domain.EUnauthenticated("bad claims"))
+		return
+	}
+	ws, ok := workspaceFromClaims(r)
+	if !ok {
+		writeErr(w, r, domain.EValidation("workspace_id claim required", nil))
+		return
+	}
+	sc, err := s.Store.GetSchema(r.Context(), op.Tenant, ws, chi.URLParam(r, "key"))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, sc)
+}
+
+func (s *Server) handleDeleteSchema(w http.ResponseWriter, r *http.Request) {
+	op, ok := opFrom(r)
+	if !ok {
+		writeErr(w, r, domain.EUnauthenticated("bad claims"))
+		return
+	}
+	ws, ok := workspaceFromClaims(r)
+	if !ok {
+		writeErr(w, r, domain.EValidation("workspace_id claim required", nil))
+		return
+	}
+	if _, err := s.Store.DeleteSchema(r.Context(), op.Tenant, ws, chi.URLParam(r, "key")); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

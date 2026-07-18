@@ -39,6 +39,8 @@ components:
     - { file: "cases/dispositions.yaml", identity: "dispositions" }
   case_fields:
     - { file: "cases/fields.yaml", identity: "exception_fields" }
+  case_schemas:
+    - { file: "cases/schemas.yaml", identity: "exception_types" }
   cases:
     - { file: "cases/queue.yaml", identity: "exception_queue" }
   roles:
@@ -91,14 +93,3 @@ deferred:
       CreditMemo, ApprovalThreshold, RecoveryClaim) awaits pack-service;
       entity semantics are carried today by the ap_audit_core semantic
       model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      The pack now ships typed case FIELDS (root_cause, oob_verified,
-      verification_method, recovered_amount, control_approver) via the
-      installable `case_fields` component — case-service's workspace
-      custom-field catalog (CASE-FR-022), rendered by the case form.
-      What remains deferred is per-CASE-TYPE schema keying (distinct field
-      sets bound to named types duplicate_review / banking_change_verification
-      / shell_vendor_investigation), which awaits a typed case-schema surface
-      in case-service; today those types are distinguished by the disposition
-      taxonomy + the shared case_fields set.

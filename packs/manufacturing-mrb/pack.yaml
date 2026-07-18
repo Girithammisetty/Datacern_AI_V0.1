@@ -86,9 +86,3 @@ deferred:
       Containment, Escape, CertificateOfConformance) awaits pack-service;
       entity semantics are carried today by the mrb_core semantic model and
       dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (nc_intake, mrb_review, supplier_scar,
-      containment_sweep, escape_assessment) await case-service schema
-      materialization; today's cases carry the same fields via
-      display_projection + the disposition taxonomy.

@@ -42,9 +42,5 @@ deferred:
       specialization-point mechanism — both pack-service-tier (BRD 23 BR-12).
       Today the methodology memories ground the existing case-triage agent
       with the same investigation discipline.
-  - kind: case_schemas
-    reason: >-
-      INV-FR-080 five investigation case schemas await case-service schema
-      materialization; the lifecycle vocabulary ships as dispositions instead.
   - kind: ontology
     reason: "investigation_base ontology registration awaits pack-service."

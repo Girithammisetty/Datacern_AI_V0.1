@@ -65,8 +65,3 @@ deferred:
     reason: >-
       INS-FR-010 ontology registration awaits pack-service; entity semantics
       are carried today by the semantic models and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      INS-FR-091 typed case schemas await case-service schema materialization;
-      today's cases carry the same fields via display_projection + the
-      disposition taxonomy.

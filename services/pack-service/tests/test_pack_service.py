@@ -46,10 +46,11 @@ def test_origin_tag_and_urn_id():
 def test_inc1_kinds_and_reversibility_contract():
     # inc1 materializes self-contained kinds (no dataset/four-eyes chain).
     # inc3 adds case_fields (case-service custom-field catalog) here.
-    assert set(installer.INC1_KINDS) == {"dispositions", "case_fields", "display_labels",
-                                         "guardrails", "agent_configs", "eval_sets",
-                                         "model_archetypes", "roles", "decision_models"}
+    assert set(installer.INC1_KINDS) == {"dispositions", "case_fields", "case_schemas",
+                                         "display_labels", "guardrails", "agent_configs",
+                                         "eval_sets", "model_archetypes", "roles", "decision_models"}
     assert "model_archetypes" in installer.REVERSIBLE_KINDS  # DELETE /archetypes/{key}
+    assert "case_schemas" in installer.REVERSIBLE_KINDS  # DELETE /case-schemas/{key}
     assert "saved_queries" not in installer.INC1_KINDS  # needs its datasets first
     # Roles/case_fields carry a real Core delete verb → reversible; dispositions/
     # decision tables do not (tombstoned honestly on uninstall).
@@ -184,3 +185,9 @@ def test_plan_materializes_case_fields(tmp_path):
     arch_ops = [o for o in ops if o["kind"] == "model_archetypes"]
     assert arch_ops and all(o["action"] == "create" for o in arch_ops)
     assert {"duplicate_pair_confidence", "vendor_fraud_risk_score"} <= {o["name"] for o in arch_ops}
+    # case_schemas (inc10) — typed case types, materializable (new case-service
+    # case-schema registry).
+    schema_ops = [o for o in ops if o["kind"] == "case_schemas"]
+    assert schema_ops and all(o["action"] == "create" for o in schema_ops)
+    assert {"banking_change_verification", "duplicate_review",
+            "shell_vendor_investigation"} <= {o["name"] for o in schema_ops}

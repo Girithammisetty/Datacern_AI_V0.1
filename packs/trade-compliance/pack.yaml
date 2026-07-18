@@ -83,9 +83,3 @@ deferred:
       DutyExposure, PriorDisclosure, DeadlineClock) awaits pack-service;
       entity semantics are carried today by the trade_core semantic model
       and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (hs_classification_review, screening_adjudication,
-      origin_verification, license_determination, prior_disclosure_review)
-      await case-service schema materialization; today's cases carry the
-      same fields via display_projection + the disposition taxonomy.

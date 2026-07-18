@@ -83,9 +83,3 @@ deferred:
       ClearanceRecord, NeededByClock, DeclinationLetter) awaits
       pack-service; entity semantics are carried today by the
       underwriting_core semantic model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (submission_triage, clearance_conflict_review,
-      appetite_referral, completeness_chase, renewal_defense) await
-      case-service schema materialization; today's cases carry the same
-      fields via display_projection + the disposition taxonomy.

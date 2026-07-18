@@ -80,9 +80,3 @@ deferred:
       VegetationSpan, PSPSEvent) awaits pack-service; entity semantics are
       carried today by the inspections_core semantic model and dataset
       schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (finding_triage, field_verification, leak_grading,
-      vegetation_clearance, deferral_engineering_review) await case-service
-      schema materialization; today's cases carry the same fields via
-      display_projection + the disposition taxonomy.

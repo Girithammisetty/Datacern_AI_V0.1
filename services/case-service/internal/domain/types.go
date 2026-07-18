@@ -159,6 +159,22 @@ type CaseField struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
+// CaseSchema is a governed, typed case TYPE (inc10): a named case type
+// (duplicate_review, banking_change_verification, ...) binding a distinct field
+// set. Distinct from the flat CaseField catalog — this is the per-type schema
+// keying. Fields are embedded definitions ({name, data_type, label, required}).
+type CaseSchema struct {
+	ID          uuid.UUID        `json:"id"`
+	TenantID    uuid.UUID        `json:"-"`
+	WorkspaceID uuid.UUID        `json:"workspace_id"`
+	SchemaKey   string           `json:"schema_key"`
+	Name        string           `json:"name"`
+	Description string           `json:"description,omitempty"`
+	Fields      []map[string]any `json:"fields"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
+}
+
 // Field purposes (CASE-FR-022).
 const (
 	PurposeCreate int16 = 0

@@ -475,6 +475,37 @@ class PlatformClient:
                       self.author_token())
         return r.status_code in (200, 204)
 
+    # ---- typed case schemas (case-service named case types, inc10) ----------
+    def ensure_case_schema(self, identity: str, schema_key: str, name: str,
+                           fields: list[dict], description: str = "") -> str | None:
+        """Register one governed typed case SCHEMA (a named case type binding a
+        distinct field set). Idempotent by schema_key; the workspace derives from
+        the forwarded JWT claim. Requires case.schema.create. Returns the
+        schema_key (its stable id for reversal), or None on failure."""
+        tok = self.author_token()
+        base = f"{self.endpoints.case}/api/v1/case-schemas"
+        g = self._req("GET", base, tok)
+        if g.status_code == 200:
+            for sc in g.json().get("data", []):
+                if sc.get("schema_key") == schema_key:
+                    self._record("case_schemas", identity, "noop", None, schema_key)
+                    return schema_key
+        r = self._req("POST", base, tok, headers=JSON,
+                      json={"schema_key": schema_key, "name": name,
+                            "description": description, "fields": fields})
+        if r.status_code in (200, 201):
+            self._record("case_schemas", identity, "create", None, schema_key)
+            return schema_key
+        self._record("case_schemas", identity, "failed", None,
+                     f"{schema_key}: {r.status_code} {r.text[:150]}")
+        return None
+
+    def delete_case_schema(self, schema_key: str) -> bool:
+        r = self._req("DELETE",
+                      f"{self.endpoints.case}/api/v1/case-schemas/{schema_key}",
+                      self.author_token())
+        return r.status_code in (200, 204)
+
     # ---- display labels (identity-service per-tenant label registry) --------
     def ensure_label(self, identity: str, key: str, value: str) -> str | None:
         """Set one per-tenant UI label override (BRD 23 inc3), e.g.

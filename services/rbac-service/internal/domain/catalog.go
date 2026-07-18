@@ -130,6 +130,7 @@ var canonicalSpecs = []resourceSpec{
 	{"case", "disposition", []string{VerbRead, VerbCreate, VerbUpdate, VerbApprove}, true, "dispositions"},
 	{"case", "bulk", []string{VerbExecute, VerbApprove}, true, "bulk case ops"},
 	{"case", "evidence", []string{VerbRead, VerbCreate, VerbDelete}, true, "case evidence files"},
+	{"case", "schema", []string{VerbRead, VerbList, VerbCreate, VerbDelete}, true, "typed case schemas (case types, inc10)"},
 	// pipeline
 	{"pipeline", "template", []string{VerbRead, VerbList, VerbCreate, VerbUpdate, VerbDelete}, true, "pipeline templates"},
 	{"pipeline", "run", []string{VerbRead, VerbList, VerbCreate, VerbExecute}, true, "pipeline runs"},

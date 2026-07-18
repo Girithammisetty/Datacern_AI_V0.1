@@ -83,10 +83,3 @@ deferred:
       ReportabilityDecision, CAPA, FieldAction, DeadlineClock) awaits
       pack-service; entity semantics are carried today by the
       complaints_core semantic model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (complaint_intake, mdr_reportability_review,
-      capa_trend_investigation, returned_device_analysis,
-      duplicate_review) await case-service schema materialization; today's
-      cases carry the same fields via display_projection + the disposition
-      taxonomy.

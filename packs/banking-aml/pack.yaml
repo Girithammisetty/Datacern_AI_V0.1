@@ -79,10 +79,3 @@ deferred:
       SanctionsMatch, WatchlistEntity, AdverseMediaEvent, RiskRating,
       TypologyPattern, RegulatoryFiling) awaits pack-service; entity semantics
       are carried today by the aml_core semantic model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      AML-FR-120 typed case schemas (alert_triage, sanctions_match_adjudication,
-      sar_case, ctr_review, cdd_edd_review, adverse_media_review,
-      peer_anomaly_investigation, regulatory_finding_remediation) await
-      case-service schema materialization; today's cases carry the same
-      fields via display_projection + the disposition taxonomy.

@@ -75,9 +75,3 @@ deferred:
       notification) execute only behind pack-service's materialization
       contract and customer credentials; BR-1/BR-8 keep every platform-side
       write proposal-mode, and AC-8 forbids autonomous recovery writes.
-  - kind: case_schemas
-    reason: >-
-      FWA-FR-100 typed case schemas (fwa_review, siu_investigation,
-      prosecution_referral_review, recovery_action_case) await case-service
-      schema materialization; today's SIU lead queue carries the same
-      fields via display_projection + the disposition taxonomy.

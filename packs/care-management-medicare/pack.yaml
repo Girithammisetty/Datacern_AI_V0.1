@@ -79,10 +79,3 @@ deferred:
       case_id:proposal_id) execute only behind pack-service's materialization
       contract and customer credentials; all platform-side writes remain
       proposal-mode (BR-2 CMM_AUTONOMOUS_BILLING_FORBIDDEN).
-  - kind: case_schemas
-    reason: >-
-      CMM-FR-141 typed case schemas (care_activity_review,
-      monthly_billing_review, care_plan_review, rpm_data_review,
-      tcm_discharge) await case-service schema materialization; today's
-      seeded queue carries the same fields via display_projection + the
-      disposition taxonomy.

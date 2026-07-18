@@ -82,10 +82,3 @@ deferred:
       RecallCampaign, GoodwillRequest, AuditFinding) awaits pack-service;
       entity semantics are carried today by the warranty_core semantic
       model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (claim_adjudication, dealer_audit,
-      supplier_recovery, goodwill_review, early_warning_investigation,
-      recall_routing_review) await case-service schema materialization;
-      today's cases carry the same fields via display_projection + the
-      disposition taxonomy.

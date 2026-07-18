@@ -82,10 +82,3 @@ deferred:
       AdverseActionNotice, ResponseWindow, Dispute, Reinvestigation) awaits
       pack-service; entity semantics are carried today by the
       screening_core semantic model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (hit_adjudication, identity_resolution,
-      adverse_action_tracking, applicant_dispute,
-      individualized_assessment) await case-service schema materialization;
-      today's cases carry the same fields via display_projection + the
-      disposition taxonomy.

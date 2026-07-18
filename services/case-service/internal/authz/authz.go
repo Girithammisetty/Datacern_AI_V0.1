@@ -65,7 +65,13 @@ const (
 	ActionDispositionUpdate = "case.disposition.update"
 	ActionFieldRead         = "case.case.read"   // case field configs read
 	ActionFieldManage       = "case.case.update" // case field configs write
-	ActionAdminReindex      = "case.case.admin"  // operator reindex
+	// Case schemas = typed case TYPES binding a distinct field set (inc10); a
+	// dedicated resource so a pack can materialize governed case types without
+	// the broad case.case.update surface.
+	ActionSchemaRead   = "case.schema.read"
+	ActionSchemaCreate = "case.schema.create"
+	ActionSchemaDelete = "case.schema.delete"
+	ActionAdminReindex = "case.case.admin" // operator reindex
 	ActionSLAManage         = "case.case.admin"  // SLA policy config
 	// Case evidence attachments (task #77): list/download vs upload vs remove.
 	ActionEvidenceRead   = "case.evidence.read"
@@ -86,6 +92,7 @@ func Manifest() []ActionManifestEntry {
 		ActionCaseExport, ActionCaseComment, ActionProposalApply,
 		ActionDispositionRead, ActionDispositionCreate, ActionDispositionUpdate,
 		ActionFieldRead, ActionFieldManage, ActionAdminReindex, ActionSLAManage,
+		ActionSchemaRead, ActionSchemaCreate, ActionSchemaDelete,
 		ActionEvidenceRead, ActionEvidenceCreate, ActionEvidenceDelete,
 	} {
 		if seen[a] {

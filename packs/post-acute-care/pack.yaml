@@ -70,10 +70,3 @@ deferred:
       update, referral response, hospice certification narrative) execute only
       behind pack-service's materialization contract and customer credentials;
       all platform-side writes remain proposal-mode per BR-1.
-  - kind: case_schemas
-    reason: >-
-      PAC-FR-110 typed case schemas (oasis_review, mds_review,
-      referral_triage_review, pdgm_optimization_review,
-      pdpm_optimization_review, hospice_eligibility_review) await case-service
-      schema materialization; today's cases carry the same fields via
-      display_projection + the disposition taxonomy.

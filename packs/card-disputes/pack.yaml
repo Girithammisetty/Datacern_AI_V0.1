@@ -79,9 +79,3 @@ deferred:
       ReasonCode, DeadlineClock, ResolutionLetter) awaits pack-service;
       entity semantics are carried today by the disputes_core semantic model
       and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (dispute_intake, fraud_investigation,
-      chargeback_representment, atm_error_review, first_party_fraud_review)
-      await case-service schema materialization; today's cases carry the
-      same fields via display_projection + the disposition taxonomy.

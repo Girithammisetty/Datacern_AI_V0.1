@@ -501,3 +501,88 @@ func (s *PG) GetAppliedProposal(ctx context.Context, tenant uuid.UUID, proposalU
 	return out, true, nil
 }
 
+
+// ---- Case schemas (typed case types, inc10) ---------------------------------
+
+func (s *PG) CreateSchema(ctx context.Context, sc *domain.CaseSchema) error {
+	err := s.withTenant(ctx, sc.TenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
+			INSERT INTO case_schemas (id, tenant_id, workspace_id, schema_key, name, description, fields)
+			VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+			sc.ID, sc.TenantID, sc.WorkspaceID, sc.SchemaKey, sc.Name, sc.Description, mustJSON(sc.Fields))
+		return err
+	})
+	if isUniqueViolation(err) {
+		return ErrCodeConflict
+	}
+	return err
+}
+
+const schemaCols = `id, workspace_id, schema_key, name, description, fields, created_at, updated_at`
+
+func scanSchema(row pgx.Row) (*domain.CaseSchema, error) {
+	sc := &domain.CaseSchema{}
+	var fields []byte
+	if err := row.Scan(&sc.ID, &sc.WorkspaceID, &sc.SchemaKey, &sc.Name, &sc.Description,
+		&fields, &sc.CreatedAt, &sc.UpdatedAt); err != nil {
+		return nil, err
+	}
+	if len(fields) > 0 {
+		_ = json.Unmarshal(fields, &sc.Fields)
+	}
+	return sc, nil
+}
+
+func (s *PG) ListSchemas(ctx context.Context, tenant, ws uuid.UUID) ([]*domain.CaseSchema, error) {
+	var out []*domain.CaseSchema
+	err := s.withTenant(ctx, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT `+schemaCols+` FROM case_schemas
+			WHERE workspace_id=$1 AND deleted_at IS NULL ORDER BY schema_key`, ws)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			sc, err := scanSchema(rows)
+			if err != nil {
+				return err
+			}
+			sc.TenantID = tenant
+			out = append(out, sc)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+func (s *PG) GetSchema(ctx context.Context, tenant, ws uuid.UUID, key string) (*domain.CaseSchema, error) {
+	var sc *domain.CaseSchema
+	err := s.withTenant(ctx, tenant, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx, `SELECT `+schemaCols+` FROM case_schemas
+			WHERE workspace_id=$1 AND schema_key=$2 AND deleted_at IS NULL`, ws, key)
+		got, err := scanSchema(row)
+		if err != nil {
+			return err
+		}
+		got.TenantID = tenant
+		sc = got
+		return nil
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return sc, err
+}
+
+func (s *PG) DeleteSchema(ctx context.Context, tenant, ws uuid.UUID, key string) (bool, error) {
+	var deleted bool
+	err := s.withTenant(ctx, tenant, func(tx pgx.Tx) error {
+		ct, err := tx.Exec(ctx, `DELETE FROM case_schemas WHERE workspace_id=$1 AND schema_key=$2`, ws, key)
+		if err != nil {
+			return err
+		}
+		deleted = ct.RowsAffected() > 0
+		return nil
+	})
+	return deleted, err
+}

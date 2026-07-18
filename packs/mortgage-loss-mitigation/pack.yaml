@@ -81,9 +81,3 @@ deferred:
       ForeclosureAction, DeadlineClock, DenialNotice, Appeal, Investor,
       SPOCAssignment) awaits pack-service; entity semantics are carried
       today by the lossmit_core semantic model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (lossmit_intake, document_chase, dual_track_review,
-      denial_appeal, forbearance_exit_review) await case-service schema
-      materialization; today's cases carry the same fields via
-      display_projection + the disposition taxonomy.

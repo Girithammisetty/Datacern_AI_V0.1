@@ -82,10 +82,3 @@ deferred:
       SIUReferral, IME, ImpairmentRating, Jurisdiction, DeadlineClock,
       BenefitPayment) awaits pack-service; entity semantics are carried
       today by the wc_claims_core semantic model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (fnol_intake, compensability_review,
-      siu_investigation, medical_bill_audit, rtw_planning,
-      litigation_management) await case-service schema materialization;
-      today's cases carry the same fields via display_projection + the
-      disposition taxonomy.

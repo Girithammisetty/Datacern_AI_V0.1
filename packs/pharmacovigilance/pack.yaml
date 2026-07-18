@@ -77,9 +77,3 @@ deferred:
       PeriodicReport, Signal, RSIVersion) awaits pack-service; entity
       semantics are carried today by the pv_core semantic model and dataset
       schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (icsr_intake, medical_review, duplicate_review,
-      signal_evaluation, late_case_investigation) await case-service schema
-      materialization; today's cases carry the same fields via
-      display_projection + the disposition taxonomy.

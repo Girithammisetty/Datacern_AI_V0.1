@@ -83,9 +83,3 @@ deferred:
       PreDisputeAlert, BlockListEntry, MonitoringProgramStatus) awaits
       pack-service; entity semantics are carried today by the
       representment_core semantic model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (chargeback_response, evidence_assembly,
-      pre_arbitration_review, friendly_fraud_review, alert_deduplication)
-      await case-service schema materialization; today's cases carry the
-      same fields via display_projection + the disposition taxonomy.

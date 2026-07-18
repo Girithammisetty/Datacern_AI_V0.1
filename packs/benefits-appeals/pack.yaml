@@ -85,10 +85,3 @@ deferred:
       OverpaymentDebt, WaiverRequest) awaits pack-service; entity semantics
       are carried today by the benefits_core semantic model and dataset
       schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (eligibility_determination, redetermination_review,
-      appeal_hearing_prep, overpayment_review, identity_verification,
-      fraud_referral) await case-service schema materialization; today's
-      cases carry the same fields via display_projection + the disposition
-      taxonomy.

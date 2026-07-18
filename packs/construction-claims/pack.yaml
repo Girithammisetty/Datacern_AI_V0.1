@@ -83,10 +83,3 @@ deferred:
       PayApplication, DeterminationLetter) awaits pack-service; entity
       semantics are carried today by the construction_claims_core semantic
       model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (change_order_review, delay_claim_analysis,
-      dsc_investigation, defect_backcharge_review, payment_dispute_review,
-      acceleration_claim_review) await case-service schema materialization;
-      today's cases carry the same fields via display_projection + the
-      disposition taxonomy.

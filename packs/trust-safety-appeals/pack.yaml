@@ -82,10 +82,3 @@ deferred:
       PolicyVersion, Appeal, Report, Reporter, Strike, StatementOfReasons,
       ComplaintClock, ODSReferral) awaits pack-service; entity semantics are
       carried today by the appeals_core semantic model and dataset schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (appeal_review, policy_escalation,
-      report_integrity_review, compromised_account_review,
-      duplicate_appeal_check) await case-service schema materialization;
-      today's cases carry the same fields via display_projection + the
-      disposition taxonomy.

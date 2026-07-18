@@ -31,7 +31,7 @@ from app.domain import catalog
 # approver AND without the data-ingestion chain — so they install cleanly on
 # their own. (saved_queries/dashboards need the pack's datasets first, which is
 # a deferred kind; they're reported `deferred` in the plan, not faked.)
-INC1_KINDS = ("dispositions", "case_fields", "display_labels", "guardrails",
+INC1_KINDS = ("dispositions", "case_fields", "case_schemas", "display_labels", "guardrails",
               "agent_configs", "eval_sets", "model_archetypes", "roles", "decision_models")
 
 # inc2 data chain, in dependency order. datasets ingest first; the semantic
@@ -48,7 +48,7 @@ INC2_PHASE2_KINDS = ("dashboards",)
 # uninstall. Others are ledgered + tombstoned honestly (PKG-FR-025): the object
 # is retained and loses its pack-origin marker, because Core has no delete verb
 # for it yet — a real, surfaced gap in the materialization contract (PKG-FR-030).
-REVERSIBLE_KINDS = {"roles", "saved_queries", "dashboards", "case_fields",
+REVERSIBLE_KINDS = {"roles", "saved_queries", "dashboards", "case_fields", "case_schemas",
                     "display_labels", "guardrails", "agent_configs", "pipelines",
                     "memories", "model_archetypes"}
 
@@ -187,6 +187,8 @@ def _component_names(manifest, comp) -> list[str]:
         return [d["code"] for d in doc]
     if comp.kind == "case_fields":
         return [f["name"] for f in doc]
+    if comp.kind == "case_schemas":
+        return [sc["schema_key"] for sc in doc]
     if comp.kind == "display_labels":
         return [lbl["key"] for lbl in doc]
     if comp.kind == "guardrails":
@@ -261,6 +263,12 @@ def run_install(client, manifest, origin_of: Callable[[str, str], str]) -> list[
                        lambda f=f: client.ensure_case_field(
                            comp.identity, f["name"], f["data_type"],
                            f.get("purpose", "both"), f.get("field_meta")))
+            elif kind == "case_schemas":
+                for sc in doc:
+                    do("case_schemas", comp, sc["schema_key"],
+                       lambda sc=sc: client.ensure_case_schema(
+                           comp.identity, sc["schema_key"], sc["name"],
+                           sc.get("fields", []), sc.get("description", "")))
             elif kind == "display_labels":
                 for lbl in doc:
                     do("display_labels", comp, lbl["key"],
@@ -347,6 +355,10 @@ def run_uninstall(client, ledger: list[dict]) -> list[dict]:
             ok = client.delete_case_field(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,
                              "detail": "case field removed" if ok else "delete failed"})
+        elif kind == "case_schemas" and tid:
+            ok = client.delete_case_schema(tid)
+            outcomes.append({"ledger_id": row["id"], "deleted": ok,
+                             "detail": "case schema removed" if ok else "delete failed"})
         elif kind == "display_labels" and tid:
             ok = client.delete_label(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,

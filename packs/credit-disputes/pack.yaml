@@ -83,10 +83,3 @@ deferred:
       FrivolousNotice, MixedFile) awaits pack-service; entity semantics are
       carried today by the credit_disputes_core semantic model and dataset
       schemas.
-  - kind: case_schemas
-    reason: >-
-      Typed case schemas (reinvestigation, acdv_response,
-      identity_theft_block_review, obsolescence_review,
-      duplicate_tradeline_review, frivolous_determination) await
-      case-service schema materialization; today's cases carry the same
-      fields via display_projection + the disposition taxonomy.

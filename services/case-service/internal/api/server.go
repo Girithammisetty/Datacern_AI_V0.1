@@ -99,6 +99,14 @@ func (s *Server) Router() http.Handler {
 			r.With(s.RequireAction(authz.ActionFieldManage)).Delete("/{id}", s.handleDeleteField)
 		})
 
+		// Typed case schemas (named case TYPES binding a distinct field set, inc10).
+		r.Route("/case-schemas", func(r chi.Router) {
+			r.With(s.RequireAction(authz.ActionSchemaRead)).Get("/", s.handleListSchemas)
+			r.With(s.RequireAction(authz.ActionSchemaRead)).Get("/{key}", s.handleGetSchema)
+			r.With(s.RequireAction(authz.ActionSchemaCreate)).Post("/", s.handleCreateSchema)
+			r.With(s.RequireAction(authz.ActionSchemaDelete)).Delete("/{key}", s.handleDeleteSchema)
+		})
+
 		r.With(s.RequireAction(authz.ActionSLAManage)).Put("/sla-policy", s.handlePutSLAPolicy)
 		r.With(s.RequireAction(authz.ActionCaseRead)).Get("/operations/{id}", s.handleGetOperation)
 		r.With(s.RequireAction(authz.ActionCaseExport)).Get("/operations/{id}/download", s.handleDownloadExport)

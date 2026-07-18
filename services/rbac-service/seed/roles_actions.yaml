@@ -194,6 +194,12 @@ roles:
       - case.disposition.create
       - case.disposition.update
       - case.disposition.approve
+      # typed case schemas (inc10): the use-case admin declares governed case
+      # types (a pack install materializes them).
+      - case.schema.read
+      - case.schema.list
+      - case.schema.create
+      - case.schema.delete
       - case.bulk.execute
       - case.bulk.approve
       - pipeline.template.read

@@ -49,6 +49,7 @@ SUPPORTED_KINDS = (
     "guardrails",         # agent-runtime per-agent security envelope (inc4)
     "eval_sets",          # eval-service golden dataset + cases (inc8)
     "model_archetypes",   # experiment-service governed model blueprints (inc9)
+    "case_schemas",       # case-service typed case types (inc10)
 )
 
 # Deferred kinds we RECOGNIZE (from BRD 23/24..31) so packs can declare them
@@ -56,7 +57,7 @@ SUPPORTED_KINDS = (
 KNOWN_DEFERRED_KINDS = (
     "ontology", "agent_recipes",
     "connection_templates",
-    "case_schemas", "write_adapters",
+    "write_adapters",
 )
 
 
