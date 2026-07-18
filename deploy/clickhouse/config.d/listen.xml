@@ -1,0 +1,12 @@
+<clickhouse>
+    <!--
+      Mounting this config.d directory as a volume MASKS the ClickHouse image's
+      docker_related_config.xml, which the entrypoint normally writes into
+      config.d to set `listen_host = ::` so the container accepts connections
+      forwarded from the host (docker port publish). Without it CH falls back to
+      the base config.xml's localhost-only listen (::1 / 127.0.0.1) and RESETS
+      every host->container native (9000/tcp) connection — which broke
+      audit-service (CLICKHOUSE_ADDR=localhost:9010). Re-declare it here.
+    -->
+    <listen_host>0.0.0.0</listen_host>
+</clickhouse>
