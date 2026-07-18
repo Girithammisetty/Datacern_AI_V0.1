@@ -42,13 +42,6 @@ deferred:
       specialization-point mechanism — both pack-service-tier (BRD 23 BR-12).
       Today the methodology memories ground the existing case-triage agent
       with the same investigation discipline.
-  - kind: guardrails
-    reason: >-
-      INV-FR-090 rego guardrails (chain_of_custody, tipping_off_lite,
-      evidence_provenance, two_signature_referral, investigator_identity)
-      await guardrail-service materialization. Their behavioral intent is
-      carried today as grounding memories + Core invariants (four-eyes
-      approvals, WORM audit).
   - kind: case_schemas
     reason: >-
       INV-FR-080 five investigation case schemas await case-service schema

@@ -55,16 +55,6 @@ deferred:
       RACAuditPackage, with phi:true field tagging) awaits pack-service;
       entity semantics are carried today by the two semantic models and the
       seed dataset schemas.
-  - kind: guardrails
-    reason: >-
-      CMM-FR-130..138 OPA policies (hipaa.rego, cms_code_mutual_exclusion,
-      cms_time_thresholds, consent_required, rpm_16day_rule, tcm_window,
-      apcm_tier_eligibility, rac_audit_trail, fqhc_rhc_g0511) require
-      guardrail-service policy materialization, which Core does not expose as
-      a pack surface yet. The behavioral guarantees are partially covered
-      today by Core invariants (proposal-mode + four-eyes approval on every
-      billing decision — BR-2) plus the same rules encoded as retrievable
-      grounding memories and the case-triage agent's instructions.
   - kind: eval_sets
     reason: >-
       CMM-FR-001 golden sets (code_selection, enrollment, documentation,

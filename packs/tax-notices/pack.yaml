@@ -49,19 +49,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Tax-notice domain policies (no response filed or payment remitted before
-      the human determination; abatement requests must cite the actual facts
-      of the taxpayer's compliance history; never advise ignoring a statutory
-      notice; deadline-forfeiture watch — a missed response window forfeits
-      administrative appeal rights) require guardrail-service / OPA policy
-      materialization, which Core does not expose as a pack surface yet. The
-      behavioral core is partially covered today by Core invariants: every
-      pack-configured agent is proposal-mode with four-eyes approval
-      (agent-runtime), and the agent instructions + disposition taxonomy
-      route final determinations exclusively to human analysts with the Tax
-      Compliance Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Notice Intake Copilot, Abatement Request

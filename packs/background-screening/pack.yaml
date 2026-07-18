@@ -49,19 +49,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Screening-domain policies (no adverse-action notice before the
-      pre-adverse response window has run; no report containing a hit whose
-      identity match is below standard or whose record is 605(a)-obsolete;
-      adjudication-matrix consistency and pattern-level adverse-rate
-      disparity watch) require guardrail-service / OPA policy
-      materialization, which Core does not expose as a pack surface yet.
-      The behavioral core is partially covered today by Core invariants:
-      every pack-configured agent is proposal-mode with four-eyes approval
-      (agent-runtime), and the agent instructions + disposition taxonomy
-      route final determinations exclusively to human adjudicators with the
-      Screening Operations Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Hit Adjudication Copilot, Identity

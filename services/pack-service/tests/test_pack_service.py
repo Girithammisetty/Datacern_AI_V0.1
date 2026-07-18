@@ -25,7 +25,7 @@ def test_catalog_lists_real_packs():
     cd = next(p for p in packs if p["name"] == "card-disputes")
     assert cd["version"]  # semver present
     assert cd["components"].get("dispositions", 0) >= 1
-    assert "guardrails" in cd["deferred_kinds"]  # honest deferral surfaced
+    assert "agent_recipes" in cd["deferred_kinds"]  # honest deferral surfaced
 
 
 def test_get_pack_detail_and_missing():
@@ -46,15 +46,31 @@ def test_origin_tag_and_urn_id():
 def test_inc1_kinds_and_reversibility_contract():
     # inc1 materializes self-contained kinds (no dataset/four-eyes chain).
     # inc3 adds case_fields (case-service custom-field catalog) here.
-    assert set(installer.INC1_KINDS) == {"dispositions", "case_fields", "display_labels", "roles", "decision_models"}
+    assert set(installer.INC1_KINDS) == {"dispositions", "case_fields", "display_labels",
+                                         "guardrails", "roles", "decision_models"}
     assert "saved_queries" not in installer.INC1_KINDS  # needs its datasets first
     # Roles/case_fields carry a real Core delete verb → reversible; dispositions/
     # decision tables do not (tombstoned honestly on uninstall).
     assert "roles" in installer.REVERSIBLE_KINDS
     assert "case_fields" in installer.REVERSIBLE_KINDS  # DELETE /case-fields/{id}
     assert "display_labels" in installer.REVERSIBLE_KINDS  # DELETE /tenants/self/labels/{key}
+    assert "guardrails" in installer.REVERSIBLE_KINDS  # PUT empty envelope clears it
     assert "dispositions" not in installer.REVERSIBLE_KINDS
     assert "decision_models" not in installer.REVERSIBLE_KINDS
+
+
+def test_guardrail_envelope_binds_workspace_and_clamps_shape():
+    ws = "019f62c1-0f5e-7af0-b9be-cbe343ea0ad4"
+    env = installer._guardrail_envelope(
+        {"budget": {"max_tokens_per_session": 60000},
+         "pii": {"block_pii_egress": True, "redact": True},
+         "bind_workspace": True}, ws)
+    assert env["budget"]["max_tokens_per_session"] == 60000
+    assert env["pii"]["block_pii_egress"] is True
+    assert env["data_scope"]["workspaces"] == [ws]  # install workspace injected
+    # no bind_workspace, no data_scope key at all
+    env2 = installer._guardrail_envelope({"pii": {"redact": True}}, ws)
+    assert "data_scope" not in env2 and env2["pii"]["redact"] is True
 
 
 def test_plan_marks_inc1_kinds_create_and_others_deferred():
@@ -130,3 +146,8 @@ def test_plan_materializes_case_fields(tmp_path):
     label_ops = [o for o in ops if o["kind"] == "display_labels"]
     assert label_ops and all(o["action"] == "create" for o in label_ops)
     assert {"cases.title", "nav.cases"} <= {o["name"] for o in label_ops}
+    # guardrails (inc4) materialize as real creates onto the fixed agents the pack
+    # specializes — never deferred.
+    guard_ops = [o for o in ops if o["kind"] == "guardrails"]
+    assert guard_ops and all(o["action"] == "create" for o in guard_ops)
+    assert {"case-triage", "analytics"} <= {o["name"] for o in guard_ops}

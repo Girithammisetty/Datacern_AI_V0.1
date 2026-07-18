@@ -575,6 +575,38 @@ class PlatformClient:
                      else f"{agent_key} {r.status_code}: {r.text[:200]}")
         return okd
 
+    # ---- per-agent security envelope (guardrails, BRD 53 inc2) ---------------
+    def ensure_guardrail(self, identity: str, agent_key: str,
+                         envelope: dict) -> str | None:
+        """Attach a per-agent security envelope (data_scope / budget / pii) to a
+        tenant agent config (PA-FR-060). The PUT is a partial upsert, so this
+        does NOT disturb the agent's prompt_params. budget is clamped to the
+        operator ceiling server-side (BR-8). Idempotent (noop if already equal);
+        requires ai.agent.admin. Returns the agent_key (its stable id for
+        reversal), or None on failure."""
+        tok = self.author_token()
+        base = f"{self.endpoints.agent}/api/v1/registry/tenants/self/agents/{agent_key}"
+        g = self._req("GET", base, tok)
+        if g.status_code == 200 and (g.json().get("data") or {}).get("guardrail_policy") == envelope:
+            self._record("guardrails", identity, "noop", None, agent_key)
+            return agent_key
+        r = self._req("PUT", base, tok, headers=JSON, json={"guardrail_policy": envelope})
+        if r.status_code in (200, 201):
+            self._record("guardrails", identity, "create", None, agent_key)
+            return agent_key
+        self._record("guardrails", identity, "failed", None,
+                     f"{agent_key}: {r.status_code} {r.text[:150]}")
+        return None
+
+    def delete_guardrail(self, agent_key: str) -> bool:
+        """Clear an agent's security envelope (reversal): PUT an explicit empty
+        policy, which the partial-upsert route sets to {} while preserving the
+        agent's prompt_params."""
+        r = self._req("PUT",
+                      f"{self.endpoints.agent}/api/v1/registry/tenants/self/agents/{agent_key}",
+                      self.author_token(), headers=JSON, json={"guardrail_policy": {}})
+        return r.status_code in (200, 201)
+
     # ---- memory-service tenant-scope grounding records -----------------------
     def ensure_memories(self, identity: str, records: list[dict],
                         source_tag: str) -> int:

@@ -45,6 +45,8 @@ components:
     - { file: "rbac/roles.yaml", identity: "roles" }
   agent_configs:
     - { file: "agents/configs.yaml", identity: "agent_configs" }
+  guardrails:
+    - { file: "agents/guardrails.yaml", identity: "agent_guardrails" }
   memories:
     - { file: "memories/grounding.yaml", identity: "grounding" }
   pipelines:
@@ -52,20 +54,6 @@ components:
   display_labels:
     - { file: "labels/display.yaml", identity: "ap_vocabulary" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      AP-domain policies (no payment released over a control exception
-      without an approver-signed rationale; no vendor banking change
-      accepted without documented out-of-band verification; no vendor
-      payable until TIN verification and sanctions screening complete;
-      block scope limited to the payment at risk) require
-      guardrail-service / OPA policy materialization, which Core does not
-      expose as a pack surface yet. The behavioral core is partially
-      covered today by Core invariants: every pack-configured agent is
-      proposal-mode with four-eyes approval (agent-runtime), and the agent
-      instructions + disposition taxonomy route payment blocks and
-      releases exclusively to human analysts with the AP Controls Manager
-      as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Exception Triage Copilot, Banking-Change

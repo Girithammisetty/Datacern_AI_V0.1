@@ -49,20 +49,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Appeals-domain policies (no outcome promised to an appellant before
-      the human determination; statements of reasons must cite the actual
-      findings; no complaint decision taken solely by automated means — DSA
-      Art. 20; report-count evidence never substitutes for content
-      assessment; outcome-disparity watch across user groups and
-      geographies) require guardrail-service / OPA policy materialization,
-      which Core does not expose as a pack surface yet. The behavioral core
-      is partially covered today by Core invariants: every pack-configured
-      agent is proposal-mode with four-eyes approval (agent-runtime), and
-      the agent instructions + disposition taxonomy route final
-      determinations exclusively to human reviewers with the Appeals
-      Operations Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Appeal Intake Copilot, Statement-of-Reasons

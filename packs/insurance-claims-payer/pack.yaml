@@ -42,15 +42,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      INS-FR-080..082 (hipaa.rego, cms_2024_human_review.rego,
-      naic_ai_disclosure.rego) require guardrail-service / OPA policy
-      materialization, which Core does not expose as a pack surface yet. The
-      behavioral guarantees they encode are partially covered today by Core
-      invariants: proposal-mode + four-eyes approval (agent-runtime) and the
-      caller-permission gate satisfy the human-review requirement for every
-      pack-configured agent.
   - kind: agent_recipes
     reason: >-
       INS-FR-030/040/050 bespoke LangGraph recipes (prior_auth,

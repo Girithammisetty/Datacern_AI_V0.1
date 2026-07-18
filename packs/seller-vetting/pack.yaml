@@ -48,19 +48,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Enforcement-domain policies (no takedown promised to a claimant before
-      the human determination; claim rejections must record why the evidence
-      failed; network suspensions must name every corroborated linkage; no
-      reinstatement without verified invoices; over-enforcement watch on
-      lawful resellers) require guardrail-service / OPA policy
-      materialization, which Core does not expose as a pack surface yet. The
-      behavioral core is partially covered today by Core invariants: every
-      pack-configured agent is proposal-mode with four-eyes approval
-      (agent-runtime), and the agent instructions + disposition taxonomy
-      route final determinations exclusively to human analysts with the
-      Marketplace Trust Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Onboarding KYB Verifier, Counterfeit

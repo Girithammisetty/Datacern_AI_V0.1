@@ -49,20 +49,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Claims-domain policies (no entitlement position communicated to a
-      claimant before the human determination; every rejection must cite the
-      governing contract clause and the record evidence relied upon; no
-      surety default declaration without contract-required notice and cure
-      period; negotiated settlements above authority thresholds escalate to
-      the review board) require guardrail-service / OPA policy
-      materialization, which Core does not expose as a pack surface yet.
-      The behavioral core is partially covered today by Core invariants:
-      every pack-configured agent is proposal-mode with four-eyes approval
-      (agent-runtime), and the agent instructions + disposition taxonomy
-      route final determinations exclusively to human analysts with the
-      Claims Review Board Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Claim Intake Copilot, Delay Analysis

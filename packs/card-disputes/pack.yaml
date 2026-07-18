@@ -47,18 +47,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Dispute-domain policies (no outcome promised to a cardholder before the
-      human determination; denial letters must cite actual investigation
-      findings; no provisional-credit reversal without the Reg E notice;
-      UDAAP pattern-of-denial watch) require guardrail-service / OPA policy
-      materialization, which Core does not expose as a pack surface yet. The
-      behavioral core is partially covered today by Core invariants: every
-      pack-configured agent is proposal-mode with four-eyes approval
-      (agent-runtime), and the agent instructions + disposition taxonomy
-      route final determinations exclusively to human analysts with the
-      Dispute Operations Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Dispute Intake Copilot, Chargeback

@@ -52,14 +52,6 @@ deferred:
       Evidence, Sanction, NPDBRecord, LawEnforcementReferral, Recovery)
       awaits pack-service; entity semantics are carried today by the
       fwa_claims / siu_operations semantic models and the dataset schemas.
-  - kind: guardrails
-    reason: >-
-      FWA-FR-090 policies (chain-of-custody hash+timestamp+access log,
-      FCA evidentiary standards, DOJ referral format, state DOI reporting,
-      whistleblower pseudonymization) require guardrail-service / OPA
-      materialization. Core invariants cover part of the intent today:
-      proposal-mode + four-eyes approval enforce BR-1/BR-3 human sign-off
-      for every pack-configured agent action.
   - kind: agent_recipes
     reason: >-
       FWA-FR-030..070 bespoke recipes (FWA Scorer, Provider Outlier

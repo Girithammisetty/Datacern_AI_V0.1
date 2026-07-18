@@ -48,20 +48,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Loss-mit-domain policies (no foreclosure referral or advancement while
-      a timely complete application is pending; no outcome promised to a
-      borrower before the human determination; denial letters must state the
-      specific reasons and any investor requirement relied upon; appeal
-      reviews routed to personnel independent of the original decision;
-      fair-servicing pattern-of-denial watch) require guardrail-service /
-      OPA policy materialization, which Core does not expose as a pack
-      surface yet. The behavioral core is partially covered today by Core
-      invariants: every pack-configured agent is proposal-mode with
-      four-eyes approval (agent-runtime), and the agent instructions +
-      disposition taxonomy route final determinations exclusively to human
-      specialists with the Loss Mitigation Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Loss Mit Intake Copilot, Investor Waterfall

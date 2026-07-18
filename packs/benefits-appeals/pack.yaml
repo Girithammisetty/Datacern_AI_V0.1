@@ -51,20 +51,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Benefits-domain policies (no adverse action — denial, termination,
-      reduction, overpayment establishment, fraud penalty — without an
-      individualized human determination and a compliant written notice; no
-      outcome communicated to a claimant before the human decision; identity
-      flags route to verification pathways, never automatic denial;
-      disparate-impact watch on denial and fraud-referral patterns) require
-      guardrail-service / OPA policy materialization, which Core does not
-      expose as a pack surface yet. The behavioral core is partially covered
-      today by Core invariants: every pack-configured agent is proposal-mode
-      with four-eyes approval (agent-runtime), and the agent instructions +
-      disposition taxonomy route final determinations exclusively to human
-      examiners with the Program Integrity Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Eligibility Determination Copilot, Appeal

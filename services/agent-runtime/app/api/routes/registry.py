@@ -69,11 +69,11 @@ def _tenant_config_view(agent_key: str, cfg: TenantAgentConfig | None) -> dict:
         # is honest about "never explicitly configured".
         return {"agent_key": agent_key, "configured": False, "enabled": True,
                 "pinned_version": None, "prompt_params": {},
-                "auto_execute_policy": {}, "self_approval": False}
+                "auto_execute_policy": {}, "self_approval": False, "guardrail_policy": {}}
     return {"agent_key": agent_key, "configured": True, "enabled": cfg.enabled,
             "pinned_version": cfg.pinned_version, "prompt_params": cfg.prompt_params,
             "auto_execute_policy": cfg.auto_execute_policy,
-            "self_approval": cfg.self_approval}
+            "self_approval": cfg.self_approval, "guardrail_policy": cfg.guardrail_policy}
 
 
 @router.get("/agents")
@@ -191,15 +191,36 @@ async def put_tenant_config(request: Request, agent_key: str, body: dict = Body(
     principal = await principal_of(request)
     await _require_agent_cap(request, principal, "ai.agent.admin")
     c = request.app.state.container
-    policy = body.get("auto_execute_policy", {})
+    # PARTIAL upsert: a field the body omits is PRESERVED, not reset to a default.
+    # Previously this rebuilt the whole config and silently wiped guardrail_policy
+    # (and prompt_params) whenever a caller PATCHed one facet — so a pack could
+    # not attach a security envelope to an agent the tenant also specializes, and
+    # a plain enable/disable dropped the envelope. Load the current row and
+    # overlay only the provided keys.
+    base = await c.store.get_tenant_config(principal.tenant_id, agent_key) or TenantAgentConfig(
+        tenant_id=principal.tenant_id, agent_key=agent_key)
+    policy = body.get("auto_execute_policy", base.auto_execute_policy)
     policy_mod.validate_auto_policy(policy)  # 422 on destructive/admin auto (AC-5)
+    # guardrail_policy: validate + clamp to the operator ceiling when supplied
+    # (BRD 53 inc2, PA-FR-060); an explicit {} clears it; omitting it preserves.
+    if "guardrail_policy" in body:
+        gp_body = body.get("guardrail_policy") or {}
+        if not isinstance(gp_body, dict):
+            raise EvalGateFailed("guardrail_policy must be an object {data_scope?, budget?, pii?}")
+        ceilings = await c.store.get_platform_ceilings()
+        guardrail = _validate_guardrail_policy(
+            gp_body, budget_ceiling=int(ceilings.get("max_budget_tokens") or _BUDGET_TOKENS_CEILING))
+    else:
+        guardrail = base.guardrail_policy
     cfg = TenantAgentConfig(
-        tenant_id=principal.tenant_id, agent_key=agent_key, enabled=body.get("enabled", True),
-        pinned_version=body.get("pinned_version"), prompt_params=body.get("prompt_params", {}),
-        auto_execute_policy=policy, self_approval=body.get("self_approval", False))
+        tenant_id=principal.tenant_id, agent_key=agent_key,
+        enabled=body.get("enabled", base.enabled),
+        pinned_version=body.get("pinned_version", base.pinned_version),
+        prompt_params=body.get("prompt_params", base.prompt_params),
+        auto_execute_policy=policy, self_approval=body.get("self_approval", base.self_approval),
+        guardrail_policy=guardrail)
     await c.store.put_tenant_config(cfg)
-    return {"data": {"agent_key": agent_key, "enabled": cfg.enabled,
-                     "pinned_version": cfg.pinned_version}}
+    return {"data": _tenant_config_view(agent_key, cfg)}
 
 
 # ---- BRD 53: tenant-authored CUSTOM agents (config over the shared graph) ----

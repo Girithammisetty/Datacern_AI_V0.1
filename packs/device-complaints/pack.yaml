@@ -50,20 +50,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Complaint-domain policies (no MDR filed or withheld without a
-      documented human rationale; no reportability outcome communicated to
-      a complainant before the determination; every death complaint carries
-      the reportability presumption unless the file rules device
-      involvement out; systematic not-reportable pattern watch) require
-      guardrail-service / OPA policy materialization, which Core does not
-      expose as a pack surface yet. The behavioral core is partially
-      covered today by Core invariants: every pack-configured agent is
-      proposal-mode with four-eyes approval (agent-runtime), and the agent
-      instructions + disposition taxonomy route reportability decisions
-      exclusively to human analysts with the Quality & Regulatory Manager
-      as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (MDR Reportability Decision-Tree Copilot,

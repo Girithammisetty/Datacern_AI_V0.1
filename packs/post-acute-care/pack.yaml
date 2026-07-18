@@ -49,16 +49,6 @@ deferred:
       MedicationRecord, HospiceElection, HospiceCertification, LCDPolicy,
       RehospitalizationRisk) awaits pack-service ontology registration; entity
       semantics are carried today by the semantic models and dataset schemas.
-  - kind: guardrails
-    reason: >-
-      PAC-FR-100 regulatory guardrails (HIPAA baseline, PDGM 60-day episode /
-      LUPA rules, PDPM interrupted-stay policy, OASIS-E timing/locking, MDS 3.0
-      schedule, hospice LCD face-to-face, PEPPER/CERT/UPIC defensibility)
-      require guardrail-service / OPA policy materialization, which Core does
-      not expose as a pack surface yet. BR-1's no-autonomous-submission
-      guarantee (PAC_AUTONOMOUS_ASSESSMENT_FORBIDDEN) is covered today by Core
-      invariants: proposal-mode + four-eyes approval for every pack-configured
-      agent.
   - kind: agent_recipes
     reason: >-
       PAC-FR-030..080 bespoke LangGraph recipes (OASIS Copilot, PDGM Optimizer,

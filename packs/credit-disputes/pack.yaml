@@ -50,21 +50,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Credit-reporting-domain policies (no outcome promised to a consumer
-      before the human determination; frivolous closures only with the
-      5-business-day notice stating reasons; no verify-accurate response
-      without documented record-level evidence — the anti-"data matching
-      only" rule; no reinsertion without furnisher certification;
-      pattern-of-verification monitoring for CFPB furnisher-accuracy
-      scrutiny) require guardrail-service / OPA policy materialization,
-      which Core does not expose as a pack surface yet. The behavioral core
-      is partially covered today by Core invariants: every pack-configured
-      agent is proposal-mode with four-eyes approval (agent-runtime), and
-      the agent instructions + disposition taxonomy route final
-      determinations exclusively to human investigators with the Dispute
-      Operations Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Reinvestigation Copilot, ACDV Response

@@ -49,20 +49,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Claims-and-safety-domain policies (no claim payment, denial, or
-      recovery filing communicated before the human determination; denial
-      letters must cite the documented investigation findings and the
-      applicable bill-of-lading defense; no preventability determination
-      recorded without the event evidence attached; suspected double-broker
-      loads freeze carrier payment pending verification) require
-      guardrail-service / OPA policy materialization, which Core does not
-      expose as a pack surface yet. The behavioral core is partially covered
-      today by Core invariants: every pack-configured agent is proposal-mode
-      with four-eyes approval (agent-runtime), and the agent instructions +
-      disposition taxonomy route final determinations exclusively to human
-      analysts with the Claims & Safety Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Cargo Claim Intake Copilot, Carrier Recovery

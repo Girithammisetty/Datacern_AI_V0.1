@@ -48,19 +48,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Warranty-domain policies (no denial or warranty-exclusion routing of a
-      claim implicating an open safety campaign; no denial conditioned on
-      branded parts/service without causation evidence — the Magnuson-Moss
-      tie-in rule; goodwill only within the documented matrix and approval
-      tier; no supplier debit without attribution evidence) require
-      guardrail-service / OPA policy materialization, which Core does not
-      expose as a pack surface yet. The behavioral core is partially covered
-      today by Core invariants: every pack-configured agent is proposal-mode
-      with four-eyes approval (agent-runtime), and the agent instructions +
-      disposition taxonomy route final determinations exclusively to human
-      analysts with the Warranty Operations Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Claim Intake Copilot, Dealer Audit

@@ -52,16 +52,6 @@ deferred:
       AdherenceRecord, DrugInteraction) awaits pack-service; entity semantics
       are carried today by the pbm_core / pbm_pa semantic models and the
       dataset schemas.
-  - kind: guardrails
-    reason: >-
-      RX-FR-090 policy bundle (HIPAA baseline, CMS Part D turnaround +
-      transparency, Star Ratings measure rules, NCPDP EDI formats, DEA EPCS
-      identity/audit, state pharmacy law, DDI alert severity rules) requires
-      guardrail-service / OPA materialization, which Core does not expose as
-      a pack surface yet. The behavioral guarantees BR-1/BR-2 encode (no
-      autonomous denial, no controlled-substance auto-approve) are covered
-      today by Core invariants — proposal-mode + four-eyes approval in
-      agent-runtime — plus the pack's agent instructions and grounding.
   - kind: agent_recipes
     reason: >-
       RX-FR-030..070 bespoke LangGraph recipes (Rx PA Copilot, Formulary

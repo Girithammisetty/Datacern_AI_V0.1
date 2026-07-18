@@ -45,17 +45,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      PV-domain policies (no autonomous regulatory submission; conservative
-      seriousness/expectedness when arguable; patient-identifier
-      minimization in analyst-facing surfaces; late-case escalation) require
-      guardrail-service / OPA policy materialization, which Core does not
-      expose as a pack surface yet. The behavioral core is partially covered
-      today by Core invariants: every pack-configured agent is proposal-mode
-      with four-eyes approval (agent-runtime), and the agent instructions +
-      disposition taxonomy route submission decisions exclusively to the
-      Safety Officer (QPPV-equivalent).
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Intake Validity Checker, Duplicate

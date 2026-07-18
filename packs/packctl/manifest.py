@@ -46,12 +46,13 @@ SUPPORTED_KINDS = (
     "memories",           # memory-service tenant-scope RAG grounding records
     "pipelines",          # pipeline-orchestrator algorithm-template pipelines
     "display_labels",     # identity-service per-tenant UI label overrides (inc3)
+    "guardrails",         # agent-runtime per-agent security envelope (inc4)
 )
 
 # Deferred kinds we RECOGNIZE (from BRD 23/24..31) so packs can declare them
 # for the future pack-service without packctl pretending to install them.
 KNOWN_DEFERRED_KINDS = (
-    "ontology", "guardrails", "eval_sets", "agent_recipes",
+    "ontology", "eval_sets", "agent_recipes",
     "connection_templates", "model_archetypes",
     "case_schemas", "write_adapters",
 )

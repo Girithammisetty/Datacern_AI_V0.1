@@ -31,7 +31,7 @@ from app.domain import catalog
 # approver AND without the data-ingestion chain — so they install cleanly on
 # their own. (saved_queries/dashboards need the pack's datasets first, which is
 # a deferred kind; they're reported `deferred` in the plan, not faked.)
-INC1_KINDS = ("dispositions", "case_fields", "display_labels", "roles", "decision_models")
+INC1_KINDS = ("dispositions", "case_fields", "display_labels", "guardrails", "roles", "decision_models")
 
 # inc2 data chain, in dependency order. datasets ingest first; the semantic
 # model + verified queries are authored + SUBMITTED as governed drafts (NOT
@@ -46,7 +46,7 @@ INC2_PHASE2_KINDS = ("dashboards",)
 # uninstall. Others are ledgered + tombstoned honestly (PKG-FR-025): the object
 # is retained and loses its pack-origin marker, because Core has no delete verb
 # for it yet — a real, surfaced gap in the materialization contract (PKG-FR-030).
-REVERSIBLE_KINDS = {"roles", "saved_queries", "dashboards", "case_fields", "display_labels"}
+REVERSIBLE_KINDS = {"roles", "saved_queries", "dashboards", "case_fields", "display_labels", "guardrails"}
 
 
 def _packctl_client():
@@ -146,6 +146,27 @@ def _existing_names(client) -> dict[str, set[str]]:
     return out
 
 
+def _guardrail_envelope(gd: dict, workspace_id: str) -> dict:
+    """Build a per-agent security envelope from a pack guardrails entry (BRD 53
+    inc2). budget + pii are static; bind_workspace injects the install workspace
+    so the agent's grounding reads are confined to it; explicit dataset_urns pass
+    through. agent-runtime validates the shape and clamps the budget DOWN to the
+    operator platform ceiling (BR-8) — a pack can never raise it."""
+    env: dict = {}
+    if gd.get("budget") is not None:
+        env["budget"] = gd["budget"]
+    if gd.get("pii") is not None:
+        env["pii"] = gd["pii"]
+    scope: dict = {}
+    if gd.get("bind_workspace") and workspace_id:
+        scope["workspaces"] = [workspace_id]
+    if gd.get("dataset_urns"):
+        scope["dataset_urns"] = gd["dataset_urns"]
+    if scope:
+        env["data_scope"] = scope
+    return env
+
+
 def _component_names(manifest, comp) -> list[str]:
     """The human names a component file will create (for the plan)."""
     from packctl.manifest import load_component_file  # noqa: PLC0415
@@ -157,6 +178,8 @@ def _component_names(manifest, comp) -> list[str]:
         return [f["name"] for f in doc]
     if comp.kind == "display_labels":
         return [lbl["key"] for lbl in doc]
+    if comp.kind == "guardrails":
+        return [gd["agent_key"] for gd in doc]
     if comp.kind == "roles":
         return [r["name"] for r in doc]
     if comp.kind == "saved_queries":
@@ -219,6 +242,12 @@ def run_install(client, manifest, origin_of: Callable[[str, str], str]) -> list[
                     do("display_labels", comp, lbl["key"],
                        lambda lbl=lbl: client.ensure_label(
                            comp.identity, lbl["key"], lbl["value"]))
+            elif kind == "guardrails":
+                for gd in doc:
+                    env = _guardrail_envelope(gd, client.workspace_id)
+                    do("guardrails", comp, gd["agent_key"],
+                       lambda gd=gd, env=env: client.ensure_guardrail(
+                           comp.identity, gd["agent_key"], env))
             elif kind == "roles":
                 for role in doc:
                     do("roles", comp, role["name"],
@@ -279,6 +308,10 @@ def run_uninstall(client, ledger: list[dict]) -> list[dict]:
             ok = client.delete_label(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,
                              "detail": "label reverted to base string" if ok else "delete failed"})
+        elif kind == "guardrails" and tid:
+            ok = client.delete_guardrail(tid)
+            outcomes.append({"ledger_id": row["id"], "deleted": ok,
+                             "detail": "agent guardrail cleared" if ok else "clear failed"})
         elif kind == "dashboards" and tid:
             r = client._req("DELETE", f"{e.chart}/api/v1/dashboards/{tid}", tok)
             ok = r.status_code in (200, 204)

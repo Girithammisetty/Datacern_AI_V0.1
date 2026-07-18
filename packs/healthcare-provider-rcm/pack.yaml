@@ -51,15 +51,6 @@ deferred:
       CodeAssignment, PayerPolicy — with phi:true field tags) awaits
       pack-service ontology registration; entity semantics are carried today
       by the semantic models and dataset schemas.
-  - kind: guardrails
-    reason: >-
-      RCM-FR-110 policies (HIPAA baseline, CMS LCD/NCD/NCCI billing edits,
-      No Surprises Act balance-billing, state balance-billing configs,
-      TILA/FDCPA payment-plan disclosures, RAC/MAC audit posture) require
-      guardrail-service / OPA materialization, which Core does not expose as a
-      pack surface yet. Proposal-mode + four-eyes approval in agent-runtime
-      already satisfies the human-review guarantee (BRD 26 BR-1) for every
-      pack-configured agent.
   - kind: agent_recipes
     reason: >-
       RCM-FR-030..080 bespoke LangGraph recipes (coding_copilot,

@@ -49,20 +49,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Trade-domain policies (no release while a plausible denied-party match
-      is unresolved; a sanctions hold can only be lifted with manager
-      approval and a documented distinguishing rationale; corrected entries
-      and prior disclosures never filed without human sign-off; screening
-      thresholds cannot be tuned down without an adjudication-history
-      review) require guardrail-service / OPA policy materialization, which
-      Core does not expose as a pack surface yet. The behavioral core is
-      partially covered today by Core invariants: every pack-configured
-      agent is proposal-mode with four-eyes approval (agent-runtime), and
-      the agent instructions + disposition taxonomy route holds, releases,
-      and corrected entries exclusively to human analysts with the Trade
-      Compliance Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Classification Copilot with GRI-ordered

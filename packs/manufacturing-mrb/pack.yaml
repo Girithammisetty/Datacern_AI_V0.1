@@ -51,20 +51,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      MRB-domain policies (no autonomous disposition of nonconforming
-      material; use-as-is or repair on a critical characteristic must carry
-      documented customer/design-authority concurrence before closure;
-      med-device rework must attach re-verification evidence per ISO 13485 /
-      21 CFR 820.90; an escape assessment must precede any release of
-      customer-return stock) require guardrail-service / OPA policy
-      materialization, which Core does not expose as a pack surface yet. The
-      behavioral core is partially covered today by Core invariants: every
-      pack-configured agent is proposal-mode with four-eyes approval
-      (agent-runtime), and the agent instructions + disposition taxonomy
-      route final dispositions exclusively to human engineers with the
-      Quality Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (NC Intake Copilot, MRB Package Builder,

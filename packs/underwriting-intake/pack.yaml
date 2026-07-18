@@ -50,19 +50,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Underwriting-domain policies (no appetite decision communicated to a
-      broker before the human determination; declination notes must carry
-      specific risk-based reasons; no E&S referral without the documented
-      admitted-market declination; unfair-discrimination pattern watch on
-      declines) require guardrail-service / OPA policy materialization,
-      which Core does not expose as a pack surface yet. The behavioral core
-      is partially covered today by Core invariants: every pack-configured
-      agent is proposal-mode with four-eyes approval (agent-runtime), and
-      the agent instructions + disposition taxonomy route final intake
-      determinations exclusively to human analysts with the Underwriting
-      Operations Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Submission Clearance Checker, Appetite Fit

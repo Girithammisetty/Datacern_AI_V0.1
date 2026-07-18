@@ -48,20 +48,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Workers'-comp policies (no acceptance, denial, or benefit amount
-      communicated to a claimant before the human determination; denial
-      notices must cite the actual AOE/COE findings; no reserve change
-      without a documented rationale; SIU referral never suspends statutory
-      benefits or decision deadlines; pattern-of-denial / fair-claims-
-      handling watch) require guardrail-service / OPA policy
-      materialization, which Core does not expose as a pack surface yet.
-      The behavioral core is partially covered today by Core invariants:
-      every pack-configured agent is proposal-mode with four-eyes approval
-      (agent-runtime), and the agent instructions + disposition taxonomy
-      route final determinations exclusively to human adjusters with the WC
-      Claims Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (FNOL Intake Copilot, Compensability Clock

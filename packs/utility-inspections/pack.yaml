@@ -48,19 +48,6 @@ components:
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
 deferred:
-  - kind: guardrails
-    reason: >-
-      Inspection-domain policies (no work order created, cancelled, or
-      deferred without a human determination; deferrals must carry a
-      documented engineering rationale and program window; a repeat finding
-      on an asset with a prior monitor decision may never be re-monitored
-      silently; pattern-of-deferral watch in Tier-3 HFTD zones) require
-      guardrail-service / OPA policy materialization, which Core does not
-      expose as a pack surface yet. The behavioral core is partially covered
-      today by Core invariants: every pack-configured agent is proposal-mode
-      with four-eyes approval (agent-runtime), and the agent instructions +
-      disposition taxonomy route final repair/defer determinations
-      exclusively to human analysts with the Asset Risk Manager as approver.
   - kind: agent_recipes
     reason: >-
       Bespoke LangGraph recipes (Finding Triage Copilot, Deadline & Make-Safe
