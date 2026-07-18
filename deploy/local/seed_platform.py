@@ -76,6 +76,10 @@ PERSONAS = {
     "manager@demo.windrose": {"sub": "019f6de5-34b4-7eb1-b169-1c66b95be578", "role": "manager"},
     "datascientist@demo.windrose": {"sub": "019f6de5-34c7-760a-b3ff-97f324237f0d", "role": "datascientist"},
     "admin@demo.windrose": {"sub": "019f6de5-34da-7301-a45b-a525052cd74d", "role": "admin"},
+    # First-class cross-tenant PLATFORM admin (distinct from the tenant "admin"
+    # above). Also a tenant Admin of the demo tenant so they see both the tenant
+    # admin cards AND the platform section.
+    "platform-admin@windrose": {"sub": "019f6de5-3600-7abc-9def-0123456789ab", "role": "platform_admin"},
 }
 
 
@@ -92,6 +96,11 @@ def persona_scopes(role):
     cross-tenant/platform-wide kills — out of scope for a demo tenant admin)."""
     if role == "admin":
         return PERSONA_SCOPES + ["tenant.admin"]
+    if role == "platform_admin":
+        # A first-class platform operator: the four platform scopes light up every
+        # backend operator predicate (IsSuperAdmin / RequireSuperAdmin /
+        # require_operator / IsPlatform), plus tenant.admin for the demo tenant.
+        return PERSONA_SCOPES + ["tenant.admin", "platform.admin", "super_admin", "operator", "ai.platform.admin"]
     return PERSONA_SCOPES
 
 # every action the UI's BFF fan-out can trigger on a Python-scheme service
@@ -134,6 +143,7 @@ ROLE_GROUPS = {
     "manager": ["Case Manager"],
     "datascientist": ["Model Builder", "Data User", "Use case Admin"],
     "admin": ["Admin"],
+    "platform_admin": ["Admin"],
 }
 
 # Minimum capabilities each persona's /me/capabilities MUST contain — the exact
@@ -144,6 +154,7 @@ REQUIRED_CAPS = {
     "manager": ["case.case.read", "ai.proposal.read", "chart.dashboard.read", "usage.report.read"],
     "datascientist": ["dataset.dataset.list", "experiment.experiment.read", "chart.dashboard.read"],
     "admin": ["*"],
+    "platform_admin": ["*"],
 }
 
 
@@ -398,8 +409,11 @@ def write_personas_env(out_path):
     persona email to the REAL tenant + workspace + scopes seeded above."""
     m = {}
     for email, p in PERSONAS.items():
-        m[email] = {"sub": p["sub"], "tenantId": TENANT,
-                    "workspaceId": WORKSPACE, "scopes": persona_scopes(p["role"])}
+        entry = {"sub": p["sub"], "tenantId": TENANT,
+                 "workspaceId": WORKSPACE, "scopes": persona_scopes(p["role"])}
+        if p["role"] == "platform_admin":
+            entry["platformAdmin"] = True
+        m[email] = entry
     with open(out_path, "w") as f:
         f.write(json.dumps(m))
     return m
