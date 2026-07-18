@@ -59,6 +59,38 @@ async def test_user_cannot_write_other_users_scope(client):
     assert r.json()["error"]["code"] == "SCOPE_DENIED"
 
 
+async def test_corpus_admin_can_write_tenant_grounding(client):
+    # A caller holding memory.corpus.admin (e.g. a pack installer curating tenant
+    # grounding) MAY write tenant scope — the governed non-agent path (MEM-FR-010).
+    r = await client.post("/api/v1/memories", json={
+        "scope": "tenant", "scope_ref": TENANT_A,
+        "content": "AP three-way-match is the anchor control",
+        "provenance": prov("user_explicit", user_id=USER_A)},
+        headers=auth(TENANT_A, USER_A, scopes=["memory.memory.create", "memory.corpus.admin"]))
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["status"] == "active"
+
+
+async def test_non_admin_cannot_write_tenant_scope(client):
+    # memory.memory.create alone does NOT unlock tenant scope (agent/admin-only).
+    r = await client.post("/api/v1/memories", json={
+        "scope": "tenant", "scope_ref": TENANT_A, "content": "should be denied",
+        "provenance": prov("user_explicit", user_id=USER_A)},
+        headers=auth(TENANT_A, USER_A, scopes=["memory.memory.create"]))
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "SCOPE_DENIED"
+
+
+async def test_corpus_admin_cannot_write_other_tenant(client):
+    # A corpus admin curates only their OWN tenant's grounding.
+    r = await client.post("/api/v1/memories", json={
+        "scope": "tenant", "scope_ref": TENANT_B, "content": "cross-tenant grounding",
+        "provenance": prov("user_explicit", user_id=USER_A)},
+        headers=auth(TENANT_A, USER_A, scopes=["memory.memory.create", "memory.corpus.admin"]))
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "SCOPE_DENIED"
+
+
 async def test_session_hook_requires_spiffe(client):
     r = await client.delete(f"/internal/v1/sessions/sess-1/memory?tenant={TENANT_A}")
     assert r.status_code == 403

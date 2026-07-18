@@ -162,3 +162,13 @@ def test_plan_materializes_case_fields(tmp_path):
     case_ops = [o for o in ops if o["kind"] == "cases"]
     assert case_ops and all(o["action"] == "create" for o in case_ops)
     assert any(o["name"] == "EX-7001" for o in case_ops)  # a real seed row_pk
+    # pipelines (inc7) — algorithm-template seeds, data-chain (need the dataset),
+    # materializable (was deferred).
+    pipe_ops = [o for o in ops if o["kind"] == "pipelines"]
+    assert pipe_ops and all(o["action"] == "create" for o in pipe_ops)
+    assert {"Invoice anomaly detector (isolation forest)",
+            "Exception outcome scorer (xgboost)"} <= {o["name"] for o in pipe_ops}
+    # memories (inc7) — tenant grounding via the governed memory.corpus.admin
+    # path, materializable (was deferred behind the agent-token barrier).
+    mem_ops = [o for o in ops if o["kind"] == "memories"]
+    assert mem_ops and all(o["action"] == "create" for o in mem_ops)

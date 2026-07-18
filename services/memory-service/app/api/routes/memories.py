@@ -32,6 +32,13 @@ CREATE = "memory.memory.create"
 READ = "memory.memory.read"
 UPDATE = "memory.memory.update"
 DELETE = "memory.memory.delete"
+# Elevated: administering the tenant RAG corpus. A caller holding this may write
+# curated TENANT-scope grounding (operator/pack-installed knowledge) — the one
+# governed path for a non-agent principal to write shared tenant memory. Agents
+# still write tenant scope via their memory_policy (mem_scopes_writable); this
+# does NOT relax that, it adds a first-class administrative curation path so a
+# pack install need not impersonate an agent (MEM-FR-010).
+CORPUS_ADMIN = "memory.corpus.admin"
 
 
 async def _authz(request: Request, principal: Principal, action: str, urn=None) -> None:
@@ -40,28 +47,41 @@ async def _authz(request: Request, principal: Principal, action: str, urn=None) 
         raise PermissionDenied(f"missing permission {action}")
 
 
-def _writable_scopes(principal: Principal) -> set[str]:
+def _writable_scopes(principal: Principal, *, corpus_admin: bool = False) -> set[str]:
     """Scopes the caller may write (MEM-FR-010 step 1). Agents carry the
     runtime-forwarded ``mem_scopes_writable`` claim (agent version memory_policy);
-    users may write only their own user scope."""
+    users may write only their own user scope. A corpus admin (a caller holding
+    memory.corpus.admin, e.g. a pack installer curating tenant grounding) may
+    additionally write TENANT scope — the governed non-agent path."""
     if principal.typ in ("agent_obo", "agent_autonomous"):
         claim = getattr(principal, "_scopes_writable", None)
         return set(claim) if claim else {SCOPE_SESSION, SCOPE_USER, SCOPE_WORKSPACE, "tenant"}
-    return {SCOPE_USER, SCOPE_SESSION}
+    scopes = {SCOPE_USER, SCOPE_SESSION}
+    if corpus_admin:
+        scopes.add("tenant")
+    return scopes
 
 
-def _check_write_scope(principal: Principal, scope: str, scope_ref: str) -> None:
-    if scope not in _writable_scopes(principal):
+def _check_write_scope(principal: Principal, scope: str, scope_ref: str,
+                       *, corpus_admin: bool = False) -> None:
+    if scope not in _writable_scopes(principal, corpus_admin=corpus_admin):
         raise ScopeDenied(f"caller may not write scope {scope}")
     if scope == SCOPE_USER and scope_ref != principal.effective_user:
         raise ScopeDenied("users may only write their own user scope")
+    if scope == "tenant" and scope_ref != principal.tenant_id:
+        # A corpus admin curates their OWN tenant's grounding, never another's.
+        raise ScopeDenied("may only write tenant scope for the caller's own tenant")
 
 
 @router.post("/memories")
 async def write_memory(request: Request, body: WriteMemoryIn):
     principal = get_principal(request)
     await _authz(request, principal, CREATE)
-    _check_write_scope(principal, body.scope, body.scope_ref)
+    # tenant-scope grounding requires the corpus-admin capability (checked once
+    # here); user/session writes never reach this OPA call.
+    corpus_admin = body.scope == "tenant" and await request.app.state.authz.allow(
+        principal, CORPUS_ADMIN, None)
+    _check_write_scope(principal, body.scope, body.scope_ref, corpus_admin=corpus_admin)
     c = request.app.state.container
     ctx = principal.ctx(getattr(request.state, "trace_id", None))
     res = await c.write_service.write(ctx, WriteRequest(
@@ -76,9 +96,12 @@ async def write_memory(request: Request, body: WriteMemoryIn):
 async def write_batch(request: Request, body: BatchWriteIn):
     principal = get_principal(request)
     await _authz(request, principal, CREATE)
+    # One corpus-admin check for the batch (only if it writes any tenant scope).
+    corpus_admin = any(i.scope == "tenant" for i in body.items) and \
+        await request.app.state.authz.allow(principal, CORPUS_ADMIN, None)
     reqs = []
     for item in body.items:
-        _check_write_scope(principal, item.scope, item.scope_ref)
+        _check_write_scope(principal, item.scope, item.scope_ref, corpus_admin=corpus_admin)
         reqs.append(WriteRequest(
             scope=item.scope, scope_ref=item.scope_ref, content=item.content,
             provenance=item.provenance.model_dump(), confidence=item.confidence,

@@ -629,19 +629,25 @@ class PlatformClient:
 
     # ---- memory-service tenant-scope grounding records -----------------------
     def ensure_memories(self, identity: str, records: list[dict],
-                        source_tag: str) -> int:
-        """Write tenant-scope RAG grounding records (agent-typed token — the only
-        principal type memory-service allows to write tenant scope). Idempotent
-        via the source tag: records already present (matched on tag) are skipped."""
-        tok = self.agent_token()
+                        source_tag: str) -> list[str]:
+        """Write tenant-scope RAG grounding records AS the installing user — who
+        must hold memory.corpus.admin, the GOVERNED curation path for writing
+        shared tenant grounding (memory-service MEM-FR-010). No agent
+        impersonation: the user authors curated knowledge, agents read it.
+        Idempotent via the source tag (records already present, matched on tag,
+        are skipped). Returns the created memory ids (for uninstall reversal)."""
+        tok = self.author_token()
+        # NB: the memory list endpoint keys scope as ?scope=, NOT ?filter[scope]=
+        # (the latter silently returns nothing — which defeated idempotency and
+        # duplicated grounding on every re-install).
         listed = self._req("GET", f"{self.endpoints.memory}/api/v1/memories"
-                                  f"?filter[scope]=tenant&limit=200", tok)
+                                  f"?scope=tenant&limit=200", tok)
         existing_contents: set[str] = set()
         if listed.status_code == 200:
             for m in listed.json().get("data", []):
                 if source_tag in (m.get("tags") or []):
                     existing_contents.add((m.get("content") or "")[:120])
-        wrote = 0
+        created: list[str] = []
         for rec in records:
             if rec["content"][:120] in existing_contents:
                 continue
@@ -659,15 +665,25 @@ class PlatformClient:
                               "tags": sorted({str(t) for t in
                                               (source_tag, *rec.get("tags", []))})})
             if r.status_code in (200, 201):
-                wrote += 1
+                mid = (r.json().get("data") or {}).get("memory_id")
+                if mid:
+                    created.append(mid)
             else:
                 self._record("memories", identity, "failed", None,
                              f"{r.status_code}: {r.text[:150]}")
-                return wrote
-        skipped = len(records) - wrote
-        self._record("memories", identity, "create" if wrote else "noop", None,
-                     f"{wrote} grounding records written, {skipped} already present")
-        return wrote
+                return created
+        skipped = len(records) - len(created)
+        self._record("memories", identity, "create" if created else "noop", None,
+                     f"{len(created)} grounding records written, {skipped} already present")
+        return created
+
+    def delete_memory(self, memory_id: str) -> bool:
+        """Reversal: delete one grounding record by id (memory.memory.delete,
+        tenant-RLS scoped)."""
+        r = self._req("DELETE",
+                      f"{self.endpoints.memory}/api/v1/memories/{memory_id}",
+                      self.author_token())
+        return r.status_code in (200, 204)
 
     # ---- pipeline templates ---------------------------------------------------
     def ensure_pipeline(self, identity: str, algorithm: str, name: str,
@@ -694,6 +710,14 @@ class PlatformClient:
         self._record("pipelines", identity, "failed", None,
                      f"{name!r} {cr.status_code}: {cr.text[:200]}")
         return None
+
+    def delete_pipeline(self, pipeline_id: str) -> bool:
+        """Reversal: archive the pipeline template (soft delete with a restore
+        counterpart) via DELETE /pipelines/{id}. Requires pipeline.template.delete."""
+        r = self._req("DELETE",
+                      f"{self.endpoints.pipeline}/api/v1/pipelines/{pipeline_id}",
+                      self.author_token())
+        return r.status_code in (200, 204)
 
     # ---- agent-runtime governed decision tables (BRD 54 inc2) ----------------
     def ensure_decision_model(self, identity: str, name: str, rules: list[dict],

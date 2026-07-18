@@ -40,7 +40,8 @@ INC1_KINDS = ("dispositions", "case_fields", "display_labels", "guardrails",
 # them in the normal review UI). saved queries create against the ingested
 # datasets. Dashboards depend on the model's PUBLISHED measure projection, so
 # they materialize in the second phase (run_complete), after approval.
-INC2_PHASE1_KINDS = ("datasets", "semantic_models", "verified_queries", "saved_queries", "cases")
+INC2_PHASE1_KINDS = ("datasets", "semantic_models", "verified_queries", "saved_queries",
+                     "cases", "pipelines", "memories")
 INC2_PHASE2_KINDS = ("dashboards",)
 
 # Kinds whose Core service exposes a real revert (delete) verb → reversible on
@@ -48,7 +49,7 @@ INC2_PHASE2_KINDS = ("dashboards",)
 # is retained and loses its pack-origin marker, because Core has no delete verb
 # for it yet — a real, surfaced gap in the materialization contract (PKG-FR-030).
 REVERSIBLE_KINDS = {"roles", "saved_queries", "dashboards", "case_fields",
-                    "display_labels", "guardrails", "agent_configs"}
+                    "display_labels", "guardrails", "agent_configs", "pipelines", "memories"}
 
 
 def _packctl_client():
@@ -104,7 +105,7 @@ def plan(client, manifest) -> list[dict]:
             continue
         if comp.kind not in materializable:
             ops.append({"kind": comp.kind, "identity": comp.identity, "action": "deferred",
-                        "detail": "not materialized yet (cases / memories / pipelines)"})
+                        "detail": "needs a Core write surface not exposed yet"})
             continue
         for name in _component_names(manifest, comp):
             action = "exists" if name in existing.get(comp.kind, set()) else "create"
@@ -192,6 +193,11 @@ def _component_names(manifest, comp) -> list[str]:
         return [ac["agent_key"] for ac in doc]
     if comp.kind == "cases":
         return [r["row_pk"] for r in doc.get("rows", [])]
+    if comp.kind == "pipelines":
+        return [p["name"] for p in (doc if isinstance(doc, list) else [doc])]
+    if comp.kind == "memories":
+        # grounding records have no name; the plan shows one create for the set.
+        return [comp.identity]
     if comp.kind == "roles":
         return [r["name"] for r in doc]
     if comp.kind == "saved_queries":
@@ -334,6 +340,14 @@ def run_uninstall(client, ledger: list[dict]) -> list[dict]:
             ok = client.clear_agent_config(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,
                              "detail": "agent specialization cleared" if ok else "clear failed"})
+        elif kind == "pipelines" and tid:
+            ok = client.delete_pipeline(tid)
+            outcomes.append({"ledger_id": row["id"], "deleted": ok,
+                             "detail": "pipeline archived" if ok else "archive failed"})
+        elif kind == "memories" and tid:
+            ok = client.delete_memory(tid)
+            outcomes.append({"ledger_id": row["id"], "deleted": ok,
+                             "detail": "grounding record deleted" if ok else "delete failed"})
         elif kind == "dashboards" and tid:
             r = client._req("DELETE", f"{e.chart}/api/v1/dashboards/{tid}", tok)
             ok = r.status_code in (200, 204)
@@ -526,6 +540,47 @@ def run_data_chain(client, manifest, origin_of):
                             action="create" if ids else "noop", urn=urn,
                             detail=f"{len(ids)} seed cases materialized (reindexed)" if ids
                             else "no seed cases materialized"))
+
+    # pipeline seeds — algorithm-template pipelines trained on the pack's dataset
+    # (invoice-anomaly detector, exception-outcome scorer). Each references a
+    # dataset URN → needs the dataset ingested above. Idempotent by name;
+    # reversible (DELETE archives the template).
+    for comp in manifest.components_of("pipelines"):
+        doc = load_component_file(manifest, comp)
+        for p in (doc if isinstance(doc, list) else [doc]):
+            ref = p.get("dataset")
+            urn = dataset_urns.get(ref)
+            if not urn:
+                records.append(_rec("pipelines", p["name"], origin_of, action="failed",
+                                    detail=f"unknown dataset ref {ref!r} (dataset not ingested)"))
+                continue
+            pid = client.ensure_pipeline(comp.identity, p["algorithm"], p["name"], urn,
+                                         p.get("mode", "train"))
+            act = client.actions[-1] if client.actions else {}
+            records.append(_rec("pipelines", p["name"], origin_of,
+                                action=act.get("action", "failed" if not pid else "create"),
+                                target_id=pid,
+                                reversible=(act.get("action") == "create" and bool(pid)),
+                                detail=act.get("detail", "")))
+
+    # tenant-scope RAG grounding — the pack's curated domain knowledge the agents
+    # retrieve. Authored AS the installing user via the governed
+    # memory.corpus.admin path (NOT agent impersonation). Idempotent by source
+    # tag; each record is reversible (deleted by id on uninstall).
+    for comp in manifest.components_of("memories"):
+        doc = load_component_file(manifest, comp)
+        tag = f"pack:{manifest.name}"
+        ids = client.ensure_memories(comp.identity, doc, tag)
+        if ids:
+            for mid in ids:
+                records.append(_rec("memories", comp.identity, origin_of, action="create",
+                                    target_id=mid, reversible=True,
+                                    detail="tenant grounding record"))
+        else:
+            act = client.actions[-1] if client.actions else {}
+            records.append(_rec("memories", comp.identity, origin_of,
+                                action=act.get("action", "noop"),
+                                detail=act.get("detail", "grounding already present")))
 
     pending_dashboards = len(manifest.components_of("dashboards")) > 0
     return records, pending_dashboards
