@@ -23,6 +23,10 @@ export const qk = {
   resolutionRuns: (datasetId: string) => ["data", "resolutionRuns", datasetId] as const,
   resolutionRun: (id: string) => ["data", "resolutionRun", id] as const,
   mergeCandidates: (runId: string) => ["data", "mergeCandidates", runId] as const,
+  packs: () => ["packs", "catalog"] as const,
+  pack: (name: string) => ["packs", "pack", name] as const,
+  packInstalls: (workspaceId: string) => ["packs", "installs", workspaceId] as const,
+  packInstall: (id: string) => ["packs", "install", id] as const,
   upload: (id: string) => ["data", "upload", id] as const,
   datasetLineage: (urn: string, direction: string) => ["data", "lineage", urn, direction] as const,
 

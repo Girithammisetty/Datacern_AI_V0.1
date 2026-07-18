@@ -21,6 +21,7 @@ import { ToolPlaneClient } from "./toolplane.js";
 import { MemoryClient } from "./memory.js";
 import { EvalClient } from "./eval.js";
 import { AiGatewayClient } from "./aigateway.js";
+import { PackClient } from "./pack.js";
 
 export interface Clients {
   identity: IdentityClient;
@@ -44,6 +45,8 @@ export interface Clients {
   eval: EvalClient;
   /** ai-gateway admin plane (Tier 2a: providers/ladders/budgets/keys/guardrails). */
   aiGateway: AiGatewayClient;
+  /** pack-service (BRD 23: capability-pack catalog + governed install lifecycle). */
+  pack: PackClient;
 }
 
 function svc(service: string, baseUrl: string, ctx: ClientRequestContext, cfg: Config, fetchImpl?: FetchImpl) {
@@ -72,5 +75,6 @@ export function buildClients(cfg: Config, ctx: ClientRequestContext, fetchImpl?:
     // ---- Tier 2a additions (eval-service + ai-gateway admin) ----------------
     eval: new EvalClient(svc("eval-service", cfg.services.eval, ctx, cfg, fetchImpl)),
     aiGateway: new AiGatewayClient(svc("ai-gateway", cfg.services.aiGateway, ctx, cfg, fetchImpl)),
+    pack: new PackClient(svc("pack-service", cfg.services.pack, ctx, cfg, fetchImpl)),
   };
 }

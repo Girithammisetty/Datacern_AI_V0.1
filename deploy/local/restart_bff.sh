@@ -51,6 +51,7 @@ boot bff env PATH="$PATH" \
   INFERENCE_URL="$INFERENCE_URL" \
   AGENT_RUNTIME_URL="$AGENT_RUNTIME_URL" RBAC_URL="$RBAC_URL" REALTIME_HUB_URL="$REALTIME_URL" \
   INGESTION_URL="$INGESTION_URL" PIPELINE_URL="$PIPELINE_URL" AUDIT_URL="$AUDIT_URL" \
+  PACK_URL="$PACK_URL" \
   bash -c "cd '$REPO_DIR/services/bff-graphql' && exec pnpm start"
 
 wait_http "$BFF_URL/graphql" 60 || { warn "bff-graphql did not come up"; exit 1; }

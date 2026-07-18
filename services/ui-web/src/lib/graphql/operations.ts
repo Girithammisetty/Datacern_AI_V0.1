@@ -140,6 +140,10 @@ import type {
   ResolveEntitiesResult,
   EntityMergeProposal,
   MaterializeResolvedResult,
+  Pack,
+  PackInstall,
+  PackInstallPlan,
+  PackUninstallResult,
   DatasetColumn,
   SemanticModelSummary,
   SemanticModelVersion,
@@ -514,6 +518,74 @@ export const MATERIALIZE_RESOLVED = /* GraphQL */ `
   }
 `;
 export interface MaterializeResolvedResultData { materializeResolvedEntities: MaterializeResolvedResult }
+
+// ---- BRD 23: capability packs (pack-service) -------------------------------
+const PACK_FIELDS = /* GraphQL */ `
+  name version description publisherName categories regulatory
+  components { kind count } deferredKinds
+`;
+const LEDGER_FIELDS = /* GraphQL */ `
+  id kind identity targetUrn targetId origin action detail reversible tombstoned
+`;
+
+export const PACKS = /* GraphQL */ `
+  query Packs { packs { ${PACK_FIELDS} } }
+`;
+export interface PacksResult { packs: Pack[] }
+
+export const PACK = /* GraphQL */ `
+  query PackDetail($name: String!) {
+    pack(name: $name) { ${PACK_FIELDS} deferred { kind reason } }
+  }
+`;
+export interface PackResult { pack: Pack | null }
+
+export const PACK_INSTALLS = /* GraphQL */ `
+  query PackInstalls($workspaceId: String) {
+    packInstalls(workspaceId: $workspaceId) {
+      id pack version workspaceId status summary createdBy createdAt
+    }
+  }
+`;
+export interface PackInstallsResult { packInstalls: PackInstall[] }
+
+export const PACK_INSTALL = /* GraphQL */ `
+  query PackInstall($id: ID!) {
+    packInstall(id: $id) {
+      id pack version workspaceId status summary createdBy createdAt
+      plan { kind identity name action detail }
+      ledger { ${LEDGER_FIELDS} }
+    }
+  }
+`;
+export interface PackInstallResult { packInstall: PackInstall | null }
+
+export const PLAN_PACK_INSTALL = /* GraphQL */ `
+  mutation PlanPackInstall($pack: String!, $workspaceId: String!, $version: String) {
+    planPackInstall(pack: $pack, workspaceId: $workspaceId, version: $version) {
+      pack version workspaceId plan { kind identity name action detail }
+    }
+  }
+`;
+export interface PlanPackInstallResult { planPackInstall: PackInstallPlan }
+
+export const INSTALL_PACK = /* GraphQL */ `
+  mutation InstallPack($pack: String!, $workspaceId: String!, $version: String, $idempotencyKey: String!) {
+    installPack(pack: $pack, workspaceId: $workspaceId, version: $version, idempotencyKey: $idempotencyKey) {
+      id pack version workspaceId status summary ledger { ${LEDGER_FIELDS} }
+    }
+  }
+`;
+export interface InstallPackResult { installPack: PackInstall }
+
+export const UNINSTALL_PACK = /* GraphQL */ `
+  mutation UninstallPack($installId: ID!, $idempotencyKey: String!) {
+    uninstallPack(installId: $installId, idempotencyKey: $idempotencyKey) {
+      id status reversed tombstoned
+    }
+  }
+`;
+export interface UninstallPackResult { uninstallPack: PackUninstallResult }
 
 export const DELETE_CONNECTION = /* GraphQL */ `
   mutation DeleteConnection($id: ID!) {

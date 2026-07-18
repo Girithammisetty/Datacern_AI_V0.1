@@ -29,6 +29,10 @@ import type {
   DecisionModelDTO, DecisionOutcomeDTO, BatchEvaluateDTO, EntityMergeProposalDTO,
 } from "../clients/agent.js";
 import type {
+  PackSummaryDTO, PackDetailDTO, PlanOpDTO, LedgerRowDTO, InstallDTO,
+  InstallPlanDTO, InstallResultDTO, UninstallResultDTO,
+} from "../clients/pack.js";
+import type {
   ToolKillSwitchDTO,
   // Tier 2b: tool-plane registry admin.
   ToolDTO, ToolVersionDTO, ToolHealthDTO, TenantToolSettingsDTO, BYOSubmissionDTO,
@@ -2295,6 +2299,72 @@ export function mapMaterializeResolved(d: MaterializeResolvedDTO) {
     columns: d.columns ?? [],
     versionNo: d.version_no,
     icebergTable: d.iceberg_table,
+  };
+}
+
+// ---- BRD 23: pack-service (capability packs + install lifecycle) ------------
+
+export function mapPack(d: PackSummaryDTO | PackDetailDTO) {
+  const detail = d as PackDetailDTO;
+  return {
+    __typename: "Pack" as const,
+    name: d.name,
+    version: d.version,
+    description: d.description,
+    publisherName: d.publisher?.name ?? null,
+    categories: d.categories ?? [],
+    regulatory: d.regulatory ?? [],
+    components: Object.entries(d.components ?? {}).map(([kind, count]) => ({ kind, count })),
+    deferredKinds: d.deferred_kinds ?? [],
+    deferred: (detail.deferred ?? []).map((x) => ({ kind: x.kind, reason: x.reason })),
+  };
+}
+
+export function mapPackPlanOp(o: PlanOpDTO) {
+  return { kind: o.kind, identity: o.identity, name: o.name ?? null, action: o.action, detail: o.detail ?? null };
+}
+
+export function mapPackLedgerRow(m: LedgerRowDTO) {
+  return {
+    id: m.id, kind: m.kind, identity: m.identity,
+    targetUrn: m.target_urn ?? null, targetId: m.target_id ?? null,
+    origin: m.origin, action: m.action, detail: m.detail ?? null,
+    reversible: !!m.reversible, tombstoned: !!m.tombstoned,
+  };
+}
+
+export function mapPackInstall(d: InstallDTO | InstallResultDTO) {
+  const asDetail = d as InstallDTO;
+  const ws = (d as InstallDTO).workspaceId ?? (d as InstallResultDTO).workspace_id;
+  return {
+    __typename: "PackInstall" as const,
+    id: d.id,
+    pack: d.pack,
+    version: d.version,
+    workspaceId: ws,
+    status: d.status,
+    summary: d.summary ?? {},
+    createdBy: asDetail.createdBy ?? null,
+    createdAt: asDetail.createdAt ?? null,
+    plan: (asDetail.plan ?? []).map(mapPackPlanOp),
+    ledger: (d.ledger ?? []).map(mapPackLedgerRow),
+  };
+}
+
+export function mapPackInstallPlan(d: InstallPlanDTO) {
+  return {
+    __typename: "PackInstallPlan" as const,
+    pack: d.pack,
+    version: d.version,
+    workspaceId: d.workspace_id,
+    plan: (d.plan ?? []).map(mapPackPlanOp),
+  };
+}
+
+export function mapPackUninstall(d: UninstallResultDTO) {
+  return {
+    __typename: "PackUninstallResult" as const,
+    id: d.id, status: d.status, reversed: d.reversed, tombstoned: d.tombstoned,
   };
 }
 

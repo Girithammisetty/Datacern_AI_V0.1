@@ -4017,6 +4017,16 @@ export const typeDefs = gql`
     """The below-auto merge candidates a steward reviews for a run (four-eyes;
     GET /resolution-runs/{id}/merge-candidates). Needs dataset.entity.read."""
     mergeCandidates(runId: ID!, status: String): [MergeCandidate!]!
+
+    # ---- BRD 23: capability packs (pack-service) ------------------------------
+    """The capability-pack catalog (pack-service GET /packs). Needs pack.pack.read."""
+    packs: [Pack!]!
+    """One pack's manifest detail incl. its honest deferred-component reasons."""
+    pack(name: String!): Pack
+    """Pack installs into a workspace (GET /installs). Needs pack.install.read."""
+    packInstalls(workspaceId: String): [PackInstall!]!
+    """One install with its materialization ledger (GET /installs/{id})."""
+    packInstall(id: ID!): PackInstall
   }
 
   "One typed condition in a decision-table rule (BRD 54 DM-FR-010/051)."
@@ -4194,6 +4204,65 @@ export const typeDefs = gql`
     workspaceId: String
     attributes: [MaterializeAttributeInput!]!
   }
+
+  # ---- BRD 23: capability packs (pack-service) --------------------------------
+
+  "A component kind + how many of it a pack ships (e.g. dashboards × 3)."
+  type PackComponentCount { kind: String! count: Int! }
+  "A component a pack declares but Core can't materialize yet — never faked."
+  type PackDeferred { kind: String! reason: String! }
+  """A capability pack: one vertical solution (semantic model, dashboards, case
+   taxonomy, roles, agents, decision tables…) shipped as one installable bundle."""
+  type Pack {
+    name: String!
+    version: String!
+    description: String!
+    publisherName: String
+    categories: [String!]!
+    regulatory: [String!]!
+    components: [PackComponentCount!]!
+    deferredKinds: [String!]!
+    """Populated on the single-pack detail query: the honest per-kind deferral reasons."""
+    deferred: [PackDeferred!]!
+  }
+  "One operation in a dry-run install plan (create | exists | deferred)."
+  type PackPlanOp { kind: String! identity: String! name: String action: String! detail: String }
+  """One materialized object in the install ledger — origin-tagged so uninstall
+   reverses exactly what the pack created and nothing a user made."""
+  type PackLedgerRow {
+    id: ID!
+    kind: String!
+    identity: String!
+    targetUrn: String
+    targetId: String
+    origin: String!
+    action: String!
+    detail: String
+    reversible: Boolean!
+    tombstoned: Boolean!
+  }
+  "A governed install of a pack version into a workspace + its ledger."
+  type PackInstall {
+    id: ID!
+    pack: String!
+    version: String!
+    workspaceId: String!
+    status: String!
+    summary: JSON
+    createdBy: String
+    createdAt: String
+    plan: [PackPlanOp!]!
+    ledger: [PackLedgerRow!]!
+  }
+  "The dry-run plan for an install (no side effects)."
+  type PackInstallPlan {
+    pack: String!
+    version: String!
+    workspaceId: String!
+    plan: [PackPlanOp!]!
+  }
+  "Outcome of reversing an install (PKG-FR-025)."
+  type PackUninstallResult { id: ID! status: String! reversed: Int! tombstoned: Int! }
 
   type Mutation {
     """
@@ -5179,5 +5248,18 @@ export const typeDefs = gql`
     (golden records; POST /resolution-runs/{id}/materialize). It becomes a normal,
     semantic-bindable governed dataset. Needs dataset.entity.execute."""
     materializeResolvedEntities(runId: ID!, input: MaterializeResolvedInput!, idempotencyKey: String): MaterializeResolvedResult!
+
+    # ---- BRD 23: capability packs (pack-service) ------------------------------
+    """Dry-run: compute what installing a pack WOULD do (create | exists |
+    deferred) with no side effects. Needs pack.install.execute."""
+    planPackInstall(pack: String!, workspaceId: String!, version: String): PackInstallPlan!
+    """Install a pack into a workspace: materializes AS the caller (the JWT is
+    forwarded, so every Core write is authorized truthfully) + records the
+    origin-tagged ledger. Needs pack.install.execute."""
+    installPack(pack: String!, workspaceId: String!, version: String, idempotencyKey: String): PackInstall!
+    """Reverse a pack install (POST /installs/{id}/uninstall): delete objects
+    whose Core service exposes a revert verb, tombstone the rest honestly.
+    Needs pack.install.execute."""
+    uninstallPack(installId: ID!, idempotencyKey: String): PackUninstallResult!
   }
 `;

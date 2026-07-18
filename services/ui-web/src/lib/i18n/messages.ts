@@ -21,6 +21,7 @@ export const en = {
   "nav.pipelines": "Pipelines",
   "nav.semanticModels": "Semantic Models",
   "nav.entityResolution": "Entity Resolution",
+  "nav.packs": "Packs",
   "nav.ingestions": "Ingestions",
   "nav.queries": "Queries",
   "nav.mlEval": "Eval",

@@ -1661,6 +1661,64 @@ export interface MaterializeResolvedInput {
   attributes: MaterializeAttributeInput[];
 }
 
+// ---- BRD 23: capability packs (pack-service) -------------------------------
+export interface PackComponentCount { kind: string; count: number }
+export interface PackDeferred { kind: string; reason: string }
+export interface Pack {
+  name: string;
+  version: string;
+  description: string;
+  publisherName?: string | null;
+  categories: string[];
+  regulatory: string[];
+  components: PackComponentCount[];
+  deferredKinds: string[];
+  deferred?: PackDeferred[];
+}
+export interface PackPlanOp {
+  kind: string;
+  identity: string;
+  name?: string | null;
+  action: string;
+  detail?: string | null;
+}
+export interface PackLedgerRow {
+  id: string;
+  kind: string;
+  identity: string;
+  targetUrn?: string | null;
+  targetId?: string | null;
+  origin: string;
+  action: string;
+  detail?: string | null;
+  reversible: boolean;
+  tombstoned: boolean;
+}
+export interface PackInstall {
+  id: string;
+  pack: string;
+  version: string;
+  workspaceId: string;
+  status: string;
+  summary?: Record<string, number> | null;
+  createdBy?: string | null;
+  createdAt?: string | null;
+  plan?: PackPlanOp[];
+  ledger?: PackLedgerRow[];
+}
+export interface PackInstallPlan {
+  pack: string;
+  version: string;
+  workspaceId: string;
+  plan: PackPlanOp[];
+}
+export interface PackUninstallResult {
+  id: string;
+  status: string;
+  reversed: number;
+  tombstoned: number;
+}
+
 export interface CreateWritebackInput {
   connectionId: string;
   decisionKind: string;

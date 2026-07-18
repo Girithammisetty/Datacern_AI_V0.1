@@ -484,6 +484,78 @@ export function useMaterializeResolvedEntities() {
   });
 }
 
+// ---- BRD 23: capability packs (pack-service) -------------------------------
+
+export function usePacks() {
+  return useQuery({
+    queryKey: qk.packs(),
+    queryFn: () => graphqlRequest<ops.PacksResult>(ops.PACKS).then((r) => r.packs),
+  });
+}
+
+export function usePack(name: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.pack(name),
+    queryFn: () => graphqlRequest<ops.PackResult>(ops.PACK, { name }).then((r) => r.pack),
+    enabled: enabled && !!name,
+  });
+}
+
+export function usePackInstalls(workspaceId: string) {
+  return useQuery({
+    queryKey: qk.packInstalls(workspaceId),
+    queryFn: () =>
+      graphqlRequest<ops.PackInstallsResult>(ops.PACK_INSTALLS, { workspaceId }).then(
+        (r) => r.packInstalls,
+      ),
+    enabled: !!workspaceId,
+  });
+}
+
+export function usePackInstall(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.packInstall(id),
+    queryFn: () =>
+      graphqlRequest<ops.PackInstallResult>(ops.PACK_INSTALL, { id }).then((r) => r.packInstall),
+    enabled: enabled && !!id,
+  });
+}
+
+/** Dry-run: compute the install plan (create | exists | deferred), no side effects. */
+export function usePlanPackInstall() {
+  return useMutation({
+    mutationFn: (vars: { pack: string; workspaceId: string; version?: string }) =>
+      graphqlRequest<ops.PlanPackInstallResult>(ops.PLAN_PACK_INSTALL, vars).then(
+        (r) => r.planPackInstall,
+      ),
+  });
+}
+
+/** Execute an install; materializes AS the caller + records the ledger. */
+export function useInstallPack() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { pack: string; workspaceId: string; version?: string }) =>
+      graphqlRequest<ops.InstallPackResult>(ops.INSTALL_PACK, {
+        ...vars, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.installPack),
+    onSuccess: (_d, vars) =>
+      client.invalidateQueries({ queryKey: qk.packInstalls(vars.workspaceId) }),
+  });
+}
+
+/** Reverse an install (reversible deletes + honest tombstones). */
+export function useUninstallPack(workspaceId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (installId: string) =>
+      graphqlRequest<ops.UninstallPackResult>(ops.UNINSTALL_PACK, {
+        installId, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.uninstallPack),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.packInstalls(workspaceId) }),
+  });
+}
+
 /** Batch-run a decision table over a worklist. propose=false previews (dry-run,
  * no side effect); propose=true mints one governed proposal per matched case. */
 export function useBatchEvaluateDecisionModel() {

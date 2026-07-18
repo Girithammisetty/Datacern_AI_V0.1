@@ -51,6 +51,7 @@ import {
   mapDecisionModel, mapBatchEvaluate,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved,
+  mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall,
 } from "../schema/map.js";
 
 /** GraphQL ChartSourceInput (camel) -> chart-service source body (snake). */
@@ -1582,6 +1583,19 @@ export const resolvers = {
 
     mergeCandidates: (_p: unknown, a: { runId: string; status?: string }, ctx: GraphQLContext) =>
       ctx.clients.dataset.mergeCandidates(a.runId, a.status).then((rows) => rows.map(mapMergeCandidate)),
+
+    // ---- BRD 23: capability packs -------------------------------------------
+    packs: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      ctx.clients.pack.packs().then((rows) => rows.map(mapPack)),
+
+    pack: (_p: unknown, a: { name: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.pack.pack(a.name).then(mapPack)),
+
+    packInstalls: (_p: unknown, a: { workspaceId?: string }, ctx: GraphQLContext) =>
+      ctx.clients.pack.installs(a.workspaceId).then((rows) => rows.map(mapPackInstall)),
+
+    packInstall: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.pack.installDetail(a.id).then(mapPackInstall)),
   },
 
   Mutation: {
@@ -4481,6 +4495,21 @@ export const resolvers = {
       );
       return mapMaterializeResolved(d);
     },
+
+    // ---- BRD 23: capability packs -------------------------------------------
+    planPackInstall: async (
+      _p: unknown, a: { pack: string; workspaceId: string; version?: string }, ctx: GraphQLContext,
+    ) => mapPackInstallPlan(await ctx.clients.pack.plan(a.pack, a.workspaceId, a.version)),
+
+    installPack: async (
+      _p: unknown,
+      a: { pack: string; workspaceId: string; version?: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => mapPackInstall(await ctx.clients.pack.install(a.pack, a.workspaceId, a.version, a.idempotencyKey)),
+
+    uninstallPack: async (
+      _p: unknown, a: { installId: string; idempotencyKey?: string }, ctx: GraphQLContext,
+    ) => mapPackUninstall(await ctx.clients.pack.uninstall(a.installId, a.idempotencyKey)),
   },
 
   // ------------------------------------------------------------ field resolvers

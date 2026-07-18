@@ -34,6 +34,9 @@ export interface ServiceUrls {
   /** ai-gateway admin plane (providers/ladders/budgets/keys/guardrails).
    * Default matches the local harness port (deploy/e2e/config.env PORT_AIGW=8312). */
   aiGateway: string;
+  /** pack-service (BRD 23: capability-pack catalog + governed install lifecycle).
+   * Default matches the local harness port (deploy/e2e/config.env PORT_PACK=8309). */
+  pack: string;
 }
 
 export interface Limits {
@@ -124,6 +127,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     // eval-service (eval flywheel: suites/runs/gates/canaries/trends). Default
     // matches the local harness port (deploy/e2e/config.env PORT_EVAL=8324).
     eval: env("EVAL_URL", "http://localhost:8324")!,
+    pack: env("PACK_URL", "http://localhost:8309")!,
     // ai-gateway (LLM gateway admin plane). Default matches the local harness
     // port (deploy/e2e/config.env PORT_AIGW=8312).
     aiGateway: env("AI_GATEWAY_URL", "http://localhost:8312")!,

@@ -9,7 +9,7 @@
  * enforce every action. Fail-safe: a capability the client cannot confirm HIDES
  * the feature (absent capability → not shown).
  */
-import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties, Fingerprint } from "lucide-react";
+import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties, Fingerprint, Boxes } from "lucide-react";
 import type { MessageKey } from "@/lib/i18n/messages";
 
 /** The tenant-admin role short-circuits every action check (rbac BR-7). */
@@ -117,6 +117,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "pipelines", href: "/data/pipelines", icon: Workflow, label: "nav.pipelines", gate: cap("pipeline.template.read"), group: "data" },
   { key: "semanticModels", href: "/data/semantic-models", icon: LineChart, label: "nav.semanticModels", gate: cap("semantic.model.list"), group: "data" },
   { key: "entityResolution", href: "/data/entity-resolution", icon: Fingerprint, label: "nav.entityResolution", gate: cap("dataset.entity.read"), group: "data" },
+  { key: "packs", href: "/packs", icon: Boxes, label: "nav.packs", gate: cap("pack.pack.read"), group: "data" },
 
   // ── Machine Learning ──
   { key: "ml", href: "/ml", icon: FlaskConical, label: "nav.ml", gate: cap("experiment.experiment.read"), group: "ml" },
@@ -172,6 +173,8 @@ const ROUTE_RULES: RouteRule[] = [
   // Entity resolution (BRD 56) also sits under /data but needs the ER read cap.
   { prefix: "/data/entity-resolution", gate: cap("dataset.entity.read") },
   { prefix: "/data", gate: cap("dataset.dataset.list") },
+  // Capability packs (BRD 23): browse/install verticals.
+  { prefix: "/packs", gate: cap("pack.pack.read") },
   // Eval flywheel also sits under /ml but needs the eval capability, not the
   // experiment one — the longer prefix wins the longest-match resolution below.
   { prefix: "/ml/eval", gate: cap("eval.run.read") },
@@ -261,6 +264,10 @@ export const FEATURE_GATES = {
   /** BRD 56: open a four-eyes merge proposal on a candidate (agent-runtime
    * POST /entity-merges; the caller must hold dataset.entity.merge). */
   proposeEntityMerge: cap("dataset.entity.merge"),
+  /** BRD 23: browse the capability-pack catalog + installs. */
+  viewPacks: cap("pack.pack.read"),
+  /** BRD 23: install / uninstall a capability pack into a workspace. */
+  installPack: cap("pack.install.execute"),
   /** Archive/restore a dashboard (chart-service POST .../archive, PATCH .../restore
    * — both authorized as chart.dashboard.update, the canonical flag-flip verb). */
   archiveDashboard: cap("chart.dashboard.update"),
