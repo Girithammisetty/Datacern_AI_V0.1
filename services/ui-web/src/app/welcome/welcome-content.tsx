@@ -330,6 +330,7 @@ export default function WelcomeContent() {
 
   useEffect(() => {
     if (!auto) return;
+    // eslint-disable-next-line no-restricted-syntax -- decorative tab carousel on the pre-login marketing page; not data polling (UI-FR-012 targets SSE-vs-poll for live data)
     const t = setInterval(() => setTab((v) => (v + 1) % CAPS.length), 4200);
     return () => clearInterval(t);
   }, [auto]);
@@ -584,7 +585,7 @@ export default function WelcomeContent() {
               <ShieldCheck className="size-3.5" />
               Built for scrutiny
             </span>
-            <h2 className="mt-5 text-3xl font-bold tracking-tight">Governance isn't a feature. It's the foundation.</h2>
+            <h2 className="mt-5 text-3xl font-bold tracking-tight">Governance isn&apos;t a feature. It&apos;s the foundation.</h2>
             <p className="mt-3 max-w-2xl text-muted-foreground">
               The controls a regulated buyer needs are how the whole thing works — so security and
               compliance are on your side from day one.

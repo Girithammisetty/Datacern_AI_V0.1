@@ -1,5 +1,6 @@
 "use client";
 import { useMemo } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Database } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -63,7 +64,7 @@ export default function DataDatasetsPage() {
               <a href="/data/upload">Upload a file</a>
             </Button>
             <Button variant="ghost" size="sm" asChild>
-              <a href="/data/connections">Connect a data source</a>
+              <Link href="/data/connections">Connect a data source</Link>
             </Button>
           </div>
         }
@@ -97,7 +98,7 @@ export default function DataDatasetsPage() {
               <a href="/data/upload">Upload a file</a>
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <a href="/data/connections">Connect a data source</a>
+              <Link href="/data/connections">Connect a data source</Link>
             </Button>
           </div>
         }

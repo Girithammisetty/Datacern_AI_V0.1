@@ -4601,6 +4601,7 @@ export const resolvers = {
 
     // Evidence attachments (task #77). Resolved on demand (detail path only) —
     // one case-service call per case; the UI requests it only on the detail page.
+    // n1-safe: detail-path only; never resolved over a case list, so no fan-out.
     evidence: async (parent: { id: string }, _a: unknown, ctx: GraphQLContext) => {
       const rows = await ctx.clients.case.listEvidence(parent.id);
       return rows.map((e) => ({
