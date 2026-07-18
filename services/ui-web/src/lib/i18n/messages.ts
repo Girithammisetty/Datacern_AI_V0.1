@@ -20,6 +20,7 @@ export const en = {
   "nav.sources": "Data Sources",
   "nav.pipelines": "Pipelines",
   "nav.semanticModels": "Semantic Models",
+  "nav.entityResolution": "Entity Resolution",
   "nav.ingestions": "Ingestions",
   "nav.queries": "Queries",
   "nav.mlEval": "Eval",

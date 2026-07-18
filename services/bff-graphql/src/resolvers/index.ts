@@ -49,6 +49,8 @@ import {
   mapTool, mapToolVersion, mapToolHealth, mapTenantToolSettings, mapByoSubmission,
   mapAgentDefinition, mapAgentVersionInfo, mapTenantAgentConfig, mapAgentRunListItem,
   mapDecisionModel, mapBatchEvaluate,
+  mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
+  mapEntityMergeProposal, mapMaterializeResolved,
 } from "../schema/map.js";
 
 /** GraphQL ChartSourceInput (camel) -> chart-service source body (snake). */
@@ -1570,6 +1572,16 @@ export const resolvers = {
 
     decisionModelVersions: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       ctx.clients.agent.decisionModelVersions(a.id).then((rows) => rows.map(mapDecisionModel)),
+
+    // ---- BRD 56: entity resolution (steward surface) ------------------------
+    resolutionRuns: (_p: unknown, a: { datasetId: string; limit?: number }, ctx: GraphQLContext) =>
+      ctx.clients.dataset.resolutionRuns(a.datasetId, a.limit ?? 50).then((rows) => rows.map(mapResolutionRun)),
+
+    resolutionRun: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.dataset.resolutionRun(a.id).then(mapResolutionRunDetail)),
+
+    mergeCandidates: (_p: unknown, a: { runId: string; status?: string }, ctx: GraphQLContext) =>
+      ctx.clients.dataset.mergeCandidates(a.runId, a.status).then((rows) => rows.map(mapMergeCandidate)),
   },
 
   Mutation: {
@@ -4372,6 +4384,102 @@ export const resolvers = {
         a.idempotencyKey,
       );
       return mapDecisionModel(d);
+    },
+
+    // ---- BRD 56: entity resolution (steward surface) ------------------------
+    resolveEntities: async (
+      _p: unknown,
+      a: {
+        datasetId: string;
+        input: {
+          pkColumn: string;
+          config: {
+            entityType?: string;
+            deterministicKeys?: string[][];
+            scoringFields?: Array<{ column: string; weight?: number }>;
+            blockingFields?: string[];
+            autoMergeThreshold?: number;
+            reviewThreshold?: number;
+          };
+          rowLimit?: number;
+        };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const cfg = a.input.config;
+      const d = await ctx.clients.dataset.resolveEntities(
+        a.datasetId,
+        {
+          pk_column: a.input.pkColumn,
+          row_limit: a.input.rowLimit,
+          config: {
+            entity_type: cfg.entityType,
+            deterministic_keys: cfg.deterministicKeys ?? [],
+            scoring_fields: (cfg.scoringFields ?? []).map((f) => ({ column: f.column, weight: f.weight })),
+            blocking_fields: cfg.blockingFields ?? [],
+            auto_merge_threshold: cfg.autoMergeThreshold,
+            review_threshold: cfg.reviewThreshold,
+          },
+        },
+        a.idempotencyKey,
+      );
+      return mapResolveEntities(d);
+    },
+
+    proposeEntityMerge: async (
+      _p: unknown,
+      a: {
+        input: {
+          datasetId: string;
+          runId: string;
+          candidateId: string;
+          leftPk?: string;
+          rightPk?: string;
+          score?: number;
+          workspaceId?: string;
+          rationale?: string;
+        };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const i = a.input;
+      const d = await ctx.clients.agent.proposeEntityMerge(
+        {
+          dataset_id: i.datasetId,
+          run_id: i.runId,
+          candidate_id: i.candidateId,
+          left_pk: i.leftPk,
+          right_pk: i.rightPk,
+          score: i.score,
+          workspace_id: i.workspaceId,
+          rationale: i.rationale,
+        },
+        a.idempotencyKey,
+      );
+      return mapEntityMergeProposal(d);
+    },
+
+    materializeResolvedEntities: async (
+      _p: unknown,
+      a: {
+        runId: string;
+        input: { name?: string; workspaceId?: string; attributes: Array<{ column: string; agg?: string }> };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.dataset.materializeResolved(
+        a.runId,
+        {
+          name: a.input.name,
+          workspace_id: a.input.workspaceId,
+          attributes: a.input.attributes.map((at) => ({ column: at.column, agg: at.agg })),
+        },
+        a.idempotencyKey,
+      );
+      return mapMaterializeResolved(d);
     },
   },
 

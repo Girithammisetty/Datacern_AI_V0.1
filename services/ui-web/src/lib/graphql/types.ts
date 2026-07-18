@@ -1564,6 +1564,103 @@ export interface BatchEvaluateResult {
   results: BatchEvaluateRow[];
 }
 
+// ---- BRD 56: entity resolution (steward surface) ---------------------------
+export interface ResolutionRun {
+  runId: ID;
+  datasetId: ID;
+  configId?: string | null;
+  entityType: string;
+  recordCount: number;
+  resolvedEntityCount: number;
+  mergedClusterCount: number;
+  reviewCandidateCount: number;
+  status: string;
+  createdBy?: string | null;
+  createdAt?: string | null;
+}
+export interface ResolvedMember { memberPk: string; method?: string | null; evidence?: JSONValue }
+export interface ResolvedCluster {
+  resolvedEntityId: ID;
+  memberCount: number;
+  confidence?: number | null;
+  method?: string | null;
+  members: ResolvedMember[];
+}
+export interface ResolutionRunDetail extends ResolutionRun {
+  clusters: ResolvedCluster[];
+}
+export interface ResolveEntitiesResult {
+  datasetId: ID;
+  entityType: string;
+  recordCount: number;
+  resolvedEntityCount: number;
+  mergedClusterCount: number;
+  reviewCandidateCount: number;
+  runId?: string | null;
+  configId?: string | null;
+  configVersion?: number | null;
+}
+export interface MergeCandidate {
+  id: ID;
+  runId: ID;
+  datasetId: ID;
+  entityType: string;
+  leftPk: string;
+  rightPk: string;
+  score?: number | null;
+  evidence?: JSONValue;
+  status: string;
+  proposalId?: string | null;
+  decidedBy?: string | null;
+  decidedAt?: string | null;
+  createdAt?: string | null;
+}
+export interface EntityMergeProposal {
+  proposalId: ID;
+  status: string;
+  executed?: boolean | null;
+  runId?: string | null;
+}
+export interface MaterializeResolvedResult {
+  resolvedDatasetId: ID;
+  resolvedDatasetUrn: string;
+  name: string;
+  rowCount: number;
+  columns: string[];
+  versionNo: number;
+  icebergTable: string;
+}
+export interface ScoringFieldInput { column: string; weight?: number }
+export interface ResolutionConfigInput {
+  entityType?: string;
+  deterministicKeys?: string[][];
+  scoringFields?: ScoringFieldInput[];
+  blockingFields?: string[];
+  autoMergeThreshold?: number;
+  reviewThreshold?: number;
+}
+export interface ResolveEntitiesInput {
+  pkColumn: string;
+  config: ResolutionConfigInput;
+  rowLimit?: number;
+}
+export interface ProposeEntityMergeInput {
+  datasetId: string;
+  runId: string;
+  candidateId: string;
+  leftPk?: string;
+  rightPk?: string;
+  score?: number;
+  workspaceId?: string;
+  rationale?: string;
+}
+export interface MaterializeAttributeInput { column: string; agg?: string }
+export interface MaterializeResolvedInput {
+  name?: string;
+  workspaceId?: string;
+  attributes: MaterializeAttributeInput[];
+}
+
 export interface CreateWritebackInput {
   connectionId: string;
   decisionKind: string;

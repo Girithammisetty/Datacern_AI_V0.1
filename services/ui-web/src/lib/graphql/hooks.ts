@@ -25,6 +25,9 @@ import type {
   CreateConnectionInput,
   CreateWritebackInput,
   CreateDecisionModelInput,
+  ResolveEntitiesInput,
+  ProposeEntityMergeInput,
+  MaterializeResolvedInput,
   Writeback,
   CreateDashboardInput,
   CreateExperimentInput,
@@ -409,6 +412,75 @@ export function useNewDecisionModelVersion() {
         id: vars.id, input: vars.input, idempotencyKey: crypto.randomUUID(),
       }).then((r) => r.newDecisionModelVersion),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.decisionModels() }),
+  });
+}
+
+// ---- BRD 56: entity resolution (steward surface) ---------------------------
+
+/** Prior resolution runs for a dataset (newest first). */
+export function useResolutionRuns(datasetId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.resolutionRuns(datasetId),
+    queryFn: () => graphqlRequest<ops.ResolutionRunsResult>(
+      ops.RESOLUTION_RUNS, { datasetId, limit: 50 }).then((r) => r.resolutionRuns),
+    enabled: enabled && !!datasetId,
+  });
+}
+
+/** One run's resolved clusters + member lineage. */
+export function useResolutionRun(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.resolutionRun(id),
+    queryFn: () => graphqlRequest<ops.ResolutionRunResult>(
+      ops.RESOLUTION_RUN, { id }).then((r) => r.resolutionRun),
+    enabled: enabled && !!id,
+  });
+}
+
+/** The below-auto merge candidates a steward reviews for a run. */
+export function useMergeCandidates(runId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.mergeCandidates(runId),
+    queryFn: () => graphqlRequest<ops.MergeCandidatesResult>(
+      ops.MERGE_CANDIDATES, { runId }).then((r) => r.mergeCandidates),
+    enabled: enabled && !!runId,
+  });
+}
+
+/** Run + persist an entity-resolution run over a dataset. Link layer only. */
+export function useResolveEntities() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { datasetId: string; input: ResolveEntitiesInput }) =>
+      graphqlRequest<ops.ResolveEntitiesResultData>(ops.RESOLVE_ENTITIES, {
+        datasetId: vars.datasetId, input: vars.input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.resolveEntities),
+    onSuccess: (_d, vars) =>
+      client.invalidateQueries({ queryKey: qk.resolutionRuns(vars.datasetId) }),
+  });
+}
+
+/** Confirm a reviewed merge candidate by opening a four-eyes proposal. A
+ * DIFFERENT user approves it in the proposals inbox. */
+export function useProposeEntityMerge() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { input: ProposeEntityMergeInput }) =>
+      graphqlRequest<ops.ProposeEntityMergeResultData>(ops.PROPOSE_ENTITY_MERGE, {
+        input: vars.input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.proposeEntityMerge),
+    onSuccess: (_d, vars) =>
+      client.invalidateQueries({ queryKey: qk.mergeCandidates(vars.input.runId) }),
+  });
+}
+
+/** Materialize a run's resolved entities into a governed golden-record dataset. */
+export function useMaterializeResolvedEntities() {
+  return useMutation({
+    mutationFn: (vars: { runId: string; input: MaterializeResolvedInput }) =>
+      graphqlRequest<ops.MaterializeResolvedResultData>(ops.MATERIALIZE_RESOLVED, {
+        runId: vars.runId, input: vars.input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.materializeResolvedEntities),
   });
 }
 

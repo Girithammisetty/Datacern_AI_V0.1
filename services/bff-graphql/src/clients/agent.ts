@@ -233,6 +233,14 @@ export interface BatchEvaluateDTO {
   results: BatchEvaluateRowDTO[];
 }
 
+/** POST /entity-merges response (BRD 56) — the pending four-eyes proposal. */
+export interface EntityMergeProposalDTO {
+  proposal_id: string;
+  status: string;
+  executed?: boolean;
+  run_id?: string;
+}
+
 export class AgentClient {
   constructor(private readonly http: ServiceClient) {}
 
@@ -265,6 +273,30 @@ export class AgentClient {
       `/api/v1/proposals/${encodeURIComponent(id)}`,
     );
     return unwrap<ProposalDTO>(r);
+  }
+
+  /** POST /entity-merges (BRD 56) — open a four-eyes proposal to confirm a
+   * reviewed merge candidate. The caller must hold dataset.entity.merge; a
+   * DIFFERENT user approves via /proposals/{id}/decide. Returns the pending
+   * proposal ref. */
+  async proposeEntityMerge(
+    body: {
+      dataset_id: string;
+      run_id: string;
+      candidate_id: string;
+      left_pk?: string;
+      right_pk?: string;
+      score?: number;
+      workspace_id?: string;
+      rationale?: string;
+    },
+    idempotencyKey?: string,
+  ): Promise<EntityMergeProposalDTO> {
+    const r = await this.http.post<{ data: EntityMergeProposalDTO } | EntityMergeProposalDTO>(
+      "/api/v1/entity-merges",
+      { body, idempotencyKey },
+    );
+    return unwrap<EntityMergeProposalDTO>(r);
   }
 
   /** POST /proposals/{id}/decide — mutation passthrough (idempotent, first-wins). */

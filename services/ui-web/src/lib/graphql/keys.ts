@@ -20,6 +20,9 @@ export const qk = {
   decisionModels: () => ["data", "decisionModels"] as const,
   decisionModel: (id: string) => ["data", "decisionModel", id] as const,
   decisionModelVersions: (id: string) => ["data", "decisionModelVersions", id] as const,
+  resolutionRuns: (datasetId: string) => ["data", "resolutionRuns", datasetId] as const,
+  resolutionRun: (id: string) => ["data", "resolutionRun", id] as const,
+  mergeCandidates: (runId: string) => ["data", "mergeCandidates", runId] as const,
   upload: (id: string) => ["data", "upload", id] as const,
   datasetLineage: (urn: string, direction: string) => ["data", "lineage", urn, direction] as const,
 

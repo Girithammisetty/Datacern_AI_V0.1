@@ -4006,6 +4006,17 @@ export const typeDefs = gql`
     decisionModel(id: ID!): DecisionModel
     """Change log: every version of one logical table, newest first."""
     decisionModelVersions(id: ID!): [DecisionModel!]!
+
+    # ---- BRD 56: entity resolution (steward surface) --------------------------
+    """Prior entity-resolution runs for a dataset, newest first (dataset-service
+    GET /datasets/{id}/resolution-runs). Needs dataset.entity.read."""
+    resolutionRuns(datasetId: ID!, limit: Int = 50): [ResolutionRun!]!
+    """One resolution run with its resolved clusters + member lineage (AC-4;
+    GET /resolution-runs/{id}). Needs dataset.entity.read."""
+    resolutionRun(id: ID!): ResolutionRunDetail
+    """The below-auto merge candidates a steward reviews for a run (four-eyes;
+    GET /resolution-runs/{id}/merge-candidates). Needs dataset.entity.read."""
+    mergeCandidates(runId: ID!, status: String): [MergeCandidate!]!
   }
 
   "One typed condition in a decision-table rule (BRD 54 DM-FR-010/051)."
@@ -4062,6 +4073,126 @@ export const typeDefs = gql`
     proposed: Boolean!
     summary: BatchEvaluateSummary!
     results: [BatchEvaluateRow!]!
+  }
+
+  # ---- BRD 56: entity resolution (steward surface) --------------------------
+
+  """A persisted entity-resolution run header (link layer — the source of
+   record is never mutated, ER-FR-050)."""
+  type ResolutionRun {
+    runId: ID!
+    datasetId: ID!
+    configId: ID
+    entityType: String!
+    recordCount: Int!
+    resolvedEntityCount: Int!
+    mergedClusterCount: Int!
+    reviewCandidateCount: Int!
+    status: String!
+    createdBy: String
+    createdAt: String
+  }
+  "One member record folded into a resolved entity (lineage / audit, AC-4)."
+  type ResolvedMember { memberPk: String! method: String evidence: JSON }
+  "A resolved-entity cluster: the golden entity + the records that merged into it."
+  type ResolvedCluster {
+    resolvedEntityId: ID!
+    memberCount: Int!
+    confidence: Float
+    method: String
+    members: [ResolvedMember!]!
+  }
+  "A run plus its resolved clusters and member lineage."
+  type ResolutionRunDetail {
+    runId: ID!
+    datasetId: ID!
+    configId: ID
+    entityType: String!
+    recordCount: Int!
+    resolvedEntityCount: Int!
+    mergedClusterCount: Int!
+    reviewCandidateCount: Int!
+    status: String!
+    createdBy: String
+    createdAt: String
+    clusters: [ResolvedCluster!]!
+  }
+  "The outcome of running a resolution: run summary + the persisted run/config ids."
+  type ResolveEntitiesResult {
+    datasetId: ID!
+    entityType: String!
+    recordCount: Int!
+    resolvedEntityCount: Int!
+    mergedClusterCount: Int!
+    reviewCandidateCount: Int!
+    runId: ID
+    configId: ID
+    configVersion: Int
+  }
+  """A below-auto merge candidate a steward reviews. Confirming one opens a
+   four-eyes proposal (proposalId) a DIFFERENT user must approve."""
+  type MergeCandidate {
+    id: ID!
+    runId: ID!
+    datasetId: ID!
+    entityType: String!
+    leftPk: String!
+    rightPk: String!
+    score: Float
+    evidence: JSON
+    status: String!
+    proposalId: ID
+    decidedBy: String
+    decidedAt: String
+    createdAt: String
+  }
+  "The pending four-eyes proposal minted for a reviewed merge candidate."
+  type EntityMergeProposal {
+    proposalId: ID!
+    status: String!
+    executed: Boolean
+    runId: ID
+  }
+  "The governed resolved-entity dataset produced by materialization (golden records)."
+  type MaterializeResolvedResult {
+    resolvedDatasetId: ID!
+    resolvedDatasetUrn: String!
+    name: String!
+    rowCount: Int!
+    columns: [String!]!
+    versionNo: Int!
+    icebergTable: String!
+  }
+  input ScoringFieldInput { column: String! weight: Float = 1.0 }
+  "A resolution config the steward runs (deterministic keys + probabilistic scoring)."
+  input ResolutionConfigInput {
+    entityType: String = "entity"
+    deterministicKeys: [[String!]!]
+    scoringFields: [ScoringFieldInput!]
+    blockingFields: [String!]
+    autoMergeThreshold: Float = 0.85
+    reviewThreshold: Float = 0.60
+  }
+  input ResolveEntitiesInput {
+    pkColumn: String!
+    config: ResolutionConfigInput!
+    rowLimit: Int = 20000
+  }
+  input ProposeEntityMergeInput {
+    datasetId: ID!
+    runId: ID!
+    candidateId: ID!
+    leftPk: String
+    rightPk: String
+    score: Float
+    workspaceId: String
+    rationale: String
+  }
+  input MaterializeAttributeInput { column: String! agg: String = "first" }
+  input MaterializeResolvedInput {
+    name: String
+    workspaceId: String
+    attributes: [MaterializeAttributeInput!]!
   }
 
   type Mutation {
@@ -5034,5 +5165,19 @@ export const typeDefs = gql`
     """Edit a table as a new DRAFT version (POST /decision-models/{id}/versions);
     the prior version is never mutated. Needs case.disposition.create."""
     newDecisionModelVersion(id: ID!, input: CreateDecisionModelInput!, idempotencyKey: String): DecisionModel!
+
+    # ---- BRD 56: entity resolution (steward surface) --------------------------
+    """Run + persist an entity-resolution run over a dataset (dataset-service
+    POST /datasets/{id}/entity-resolution). Link layer only — the source of
+    record is never mutated. Needs dataset.entity.execute."""
+    resolveEntities(datasetId: ID!, input: ResolveEntitiesInput!, idempotencyKey: String): ResolveEntitiesResult!
+    """Confirm a reviewed merge candidate by opening a four-eyes proposal
+    (agent-runtime POST /entity-merges). The caller must hold dataset.entity.merge;
+    a DIFFERENT user approves it in the proposals inbox. Self-approval is blocked."""
+    proposeEntityMerge(input: ProposeEntityMergeInput!, idempotencyKey: String): EntityMergeProposal!
+    """Materialize a run's resolved entities into a governed derived dataset
+    (golden records; POST /resolution-runs/{id}/materialize). It becomes a normal,
+    semantic-bindable governed dataset. Needs dataset.entity.execute."""
+    materializeResolvedEntities(runId: ID!, input: MaterializeResolvedInput!, idempotencyKey: String): MaterializeResolvedResult!
   }
 `;

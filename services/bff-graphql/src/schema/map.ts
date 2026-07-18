@@ -3,6 +3,8 @@ import type { GraphQLContext } from "../context.js";
 import type {
   DatasetDTO, ProfileDTO, LineageDTO, DatasetVersionDTO, ProfileColumnDTO,
   DatasetConsumersDTO, SimilarDatasetDTO, ReprofileDTO,
+  ResolveEntitiesDTO, ResolutionRunDTO, ResolutionRunDetailDTO, MergeCandidateDTO,
+  MaterializeResolvedDTO,
 } from "../clients/dataset.js";
 import type {
   SavedQueryDTO, ExecutionDTO, ResultsDTO, SavedQueryVersionDTO, QueryStatDTO,
@@ -24,7 +26,7 @@ import type {
   // Tier 2b: agent-runtime catalog/registry.
   AgentDefinitionDTO, AgentVersionDTO, TenantAgentConfigDTO, AgentRunListItemDTO,
   // BRD 54 inc2: governed decision tables.
-  DecisionModelDTO, DecisionOutcomeDTO, BatchEvaluateDTO,
+  DecisionModelDTO, DecisionOutcomeDTO, BatchEvaluateDTO, EntityMergeProposalDTO,
 } from "../clients/agent.js";
 import type {
   ToolKillSwitchDTO,
@@ -2193,6 +2195,106 @@ export function mapBatchEvaluate(d: BatchEvaluateDTO) {
       proposalStatus: r.proposal_status ?? null,
       executed: r.executed ?? null,
     })),
+  };
+}
+
+// ---- BRD 56: entity resolution (steward surface) ----------------------------
+
+/** A persisted resolution run header. */
+export function mapResolutionRun(d: ResolutionRunDTO | ResolutionRunDetailDTO) {
+  return {
+    __typename: "ResolutionRun" as const,
+    runId: d.run_id,
+    datasetId: d.dataset_id,
+    configId: d.config_id ?? null,
+    entityType: d.entity_type,
+    recordCount: d.record_count,
+    resolvedEntityCount: d.resolved_entity_count,
+    mergedClusterCount: d.merged_cluster_count,
+    reviewCandidateCount: d.review_candidate_count,
+    status: d.status,
+    createdBy: d.created_by ?? null,
+    createdAt: d.created_at ?? null,
+  };
+}
+
+/** A run + its resolved clusters and member lineage (AC-4). */
+export function mapResolutionRunDetail(d: ResolutionRunDetailDTO) {
+  return {
+    ...mapResolutionRun(d),
+    __typename: "ResolutionRunDetail" as const,
+    clusters: (d.clusters ?? []).map((c) => ({
+      resolvedEntityId: c.resolved_entity_id,
+      memberCount: c.member_count,
+      confidence: c.confidence ?? null,
+      method: c.method ?? null,
+      members: (c.members ?? []).map((m) => ({
+        memberPk: m.member_pk,
+        method: m.method ?? null,
+        evidence: m.evidence ?? null,
+      })),
+    })),
+  };
+}
+
+/** The result of running a resolution (run summary + persisted ids). */
+export function mapResolveEntities(d: ResolveEntitiesDTO) {
+  return {
+    __typename: "ResolveEntitiesResult" as const,
+    datasetId: d.dataset_id,
+    entityType: d.entity_type,
+    recordCount: d.record_count,
+    resolvedEntityCount: d.resolved_entity_count,
+    mergedClusterCount: d.merged_cluster_count,
+    reviewCandidateCount: d.review_candidate_count,
+    runId: d.run_id ?? null,
+    configId: d.config_id ?? null,
+    configVersion: d.config_version ?? null,
+  };
+}
+
+/** A below-auto merge candidate a steward reviews (four-eyes). */
+export function mapMergeCandidate(d: MergeCandidateDTO) {
+  return {
+    __typename: "MergeCandidate" as const,
+    id: d.id,
+    runId: d.run_id,
+    datasetId: d.dataset_id,
+    entityType: d.entity_type,
+    leftPk: d.left_pk,
+    rightPk: d.right_pk,
+    score: d.score ?? null,
+    evidence: d.evidence ?? null,
+    status: d.status,
+    proposalId: d.proposal_id ?? null,
+    decidedBy: d.decided_by ?? null,
+    decidedAt: d.decided_at ?? null,
+    createdAt: d.created_at ?? null,
+  };
+}
+
+/** The pending four-eyes proposal minted for a reviewed merge candidate. */
+export function mapEntityMergeProposal(d: EntityMergeProposalDTO) {
+  return {
+    __typename: "EntityMergeProposal" as const,
+    proposalId: d.proposal_id,
+    status: d.status,
+    executed: d.executed ?? null,
+    runId: d.run_id ?? null,
+  };
+}
+
+/** The governed resolved-entity dataset produced by materialization. */
+export function mapMaterializeResolved(d: MaterializeResolvedDTO) {
+  return {
+    __typename: "MaterializeResolvedResult" as const,
+    resolvedDatasetId: d.resolved_dataset_id,
+    resolvedDatasetUrn: d.resolved_dataset_urn,
+    name: d.name,
+    rowCount: d.row_count,
+    columns: d.columns ?? [],
+    versionNo: d.version_no,
+    icebergTable: d.iceberg_table,
   };
 }
 

@@ -9,7 +9,7 @@
  * enforce every action. Fail-safe: a capability the client cannot confirm HIDES
  * the feature (absent capability → not shown).
  */
-import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties } from "lucide-react";
+import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties, Fingerprint } from "lucide-react";
 import type { MessageKey } from "@/lib/i18n/messages";
 
 /** The tenant-admin role short-circuits every action check (rbac BR-7). */
@@ -116,6 +116,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "queries", href: "/data/queries", icon: Terminal, label: "nav.queries", gate: cap("query.query.read"), group: "data" },
   { key: "pipelines", href: "/data/pipelines", icon: Workflow, label: "nav.pipelines", gate: cap("pipeline.template.read"), group: "data" },
   { key: "semanticModels", href: "/data/semantic-models", icon: LineChart, label: "nav.semanticModels", gate: cap("semantic.model.list"), group: "data" },
+  { key: "entityResolution", href: "/data/entity-resolution", icon: Fingerprint, label: "nav.entityResolution", gate: cap("dataset.entity.read"), group: "data" },
 
   // ── Machine Learning ──
   { key: "ml", href: "/ml", icon: FlaskConical, label: "nav.ml", gate: cap("experiment.experiment.read"), group: "ml" },
@@ -168,6 +169,8 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/data/pipelines", gate: cap("pipeline.template.read") },
   // Semantic models also sit under /data but need the semantic capability.
   { prefix: "/data/semantic-models", gate: cap("semantic.model.list") },
+  // Entity resolution (BRD 56) also sits under /data but needs the ER read cap.
+  { prefix: "/data/entity-resolution", gate: cap("dataset.entity.read") },
   { prefix: "/data", gate: cap("dataset.dataset.list") },
   // Eval flywheel also sits under /ml but needs the eval capability, not the
   // experiment one — the longer prefix wins the longest-match resolution below.
@@ -249,6 +252,15 @@ export const FEATURE_GATES = {
   restoreDataset: cap("dataset.dataset.update"),
   /** Edit a dataset's name/description (dataset-service PATCH /datasets/{id}). */
   editDataset: cap("dataset.dataset.update"),
+  /** BRD 56: read entity-resolution runs / clusters / merge candidates
+   * (dataset-service GET resolution-runs endpoints). */
+  viewEntityResolution: cap("dataset.entity.read"),
+  /** BRD 56: run a resolution + materialize the golden-record dataset
+   * (dataset-service POST entity-resolution / materialize). */
+  runEntityResolution: cap("dataset.entity.execute"),
+  /** BRD 56: open a four-eyes merge proposal on a candidate (agent-runtime
+   * POST /entity-merges; the caller must hold dataset.entity.merge). */
+  proposeEntityMerge: cap("dataset.entity.merge"),
   /** Archive/restore a dashboard (chart-service POST .../archive, PATCH .../restore
    * — both authorized as chart.dashboard.update, the canonical flag-flip verb). */
   archiveDashboard: cap("chart.dashboard.update"),

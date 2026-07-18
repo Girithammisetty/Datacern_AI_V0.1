@@ -134,6 +134,12 @@ import type {
   DecisionModel,
   CreateDecisionModelInput,
   BatchEvaluateResult,
+  ResolutionRun,
+  ResolutionRunDetail,
+  MergeCandidate,
+  ResolveEntitiesResult,
+  EntityMergeProposal,
+  MaterializeResolvedResult,
   DatasetColumn,
   SemanticModelSummary,
   SemanticModelVersion,
@@ -444,6 +450,70 @@ export const NEW_DECISION_MODEL_VERSION = /* GraphQL */ `
   }
 `;
 export interface NewDecisionModelVersionResult { newDecisionModelVersion: DecisionModel }
+
+// ---- BRD 56: entity resolution (steward surface) ---------------------------
+const RESOLUTION_RUN_FIELDS = /* GraphQL */ `
+  runId datasetId configId entityType recordCount resolvedEntityCount
+  mergedClusterCount reviewCandidateCount status createdBy createdAt
+`;
+
+export const RESOLUTION_RUNS = /* GraphQL */ `
+  query ResolutionRuns($datasetId: ID!, $limit: Int) {
+    resolutionRuns(datasetId: $datasetId, limit: $limit) { ${RESOLUTION_RUN_FIELDS} }
+  }
+`;
+export interface ResolutionRunsResult { resolutionRuns: ResolutionRun[] }
+
+export const RESOLUTION_RUN = /* GraphQL */ `
+  query ResolutionRunDetail($id: ID!) {
+    resolutionRun(id: $id) {
+      ${RESOLUTION_RUN_FIELDS}
+      clusters {
+        resolvedEntityId memberCount confidence method
+        members { memberPk method evidence }
+      }
+    }
+  }
+`;
+export interface ResolutionRunResult { resolutionRun: ResolutionRunDetail | null }
+
+export const MERGE_CANDIDATES = /* GraphQL */ `
+  query MergeCandidates($runId: ID!, $status: String) {
+    mergeCandidates(runId: $runId, status: $status) {
+      id runId datasetId entityType leftPk rightPk score evidence status
+      proposalId decidedBy decidedAt createdAt
+    }
+  }
+`;
+export interface MergeCandidatesResult { mergeCandidates: MergeCandidate[] }
+
+export const RESOLVE_ENTITIES = /* GraphQL */ `
+  mutation ResolveEntities($datasetId: ID!, $input: ResolveEntitiesInput!, $idempotencyKey: String!) {
+    resolveEntities(datasetId: $datasetId, input: $input, idempotencyKey: $idempotencyKey) {
+      datasetId entityType recordCount resolvedEntityCount mergedClusterCount
+      reviewCandidateCount runId configId configVersion
+    }
+  }
+`;
+export interface ResolveEntitiesResultData { resolveEntities: ResolveEntitiesResult }
+
+export const PROPOSE_ENTITY_MERGE = /* GraphQL */ `
+  mutation ProposeEntityMerge($input: ProposeEntityMergeInput!, $idempotencyKey: String!) {
+    proposeEntityMerge(input: $input, idempotencyKey: $idempotencyKey) {
+      proposalId status executed runId
+    }
+  }
+`;
+export interface ProposeEntityMergeResultData { proposeEntityMerge: EntityMergeProposal }
+
+export const MATERIALIZE_RESOLVED = /* GraphQL */ `
+  mutation MaterializeResolvedEntities($runId: ID!, $input: MaterializeResolvedInput!, $idempotencyKey: String!) {
+    materializeResolvedEntities(runId: $runId, input: $input, idempotencyKey: $idempotencyKey) {
+      resolvedDatasetId resolvedDatasetUrn name rowCount columns versionNo icebergTable
+    }
+  }
+`;
+export interface MaterializeResolvedResultData { materializeResolvedEntities: MaterializeResolvedResult }
 
 export const DELETE_CONNECTION = /* GraphQL */ `
   mutation DeleteConnection($id: ID!) {

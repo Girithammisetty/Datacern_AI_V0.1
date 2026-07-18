@@ -140,8 +140,169 @@ export interface LineageDTO {
   truncated?: boolean;
 }
 
+// ---- BRD 56: entity resolution (steward surface) ----------------------------
+
+/** One weighted scoring field in a resolution config. */
+export interface ScoringFieldDTO {
+  column: string;
+  weight?: number;
+}
+
+/** Resolution config the steward runs (dataset-service ResolutionConfigIn). */
+export interface ResolutionConfigDTO {
+  entity_type?: string;
+  deterministic_keys?: string[][];
+  scoring_fields?: ScoringFieldDTO[];
+  blocking_fields?: string[];
+  auto_merge_threshold?: number;
+  review_threshold?: number;
+}
+
+/** POST /datasets/{id}/entity-resolution response (persist=true). Carries the
+ * run summary + the persisted run/config ids so the UI can drill into the
+ * stored views. */
+export interface ResolveEntitiesDTO {
+  dataset_id: string;
+  entity_type: string;
+  record_count: number;
+  resolved_entity_count: number;
+  merged_cluster_count: number;
+  review_candidate_count: number;
+  run_id?: string;
+  config_id?: string;
+  config_version?: number;
+}
+
+/** A persisted resolution run header (GET /datasets/{id}/resolution-runs). */
+export interface ResolutionRunDTO {
+  run_id: string;
+  dataset_id: string;
+  config_id?: string | null;
+  entity_type: string;
+  record_count: number;
+  resolved_entity_count: number;
+  merged_cluster_count: number;
+  review_candidate_count: number;
+  status: string;
+  created_by?: string | null;
+  created_at?: string | null;
+}
+
+/** One member record folded into a resolved entity (lineage, AC-4). */
+export interface ResolvedMemberDTO {
+  member_pk: string;
+  method?: string | null;
+  evidence?: unknown;
+}
+
+/** A resolved-entity cluster + its member lineage (GET /resolution-runs/{id}). */
+export interface ResolvedClusterDTO {
+  resolved_entity_id: string;
+  member_count: number;
+  confidence?: number | null;
+  method?: string | null;
+  members?: ResolvedMemberDTO[];
+}
+
+export interface ResolutionRunDetailDTO extends ResolutionRunDTO {
+  clusters?: ResolvedClusterDTO[];
+}
+
+/** A below-auto merge candidate a steward reviews (GET /resolution-runs/{id}/merge-candidates). */
+export interface MergeCandidateDTO {
+  id: string;
+  run_id: string;
+  dataset_id: string;
+  entity_type: string;
+  left_pk: string;
+  right_pk: string;
+  score?: number | null;
+  evidence?: unknown;
+  status: string;
+  proposal_id?: string | null;
+  decided_by?: string | null;
+  decided_at?: string | null;
+  created_at?: string | null;
+}
+
+/** One golden-record attribute rollup for materialization. */
+export interface MaterializeAttributeDTO {
+  column: string;
+  agg?: string;
+}
+
+/** POST /resolution-runs/{id}/materialize response. */
+export interface MaterializeResolvedDTO {
+  resolved_dataset_id: string;
+  resolved_dataset_urn: string;
+  name: string;
+  row_count: number;
+  columns: string[];
+  version_no: number;
+  iceberg_table: string;
+}
+
 export class DatasetClient {
   constructor(private readonly http: ServiceClient) {}
+
+  // ---- BRD 56: entity resolution ------------------------------------------
+
+  /** POST /datasets/{id}/entity-resolution — run + persist a resolution run
+   * (needs dataset.entity.execute). Link layer only; never mutates the source. */
+  async resolveEntities(
+    datasetId: string,
+    body: { pk_column: string; config: ResolutionConfigDTO; row_limit?: number },
+    idempotencyKey?: string,
+  ): Promise<ResolveEntitiesDTO> {
+    const r = await this.http.post<{ data: ResolveEntitiesDTO } | ResolveEntitiesDTO>(
+      `/api/v1/datasets/${encodeURIComponent(datasetId)}/entity-resolution`,
+      { body: { ...body, persist: true }, idempotencyKey },
+    );
+    return unwrap<ResolveEntitiesDTO>(r);
+  }
+
+  /** GET /datasets/{id}/resolution-runs — prior runs, newest first (needs
+   * dataset.entity.read). */
+  async resolutionRuns(datasetId: string, limit = 50): Promise<ResolutionRunDTO[]> {
+    const r = await this.http.get<{ data: ResolutionRunDTO[] }>(
+      `/api/v1/datasets/${encodeURIComponent(datasetId)}/resolution-runs`,
+      { query: { limit } },
+    );
+    return r.data ?? [];
+  }
+
+  /** GET /resolution-runs/{id} — a run's resolved clusters + member lineage
+   * (needs dataset.entity.read). */
+  async resolutionRun(runId: string): Promise<ResolutionRunDetailDTO> {
+    const r = await this.http.get<{ data: ResolutionRunDetailDTO } | ResolutionRunDetailDTO>(
+      `/api/v1/resolution-runs/${encodeURIComponent(runId)}`,
+    );
+    return unwrap<ResolutionRunDetailDTO>(r);
+  }
+
+  /** GET /resolution-runs/{id}/merge-candidates — the review queue for a run
+   * (needs dataset.entity.read). */
+  async mergeCandidates(runId: string, status?: string): Promise<MergeCandidateDTO[]> {
+    const r = await this.http.get<{ data: MergeCandidateDTO[] }>(
+      `/api/v1/resolution-runs/${encodeURIComponent(runId)}/merge-candidates`,
+      { query: status ? { status } : undefined },
+    );
+    return r.data ?? [];
+  }
+
+  /** POST /resolution-runs/{id}/materialize — build the governed resolved-entity
+   * dataset (golden records). Needs dataset.entity.execute. */
+  async materializeResolved(
+    runId: string,
+    body: { name?: string; workspace_id?: string; attributes: MaterializeAttributeDTO[] },
+    idempotencyKey?: string,
+  ): Promise<MaterializeResolvedDTO> {
+    const r = await this.http.post<{ data: MaterializeResolvedDTO } | MaterializeResolvedDTO>(
+      `/api/v1/resolution-runs/${encodeURIComponent(runId)}/materialize`,
+      { body, idempotencyKey },
+    );
+    return unwrap<MaterializeResolvedDTO>(r);
+  }
 
   async dataset(id: string): Promise<DatasetDTO> {
     const r = await this.http.get<{ data: DatasetDTO } | DatasetDTO>(
