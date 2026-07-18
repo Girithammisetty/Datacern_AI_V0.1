@@ -88,3 +88,35 @@ async def list_merge_candidates(
     c = request.app.state.container
     cands = await c.dataset_service.list_merge_candidates(principal.tenant_id, run_id, status)
     return {"data": cands}
+
+
+class AttributeIn(BaseModel):
+    column: str
+    # first | sum | max | min | avg | count_distinct  (default first)
+    agg: str = "first"
+
+
+class MaterializeRequest(BaseModel):
+    name: str | None = None
+    attributes: list[AttributeIn] = Field(default_factory=list)
+    workspace_id: str | None = None
+
+
+@router.post("/resolution-runs/{run_id}/materialize")
+async def materialize_resolved_entities(
+    request: Request,
+    run_id: str,
+    body: MaterializeRequest,
+    principal: Principal = Depends(require("dataset.entity.execute")),
+):
+    """ER-FR-020 / AC-2: materialize a run's resolved entities into a governed
+    derived warehouse dataset (one golden row per resolved entity + golden-record
+    attribute columns) that decision models, packs and dashboards can read."""
+    c = request.app.state.container
+    ctx = principal.ctx()
+    ctx.tenant_id = principal.tenant_id
+    result = await c.dataset_service.materialize_resolved_entities(
+        ctx, run_id, name=body.name,
+        attributes=[a.model_dump() for a in body.attributes],
+        workspace_id=body.workspace_id or principal.workspace_id)
+    return {"data": result}

@@ -157,6 +157,14 @@ class SqlVersionRepo:
         row = await self.s.get(ModelVersionRow, version_id)
         return _to_entity(row, _VERSION_FIELDS, ModelVersion) if row else None
 
+    async def version_nos_by_id(self, version_ids: list[str]) -> dict[str, int]:
+        if not version_ids:
+            return {}
+        stmt = select(ModelVersionRow.id, ModelVersionRow.version_no).where(
+            ModelVersionRow.id.in_(version_ids))
+        rows = (await self.s.execute(stmt)).all()
+        return {r.id: r.version_no for r in rows}
+
     async def latest(self, model_id: str) -> ModelVersion | None:
         stmt = (select(ModelVersionRow)
                 .where(ModelVersionRow.model_id == model_id)

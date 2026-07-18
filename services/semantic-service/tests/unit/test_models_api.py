@@ -14,6 +14,22 @@ from tests.conftest import (
 )
 
 
+async def test_list_reports_published_version_no(client):
+    """Regression: the models LIST payload must carry published_version_no like
+    the detail endpoint does — otherwise the UI mislabels published models
+    'Not yet published'."""
+    published = await create_published_model(client, name="published_one")
+    await create_model(client, name="draft_only", definition={})
+
+    resp = await client.get("/api/v1/models?limit=50", headers=auth())
+    assert resp.status_code == 200
+    by_id = {m["id"]: m for m in resp.json()["data"]}
+    assert by_id[published["id"]]["published_version_no"] == 1
+    # a model with no published version still reports null (not mislabeled)
+    draft = next(m for m in resp.json()["data"] if m["name"] == "draft_only")
+    assert draft["published_version_no"] is None
+
+
 async def test_create_and_get_model(client):
     model = await create_model(client)
     assert model["name"] == "sales"

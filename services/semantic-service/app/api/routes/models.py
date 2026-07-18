@@ -65,10 +65,11 @@ async def list_models(
     cursor: str | None = None,
 ):
     c = _c(request)
-    page = await c.model_service.list(
+    page, published_nos = await c.model_service.list(
         principal.ctx(request.state.trace_id), workspace_id, limit, cursor)
-    return page_envelope([model_payload(m) for m in page.items],
-                         page.next_cursor, page.has_more)
+    return page_envelope(
+        [model_payload(m, published_nos.get(m.id)) for m in page.items],
+        page.next_cursor, page.has_more)
 
 
 @router.get("/models/{model_id}")

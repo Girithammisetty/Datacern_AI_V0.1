@@ -119,6 +119,14 @@ class MemoryVersionRepo:
     async def get_by_id(self, version_id: str) -> ModelVersion | None:
         return _copy(self._mine(self.state.versions.get(version_id)))
 
+    async def version_nos_by_id(self, version_ids: list[str]) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for vid in version_ids:
+            v = self._mine(self.state.versions.get(vid))
+            if v is not None:
+                out[vid] = v.version_no
+        return out
+
     async def latest(self, model_id: str) -> ModelVersion | None:
         mine = [v for v in self.state.versions.values()
                 if self._mine(v) and v.model_id == model_id]

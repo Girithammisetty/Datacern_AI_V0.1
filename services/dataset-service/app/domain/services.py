@@ -84,6 +84,9 @@ class ServiceDeps:
     object_store: ObjectStore
     search_index: SearchIndex
     runner_provider: Callable[[], ProfilerRunner] = field(default=lambda: None)  # set by wiring
+    # BRD 56 inc3: real Iceberg table writer used to materialize the governed
+    # resolved-entity view as a derived warehouse dataset. None in the unit tier.
+    iceberg_writer: object | None = None
 
 
 class _Base:
@@ -511,6 +514,100 @@ class DatasetService(_Base):
             if c is None:
                 raise NotFound(f"merge candidate {candidate_id} not found")
         return _candidate_to_dict(c)
+
+    async def materialize_resolved_entities(
+        self, ctx: CallCtx, run_id: str, *, name: str | None = None,
+        attributes: list[dict] | None = None, workspace_id: str | None = None,
+    ) -> dict:
+        """ER-FR-020 / AC-2: materialize a persisted resolution run's resolved
+        entities into a GOVERNED derived warehouse dataset (``resolved_<type>``)
+        so decision models (BRD 54), packs, agents and dashboards can read
+        resolved-entity attributes as governed columns under RLS. One golden row
+        per resolved entity (id + member_count + confidence + method + configured
+        golden-record attribute columns). A link/view layer — the source of
+        record is never mutated (ER-FR-050)."""
+        from app.domain.entity_resolution import build_golden_records
+
+        if self.deps.iceberg_writer is None:
+            raise ValidationFailed(
+                "resolved-entity materialization requires the warehouse writer "
+                "(iceberg_rest catalog); not available in this deployment")
+        tenant_id = ctx.tenant_id
+        async with self.uow(tenant_id) as uow:
+            run = await uow.entity_resolution.get_run(run_id)
+            if run is None:
+                raise NotFound(f"resolution run {run_id} not found")
+            config = await uow.entity_resolution.get_config(run.config_id)
+            entities = await uow.entity_resolution.list_resolved_entities(run_id)
+            members = await uow.entity_resolution.list_members(run_id)
+        if not entities:
+            raise ValidationFailed("run has no resolved entities to materialize")
+        pk_column = config.pk_column if config else "id"
+
+        # Source attribute values, keyed by the pk that clustering used.
+        src_cols, src_rows = await self.read_rows(tenant_id, run.dataset_id)
+        attrs = attributes or []
+        unknown = [a["column"] for a in attrs if a.get("column") not in src_cols]
+        if unknown:
+            raise ValidationFailed(f"unknown attribute column(s): {', '.join(unknown)}")
+        rows_by_pk = {str(r.get(pk_column)): r for r in src_rows if r.get(pk_column) is not None}
+        members_by_entity: dict[str, list[str]] = {}
+        for m in members:
+            members_by_entity.setdefault(m.resolved_entity_id, []).append(m.member_pk)
+
+        columns, grid = build_golden_records(
+            [{"resolved_entity_id": e.resolved_entity_id, "member_count": e.member_count,
+              "confidence": e.confidence, "method": e.method} for e in entities],
+            members_by_entity, rows_by_pk, attrs)
+
+        # Create the governed derived dataset (RLS by tenant), then WRITE its rows
+        # to a real Iceberg table and register the immutable version so it is a
+        # first-class, queryable, semantic-bindable dataset.
+        ds_name = (name or f"resolved_{run.entity_type}").strip()[:120]
+        ws = workspace_id or getattr(ctx, "workspace_id", None)
+        create_payload = {
+            "workspace_id": ws, "name": ds_name,
+            "description": (f"Governed resolved-entity view for '{run.entity_type}' "
+                            f"(resolution run {run_id}): one row per resolved entity."),
+            "tags": ["entity-resolution", "resolved-entity", run.entity_type],
+            "custom_metadata": {"resolution_run_id": run_id, "entity_type": run.entity_type,
+                                "source_dataset_id": run.dataset_id},
+        }
+        dataset = await self.create(ctx, create_payload)
+
+        from windrose_common.iceberg import RowBatch
+
+        async def _batches():
+            yield RowBatch(columns=columns, rows=grid)
+
+        summary = {"columns": columns, "ingestion_id": run_id,
+                   "source": f"entity-resolution:{run_id}"}
+        staged = await self.deps.iceberg_writer.stage(dataset.iceberg_table, _batches(), summary)
+        result = await self.deps.iceberg_writer.commit(staged)
+
+        schema = {c: {"type": "string"} for c in columns}
+        version = await VersionService(self.deps).register(ctx, dataset.id, {
+            "iceberg_snapshot_id": result.snapshot_id, "schema": schema,
+            "row_count": result.rows_appended, "bytes": result.bytes_written,
+            "produced_by_urn": f"wr:{tenant_id}:dataset:resolution_run/{run_id}",
+            "skip_profiling": True})
+
+        async with self.uow(tenant_id) as uow:
+            await self._emit(
+                uow, ctx, "dataset.entity_resolution.materialized",
+                dataset_urn(tenant_id, dataset.id),
+                {"run_id": run_id, "entity_type": run.entity_type,
+                 "resolved_dataset_id": dataset.id, "row_count": result.rows_appended,
+                 "columns": columns})
+            await uow.commit()
+
+        return {
+            "resolved_dataset_id": dataset.id,
+            "resolved_dataset_urn": dataset_urn(tenant_id, dataset.id),
+            "name": ds_name, "row_count": result.rows_appended,
+            "columns": columns, "version_no": version.version_no,
+            "iceberg_table": dataset.iceberg_table,
+        }
 
     async def link_merge_proposal(self, tenant_id: str, candidate_id: str,
                                   proposal_id: str) -> None:

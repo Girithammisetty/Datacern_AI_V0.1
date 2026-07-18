@@ -201,9 +201,20 @@ class ModelService(_Base):
             return model, version
 
     async def list(self, ctx: CallCtx, workspace_id: str | None, limit: int,
-                   cursor: str | None) -> Page:
+                   cursor: str | None) -> tuple[Page, dict[str, int]]:
+        """Returns the page plus {model_id: published_version_no} so the list
+        payload can label published models correctly (batch, no N+1)."""
         async with self.uow(ctx.tenant_id) as uow:
-            return await uow.models.list(workspace_id, limit, cursor)
+            page = await uow.models.list(workspace_id, limit, cursor)
+            pub_ids = [m.published_version_id for m in page.items
+                       if m.published_version_id]
+            nos_by_version = await uow.versions.version_nos_by_id(pub_ids)
+            published_nos = {
+                m.id: nos_by_version[m.published_version_id]
+                for m in page.items
+                if m.published_version_id in nos_by_version
+            }
+            return page, published_nos
 
     async def get(self, ctx: CallCtx, model_id: str) -> tuple[SemanticModel, int | None]:
         async with self.uow(ctx.tenant_id) as uow:

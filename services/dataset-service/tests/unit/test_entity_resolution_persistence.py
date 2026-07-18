@@ -133,3 +133,97 @@ async def test_run_emits_audit_event(svc, container):
     out = await _resolve(svc)
     events = container.memory_state.events_of_type("dataset.entity_resolution.run")
     assert any(e["payload"].get("run_id") == out["run_id"] for e in events)
+
+
+# ---- inc3: golden-record rollup + governed resolved-entity view -------------
+
+from types import SimpleNamespace  # noqa: E402
+
+from app.domain.entity_resolution import build_golden_records  # noqa: E402
+
+
+def test_build_golden_records_first_and_numeric_aggs():
+    cols, rows = build_golden_records(
+        [{"resolved_entity_id": "e1", "member_count": 3, "confidence": 0.9,
+          "method": "probabilistic"}],
+        {"e1": ["r3", "r1", "r2"]},
+        {"r1": {"name": "", "amt": "100"}, "r2": {"name": "Acme", "amt": "50"},
+         "r3": {"name": "Acme Corp", "amt": "bad"}},
+        [{"column": "name", "agg": "first"}, {"column": "amt", "agg": "sum"},
+         {"column": "amt", "agg": "max"}])
+    assert cols == ["resolved_entity_id", "member_count", "confidence", "method",
+                    "name", "amt", "amt"]
+    # first non-empty by SORTED member pk (r1 empty -> r2 "Acme"); sum ignores "bad"
+    assert rows[0] == ["e1", "3", "0.9", "probabilistic", "Acme", "150", "100"]
+
+
+def test_build_golden_records_count_distinct_and_empty():
+    cols, rows = build_golden_records(
+        [{"resolved_entity_id": "e1", "member_count": 2, "confidence": 1.0,
+          "method": "deterministic"}],
+        {"e1": ["a", "b"]},
+        {"a": {"policy": "P1"}, "b": {"policy": "P1"}},
+        [{"column": "policy", "agg": "count_distinct"}, {"column": "missing", "agg": "first"}])
+    assert rows[0] == ["e1", "2", "1.0", "deterministic", "1", ""]
+
+
+class _FakeWriter:
+    def __init__(self):
+        self.staged = None
+
+    async def stage(self, table, batches, summary):
+        cols, rows = [], []
+        async for b in batches:
+            cols = b.columns
+            rows += b.rows
+        self.staged = {"table": table, "columns": cols, "rows": rows, "summary": summary}
+        return SimpleNamespace(table=table, columns=cols, rows=len(rows),
+                               bytes_written=len(rows) * 8, summary=summary,
+                               staging_token="t", path="/tmp/x")
+
+    async def commit(self, staged):
+        return SimpleNamespace(snapshot_id=987654321, rows_appended=len(self.staged["rows"]),
+                               bytes_written=8)
+
+
+async def _fake_register(self, ctx, dataset_id, payload):
+    _fake_register.calls.append({"dataset_id": dataset_id, **payload})
+    return SimpleNamespace(version_no=1)
+
+
+_fake_register.calls = []
+
+
+async def test_materialize_creates_governed_resolved_dataset(svc, container, monkeypatch):
+    out = await _resolve(svc)  # merged cluster r1+r2 (shared national_id) + r3/r4/r5
+    writer = _FakeWriter()
+    container.dataset_service.deps.iceberg_writer = writer
+    _fake_register.calls.clear()
+    monkeypatch.setattr("app.domain.services.VersionService.register", _fake_register)
+
+    res = await container.dataset_service.materialize_resolved_entities(
+        _ctx(), out["run_id"], name="resolved_person",
+        attributes=[{"column": "name", "agg": "first"},
+                    {"column": "national_id", "agg": "count_distinct"}],
+        workspace_id="ws-claims")
+
+    # one governed row per resolved entity, written to a bronze warehouse table
+    assert res["row_count"] == out["resolved_entity_count"]
+    assert res["columns"][:4] == ["resolved_entity_id", "member_count", "confidence", "method"]
+    assert writer.staged["table"].startswith("bronze.")
+    assert len(writer.staged["rows"]) == out["resolved_entity_count"]
+    # the immutable version was registered against the committed snapshot
+    assert _fake_register.calls and _fake_register.calls[0]["iceberg_snapshot_id"] == 987654321
+    assert _fake_register.calls[0]["skip_profiling"] is True
+    # the derived dataset is a real governed dataset (RLS by tenant) + audited
+    ds, _ver = await container.dataset_service.get(_ctx(), res["resolved_dataset_id"])
+    assert ds.name == "resolved_person"
+    assert container.memory_state.events_of_type("dataset.entity_resolution.materialized")
+
+
+async def test_materialize_requires_warehouse_writer(svc, container):
+    out = await _resolve(svc)
+    container.dataset_service.deps.iceberg_writer = None
+    with pytest.raises(Exception):
+        await container.dataset_service.materialize_resolved_entities(
+            _ctx(), out["run_id"], workspace_id="ws-claims")

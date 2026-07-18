@@ -221,3 +221,67 @@ def resolve(rows: list[dict], config: ResolutionConfig, *, pk_column: str,
                                 confidence=confidence, method=cmethod, evidence=ev))
     clusters.sort(key=lambda c: c.resolved_entity_id)
     return ResolutionResult(clusters=clusters, merge_candidates=candidates)
+
+
+# ---- BRD 56 inc3: golden-record rollup (the governed resolved-entity view) --
+
+_NUMERIC_AGGS = {"sum", "max", "min", "avg", "count_distinct"}
+
+
+def _to_float(v) -> float | None:
+    try:
+        return float(str(v).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def build_golden_records(
+    entities: list[dict], members_by_entity: dict[str, list[str]],
+    rows_by_pk: dict[str, dict], attributes: list[dict], *, id_column: str = "resolved_entity_id",
+) -> tuple[list[str], list[list]]:
+    """One golden row per resolved entity for the governed resolved-entity VIEW
+    (ER-FR-020): ``resolved_entity_id, member_count, confidence, method`` + one
+    column per configured attribute. All values are strings (bronze convention —
+    the warehouse table is created string-typed like ingested data).
+
+    Each attribute is ``{"column": <source col>, "agg": first|sum|max|min|avg|
+    count_distinct}``. Default ``first`` carries a representative value (first
+    non-empty across the cluster's sorted members — deterministic for audit); the
+    numeric aggs realise cross-record rollups the BRD's US-3 wants (e.g.
+    ``total_exposure_across_accounts`` = sum of each member's exposure)."""
+    attr_cols = [a["column"] for a in attributes]
+    columns = [id_column, "member_count", "confidence", "method", *attr_cols]
+    out: list[list] = []
+    # entities is a list of dicts with resolved_entity_id/member_count/confidence/method
+    for e in sorted(entities, key=lambda x: x["resolved_entity_id"]):
+        eid = e["resolved_entity_id"]
+        members = sorted(members_by_entity.get(eid, []))
+        row = [eid, str(e.get("member_count") or len(members)),
+               str(e.get("confidence")), str(e.get("method") or "")]
+        for a in attributes:
+            col, agg = a["column"], (a.get("agg") or "first")
+            vals = [rows_by_pk.get(pk, {}).get(col) for pk in members]
+            if agg in _NUMERIC_AGGS:
+                if agg == "count_distinct":
+                    row.append(str(len({str(v) for v in vals if v not in (None, "")})))
+                    continue
+                nums = [n for n in (_to_float(v) for v in vals) if n is not None]
+                if not nums:
+                    row.append("")
+                elif agg == "sum":
+                    row.append(_fmt_num(sum(nums)))
+                elif agg == "max":
+                    row.append(_fmt_num(max(nums)))
+                elif agg == "min":
+                    row.append(_fmt_num(min(nums)))
+                else:  # avg
+                    row.append(_fmt_num(sum(nums) / len(nums)))
+            else:  # "first": first non-empty representative value
+                row.append(next((str(v) for v in vals if v not in (None, "")), ""))
+        out.append(row)
+    return columns, out
+
+
+def _fmt_num(x: float) -> str:
+    """Compact numeric string: drop the trailing .0 on integral values."""
+    return str(int(x)) if x == int(x) else repr(round(x, 6))

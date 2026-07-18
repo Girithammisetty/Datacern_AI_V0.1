@@ -132,6 +132,26 @@ def build_container(
     catalog = resolve_catalog(settings)
     object_store = resolve_object_store(settings)
 
+    # BRD 56 inc3: a real Iceberg table writer (same REST catalog + S3 as the
+    # read catalog) so the resolved-entity view can be materialized as a governed
+    # warehouse dataset. Only wired when the deployment uses the iceberg_rest
+    # catalog; the unit/local tier leaves it None (materialize is a real-warehouse
+    # operation, tested live).
+    iceberg_writer = None
+    from app.adapters.registry import catalog_provider_name
+
+    if catalog_provider_name(settings) == "iceberg_rest":
+        from windrose_common.iceberg import IcebergConfig, IcebergTableWriter
+
+        iceberg_writer = IcebergTableWriter(IcebergConfig(
+            uri=settings.iceberg_catalog_uri,
+            warehouse=settings.iceberg_warehouse,
+            s3_endpoint=settings.s3_endpoint_url,
+            s3_access_key=settings.s3_access_key,
+            s3_secret_key=settings.s3_secret_key,
+            s3_region=settings.s3_region,
+        ))
+
     deps = ServiceDeps(
         settings=settings,
         clock=clock,
@@ -139,6 +159,7 @@ def build_container(
         catalog=catalog,
         object_store=object_store,
         search_index=search_index,
+        iceberg_writer=iceberg_writer,
     )
 
     dataset_service = DatasetService(deps)
