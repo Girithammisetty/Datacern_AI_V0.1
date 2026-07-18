@@ -17,7 +17,15 @@ from fastapi import FastAPI
 
 from app.api.errors import TraceMiddleware, install_error_handlers
 from app.api.middleware import AuthMiddleware
-from app.api.routes import experiments, health, internal, models, promotions, runs
+from app.api.routes import (
+    archetypes,
+    experiments,
+    health,
+    internal,
+    models,
+    promotions,
+    runs,
+)
 from app.config import Settings
 from app.container import Container, build_container
 
@@ -143,6 +151,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(experiments.router)
     app.include_router(runs.router)
     app.include_router(models.router)
+    app.include_router(archetypes.router)
     app.include_router(promotions.router)
     app.include_router(internal.router)
     return app

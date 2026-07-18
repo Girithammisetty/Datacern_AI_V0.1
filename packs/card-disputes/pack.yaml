@@ -85,10 +85,3 @@ deferred:
       chargeback_representment, atm_error_review, first_party_fraud_review)
       await case-service schema materialization; today's cases carry the
       same fields via display_projection + the disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (dispute_outcome_confidence, first_party_fraud_score)
-      await experiment-service archetype APIs; the scoring capability ships
-      as pipeline seeds instead (isolation_forest transaction anomaly +
-      xgboost dispute-outcome scorer) with model-governance expectations
-      noted in grounding memories.

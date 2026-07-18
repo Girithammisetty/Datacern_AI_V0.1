@@ -90,10 +90,3 @@ deferred:
       duplicate_tradeline_review, frivolous_determination) await
       case-service schema materialization; today's cases carry the same
       fields via display_projection + the disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (dispute_outcome_confidence,
-      tradeline_accuracy_risk_score) await experiment-service archetype
-      APIs; the scoring capability ships as pipeline seeds instead
-      (isolation_forest tradeline anomaly + xgboost dispute-outcome scorer)
-      with model-governance expectations noted in grounding memories.

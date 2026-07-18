@@ -75,11 +75,6 @@ deferred:
       adherence intervention log) execute only behind pack-service's
       materialization contract and customer credentials; all platform-side
       writes remain proposal-mode per BR-1/BR-10.
-  - kind: model_archetypes
-    reason: >-
-      BRD 28 §4 archetypes (rx_pa_confidence, adherence_event_risk) await
-      experiment-service archetype APIs; the confidence model ships today as
-      the pa_auto_decision pipeline seed instead.
   - kind: case_schemas
     reason: >-
       RX-FR-100 typed case schemas (rx_pa_review, formulary_alternative_review,

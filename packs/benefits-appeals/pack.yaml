@@ -92,11 +92,3 @@ deferred:
       fraud_referral) await case-service schema materialization; today's
       cases carry the same fields via display_projection + the disposition
       taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (determination_outcome_confidence,
-      identity_risk_score, waiver_likelihood) await experiment-service
-      archetype APIs; the scoring capability ships as pipeline seeds instead
-      (isolation_forest claim anomaly + xgboost determination-outcome
-      scorer) with model-governance and human-review expectations noted in
-      grounding memories.

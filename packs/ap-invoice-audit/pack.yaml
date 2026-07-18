@@ -55,6 +55,8 @@ components:
     - { file: "labels/display.yaml", identity: "ap_vocabulary" }
   eval_sets:
     - { file: "evals/triage_gold.yaml", identity: "triage_gold" }
+  model_archetypes:
+    - { file: "models/archetypes.yaml", identity: "scoring_archetypes" }
 deferred:
   - kind: agent_recipes
     reason: >-
@@ -100,10 +102,3 @@ deferred:
       / shell_vendor_investigation), which awaits a typed case-schema surface
       in case-service; today those types are distinguished by the disposition
       taxonomy + the shared case_fields set.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (duplicate_pair_confidence, vendor_fraud_risk_score)
-      await experiment-service archetype APIs; the scoring capability
-      ships as pipeline seeds instead (isolation_forest invoice anomaly +
-      xgboost exception-outcome scorer) with model-governance expectations
-      noted in grounding memories.

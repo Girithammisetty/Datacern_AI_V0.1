@@ -76,12 +76,6 @@ deferred:
       materialization contract and customer credentials; per BRD 26 BR-1 the
       coding-write adapter refuses without a signed grant and all
       platform-side writes remain proposal-mode.
-  - kind: model_archetypes
-    reason: >-
-      BRD 26 §4 archetypes (denial_reversal_probability,
-      patient_affordability_score) await experiment-service archetype APIs;
-      the denial-prediction capability ships today as a pipeline seed
-      (denial_prediction_classifier) instead.
   - kind: case_schemas
     reason: >-
       RCM-FR-120 typed case schemas (coding_review, denial_response_review,

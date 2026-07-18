@@ -39,6 +39,10 @@ MANIFEST: list[str] = [
     "experiment.model.update",
     "experiment.promotion.approve",
     "experiment.model_card.update",
+    # model archetypes (inc9): governed model blueprints a pack declares.
+    "experiment.archetype.read",
+    "experiment.archetype.create",
+    "experiment.archetype.delete",
 ]
 
 

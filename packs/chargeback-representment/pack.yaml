@@ -89,10 +89,3 @@ deferred:
       pre_arbitration_review, friendly_fraud_review, alert_deduplication)
       await case-service schema materialization; today's cases carry the
       same fields via display_projection + the disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (representment_win_probability,
-      friendly_fraud_score) await experiment-service archetype APIs; the
-      scoring capability ships as pipeline seeds instead (isolation_forest
-      order anomaly + xgboost win-likelihood scorer) with model-governance
-      expectations noted in grounding memories.

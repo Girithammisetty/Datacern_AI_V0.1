@@ -70,12 +70,6 @@ deferred:
       update, referral response, hospice certification narrative) execute only
       behind pack-service's materialization contract and customer credentials;
       all platform-side writes remain proposal-mode per BR-1.
-  - kind: model_archetypes
-    reason: >-
-      BRD 29 §4 archetypes (rehospitalization_30d_risk,
-      referral_acceptance_score) await experiment-service archetype APIs; the
-      rehospitalization risk model ships as a pipeline seed instead
-      (rehospitalization_risk_model, random_forest).
   - kind: case_schemas
     reason: >-
       PAC-FR-110 typed case schemas (oasis_review, mds_review,

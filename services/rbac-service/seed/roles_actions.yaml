@@ -206,6 +206,13 @@ roles:
       - experiment.run.list
       - experiment.model.read
       - experiment.model.list
+      # model archetypes (inc9): the use-case admin declares governed model
+      # blueprints (a pack install materializes them); training/promotion stay
+      # read-only above.
+      - experiment.archetype.read
+      - experiment.archetype.list
+      - experiment.archetype.create
+      - experiment.archetype.delete
       - inference.job.read
       - inference.job.list
       - inference.schedule.read

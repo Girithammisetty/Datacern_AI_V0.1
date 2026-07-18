@@ -89,10 +89,3 @@ deferred:
       appetite_referral, completeness_chase, renewal_defense) await
       case-service schema materialization; today's cases carry the same
       fields via display_projection + the disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (appetite_fit_confidence, submission_priority_score)
-      await experiment-service archetype APIs; the scoring capability ships
-      as pipeline seeds instead (isolation_forest account-book anomaly +
-      xgboost triage-outcome scorer) with NAIC AI-bulletin model-governance
-      expectations noted in grounding memories.

@@ -70,8 +70,3 @@ deferred:
       INS-FR-091 typed case schemas await case-service schema materialization;
       today's cases carry the same fields via display_projection + the
       disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      INS-FR-071 confidence calibrator ships as a pipeline seed instead
-      (pa_approval_classifier); Platt-scaling archetype registration awaits
-      experiment-service archetype APIs.

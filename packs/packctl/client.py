@@ -39,6 +39,7 @@ class Endpoints:
     pipeline: str = "http://localhost:8313"
     identity: str = "http://localhost:8301"
     eval: str = "http://localhost:8324"
+    experiment: str = "http://localhost:8314"
 
 
 @dataclass
@@ -785,6 +786,43 @@ class PlatformClient:
                      f"{dataset_key}: {wrote} golden cases, "
                      + ("frozen" if frozen else f"freeze {fr.status_code}"))
         return dataset_key
+
+    # ---- model archetypes (experiment-service governed blueprints) ----------
+    def ensure_archetype(self, identity: str, archetype_key: str, name: str,
+                         task_type: str, target: str | None = None,
+                         description: str = "", expected_metrics: dict | None = None,
+                         governance_notes: str | None = None) -> str | None:
+        """Register a governed model BLUEPRINT (inc9): the intended-model spec a
+        vertical expects, independent of any trained artifact. Idempotent by
+        (workspace, archetype_key). Requires experiment.archetype.create. Returns
+        the archetype_key (its stable id for reversal), or None on failure."""
+        tok = self.author_token()
+        e = self.endpoints.experiment
+        g = self._req("GET", f"{e}/api/v1/archetypes?filter[workspace_id]={self.workspace_id}", tok)
+        if g.status_code == 200:
+            for a in g.json().get("data", []):
+                if a.get("archetype_key") == archetype_key:
+                    self._record("model_archetypes", identity, "noop", None, archetype_key)
+                    return archetype_key
+        r = self._req("POST", f"{e}/api/v1/archetypes", tok, headers=JSON,
+                      json={"workspace_id": self.workspace_id, "archetype_key": archetype_key,
+                            "name": name, "task_type": task_type, "target": target,
+                            "description": description, "expected_metrics": expected_metrics or {},
+                            "governance_notes": governance_notes})
+        if r.status_code in (200, 201):
+            self._record("model_archetypes", identity, "create", None, archetype_key)
+            return archetype_key
+        self._record("model_archetypes", identity, "failed", None,
+                     f"{archetype_key}: {r.status_code} {r.text[:150]}")
+        return None
+
+    def delete_archetype(self, archetype_key: str) -> bool:
+        """Reversal: delete a model blueprint (experiment.archetype.delete)."""
+        r = self._req("DELETE",
+                      f"{self.endpoints.experiment}/api/v1/archetypes/{archetype_key}"
+                      f"?filter[workspace_id]={self.workspace_id}",
+                      self.author_token())
+        return r.status_code in (200, 204)
 
     # ---- agent-runtime governed decision tables (BRD 54 inc2) ----------------
     def ensure_decision_model(self, identity: str, name: str, rules: list[dict],

@@ -32,7 +32,7 @@ from app.domain import catalog
 # their own. (saved_queries/dashboards need the pack's datasets first, which is
 # a deferred kind; they're reported `deferred` in the plan, not faked.)
 INC1_KINDS = ("dispositions", "case_fields", "display_labels", "guardrails",
-              "agent_configs", "eval_sets", "roles", "decision_models")
+              "agent_configs", "eval_sets", "model_archetypes", "roles", "decision_models")
 
 # inc2 data chain, in dependency order. datasets ingest first; the semantic
 # model + verified queries are authored + SUBMITTED as governed drafts (NOT
@@ -49,7 +49,8 @@ INC2_PHASE2_KINDS = ("dashboards",)
 # is retained and loses its pack-origin marker, because Core has no delete verb
 # for it yet — a real, surfaced gap in the materialization contract (PKG-FR-030).
 REVERSIBLE_KINDS = {"roles", "saved_queries", "dashboards", "case_fields",
-                    "display_labels", "guardrails", "agent_configs", "pipelines", "memories"}
+                    "display_labels", "guardrails", "agent_configs", "pipelines",
+                    "memories", "model_archetypes"}
 
 
 def _packctl_client():
@@ -68,6 +69,7 @@ def _endpoints(settings: Settings):
         rbac=settings.rbac_svc_url, agent=settings.agent_url,
         memory=settings.memory_url, pipeline=settings.pipeline_url,
         identity=settings.identity_url, eval=settings.eval_url,
+        experiment=settings.experiment_url,
     )
 
 
@@ -193,6 +195,8 @@ def _component_names(manifest, comp) -> list[str]:
         return [ac["agent_key"] for ac in doc]
     if comp.kind == "eval_sets":
         return [es["dataset_key"] for es in doc]
+    if comp.kind == "model_archetypes":
+        return [a["archetype_key"] for a in doc]
     if comp.kind == "cases":
         return [r["row_pk"] for r in doc.get("rows", [])]
     if comp.kind == "pipelines":
@@ -280,6 +284,13 @@ def run_install(client, manifest, origin_of: Callable[[str, str], str]) -> list[
                        lambda es=es: client.ensure_eval_set(
                            comp.identity, es["dataset_key"], es["agent_key"],
                            es.get("cases", []), es.get("description", "")))
+            elif kind == "model_archetypes":
+                for a in doc:
+                    do("model_archetypes", comp, a["archetype_key"],
+                       lambda a=a: client.ensure_archetype(
+                           comp.identity, a["archetype_key"], a["name"], a["task_type"],
+                           a.get("target"), a.get("description", ""),
+                           a.get("expected_metrics"), a.get("governance_notes")))
             elif kind == "roles":
                 for role in doc:
                     do("roles", comp, role["name"],
@@ -356,6 +367,10 @@ def run_uninstall(client, ledger: list[dict]) -> list[dict]:
             ok = client.delete_memory(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,
                              "detail": "grounding record deleted" if ok else "delete failed"})
+        elif kind == "model_archetypes" and tid:
+            ok = client.delete_archetype(tid)
+            outcomes.append({"ledger_id": row["id"], "deleted": ok,
+                             "detail": "model archetype deleted" if ok else "delete failed"})
         elif kind == "dashboards" and tid:
             r = client._req("DELETE", f"{e.chart}/api/v1/dashboards/{tid}", tok)
             ok = r.status_code in (200, 204)

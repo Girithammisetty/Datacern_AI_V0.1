@@ -89,10 +89,3 @@ deferred:
       litigation_management) await case-service schema materialization;
       today's cases carry the same fields via display_projection + the
       disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (compensability_confidence, siu_referral_score,
-      reserve_development_risk) await experiment-service archetype APIs; the
-      scoring capability ships as pipeline seeds instead (isolation_forest
-      medical-bill anomaly + xgboost compensability-outcome scorer) with
-      model-governance expectations noted in grounding memories.

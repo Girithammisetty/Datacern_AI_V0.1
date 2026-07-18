@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.domain.entities import (
     STAGE,
     Experiment,
+    ModelArchetype,
     ModelCard,
     ModelVersion,
     Promotion,
@@ -33,6 +34,7 @@ from app.store.orm import (
     ExperimentRow,
     IdempotencyKeyRow,
     MirrorInboxRow,
+    ModelArchetypeRow,
     ModelCardRow,
     ModelRegistrationLogRow,
     ModelVersionRow,
@@ -725,6 +727,58 @@ class SqlIdempotencyRepo:
         await self.s.flush()
 
 
+# --- model archetypes (inc9) ------------------------------------------------
+
+
+def _archetype(row: ModelArchetypeRow) -> ModelArchetype:
+    return ModelArchetype(
+        id=row.id, tenant_id=row.tenant_id, workspace_id=row.workspace_id,
+        archetype_key=row.archetype_key, name=row.name, task_type=row.task_type,
+        target=row.target, description=row.description,
+        expected_metrics=row.expected_metrics or {}, governance_notes=row.governance_notes,
+        created_by=row.created_by, created_at=row.created_at, updated_at=row.updated_at,
+        deleted_at=row.deleted_at)
+
+
+class SqlArchetypeRepo:
+    def __init__(self, session: AsyncSession):
+        self.s = session
+
+    async def get(self, workspace_id: str, archetype_key: str) -> ModelArchetype | None:
+        row = (await self.s.execute(select(ModelArchetypeRow).where(
+            ModelArchetypeRow.workspace_id == workspace_id,
+            ModelArchetypeRow.archetype_key == archetype_key,
+        ))).scalar_one_or_none()
+        return _archetype(row) if row else None
+
+    async def list(self, workspace_id: str | None) -> list[ModelArchetype]:
+        q = select(ModelArchetypeRow)
+        if workspace_id:
+            q = q.where(ModelArchetypeRow.workspace_id == workspace_id)
+        q = q.order_by(ModelArchetypeRow.archetype_key)
+        return [_archetype(r) for r in (await self.s.execute(q)).scalars().all()]
+
+    async def add(self, a: ModelArchetype) -> None:
+        self.s.add(ModelArchetypeRow(
+            id=a.id, tenant_id=a.tenant_id, workspace_id=a.workspace_id,
+            archetype_key=a.archetype_key, name=a.name, task_type=a.task_type,
+            target=a.target, description=a.description,
+            expected_metrics=a.expected_metrics, governance_notes=a.governance_notes,
+            created_by=a.created_by, created_at=a.created_at, updated_at=a.updated_at))
+        await self.s.flush()
+
+    async def delete(self, workspace_id: str, archetype_key: str) -> bool:
+        row = (await self.s.execute(select(ModelArchetypeRow).where(
+            ModelArchetypeRow.workspace_id == workspace_id,
+            ModelArchetypeRow.archetype_key == archetype_key,
+        ))).scalar_one_or_none()
+        if not row:
+            return False
+        await self.s.delete(row)
+        await self.s.flush()
+        return True
+
+
 # --- unit of work -----------------------------------------------------------
 
 
@@ -746,6 +800,7 @@ class SqlUnitOfWork:
         self.experiments = SqlExperimentRepo(self._session)
         self.runs = SqlRunRepo(self._session)
         self.models = SqlModelRepo(self._session)
+        self.archetypes = SqlArchetypeRepo(self._session)
         self.inbox = SqlInboxRepo(self._session)
         self.watermarks = SqlWatermarkRepo(self._session)
         self.outbox = SqlOutboxRepo(self._session, self.tenant_id)

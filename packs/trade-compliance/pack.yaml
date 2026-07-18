@@ -89,10 +89,3 @@ deferred:
       origin_verification, license_determination, prior_disclosure_review)
       await case-service schema materialization; today's cases carry the
       same fields via display_projection + the disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (classification_confidence, screening_match_risk)
-      await experiment-service archetype APIs; the scoring capability ships
-      as pipeline seeds instead (isolation_forest shipment anomaly + xgboost
-      review-outcome scorer) with model-governance expectations noted in
-      grounding memories.

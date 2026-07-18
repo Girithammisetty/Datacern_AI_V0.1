@@ -13,6 +13,7 @@ from datetime import datetime
 from app.domain.entities import (
     STAGE,
     Experiment,
+    ModelArchetype,
     ModelCard,
     ModelVersion,
     Promotion,
@@ -37,6 +38,7 @@ class MemoryState:
     artifacts: dict[tuple[str, str], RunArtifact] = field(default_factory=dict)
     notes: dict[str, str] = field(default_factory=dict)
     models: dict[str, RegisteredModel] = field(default_factory=dict)
+    archetypes: dict[tuple[str, str], ModelArchetype] = field(default_factory=dict)
     versions: dict[str, ModelVersion] = field(default_factory=dict)
     promotions: dict[str, Promotion] = field(default_factory=dict)
     registration_log: list[dict] = field(default_factory=list)
@@ -274,6 +276,29 @@ class _RunRepo:
         self.st.notes.pop(run_id, None)
 
 
+class _ArchetypeRepo:
+    def __init__(self, st: MemoryState, tenant: str):
+        self.st, self.t = st, tenant
+
+    def _k(self, workspace_id, archetype_key):
+        return (workspace_id, archetype_key)
+
+    async def get(self, workspace_id, archetype_key):
+        a = self.st.archetypes.get(self._k(workspace_id, archetype_key))
+        return copy.deepcopy(a) if a and a.tenant_id == self.t else None
+
+    async def list(self, workspace_id):
+        out = [copy.deepcopy(a) for a in self.st.archetypes.values()
+               if a.tenant_id == self.t and (not workspace_id or a.workspace_id == workspace_id)]
+        return sorted(out, key=lambda a: a.archetype_key)
+
+    async def add(self, a: ModelArchetype):
+        self.st.archetypes[self._k(a.workspace_id, a.archetype_key)] = copy.deepcopy(a)
+
+    async def delete(self, workspace_id, archetype_key):
+        return self.st.archetypes.pop(self._k(workspace_id, archetype_key), None) is not None
+
+
 class _ModelRepo:
     def __init__(self, st: MemoryState, tenant: str):
         self.st, self.t = st, tenant
@@ -479,6 +504,7 @@ class MemoryUnitOfWork:
         self.experiments = _ExperimentRepo(self.state, self.tenant_id)
         self.runs = _RunRepo(self.state, self.tenant_id)
         self.models = _ModelRepo(self.state, self.tenant_id)
+        self.archetypes = _ArchetypeRepo(self.state, self.tenant_id)
         self.inbox = _InboxRepo(self.state, self.tenant_id)
         self.watermarks = _WatermarkRepo(self.state, self.tenant_id)
         self.outbox = _OutboxRepo(self.state, self.tenant_id, self._bus)

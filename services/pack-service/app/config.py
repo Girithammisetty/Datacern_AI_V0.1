@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     pipeline_url: str = "http://localhost:8313"
     identity_url: str = "http://localhost:8301"
     eval_url: str = "http://localhost:8324"
+    experiment_url: str = "http://localhost:8314"
 
     use_real_adapters: bool = True
 

@@ -142,6 +142,28 @@ class RegisteredModel:
 
 
 @dataclass(slots=True)
+class ModelArchetype:
+    """A governed model BLUEPRINT (inc9): a named model the vertical expects
+    (task/target/expected metrics/governance), declared by a capability pack,
+    independent of any trained artifact. Distinct from RegisteredModel (which is
+    materialized from a training run)."""
+    id: str
+    tenant_id: str
+    workspace_id: str
+    archetype_key: str
+    name: str
+    task_type: str
+    target: str | None = None
+    description: str | None = None
+    expected_metrics: dict = field(default_factory=dict)
+    governance_notes: str | None = None
+    created_by: str = "unknown"
+    created_at: datetime = None  # type: ignore[assignment]
+    updated_at: datetime = None  # type: ignore[assignment]
+    deleted_at: datetime | None = None
+
+
+@dataclass(slots=True)
 class ModelVersion:
     id: str
     tenant_id: str

@@ -86,10 +86,3 @@ deferred:
       peer_anomaly_investigation, regulatory_finding_remediation) await
       case-service schema materialization; today's cases carry the same
       fields via display_projection + the disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      BRD 30 §4 model archetypes (alert_disposition_confidence,
-      customer_risk_rating_v1) await experiment-service archetype APIs; the
-      alert-scoring capability ships as pipeline seeds instead
-      (isolation_forest anomaly detector + xgboost alert-disposition scorer)
-      with SR 11-7 model-risk documentation noted in grounding memories (BR-8).

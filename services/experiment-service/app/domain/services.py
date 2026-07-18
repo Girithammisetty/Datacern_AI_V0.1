@@ -25,6 +25,7 @@ from app.domain.entities import (
     STAGE,
     STAGE_LABELS,
     Experiment,
+    ModelArchetype,
     ModelCard,
     ModelVersion,
     Promotion,
@@ -1439,3 +1440,64 @@ class CardService(_Base):
                 flagged += 1
             await uow.commit()
         return flagged
+
+
+# ---------------------------------------------------------------------------
+# Model archetypes (inc9): governed model BLUEPRINTS a capability pack declares
+# ---------------------------------------------------------------------------
+
+
+class ArchetypeService(_Base):
+    """A named model the vertical EXPECTS (task/target/expected metrics/
+    governance), independent of any trained artifact. Distinct from a
+    RegisteredModel (materialized from a run) — this is the intended-model
+    catalog a pack installs and the ml-engineer/pipelines fulfil."""
+
+    async def create(self, ctx: CallCtx, payload: dict) -> ModelArchetype:
+        key = str(payload.get("archetype_key") or "").strip()
+        name = str(payload.get("name") or "").strip()
+        task_type = str(payload.get("task_type") or "").strip()
+        workspace_id = payload["workspace_id"]
+        if not key or not name or not task_type:
+            raise ValidationFailed("archetype_key, name and task_type are required")
+        now = self.clock.now()
+        async with self.uow(ctx.tenant_id) as uow:
+            existing = await uow.archetypes.get(workspace_id, key)
+            if existing:
+                return existing  # idempotent by (workspace, archetype_key)
+            a = ModelArchetype(
+                id=str(uuid7()), tenant_id=ctx.tenant_id, workspace_id=workspace_id,
+                archetype_key=key, name=name, task_type=task_type,
+                target=payload.get("target"), description=payload.get("description"),
+                expected_metrics=payload.get("expected_metrics") or {},
+                governance_notes=payload.get("governance_notes"),
+                created_by=ctx.actor_id, created_at=now, updated_at=now)
+            await uow.archetypes.add(a)
+            await self._emit(
+                uow, ctx, "experiment.archetype.created",
+                f"wr:{ctx.tenant_id}:experiment:archetype/{key}",
+                {"archetype_key": key, "workspace_id": workspace_id, "task_type": task_type},
+                trace_id=ctx.trace_id)
+            return a
+
+    async def list(self, ctx: CallCtx, workspace_id: str | None) -> list[ModelArchetype]:
+        async with self.uow(ctx.tenant_id) as uow:
+            return await uow.archetypes.list(workspace_id)
+
+    async def get(self, ctx: CallCtx, workspace_id: str, archetype_key: str) -> ModelArchetype:
+        async with self.uow(ctx.tenant_id) as uow:
+            a = await uow.archetypes.get(workspace_id, archetype_key)
+        if not a:
+            raise NotFound(f"archetype {archetype_key!r} not found")
+        return a
+
+    async def delete(self, ctx: CallCtx, workspace_id: str, archetype_key: str) -> bool:
+        async with self.uow(ctx.tenant_id) as uow:
+            ok = await uow.archetypes.delete(workspace_id, archetype_key)
+            if ok:
+                await self._emit(
+                    uow, ctx, "experiment.archetype.deleted",
+                    f"wr:{ctx.tenant_id}:experiment:archetype/{archetype_key}",
+                    {"archetype_key": archetype_key, "workspace_id": workspace_id},
+                    trace_id=ctx.trace_id)
+        return ok

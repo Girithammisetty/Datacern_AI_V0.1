@@ -75,12 +75,6 @@ deferred:
       notification) execute only behind pack-service's materialization
       contract and customer credentials; BR-1/BR-8 keep every platform-side
       write proposal-mode, and AC-8 forbids autonomous recovery writes.
-  - kind: model_archetypes
-    reason: >-
-      BRD 27 §4 archetypes (fwa_ensemble_v1, provider_outlier_v1) await
-      experiment-service archetype APIs; the detector ships today as
-      pipeline seeds (isolation_forest claim-line outlier detector +
-      xgboost lead classifier per FWA-FR-030/040).
   - kind: case_schemas
     reason: >-
       FWA-FR-100 typed case schemas (fwa_review, siu_investigation,

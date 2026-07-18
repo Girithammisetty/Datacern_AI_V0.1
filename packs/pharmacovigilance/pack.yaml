@@ -83,10 +83,3 @@ deferred:
       signal_evaluation, late_case_investigation) await case-service schema
       materialization; today's cases carry the same fields via
       display_projection + the disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (case_priority_score, seriousness_classifier_v1)
-      await experiment-service archetype APIs; the scoring capability ships
-      as pipeline seeds instead (isolation_forest event anomaly + xgboost
-      case-priority scorer) with GxP model-documentation expectations noted
-      in grounding memories.

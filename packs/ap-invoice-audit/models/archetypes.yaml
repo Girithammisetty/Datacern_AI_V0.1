@@ -1,0 +1,40 @@
+# Model archetypes (experiment-service governed blueprints, inc9). Each archetype
+# is the INTENDED-model spec for the AP invoice-audit vertical — task, target,
+# expected metrics, governance expectations — declared independent of any trained
+# artifact. The pack's pipeline seeds (isolation_forest anomaly + xgboost outcome
+# scorer) and the ml-engineer agent fulfil these; the archetype is the governed
+# catalog entry the model must satisfy before promotion.
+- archetype_key: duplicate_pair_confidence
+  name: "Duplicate invoice-pair confidence"
+  task_type: pairwise_binary_classification
+  target: is_duplicate_pair
+  description: >-
+    Scores whether two invoices are a duplicate pair (same obligation billed
+    twice) from vendor, amount, date and OCR-confusable invoice-number distance —
+    the pre-router for the duplicate-payment recovery workflow.
+  expected_metrics:
+    precision_min: 0.95
+    recall_min: 0.80
+    primary: precision
+  governance_notes: >-
+    A duplicate call only HOLDS a payment for human confirmation; it never blocks
+    or releases autonomously. False positives are cheaper than a double payment,
+    so precision is the promotion gate. Four-eyes on every payment block stands.
+- archetype_key: vendor_fraud_risk_score
+  name: "Vendor fraud-risk score"
+  task_type: binary_classification
+  target: vendor_fraud_escalation
+  description: >-
+    Scores a vendor/invoice for shell-vendor and BEC banking-change fraud
+    indicators (vendor tenure, TIN/sanctions status, address collisions,
+    sequential invoice numbering, banking-change timing vs the payment run) to
+    prioritise the fraud-escalation queue.
+  expected_metrics:
+    roc_auc_min: 0.85
+    recall_min: 0.75
+    primary: recall
+  governance_notes: >-
+    Advisory only — the score prioritises an investigations handoff, never a
+    payment decision. Banking-change acceptance always requires documented
+    out-of-band verification by a human. Model card must record the fairness
+    review across vendor categories before promotion.

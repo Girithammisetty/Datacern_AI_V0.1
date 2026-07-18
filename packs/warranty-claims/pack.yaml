@@ -89,10 +89,3 @@ deferred:
       recall_routing_review) await case-service schema materialization;
       today's cases carry the same fields via display_projection + the
       disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (claim_approval_confidence, dealer_padding_score,
-      component_failure_hazard) await experiment-service archetype APIs;
-      the scoring capability ships as pipeline seeds instead
-      (isolation_forest unit anomaly + xgboost claim-outcome scorer) with
-      model-governance expectations noted in grounding memories.

@@ -15,6 +15,7 @@ from app.adapters.mlflow_client import LocalMlflowClient, MlflowClient
 from app.api.auth import LocalScopeAuthz, OpaAuthzClient, TokenVerifier
 from app.config import Settings
 from app.domain.services import (
+    ArchetypeService,
     CardService,
     CompareService,
     ExperimentService,
@@ -50,6 +51,7 @@ class Container:
     registry_service: RegistryService
     promotion_service: PromotionService
     card_service: CardService
+    archetype_service: ArchetypeService
     mcp: McpFacade
     memory_state: MemoryState | None = None
     extras: dict = field(default_factory=dict)
@@ -115,6 +117,7 @@ def build_container(settings: Settings | None = None, *, mode: str = "memory",
     registry_service = RegistryService(deps)
     promotion_service = PromotionService(deps)
     card_service = CardService(deps)
+    archetype_service = ArchetypeService(deps)
     mcp = McpFacade(query_service, compare_service, registry_service, promotion_service,
                     card_service)
 
@@ -128,4 +131,5 @@ def build_container(settings: Settings | None = None, *, mode: str = "memory",
         mirror_service=mirror_service, reconciliation_service=reconciliation_service,
         compare_service=compare_service, query_service=query_service,
         registry_service=registry_service, promotion_service=promotion_service,
-        card_service=card_service, mcp=mcp, memory_state=memory_state, extras=extras)
+        card_service=card_service, archetype_service=archetype_service,
+        mcp=mcp, memory_state=memory_state, extras=extras)

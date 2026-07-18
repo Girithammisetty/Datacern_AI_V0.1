@@ -17,6 +17,18 @@ class ExperimentCreate(BaseModel):
     tags: dict = Field(default_factory=dict)
 
 
+class ArchetypeCreate(BaseModel):
+    """A governed model blueprint (inc9): the intended-model spec a pack declares."""
+    workspace_id: str
+    archetype_key: str
+    name: str
+    task_type: str
+    target: str | None = None
+    description: str | None = None
+    expected_metrics: dict = Field(default_factory=dict)
+    governance_notes: str | None = None
+
+
 class ExperimentPatch(BaseModel):
     name: str | None = None
     description: str | None = None

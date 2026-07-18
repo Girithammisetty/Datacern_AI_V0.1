@@ -89,10 +89,3 @@ deferred:
       duplicate_appeal_check) await case-service schema materialization;
       today's cases carry the same fields via display_projection + the
       disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (appeal_overturn_likelihood, brigading_risk_score)
-      await experiment-service archetype APIs; the scoring capability ships
-      as pipeline seeds instead (isolation_forest enforcement anomaly +
-      xgboost appeal-outcome scorer) with model-governance expectations
-      noted in grounding memories.

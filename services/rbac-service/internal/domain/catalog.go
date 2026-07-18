@@ -141,6 +141,7 @@ var canonicalSpecs = []resourceSpec{
 	{"experiment", "experiment", []string{VerbRead, VerbList, VerbCreate, VerbUpdate, VerbDelete}, true, "experiments"},
 	{"experiment", "run", []string{VerbRead, VerbList, VerbCreate, VerbExecute}, true, "experiment runs"},
 	{"experiment", "model", []string{VerbRead, VerbList, VerbUpdate, VerbApprove}, true, "trained models"},
+	{"experiment", "archetype", []string{VerbRead, VerbList, VerbCreate, VerbDelete}, true, "model archetypes (governed blueprints, inc9)"},
 	{"experiment", "model_card", []string{VerbRead, VerbUpdate}, true, "model card edits"},
 	{"experiment", "promotion", []string{VerbRead, VerbApprove}, true, "model promotion decisions (four-eyes)"},
 	// inference

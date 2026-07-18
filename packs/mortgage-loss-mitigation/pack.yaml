@@ -87,10 +87,3 @@ deferred:
       denial_appeal, forbearance_exit_review) await case-service schema
       materialization; today's cases carry the same fields via
       display_projection + the disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (workout_outcome_confidence, redefault_risk_score)
-      await experiment-service archetype APIs; the scoring capability ships
-      as pipeline seeds instead (isolation_forest loan anomaly + xgboost
-      workout-outcome scorer) with model-governance expectations noted in
-      grounding memories.

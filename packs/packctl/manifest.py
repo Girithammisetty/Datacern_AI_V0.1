@@ -48,13 +48,14 @@ SUPPORTED_KINDS = (
     "display_labels",     # identity-service per-tenant UI label overrides (inc3)
     "guardrails",         # agent-runtime per-agent security envelope (inc4)
     "eval_sets",          # eval-service golden dataset + cases (inc8)
+    "model_archetypes",   # experiment-service governed model blueprints (inc9)
 )
 
 # Deferred kinds we RECOGNIZE (from BRD 23/24..31) so packs can declare them
 # for the future pack-service without packctl pretending to install them.
 KNOWN_DEFERRED_KINDS = (
     "ontology", "agent_recipes",
-    "connection_templates", "model_archetypes",
+    "connection_templates",
     "case_schemas", "write_adapters",
 )
 

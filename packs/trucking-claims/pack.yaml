@@ -89,10 +89,3 @@ deferred:
       safety_event_review, carrier_fraud_vetting, recovery_filing) await
       case-service schema materialization; today's cases carry the same
       fields via display_projection + the disposition taxonomy.
-  - kind: model_archetypes
-    reason: >-
-      Model archetypes (claim_outcome_confidence, carrier_fraud_risk_score,
-      preventability_likelihood) await experiment-service archetype APIs; the
-      scoring capability ships as pipeline seeds instead (isolation_forest
-      shipment anomaly + xgboost claim-outcome scorer) with model-governance
-      expectations noted in grounding memories.

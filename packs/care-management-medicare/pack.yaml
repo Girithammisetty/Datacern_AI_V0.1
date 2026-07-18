@@ -79,12 +79,6 @@ deferred:
       case_id:proposal_id) execute only behind pack-service's materialization
       contract and customer credentials; all platform-side writes remain
       proposal-mode (BR-2 CMM_AUTONOMOUS_BILLING_FORBIDDEN).
-  - kind: model_archetypes
-    reason: >-
-      CMM-FR-033/090 model archetypes (enrollment_propensity,
-      readmission_risk_30d) await experiment-service archetype APIs; the
-      enrollment-propensity capability ships today as a real training
-      pipeline seed instead (pipelines/templates.yaml).
   - kind: case_schemas
     reason: >-
       CMM-FR-141 typed case schemas (care_activity_review,

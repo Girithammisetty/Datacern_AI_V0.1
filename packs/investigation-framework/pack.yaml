@@ -48,8 +48,3 @@ deferred:
       materialization; the lifecycle vocabulary ships as dispositions instead.
   - kind: ontology
     reason: "investigation_base ontology registration awaits pack-service."
-  - kind: model_archetypes
-    reason: >-
-      confidence_calibrator + network_anomaly_baseline archetypes await
-      experiment-service archetype APIs; consumer packs ship trainable
-      pipeline seeds instead.
