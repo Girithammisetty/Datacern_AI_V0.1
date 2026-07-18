@@ -8,6 +8,7 @@ import { GaugeChart } from "./GaugeChart";
 import { WordCloudChart } from "./WordCloudChart";
 import { NetworkChart } from "./NetworkChart";
 import { MetricChart } from "./MetricChart";
+import { EChartsChart } from "./EChartsChart";
 
 /**
  * The single dispatch point for rendering shaped chart data as a real chart.
@@ -54,17 +55,36 @@ export function ChartView({
   selectedValue?: string | null;
 }) {
   const kind = resolveKind(chartType, family);
+  // Visual families (bar / line / pie / heatmap / gauge) render through the
+  // interactive ECharts engine, which progressively enhances the bespoke SVG
+  // renderer passed as `fallback` (kept for SSR + jsdom/tests + canvas-less
+  // environments). Grid / metric / network / wordcloud stay on their bespoke
+  // renderers — a real data table, a KPI card, an honest gap, and a
+  // dependency-free word cloud respectively.
   switch (kind) {
+    case "pie":
+      return (
+        <EChartsChart kind="pie" chartType={chartType} columns={columns} rows={rows} title={title} desc={desc}
+          onSelect={onSelect} selectedValue={selectedValue}
+          fallback={<PieChart columns={columns} rows={rows} title={title} desc={desc} onSelect={onSelect} selectedValue={selectedValue} />} />
+      );
+    case "line":
+      return (
+        <EChartsChart kind="line" chartType={chartType} columns={columns} rows={rows} title={title} desc={desc}
+          fallback={<LineChart columns={columns} rows={rows} title={title} desc={desc} />} />
+      );
+    case "heatmap":
+      return (
+        <EChartsChart kind="heatmap" chartType={chartType} columns={columns} rows={rows} title={title} desc={desc}
+          fallback={<HeatmapChart columns={columns} rows={rows} title={title} desc={desc} />} />
+      );
+    case "gauge":
+      return (
+        <EChartsChart kind="gauge" chartType={chartType} columns={columns} rows={rows} title={title} desc={desc}
+          fallback={<GaugeChart columns={columns} rows={rows} title={title} desc={desc} />} />
+      );
     case "grid":
       return <GridChart columns={columns} rows={rows} title={title} onSelect={onSelect} selectedValue={selectedValue} />;
-    case "pie":
-      return <PieChart columns={columns} rows={rows} title={title} desc={desc} onSelect={onSelect} selectedValue={selectedValue} />;
-    case "line":
-      return <LineChart columns={columns} rows={rows} title={title} desc={desc} />;
-    case "heatmap":
-      return <HeatmapChart columns={columns} rows={rows} title={title} desc={desc} />;
-    case "gauge":
-      return <GaugeChart columns={columns} rows={rows} title={title} desc={desc} />;
     case "wordcloud":
       return <WordCloudChart columns={columns} rows={rows} title={title} />;
     case "network":
@@ -72,7 +92,11 @@ export function ChartView({
     case "metric":
       return <MetricChart columns={columns} rows={rows} artifact={artifact} title={title} />;
     default:
-      return <BarChart columns={columns} rows={rows} title={title} desc={desc} />;
+      return (
+        <EChartsChart kind="bar" chartType={chartType} columns={columns} rows={rows} title={title} desc={desc}
+          onSelect={onSelect} selectedValue={selectedValue}
+          fallback={<BarChart columns={columns} rows={rows} title={title} desc={desc} onSelect={onSelect} selectedValue={selectedValue} />} />
+      );
   }
 }
 
