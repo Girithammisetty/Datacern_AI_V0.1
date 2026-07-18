@@ -2,7 +2,7 @@
 import { useMemo } from "react";
 import type { ConnectorType } from "@/lib/graphql/types";
 import { CATEGORY_ORDER, CATEGORY_LABELS } from "@/lib/connections/form";
-import { CategoryIcon } from "./icons";
+import { CategoryIcon, ConnectorLogo } from "./icons";
 import { cn } from "@/lib/utils";
 
 /**
@@ -51,7 +51,7 @@ export function ConnectorTypePicker({
                   selected === t.connectorType && "border-primary bg-primary/10",
                 )}
               >
-                <CategoryIcon category={t.category} className="size-4 shrink-0 text-muted-foreground" />
+                <ConnectorLogo connectorType={t.connectorType} category={t.category} size={22} className="shrink-0" />
                 <span className="truncate font-medium">{t.displayName}</span>
               </button>
             ))}

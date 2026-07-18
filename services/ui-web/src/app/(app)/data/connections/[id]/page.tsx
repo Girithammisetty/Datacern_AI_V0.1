@@ -7,6 +7,7 @@ import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { Can } from "@/components/authz/Can";
 import { Button } from "@/components/ui/button";
 import { ConnectionForm } from "@/components/connections/ConnectionForm";
+import { ConnectorLogo } from "@/components/connections/icons";
 import { ConnectionPreviewPanel } from "@/components/connections/ConnectionPreviewPanel";
 import { FEATURE_GATES } from "@/lib/authz/registry";
 import { useConnection, useConnectorTypes } from "@/lib/graphql/hooks";
@@ -39,6 +40,13 @@ export default function ConnectionEditPage({ params }: { params: Promise<{ id: s
           </Button>
         }
       />
+
+      {conn && (
+        <div className="mb-3 flex items-center gap-2.5">
+          <ConnectorLogo connectorType={conn.connectorType} size={32} className="shrink-0" />
+          <span className="text-sm font-medium">{type?.displayName ?? conn.connectorType}</span>
+        </div>
+      )}
 
       {banner && (
         <div role="status" className="mb-3 rounded-md border bg-muted/40 px-3 py-2 text-sm" data-testid="notice-banner">

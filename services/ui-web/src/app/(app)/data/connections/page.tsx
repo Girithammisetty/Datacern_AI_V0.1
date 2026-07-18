@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { FEATURE_GATES, cap } from "@/lib/authz/registry";
 import { useConnections, useConnectorTypes, useTestConnection, useDeleteConnection } from "@/lib/graphql/hooks";
 import type { DataConnection } from "@/lib/graphql/types";
+import { ConnectorLogo } from "@/components/connections/icons";
 import { formatLocal } from "@/lib/utils";
 import { t } from "@/lib/i18n/messages";
 
@@ -58,7 +59,15 @@ export default function DataConnectionsPage() {
 
   const columns: Column<DataConnection>[] = [
     { id: "name", header: t("connections.name"), cell: (c) => <span className="font-medium">{c.name}</span> },
-    { id: "type", header: t("connections.type"), width: 170, cell: (c) => displayName(c.connectorType) },
+    {
+      id: "type", header: t("connections.type"), width: 190,
+      cell: (c) => (
+        <span className="flex items-center gap-2">
+          <ConnectorLogo connectorType={c.connectorType} size={20} className="shrink-0" />
+          <span className="truncate">{displayName(c.connectorType)}</span>
+        </span>
+      ),
+    },
     {
       id: "status",
       header: t("connections.status"),
