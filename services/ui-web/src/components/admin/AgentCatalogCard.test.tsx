@@ -38,6 +38,10 @@ beforeEach(() => {
   handler = (doc: string) => {
     if (doc.includes("query Me")) return meResult;
     if (doc.includes("query AgentDefinitions")) return definitions;
+    // Persona auto-binding (BRD 53 inc3) reads the tenant role list; no test
+    // exercises autobind, so an empty connection suffices — it just must be a
+    // well-formed page so the useRoles infinite query doesn't crash.
+    if (doc.includes("query Roles")) return { roles: { nodes: [], pageInfo: { nextCursor: null, hasMore: false } } };
     return {};
   };
 });

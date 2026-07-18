@@ -28,7 +28,7 @@ const meResult = {
   me: { userId: "u", tenantId: "t-42", type: "user", scopes: [], roles: ["Admin"], capabilities: ["*"], capsDegraded: false },
 };
 const usersResult = {
-  users: {
+  assignableUsers: {
     nodes: [{ id: "u-1", urn: "wr:t-42:identity:user/u-1", email: "ann@x.com", fullName: "Ann" }],
     pageInfo: { nextCursor: null, hasMore: false },
   },
@@ -67,7 +67,7 @@ beforeEach(() => {
   detail = caseResult();
   handler = (doc: string) => {
     if (doc.includes("query Me")) return meResult;
-    if (doc.includes("query Users")) return usersResult;
+    if (doc.includes("query AssignableUsers")) return usersResult;
     if (doc.includes("query Dispositions")) return dispositionsResult;
     if (doc.includes("query CaseTimeline")) return emptyTimeline;
     if (doc.includes("query CaseDetail")) return detail;
@@ -141,7 +141,9 @@ describe("Case detail actions bar — buttons derived from the real state machin
   it("closed is terminal — no lifecycle buttons at all", async () => {
     detail = caseResult({ status: "CLOSED", closedAt: "2026-07-11T00:00:00Z" });
     renderPage();
-    await screen.findByText("Case #7");
+    // "Case #7" is both the case title and the header's derived `Case #<n>`
+    // subtitle, so match all — this is just a wait-for-render anchor.
+    await screen.findAllByText("Case #7");
     for (const name of ["Assign", "Reassign", "Unassign", "Start", "Resolve", "Reopen", "Close", "Escalate"]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
@@ -152,7 +154,7 @@ describe("Case detail actions — real mutations", () => {
   it("resolveCase carries the chosen dispositionId + required note", async () => {
     handler = (doc: string, vars: any) => {
       if (doc.includes("query Me")) return meResult;
-      if (doc.includes("query Users")) return usersResult;
+      if (doc.includes("query AssignableUsers")) return usersResult;
       if (doc.includes("query Dispositions")) return dispositionsResult;
       if (doc.includes("query CaseTimeline")) return emptyTimeline;
       if (doc.includes("query CaseDetail")) return detail;
@@ -191,7 +193,7 @@ describe("Case detail actions — real mutations", () => {
   it("addCaseComment posts the composed body against the real mutation", async () => {
     handler = (doc: string, vars: any) => {
       if (doc.includes("query Me")) return meResult;
-      if (doc.includes("query Users")) return usersResult;
+      if (doc.includes("query AssignableUsers")) return usersResult;
       if (doc.includes("query Dispositions")) return dispositionsResult;
       if (doc.includes("query CaseTimeline")) return emptyTimeline;
       if (doc.includes("query CaseDetail")) return detail;

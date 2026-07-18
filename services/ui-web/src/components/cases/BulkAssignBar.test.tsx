@@ -32,7 +32,7 @@ const meResult = {
   me: { userId: "u", tenantId: "t-42", type: "user", scopes: [], roles: ["Admin"], capabilities: ["*"], capsDegraded: false },
 };
 const usersResult = {
-  users: {
+  assignableUsers: {
     nodes: [{ id: "u-1", urn: "wr:t-42:identity:user/u-1", email: "ann@x.com", fullName: "Ann" }],
     pageInfo: { nextCursor: null, hasMore: false },
   },
@@ -44,7 +44,7 @@ beforeEach(() => {
   useSelection.getState().clear();
   handler = (doc: string) => {
     if (doc.includes("query Me")) return meResult;
-    if (doc.includes("query Users")) return usersResult;
+    if (doc.includes("query AssignableUsers")) return usersResult;
     return {};
   };
 });
@@ -59,7 +59,7 @@ describe("BulkAssignBar — real server-side bulk assign (no fake success)", () 
     useSelection.getState().selectMany(["case-1", "case-2"]);
     handler = (doc: string) => {
       if (doc.includes("query Me")) return meResult;
-      if (doc.includes("query Users")) return usersResult;
+      if (doc.includes("query AssignableUsers")) return usersResult;
       if (doc.includes("bulkAssignCases")) {
         return { bulkAssignCases: { succeededIds: ["case-1"], failed: [{ caseId: "case-2", code: "NOT_FOUND", message: "gone" }] } };
       }
