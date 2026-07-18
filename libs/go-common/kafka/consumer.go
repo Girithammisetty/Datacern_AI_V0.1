@@ -171,7 +171,14 @@ func (c *ConsumerGroup) process(ctx context.Context, msg kafka.Message) error {
 	if err := json.Unmarshal(msg.Value, &env); err != nil {
 		return c.toDLQ(ctx, msg, fmt.Errorf("decode: %w", err))
 	}
-	dedupKey := "evt:dedup:" + env.EventID.String()
+	// The dedup claim MUST be namespaced by consumer group. Idempotency is a
+	// per-group property (a group must process each event once), NOT global:
+	// case.events.v1 is consumed by several groups (search-indexer, notification,
+	// realtime-hub, audit) that share one Redis. A global "evt:dedup:<id>" key
+	// let whichever group processed an event FIRST claim it and every other group
+	// silently skip it (SetNX !fresh -> return nil), randomly dropping events per
+	// consumer. Scoping by group makes each group's dedup independent.
+	dedupKey := "evt:dedup:" + c.group + ":" + env.EventID.String()
 	if c.dedup != nil {
 		fresh, err := c.dedup.SetNX(ctx, dedupKey, c.dedupTTL)
 		if err == nil && !fresh {

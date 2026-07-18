@@ -95,6 +95,53 @@ func TestProcessDLQPublishFailureDoesNotCommit(t *testing.T) {
 	}
 }
 
+// recordingDeduper captures every key SetNX is asked about and always reports
+// the key as freshly claimed (so the handler runs).
+type recordingDeduper struct{ keys []string }
+
+func (d *recordingDeduper) SetNX(_ context.Context, key string, _ time.Duration) (bool, error) {
+	d.keys = append(d.keys, key)
+	return true, nil
+}
+
+// The dedup claim MUST be namespaced by consumer group. case.events.v1 is
+// consumed by several groups sharing one Redis; a global "evt:dedup:<id>" key
+// let whichever group ran first claim an event and every other group silently
+// skip it. Regression guard: the key must embed the group id.
+func TestDedupKeyIsGroupNamespaced(t *testing.T) {
+	msg := poisonMsg(t)
+	var env event.Envelope
+	if err := json.Unmarshal(msg.Value, &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	dedA := &recordingDeduper{}
+	cgA := newTestConsumer(func(context.Context, event.Envelope) error { return nil }, &fakeDLQ{})
+	cgA.group, cgA.dedup = "group-a", dedA
+	if err := cgA.process(context.Background(), msg); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	dedB := &recordingDeduper{}
+	cgB := newTestConsumer(func(context.Context, event.Envelope) error { return nil }, &fakeDLQ{})
+	cgB.group, cgB.dedup = "group-b", dedB
+	if err := cgB.process(context.Background(), msg); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	if len(dedA.keys) != 1 || len(dedB.keys) != 1 {
+		t.Fatalf("each group should claim exactly one key, got a=%v b=%v", dedA.keys, dedB.keys)
+	}
+	// Same event, different groups → DIFFERENT keys (no cross-group cannibalism).
+	if dedA.keys[0] == dedB.keys[0] {
+		t.Fatalf("dedup key must differ across consumer groups; both were %q", dedA.keys[0])
+	}
+	wantA := "evt:dedup:group-a:" + env.EventID.String()
+	if dedA.keys[0] != wantA {
+		t.Fatalf("group-a dedup key = %q, want %q", dedA.keys[0], wantA)
+	}
+}
+
 // A nil DLQ is a misconfiguration: rather than silently drop a poison event,
 // process must block (never returning a committable nil) until ctx is cancelled.
 func TestProcessNilDLQPausesRatherThanDrops(t *testing.T) {
