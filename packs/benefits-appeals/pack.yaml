@@ -121,9 +121,3 @@ deferred:
       (isolation_forest claim anomaly + xgboost determination-outcome
       scorer) with model-governance and human-review expectations noted in
       grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Determination", "Fair hearing", "Expedited —
-      clock running", "Waiver candidate", entity templates) require the BFF
-      label-registry endpoints (BFF-FR-082/088) which are pack-service-tier
-      features.

@@ -1,0 +1,45 @@
+# Typed case fields for the AP exception-audit workflow (CASE-FR-022). These
+# structure the evidence an analyst records when resolving an exception, beyond
+# the free-form display_projection the seed rows carry — so the case form shows
+# governed, typed inputs (root cause, out-of-band verification discipline,
+# recovered dollars) that SOX/recovery auditors and the four-eyes approver rely
+# on. purpose=update: they are captured at resolution, not at intake. field_meta
+# carries the label/help/options the case form renders; enum options are the
+# closed value set for that field.
+- name: root_cause
+  data_type: enum
+  purpose: update
+  field_meta:
+    label: "Root cause"
+    required: true
+    help: "The confirmed driver of the exception, for recovery + control analytics."
+    options: [duplicate_payment, bec_banking_change, shell_vendor, split_invoicing, price_variance, missing_po, benign_timing]
+- name: oob_verified
+  data_type: boolean
+  purpose: update
+  field_meta:
+    label: "Out-of-band verification completed"
+    required: false
+    help: "For banking-change / BEC exceptions: vendor confirmed via the known-good phone number on the vendor master — NEVER a contact in the request."
+- name: verification_method
+  data_type: enum
+  purpose: update
+  field_meta:
+    label: "Verification method"
+    required: false
+    help: "How the vendor / invoice was verified before release."
+    options: [out_of_band_phone, vendor_portal, three_way_match, none]
+- name: recovered_amount
+  data_type: float
+  purpose: update
+  field_meta:
+    label: "Recovered amount (USD)"
+    required: false
+    help: "Dollars recovered on a duplicate payment or negotiated vendor credit."
+- name: control_approver
+  data_type: string
+  purpose: update
+  field_meta:
+    label: "Control approver"
+    required: false
+    help: "The AP Controls Manager who signed off the payment block or release (four-eyes)."

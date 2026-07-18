@@ -94,11 +94,6 @@ deferred:
       experiment-service archetype APIs; the detector ships today as
       pipeline seeds (isolation_forest claim-line outlier detector +
       xgboost lead classifier per FWA-FR-030/040).
-  - kind: display_labels
-    reason: >-
-      BRD 27 §4 display labels (FWA candidate / Investigation / Referral /
-      Recovery, agent names, provider/member entity templates) require the
-      BFF label-registry endpoints, a pack-service-tier feature.
   - kind: case_schemas
     reason: >-
       FWA-FR-100 typed case schemas (fwa_review, siu_investigation,

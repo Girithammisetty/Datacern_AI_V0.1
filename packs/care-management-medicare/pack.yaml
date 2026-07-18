@@ -108,8 +108,3 @@ deferred:
       tcm_discharge) await case-service schema materialization; today's
       seeded queue carries the same fields via display_projection + the
       disposition taxonomy.
-  - kind: display_labels
-    reason: >-
-      CMM-FR-160 label overlays (labels/en.yaml, PHI-safe patient display
-      templates) require the BFF label-registry endpoints which are
-      pack-service-tier features.

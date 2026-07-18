@@ -115,8 +115,3 @@ deferred:
       as pipeline seeds instead (isolation_forest account-book anomaly +
       xgboost triage-outcome scorer) with NAIC AI-bulletin model-governance
       expectations noted in grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Submission", "Clearance", "Needed-by date",
-      "Renewal defense", entity templates) require the BFF label-registry
-      endpoints (BFF-FR-082/088) which are pack-service-tier features.

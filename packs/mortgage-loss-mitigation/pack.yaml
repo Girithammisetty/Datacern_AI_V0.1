@@ -115,9 +115,3 @@ deferred:
       as pipeline seeds instead (isolation_forest loan anomaly + xgboost
       workout-outcome scorer) with model-governance expectations noted in
       grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Application", "Workout offer", "Evaluation
-      due", "Dual-track hold", entity templates) require the BFF
-      label-registry endpoints (BFF-FR-082/088) which are pack-service-tier
-      features.

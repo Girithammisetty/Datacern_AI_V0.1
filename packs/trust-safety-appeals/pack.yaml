@@ -116,9 +116,3 @@ deferred:
       as pipeline seeds instead (isolation_forest enforcement anomaly +
       xgboost appeal-outcome scorer) with model-governance expectations
       noted in grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Appeal", "Enforcement decision", "Statement
-      of reasons due", "Deadline at risk", entity templates) require the BFF
-      label-registry endpoints (BFF-FR-082/088) which are pack-service-tier
-      features.

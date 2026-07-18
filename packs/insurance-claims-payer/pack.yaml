@@ -70,10 +70,6 @@ deferred:
       INS-FR shipped golden sets (pa_golden, appeal_golden, denial_golden)
       require eval-service write APIs whose action names are not yet in the
       rbac canonical catalog (Core follow-up noted in rbac catalog.go).
-  - kind: display_labels
-    reason: >-
-      INS-FR-110 label overlays require the BFF label-registry endpoints
-      (BFF-FR-082/088) which are pack-service-tier features.
   - kind: write_adapters
     reason: >-
       INS-FR-061 SoR write adapters (Facets PA decision, Guidewire notes, EDI

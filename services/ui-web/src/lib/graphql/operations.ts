@@ -216,7 +216,7 @@ import type {
 
 export const ME = /* GraphQL */ `
   query Me {
-    me { userId tenantId tenantName workspaceId workspaceName type scopes roles capabilities capsDegraded }
+    me { userId tenantId tenantName workspaceId workspaceName type scopes roles capabilities capsDegraded displayLabels { key value } }
   }
 `;
 export interface MeResult {

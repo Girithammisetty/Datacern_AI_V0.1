@@ -116,9 +116,3 @@ deferred:
       scoring capability ships as pipeline seeds instead (isolation_forest
       medical-bill anomaly + xgboost compensability-outcome scorer) with
       model-governance expectations noted in grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Claim", "Compensability decision due",
-      "Deadline at risk", "SIU referred", "Above fee schedule", entity
-      templates) require the BFF label-registry endpoints (BFF-FR-082/088)
-      which are pack-service-tier features.

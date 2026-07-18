@@ -104,8 +104,3 @@ deferred:
       coding_audit_prep) await case-service schema materialization; today's
       cases carry the same fields via display_projection + the disposition
       taxonomy.
-  - kind: display_labels
-    reason: >-
-      BRD 26 §4 display-label overlays ("Denial appeal", "Underpayment",
-      "AR item", entity templates) require the BFF label-registry endpoints
-      (BFF-FR-082/088) which are pack-service-tier features.

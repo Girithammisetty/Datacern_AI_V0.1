@@ -116,9 +116,3 @@ deferred:
       as pipeline seeds instead (isolation_forest order anomaly + xgboost
       hit-outcome scorer) with model-governance expectations noted in
       grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Screening hit", "Pre-adverse sent",
-      "Response window closing", "Obsolete record", entity templates)
-      require the BFF label-registry endpoints (BFF-FR-082/088) which are
-      pack-service-tier features.

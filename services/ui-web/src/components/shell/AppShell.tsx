@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ToastHost } from "./ToastHost";
@@ -7,10 +7,32 @@ import { CommandPalette } from "./CommandPalette";
 import { CopilotDrawer } from "@/components/copilot/CopilotDrawer";
 import { SessionProvider, type SessionInfo } from "@/lib/session/SessionContext";
 import { useProposalsInbox } from "@/lib/graphql/hooks";
-import { useCostPanel } from "@/lib/graphql/hooks";
+import { useCostPanel, useMe } from "@/lib/graphql/hooks";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { cap } from "@/lib/authz/registry";
 import { RouteGuard } from "@/components/authz/RouteGuard";
+import { setLabelOverrides } from "@/lib/i18n/messages";
+
+/** Load this tenant's UI label overrides (BRD 23 inc3) into the i18n overlay
+ * once at bootstrap, so a capability pack's white-label vocabulary ("Cases" ->
+ * "AP Exceptions") renders across the shell. Returns a version that bumps only
+ * when the label set actually changes — the shell keys its subtree on it so nav
+ * + page re-render with the overlay applied (a one-time remount after login,
+ * not on every 5-min Me refetch). */
+function useLabelOverlay(): number {
+  const me = useMe();
+  const [version, setVersion] = useState(0);
+  const applied = useRef<string>("");
+  useEffect(() => {
+    const labels = me.data?.me.displayLabels ?? [];
+    const sig = JSON.stringify(labels);
+    if (sig === applied.current) return;
+    applied.current = sig;
+    setLabelOverrides(Object.fromEntries(labels.map((l) => [l.key, l.value])));
+    setVersion((v) => v + 1);
+  }, [me.data]);
+  return version;
+}
 
 function todayRange(): { from: string; to: string } {
   const to = new Date();
@@ -46,8 +68,12 @@ function ShellInner({ children, session }: { children: React.ReactNode; session:
     (b) => b.exhaustedAt != null || (b.limit != null && b.consumed != null && b.consumed >= b.limit),
   );
 
+  // Bumps once when this tenant's label overrides load → remount so the overlay
+  // reaches both the nav and the routed page.
+  const labelVersion = useLabelOverlay();
+
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div key={labelVersion} className="flex h-screen overflow-hidden">
       <Sidebar pendingCount={pendingCount} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />

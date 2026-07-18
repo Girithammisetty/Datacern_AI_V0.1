@@ -241,6 +241,91 @@ func idpConfigView(c *domain.TenantIdpConfig) map[string]any {
 	}
 }
 
+// --- per-tenant display-label overlays (BRD 23 inc3) ---
+
+// GET /tenants/self/labels: the caller's tenant's UI label overrides as a flat
+// {key: value} map. MEMBER-SAFE (no admin scope) — every tenant member's UI
+// loads these at bootstrap to overlay its base i18n catalog, so a capability
+// pack's "Cases -> AP Exceptions" rename renders for the whole tenant.
+func (s *Server) handleGetTenantLabels(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFrom(r.Context())
+	labels, err := s.Store.ListTenantDisplayLabels(r.Context(), claims.TenantID)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"labels": labelMap(labels)})
+}
+
+// PUT /tenants/self/labels: bulk-merge upsert of the caller's tenant's label
+// overrides (tenant-admin scoped — labels are tenant-wide presentation). Body:
+// {"labels": {"cases.title": "AP Exceptions", ...}}. Each entry is validated;
+// unknown-but-well-formed keys are allowed (the UI overlays only keys it knows).
+// Returns the full merged map.
+func (s *Server) handleSetTenantLabels(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFrom(r.Context())
+	var body struct {
+		Labels map[string]string `json:"labels"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	if len(body.Labels) == 0 {
+		writeErr(w, r, domain.EValidation("labels is required",
+			domain.FieldError{Field: "labels", Message: "at least one label required"}))
+		return
+	}
+	for k, v := range body.Labels {
+		if err := domain.ValidateDisplayLabel(k, v); err != nil {
+			writeErr(w, r, err)
+			return
+		}
+	}
+	for k, v := range body.Labels {
+		l := &domain.DisplayLabel{
+			TenantID: claims.TenantID, Key: strings.TrimSpace(k),
+			Value: v, UpdatedBy: claims.Subject,
+		}
+		if err := s.Store.UpsertTenantDisplayLabel(r.Context(), l); err != nil {
+			writeErr(w, r, err)
+			return
+		}
+	}
+	merged, err := s.Store.ListTenantDisplayLabels(r.Context(), claims.TenantID)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"labels": labelMap(merged)})
+}
+
+// DELETE /tenants/self/labels/{key}: remove one label override (tenant-admin
+// scoped). Reverts that key to the app's base i18n string. 204 whether or not
+// the key existed (idempotent — the reversal path a pack uninstall drives).
+func (s *Server) handleDeleteTenantLabel(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFrom(r.Context())
+	key := chi.URLParam(r, "key")
+	if strings.TrimSpace(key) == "" {
+		writeErr(w, r, domain.EValidation("label key is required",
+			domain.FieldError{Field: "key", Message: "required"}))
+		return
+	}
+	if err := s.Store.DeleteTenantDisplayLabel(r.Context(), claims.TenantID, key); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func labelMap(labels []domain.DisplayLabel) map[string]string {
+	m := map[string]string{}
+	for _, l := range labels {
+		m[l.Key] = l.Value
+	}
+	return m
+}
+
 // GET /tenants — filters: status, cell, cloud (MASTER-FR-023).
 func (s *Server) handleListTenants(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()

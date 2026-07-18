@@ -107,6 +107,13 @@ func (s *Server) Router() http.Handler {
 			// as a static route ahead of the ActUserAdmin-gated /users/{id} below
 			// so "assignable" never parses as an {id}.
 			r.Get("/users/assignable", s.handleAssignableUsers)
+			// Per-tenant display-label overlays (BRD 23 inc3): READ is member-safe
+			// (every member's UI overlays them at bootstrap); WRITES are tenant-admin
+			// scoped (labels are tenant-wide presentation). Static routes registered
+			// ahead of /tenants/{id} so "self" never parses as an id.
+			r.Get("/tenants/self/labels", s.handleGetTenantLabels)
+			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/self/labels", s.handleSetTenantLabels)
+			r.With(s.requireScope(ActUserAdmin)).Delete("/tenants/self/labels/{key}", s.handleDeleteTenantLabel)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}", s.handleGetTenant)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/embed-config", s.handleGetEmbedConfig)
 			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/{id}/embed-config", s.handleSetEmbedConfig)

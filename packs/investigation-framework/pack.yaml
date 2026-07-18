@@ -64,5 +64,3 @@ deferred:
       confidence_calibrator + network_anomaly_baseline archetypes await
       experiment-service archetype APIs; consumer packs ship trainable
       pipeline seeds instead.
-  - kind: display_labels
-    reason: "Label overlays await BFF label-registry endpoints (BFF-FR-082/088)."

@@ -113,9 +113,3 @@ deferred:
       (isolation_forest asset-condition anomaly + xgboost
       finding-disposition scorer) with model-governance expectations noted
       in grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Finding", "Make-safe deadline", "HFTD Tier 3",
-      "Deferral pending engineering review", entity templates) require the
-      BFF label-registry endpoints (BFF-FR-082/088) which are
-      pack-service-tier features.

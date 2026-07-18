@@ -119,8 +119,3 @@ deferred:
       APIs; the scoring capability ships as pipeline seeds instead
       (isolation_forest tradeline anomaly + xgboost dispute-outcome scorer)
       with model-governance expectations noted in grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Reinvestigation", "ACDV", "605B block due",
-      "Deadline at risk", entity templates) require the BFF label-registry
-      endpoints (BFF-FR-082/088) which are pack-service-tier features.

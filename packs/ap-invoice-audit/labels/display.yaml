@@ -1,0 +1,10 @@
+# Per-tenant UI label overrides for the AP invoice-audit vertical (BRD 23 inc3 /
+# PKG display_labels). Each key is a ui-web i18n key; the value overlays the base
+# catalog for THIS tenant only, so the same Core reads as an AP-exceptions
+# workbench rather than the generic "Cases" surface. Installed into the
+# identity-service tenant label registry; reversible on uninstall (each key
+# reverts to the app's base string).
+- { key: "nav.cases",      value: "AP Exceptions" }
+- { key: "cases.title",    value: "AP Exceptions" }
+- { key: "cases.number",   value: "Exception ref" }
+- { key: "cases.assignee", value: "AP analyst" }

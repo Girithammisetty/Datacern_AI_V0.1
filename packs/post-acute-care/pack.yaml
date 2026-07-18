@@ -99,8 +99,3 @@ deferred:
       pdpm_optimization_review, hospice_eligibility_review) await case-service
       schema materialization; today's cases carry the same fields via
       display_projection + the disposition taxonomy.
-  - kind: display_labels
-    reason: >-
-      BRD 29 §4 display-label overlays (case-schema singulars, agent names,
-      patient entity template) require the BFF label-registry endpoints
-      (BFF-FR-082/088) which are pack-service-tier features.

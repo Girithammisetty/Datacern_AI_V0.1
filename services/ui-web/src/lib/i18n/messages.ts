@@ -865,8 +865,20 @@ export const en = {
 
 export type MessageKey = keyof typeof en;
 
+// Per-tenant display-label overlay (BRD 23 inc3). A capability pack (or a tenant
+// admin) can override i18n keys — e.g. "cases.title" -> "AP Exceptions" — via the
+// identity-service label registry; the app loads them once at bootstrap (see
+// AppShell) and t() prefers them over the base `en` catalog. Client-only mutable
+// singleton: it is set exclusively in a client effect, so server-side t() always
+// reads the base catalog (no cross-tenant leak during SSR).
+let labelOverride: Record<string, string> = {};
+
+export function setLabelOverrides(overrides: Record<string, string> | null | undefined): void {
+  labelOverride = overrides ?? {};
+}
+
 export function t(key: MessageKey, params?: Record<string, string | number>): string {
-  let s: string = en[key] ?? key;
+  let s: string = labelOverride[key] ?? en[key] ?? key;
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       s = s.replace(new RegExp(`\\{${k}\\}`, "g"), String(v));

@@ -32,6 +32,7 @@ type Store struct {
 	signingKeys  map[string]*domain.SigningKey
 	embedConfigs map[uuid.UUID]*domain.TenantEmbedConfig
 	idpConfigs   map[uuid.UUID]*domain.TenantIdpConfig
+	labels       map[uuid.UUID]map[string]*domain.DisplayLabel
 	idempotency  map[string]*domain.IdempotencyRecord
 	outbox       []*domain.OutboxEvent
 }
@@ -50,6 +51,7 @@ func New() *Store {
 		signingKeys:  map[string]*domain.SigningKey{},
 		embedConfigs: map[uuid.UUID]*domain.TenantEmbedConfig{},
 		idpConfigs:   map[uuid.UUID]*domain.TenantIdpConfig{},
+		labels:       map[uuid.UUID]map[string]*domain.DisplayLabel{},
 		idempotency:  map[string]*domain.IdempotencyRecord{},
 	}
 }
@@ -285,6 +287,36 @@ func (s *Store) DeleteTenantIdpConfig(_ context.Context, tenantID uuid.UUID) err
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.idpConfigs, tenantID)
+	return nil
+}
+
+func (s *Store) ListTenantDisplayLabels(_ context.Context, tenantID uuid.UUID) ([]domain.DisplayLabel, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []domain.DisplayLabel{}
+	for _, l := range s.labels[tenantID] {
+		out = append(out, *l)
+	}
+	return out, nil
+}
+
+func (s *Store) UpsertTenantDisplayLabel(_ context.Context, l *domain.DisplayLabel) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.labels[l.TenantID] == nil {
+		s.labels[l.TenantID] = map[string]*domain.DisplayLabel{}
+	}
+	cp := *l
+	s.labels[l.TenantID][l.Key] = &cp
+	return nil
+}
+
+func (s *Store) DeleteTenantDisplayLabel(_ context.Context, tenantID uuid.UUID, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if m := s.labels[tenantID]; m != nil {
+		delete(m, key)
+	}
 	return nil
 }
 

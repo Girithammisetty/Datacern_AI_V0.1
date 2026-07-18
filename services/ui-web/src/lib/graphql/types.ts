@@ -100,6 +100,14 @@ export interface Viewer {
   /** True when the rbac lookup FAILED and roles/capabilities are the fail-closed
    * empty fallback — show "permissions unavailable", not "you have no access". */
   capsDegraded: boolean;
+  /** Per-tenant UI label overrides (BRD 23 inc3) the app overlays onto its base
+   * i18n catalog to white-label the vertical (e.g. "Cases" -> "AP Exceptions"). */
+  displayLabels?: LabelOverride[];
+}
+
+export interface LabelOverride {
+  key: string;
+  value: string;
 }
 
 export interface User {

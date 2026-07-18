@@ -117,9 +117,3 @@ deferred:
       scoring capability ships as pipeline seeds instead (isolation_forest
       order anomaly + xgboost win-likelihood scorer) with model-governance
       expectations noted in grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Chargeback", "Representment", "Response due",
-      "CE 3.0 qualified", "Below fight threshold", entity templates) require
-      the BFF label-registry endpoints (BFF-FR-082/088) which are
-      pack-service-tier features.

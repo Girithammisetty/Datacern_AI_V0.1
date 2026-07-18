@@ -116,9 +116,3 @@ deferred:
       the scoring capability ships as pipeline seeds instead
       (isolation_forest unit anomaly + xgboost claim-outcome scorer) with
       model-governance expectations noted in grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Claim", "Supplier chargeback", "Payment
-      decision due", "Deadline at risk", "Recall routing", entity
-      templates) require the BFF label-registry endpoints (BFF-FR-082/088)
-      which are pack-service-tier features.

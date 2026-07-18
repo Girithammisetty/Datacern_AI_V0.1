@@ -121,6 +121,14 @@ export class IdentityClient {
     return this.http.get<TenantSelfDTO>("/api/v1/tenants/self");
   }
 
+  /** GET /api/v1/tenants/self/labels — the caller's tenant's UI label overrides
+   * as a flat {key: value} map (BRD 23 inc3). Member-visible: every tenant
+   * member loads these to overlay the app's base i18n catalog, so a capability
+   * pack's "Cases -> AP Exceptions" rename renders for the whole tenant. */
+  tenantLabels(): Promise<{ labels: Record<string, string> }> {
+    return this.http.get<{ labels: Record<string, string> }>("/api/v1/tenants/self/labels");
+  }
+
   /** GET /api/v1/users/profiles?filter[id]=a,b,c — batch hydration for the
    * userById loader (Case.assignee, CaseComment.author, CaseActivity.actor).
    * Deliberately NOT GET /api/v1/users (identity.user.admin, the tenant

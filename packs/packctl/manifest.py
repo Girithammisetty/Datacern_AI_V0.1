@@ -38,19 +38,21 @@ SUPPORTED_KINDS = (
     "saved_queries",      # query-service saved queries ({{dataset()}} macros)
     "dashboards",         # chart-service dashboards + charts + layout
     "dispositions",       # case-service disposition taxonomy
+    "case_fields",        # case-service typed custom-field catalog (CASE-FR-022)
     "decision_models",    # agent-runtime governed decision tables (BRD 54)
     "cases",              # case-service seeded queue rows (+ reindex)
     "roles",              # rbac-service tenant custom roles + permission group
     "agent_configs",      # agent-runtime TenantAgentConfig prompt_params
     "memories",           # memory-service tenant-scope RAG grounding records
     "pipelines",          # pipeline-orchestrator algorithm-template pipelines
+    "display_labels",     # identity-service per-tenant UI label overrides (inc3)
 )
 
 # Deferred kinds we RECOGNIZE (from BRD 23/24..31) so packs can declare them
 # for the future pack-service without packctl pretending to install them.
 KNOWN_DEFERRED_KINDS = (
     "ontology", "guardrails", "eval_sets", "agent_recipes",
-    "connection_templates", "model_archetypes", "display_labels",
+    "connection_templates", "model_archetypes",
     "case_schemas", "write_adapters",
 )
 

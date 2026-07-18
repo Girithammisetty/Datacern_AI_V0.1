@@ -83,6 +83,18 @@ export const typeDefs = gql`
     /me/capabilities workspace_name; null when unresolvable)."""
     workspaceId: ID
     workspaceName: String
+    """Per-tenant UI label overrides (identity GET /tenants/self/labels; BRD 23
+    inc3). The app overlays these onto its base i18n catalog so a capability
+    pack can white-label the vertical (e.g. "Cases" -> "AP Exceptions"). Empty
+    when none are set or the lookup fails (the base catalog is used)."""
+    displayLabels: [LabelOverride!]!
+  }
+
+  """One per-tenant UI label override: an i18n key and the string to show for
+  it (BRD 23 inc3)."""
+  type LabelOverride {
+    key: String!
+    value: String!
   }
 
   """A directory user (identity-service GET /users/{id})."""

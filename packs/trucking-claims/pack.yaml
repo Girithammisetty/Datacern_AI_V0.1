@@ -117,9 +117,3 @@ deferred:
       scoring capability ships as pipeline seeds instead (isolation_forest
       shipment anomaly + xgboost claim-outcome scorer) with model-governance
       expectations noted in grounding memories.
-  - kind: display_labels
-    reason: >-
-      Display-label overlays ("Claim", "Safety event", "Filing deadline at
-      risk", "Carrier on watch", entity templates) require the BFF
-      label-registry endpoints (BFF-FR-082/088) which are pack-service-tier
-      features.

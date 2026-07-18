@@ -235,6 +235,7 @@ interface ViewerParent {
   workspaceId: string;
   _caps?: Promise<ViewerCaps>;
   _tenant?: Promise<{ name: string | null; displayName: string | null }>;
+  _labels?: Promise<Array<{ key: string; value: string }>>;
 }
 
 /** Fetch the caller's rbac roles+capabilities once per request; fail-safe to []
@@ -263,6 +264,19 @@ function viewerTenant(parent: ViewerParent, ctx: GraphQLContext) {
       .catch(() => ({ name: null, displayName: null }));
   }
   return parent._tenant;
+}
+
+/** Fetch the caller's tenant UI-label overrides once per request (identity
+ * /tenants/self/labels). Display-only — a failure yields [] so the UI falls
+ * back to its base i18n catalog, never an error. */
+function viewerLabels(parent: ViewerParent, ctx: GraphQLContext): Promise<Array<{ key: string; value: string }>> {
+  if (!parent._labels) {
+    parent._labels = ctx.clients.identity
+      .tenantLabels()
+      .then((r) => Object.entries(r.labels ?? {}).map(([key, value]) => ({ key, value })))
+      .catch(() => []);
+  }
+  return parent._labels;
 }
 
 /** Flatten one data entry into {chart_id, rows, columns, meta, error}. Both the
@@ -4541,6 +4555,10 @@ export const resolvers = {
     workspaceId: (parent: ViewerParent) => parent.workspaceId || null,
     workspaceName: (parent: ViewerParent, _a: unknown, ctx: GraphQLContext) =>
       viewerCaps(parent, ctx).then((c) => c.workspaceName || null),
+    // Per-tenant UI label overrides (BRD 23 inc3) the app overlays onto its base
+    // i18n catalog. Lazy + fail-safe ([] on any downstream error).
+    displayLabels: (parent: ViewerParent, _a: unknown, ctx: GraphQLContext) =>
+      viewerLabels(parent, ctx),
   },
 
   Tenant: {

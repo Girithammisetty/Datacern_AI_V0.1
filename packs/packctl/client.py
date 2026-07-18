@@ -37,6 +37,7 @@ class Endpoints:
     agent: str = "http://localhost:8306"
     memory: str = "http://localhost:8307"
     pipeline: str = "http://localhost:8313"
+    identity: str = "http://localhost:8301"
 
 
 @dataclass
@@ -437,6 +438,68 @@ class PlatformClient:
         self._record("cases", identity, "create", dataset_urn,
                      f"{len(ids)} open cases (reindexed)")
         return ids
+
+    # ---- case field configs (case-service custom-field catalog) -------------
+    def ensure_case_field(self, identity: str, name: str, data_type: str,
+                          purpose: str = "both",
+                          field_meta: dict | None = None) -> str | None:
+        """Register one typed case field in the workspace's custom-field catalog
+        (CASE-FR-022). Idempotent by name; the workspace is derived from the
+        forwarded JWT's workspace_id claim (case-service reads it from the claim,
+        not the body). field_meta carries the display label/options/required
+        config the case form renders. Uses the generic case.case.update action."""
+        tok = self.author_token()
+        g = self._req("GET", f"{self.endpoints.case}/api/v1/case-fields", tok)
+        if g.status_code == 200:
+            for f in g.json().get("data", []):
+                if f.get("name") == name:
+                    self._record("case_fields", identity, "noop", None, f"field {name!r}")
+                    return f.get("id")
+        r = self._req("POST", f"{self.endpoints.case}/api/v1/case-fields", tok,
+                      headers=JSON, json={"name": name, "data_type": data_type,
+                                          "purpose": purpose,
+                                          "field_meta": field_meta or {}})
+        if r.status_code in (200, 201):
+            fid = (r.json().get("data", r.json())).get("id")
+            self._record("case_fields", identity, "create", None, f"field {name!r}")
+            return fid
+        self._record("case_fields", identity, "failed", None,
+                     f"{name}: {r.status_code} {r.text[:150]}")
+        return None
+
+    def delete_case_field(self, field_id: str) -> bool:
+        r = self._req("DELETE",
+                      f"{self.endpoints.case}/api/v1/case-fields/{field_id}",
+                      self.author_token())
+        return r.status_code in (200, 204)
+
+    # ---- display labels (identity-service per-tenant label registry) --------
+    def ensure_label(self, identity: str, key: str, value: str) -> str | None:
+        """Set one per-tenant UI label override (BRD 23 inc3), e.g.
+        cases.title="AP Exceptions". Idempotent by key (noop if already set to
+        the same value); the tenant is derived from the forwarded JWT. WRITES
+        require the tenant-admin action (identity.user.admin) — labels are
+        tenant-wide presentation. Returns the label key (its stable id for
+        reversal), or None on failure."""
+        tok = self.author_token()
+        base = f"{self.endpoints.identity}/api/v1/tenants/self/labels"
+        g = self._req("GET", base, tok)
+        if g.status_code == 200 and (g.json().get("labels") or {}).get(key) == value:
+            self._record("display_labels", identity, "noop", None, f"{key}={value!r}")
+            return key
+        r = self._req("PUT", base, tok, headers=JSON, json={"labels": {key: value}})
+        if r.status_code in (200, 201):
+            self._record("display_labels", identity, "create", None, f"{key}={value!r}")
+            return key
+        self._record("display_labels", identity, "failed", None,
+                     f"{key}: {r.status_code} {r.text[:150]}")
+        return None
+
+    def delete_label(self, key: str) -> bool:
+        r = self._req("DELETE",
+                      f"{self.endpoints.identity}/api/v1/tenants/self/labels/{key}",
+                      self.author_token())
+        return r.status_code in (200, 204)
 
     # ---- rbac custom roles + permission group binding ------------------------
     def ensure_role(self, identity: str, name: str, actions: list[str]) -> str | None:

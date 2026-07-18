@@ -109,8 +109,3 @@ deferred:
       alert-scoring capability ships as pipeline seeds instead
       (isolation_forest anomaly detector + xgboost alert-disposition scorer)
       with SR 11-7 model-risk documentation noted in grounding memories (BR-8).
-  - kind: display_labels
-    reason: >-
-      BRD 30 §4 display-label overlays ("Alert", "Sanctions hit", "SAR case",
-      "Escalate to L2", entity templates) require the BFF label-registry
-      endpoints (BFF-FR-082/088) which are pack-service-tier features.

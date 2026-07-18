@@ -44,12 +44,15 @@ def test_origin_tag_and_urn_id():
 
 
 def test_inc1_kinds_and_reversibility_contract():
-    # inc1 materializes only self-contained kinds (no dataset/four-eyes chain).
-    assert set(installer.INC1_KINDS) == {"dispositions", "roles", "decision_models"}
+    # inc1 materializes self-contained kinds (no dataset/four-eyes chain).
+    # inc3 adds case_fields (case-service custom-field catalog) here.
+    assert set(installer.INC1_KINDS) == {"dispositions", "case_fields", "display_labels", "roles", "decision_models"}
     assert "saved_queries" not in installer.INC1_KINDS  # needs its datasets first
-    # Roles carry a real Core delete verb → reversible; dispositions/decision
-    # tables do not (tombstoned honestly on uninstall).
+    # Roles/case_fields carry a real Core delete verb → reversible; dispositions/
+    # decision tables do not (tombstoned honestly on uninstall).
     assert "roles" in installer.REVERSIBLE_KINDS
+    assert "case_fields" in installer.REVERSIBLE_KINDS  # DELETE /case-fields/{id}
+    assert "display_labels" in installer.REVERSIBLE_KINDS  # DELETE /tenants/self/labels/{key}
     assert "dispositions" not in installer.REVERSIBLE_KINDS
     assert "decision_models" not in installer.REVERSIBLE_KINDS
 
@@ -68,7 +71,7 @@ def test_plan_marks_inc1_kinds_create_and_others_deferred():
         workspace_id = "ws-1"
         endpoints = types.SimpleNamespace(
             case="c", rbac="r", query="q", agent="a", semantic="s",
-            chart="ch", dataset="d", ingestion="i", memory="m", pipeline="p")
+            chart="ch", dataset="d", ingestion="i", memory="m", pipeline="p", identity="id")
 
         @staticmethod
         def author_token():
@@ -88,3 +91,42 @@ def test_plan_marks_inc1_kinds_create_and_others_deferred():
     assert kinds.get("semantic_models") == "create"
     # dashboards wait for the steward to approve the semantic model (phase 2)
     assert any(o["kind"] == "dashboards" and o["action"] == "after_approval" for o in ops)
+
+
+def test_plan_materializes_case_fields(tmp_path):
+    # ap-invoice-audit ships a case_fields component (inc3) — it must plan as a
+    # real create (case-service custom-field catalog), never `deferred`/faked.
+    manifest = catalog.load_manifest("ap-invoice-audit")
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"data": []}
+
+    class _FakeClient:
+        workspace_id = "ws-1"
+        endpoints = types.SimpleNamespace(
+            case="c", rbac="r", query="q", agent="a", semantic="s",
+            chart="ch", dataset="d", ingestion="i", memory="m", pipeline="p", identity="id")
+
+        @staticmethod
+        def author_token():
+            return "tok"
+
+        @staticmethod
+        def _req(method, url, tok):
+            return _Resp()
+
+    ops = installer.plan(_FakeClient(), manifest)
+    field_ops = [o for o in ops if o["kind"] == "case_fields"]
+    assert field_ops, "case_fields must appear in the plan"
+    assert all(o["action"] == "create" for o in field_ops)
+    names = {o["name"] for o in field_ops}
+    assert {"root_cause", "oob_verified", "recovered_amount"} <= names
+    # display_labels (inc3) also materialize as real creates (identity registry),
+    # never deferred — the AP "Cases -> AP Exceptions" vocabulary.
+    label_ops = [o for o in ops if o["kind"] == "display_labels"]
+    assert label_ops and all(o["action"] == "create" for o in label_ops)
+    assert {"cases.title", "nav.cases"} <= {o["name"] for o in label_ops}

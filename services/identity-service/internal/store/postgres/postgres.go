@@ -209,6 +209,48 @@ func (s *Store) DeleteTenantIdpConfig(ctx context.Context, tenantID uuid.UUID) e
 	return err
 }
 
+// --- per-tenant display-label overlays (BRD 23 inc3) — platform-scoped ---
+
+const labelCols = `tenant_id, label_key, label_value, updated_at, updated_by`
+
+func (s *Store) ListTenantDisplayLabels(ctx context.Context, tenantID uuid.UUID) ([]domain.DisplayLabel, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+labelCols+` FROM tenant_display_labels WHERE tenant_id = $1 ORDER BY label_key`,
+		tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.DisplayLabel{}
+	for rows.Next() {
+		var l domain.DisplayLabel
+		if err := rows.Scan(&l.TenantID, &l.Key, &l.Value, &l.UpdatedAt, &l.UpdatedBy); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) UpsertTenantDisplayLabel(ctx context.Context, l *domain.DisplayLabel) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO tenant_display_labels (tenant_id, label_key, label_value, updated_at, updated_by)
+		 VALUES ($1, $2, $3, now(), $4)
+		 ON CONFLICT (tenant_id, label_key) DO UPDATE SET
+		   label_value = EXCLUDED.label_value,
+		   updated_at = now(),
+		   updated_by = EXCLUDED.updated_by`,
+		l.TenantID, l.Key, l.Value, l.UpdatedBy)
+	return err
+}
+
+func (s *Store) DeleteTenantDisplayLabel(ctx context.Context, tenantID uuid.UUID, key string) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM tenant_display_labels WHERE tenant_id = $1 AND label_key = $2`,
+		tenantID, key)
+	return err
+}
+
 func (s *Store) ListTenants(ctx context.Context, f domain.TenantFilter, page domain.PageRequest) ([]*domain.Tenant, domain.PageInfo, error) {
 	q := `SELECT ` + tenantCols + ` FROM tenants WHERE 1=1`
 	args := []any{}

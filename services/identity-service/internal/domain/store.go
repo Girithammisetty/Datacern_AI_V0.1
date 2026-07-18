@@ -74,6 +74,11 @@ type Store interface {
 	UpsertTenantIdpConfig(ctx context.Context, cfg *TenantIdpConfig) error
 	DeleteTenantIdpConfig(ctx context.Context, tenantID uuid.UUID) error
 
+	// --- per-tenant display-label overlays (BRD 23 inc3) ---
+	ListTenantDisplayLabels(ctx context.Context, tenantID uuid.UUID) ([]DisplayLabel, error)
+	UpsertTenantDisplayLabel(ctx context.Context, l *DisplayLabel) error
+	DeleteTenantDisplayLabel(ctx context.Context, tenantID uuid.UUID, key string) error
+
 	// ResolveAPIKeyTenant maps a service-account id to its tenant via the
 	// platform-scoped api_key_index table (pre-auth edge exchange).
 	ResolveAPIKeyTenant(ctx context.Context, saID uuid.UUID) (uuid.UUID, error)

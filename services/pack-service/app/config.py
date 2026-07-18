@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     agent_url: str = "http://localhost:8306"
     memory_url: str = "http://localhost:8307"
     pipeline_url: str = "http://localhost:8313"
+    identity_url: str = "http://localhost:8301"
 
     use_real_adapters: bool = True
 
