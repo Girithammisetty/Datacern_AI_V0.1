@@ -158,9 +158,52 @@ Decision-model artifact + store + migration; the pure evaluator; author-time
 validation; the governed `evaluate → ProposalService` path; create/get/list/
 publish/evaluate API + RBAC; unit tests for the evaluator + validation + the
 governed path; live-verify in wr-disputes (author → evaluate a real case →
-four-eyes proposal → approve). Inc 2 (designed): visual authoring UI, richer
-operators/aggregations + model-score columns, decision-model-as-pack-artifact,
-batch evaluation across a worklist.
+four-eyes proposal → approve).
+
+## 7a. Increment 2 — what shipped (task #22)
+BUILT + live-verified. (a) **Richer operators** — `not_in`, `between`,
+`starts_with`, `ends_with`, `matches` (regex), `is_empty` added to the evaluator
++ author-time shape validation (between=[lo,hi], in/not_in=list, regex compiles);
+score/computed columns supported via an evaluate-time `fields` passthrough.
+(b) **Batch evaluation** — `POST /decision-models/{id}/batch-evaluate` runs a
+table across a worklist (explicit `case_ids` or an open-case pull), dry-run
+PREVIEW by default (per-case outcome + coverage summary, no side effect) or
+`?propose=true` mints ONE governed four-eyes proposal per matched case — no
+batch bypass of approval. (c) **Pack-artifact** — new `decision_models` packctl
+component kind (manifest + installer, ordered after `dispositions`; idempotent
+by name); card-disputes ships `decisions/reg_e_triage.yaml`. (d) **Authoring
+UI** — `/decisions` page (nav-gated on case.disposition.read): list tables,
+a no-code rule builder (15 operators + live disposition catalog), batch
+preview/propose; BFF `decisionModels`/`decisionModel` queries +
+`createDecisionModel`/`batchEvaluateDecisionModel` mutations. Live-verified:
+authored a table in the UI → batch preview over 200 real cases (92 escalate /
+108 default); operators fired over 6 real wr-disputes cases; propose minted 2
+governed pending proposals with resolved disposition_ids.
+
+## 7b. Increment 3 — decision-logic governance + per-decision trace (tasks #29/#30)
+BUILT + live-verified. Closes the Leapter "control layer" requirements #5
+(traceability) and #6 (governance of the logic lifecycle). (a) **Lifecycle
+governance** — a table no longer goes live on create: it lands `draft` and a
+DIFFERENT user must approve it (four-eyes on the LOGIC, not just the decisions).
+Approving archives the prior published version of the same table, so exactly one
+version is live and it is the one that was approved ("what you approve is what
+runs"). Editing = a new `draft` version; the prior version is immutable.
+`evaluate`/`batch-evaluate` are refused on a non-published table. New: migration
+0013 (approved_by/approved_at + `archived` status), store approve/list-versions,
+routes `POST /{id}/approve` (author≠approver), `POST /{id}/versions`,
+`GET /{id}/versions` (change log). (b) **Per-decision trace** — every governed
+proposal now carries a `decision_trace` in predicted_effect: model id + name +
+VERSION, the INPUT values the rules read (only referenced columns — lean, no PII
+dump), the fired rule + explanation, and the outcome — a fully reconstructable
+"how this decision was reached". (c) **UI** — /decisions shows status + author +
+approver, an Approve button (four-eyes-disabled for the author, enabled for
+others), a New-version editor (prefilled), change-log History, and batch
+controls gated to published tables; one card per logical table. Live-verified:
+authored a draft as Manager (self-approve blocked, batch disabled) → approved as
+Admin (author≠approver recorded, published, batch enabled) → change log; full
+draft→approve→archive→version lifecycle + trace snapshot proven via API in
+wr-disputes. Tests: +3 governance API tests, +1 trace assertion; full suite 169
+passed / same 9 pre-existing triage failures.
 
 ## 8. Dependencies
 agent-runtime (proposals, guardrails, case reader, store), rbac

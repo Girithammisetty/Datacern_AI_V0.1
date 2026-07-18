@@ -446,6 +446,38 @@ contract directly; needs the live E2E regression suite (`tests-live/`,
 already built) as a hard regression gate before/after, given how much of the
 platform depends on the current claims shape.
 
+### Phase 4 status (partial): #1-2 (task #76) + PER-TENANT IdP CONFIG done+live-verified (2026-07-17)
+
+Increments #1 (generic `IdentityProvider` interface) + #2 (real OIDC/PKCE login
+in ui-web) shipped in task #76. This increment closes the flagged **per-tenant
+IdP config** (#4's core): OIDC login is no longer a single deployment-wide
+`OIDC_ISSUER` — each tenant brings their own IdP.
+- **identity-service**: `tenant_idp_configs` table (migration 0005; no RLS,
+  issuer globally UNIQUE — one tenant per issuer; admin-API-gated like
+  `tenant_embed_configs`); store CRUD + `GetTenantIdpConfigByIssuer`; a per-
+  tenant provider registry (`TokenService.providerFor` + injected `IdpBuild`,
+  cached by config fingerprint). `OIDCLogin` now peeks the ID token's *unverified*
+  `iss`, routes to that tenant's registered config, verifies against it, and
+  resolves the user in that tenant — **falling back to the legacy env
+  `IDP`/`OIDCTenantID` only when no per-tenant config matches** (unchanged
+  behavior). Self-service admin API `GET/PUT/DELETE /api/v1/tenants/self/idp`
+  (`identity.user.admin`).
+- **BFF + ui-web**: `Query.tenantIdp` + `setTenantIdp`/`deleteTenantIdp`, and a
+  "Single sign-on (SSO)" card on Admin → Tenant settings (issuer/client/discovery
+  + enable/turn-off).
+- **Verified**: 3 domain tests (routes-by-issuer to the right tenant, disabled
+  rejected, unknown-issuer rejected); full identity `go test` green, zero
+  regressions. LIVE against real local Keycloak: with the legacy env pointed at
+  a BOGUS issuer, a real Keycloak ID token still minted a session for the
+  correct tenant — provable proof the per-tenant config drove it; delete config →
+  login 401. UI card enable/persist verified in the browser.
+- **Still open (documented follow-ups, not built)**: claims-normalization (#3,
+  IdP group→Windrose scope mapping — today the user is resolved locally by email
+  and scopes come from the RBAC projection, so it works without it), login-page
+  tenant routing UX (email-domain → IdP redirect for a pure SP-initiated flow),
+  JIT provisioning, and SCIM. Keycloak-as-just-another-OIDC-config (#5) +
+  Helm/Terraform issuer settability (#6) also remain.
+
 ---
 
 ## Sequencing note
