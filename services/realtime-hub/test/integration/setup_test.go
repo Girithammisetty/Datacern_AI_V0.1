@@ -30,11 +30,11 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/windrose-ai/go-common/authjwt"
 	gcevent "github.com/windrose-ai/go-common/event"
 	gckafka "github.com/windrose-ai/go-common/kafka"
+	"github.com/windrose-ai/go-common/metricsx"
 	"github.com/windrose-ai/go-common/opaclient"
 	"github.com/windrose-ai/go-common/redisx"
 
@@ -142,8 +142,8 @@ func (in *instance) close() {
 func newInstance(t *testing.T, withKafka bool, lease *fanout.Lease) *instance {
 	t.Helper()
 	podID := "pod-" + uuid.NewString()[:8]
-	reg := prometheus.NewRegistry()
-	m := metrics.New(reg)
+	httpMetrics := metricsx.New("realtime-hub")
+	m := metrics.New(httpMetrics.Registerer())
 	rc := redisx.New(redisAddr)
 	rdb := rc.R
 
@@ -174,7 +174,7 @@ func newInstance(t *testing.T, withKafka bool, lease *fanout.Lease) *instance {
 
 	srv := &api.Server{
 		Hub: hub, Authz: az, Verifier: verifier, Redis: rc,
-		Caps: caps, Auditor: events.NoopAuditor{}, Metrics: m, Registry: reg,
+		Caps: caps, Auditor: events.NoopAuditor{}, Metrics: m, Metricsx: httpMetrics,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	in := &instance{podID: podID, hub: hub, bus: bus, rc: rc, srv: srv,
