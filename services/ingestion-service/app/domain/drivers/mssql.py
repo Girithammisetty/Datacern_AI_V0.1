@@ -45,11 +45,27 @@ def _connect_kwargs(
     }
 
 
+# Login-failure signatures FreeTDS/pymssql may surface in the DB-Lib message
+# even when args[0] is NOT the clean SQL Server number. Depending on the TDS
+# protocol version and driver build, a bad-password login to a *reachable*
+# server can arrive as an OperationalError whose args[0] is the DB-Lib message
+# (not int 18456), leaving the SQL number only inside the text — so we scan the
+# text for these too. None of these appear for a genuinely unreachable/timed-out
+# server ("unable to connect", "server is unavailable or does not exist"), so
+# this cannot misclassify a network failure as auth (no false positives).
+_AUTH_TEXTS = (
+    "login failed", "login incorrect", "cannot open database", "password",
+    "18456", "18452", "4060", "40615",
+)
+
+
 def _classify(exc: Exception) -> tuple[str, str]:
     if isinstance(exc, pymssql.OperationalError):
-        number = exc.args[0] if exc.args else None
+        # args[0] is the SQL Server error number only when it is actually an int;
+        # FreeTDS sometimes puts the message string there instead.
+        number = exc.args[0] if exc.args and isinstance(exc.args[0], int) else None
         text = str(exc).lower()
-        if number in _AUTH_NUMBERS or "login failed" in text or "password" in text:
+        if number in _AUTH_NUMBERS or any(sig in text for sig in _AUTH_TEXTS):
             return ErrorCategory.AUTH_FAILED, "authentication failed (scrubbed)"
         return ErrorCategory.SOURCE_UNREACHABLE, f"sqlserver error {number or 'unknown'}"
     if isinstance(exc, TimeoutError):
