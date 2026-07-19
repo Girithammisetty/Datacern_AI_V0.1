@@ -23,6 +23,32 @@ log = logging.getLogger("agent_runtime.transcripts")
 _DECISION_LABEL = {"approve": "approve", "edit_args": "edit", "reject": "reject",
                    "respond": "cancel"}
 
+# adoption label -> pairwise-preference signal (Agent-in-the-Loop signal 1)
+_PREFERENCE = {"approve": "adopted", "edit": "corrected_over_proposed",
+               "reject": "rejected", "cancel": None}
+
+
+def build_feedback(
+    *, action: str, rationale: str | None = None,
+    knowledge_relevance: str | None = None, missing_knowledge: str | None = None,
+) -> dict:
+    """Structure the four first-class human-correction signals from a decision
+    (Agent-in-the-Loop, EMNLP 2025): (1) pairwise preference, (2) adoption/
+    rejection WITH rationale, (3) knowledge-relevance validation, (4) missing-
+    knowledge identification. Rationale is PII-redacted. Optional signals are
+    included only when the human supplied them (capture-ready for the review UI)."""
+    label = _DECISION_LABEL.get(action, action)
+    fb: dict = {
+        "adoption": label,                       # (2) approve | edit | reject | cancel
+        "preference": _PREFERENCE.get(label),    # (1) pairwise preference
+        "rationale": (redact(rationale).strip() or None) if rationale else None,
+    }
+    if knowledge_relevance is not None:          # (3) was the grounding relevant?
+        fb["knowledge_relevance"] = knowledge_relevance
+    if missing_knowledge:                        # (4) what knowledge was missing?
+        fb["missing_knowledge"] = redact(missing_knowledge)
+    return fb
+
 
 class TranscriptSink:
     def __init__(self, store, *, enabled: bool) -> None:
@@ -69,15 +95,22 @@ class TranscriptSink:
     async def attach_decision(
         self, *, tenant_id: str, proposal_id: str, action: str,
         edited_args: dict | None, decided_by: str, decided_at,
+        rationale: str | None = None, knowledge_relevance: str | None = None,
+        missing_knowledge: str | None = None,
     ) -> None:
         if not self._enabled:
             return
         try:
+            feedback = build_feedback(
+                action=action, rationale=rationale,
+                knowledge_relevance=knowledge_relevance,
+                missing_knowledge=missing_knowledge)
             await self._store.attach_transcript_decision(
                 tenant_id=tenant_id, proposal_id=proposal_id,
                 decision=_DECISION_LABEL.get(action, action),
                 corrected_output=redact(edited_args) if edited_args else None,
                 decided_by=decided_by, decided_at=decided_at,
+                feedback=feedback,
             )
         except Exception:  # noqa: BLE001 — never fail a decision because attach failed
             log.warning("transcript decision attach failed for proposal %s",

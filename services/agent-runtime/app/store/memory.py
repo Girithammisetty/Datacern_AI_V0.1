@@ -320,6 +320,7 @@ class InMemoryStore:
     async def attach_transcript_decision(
         self, *, tenant_id: str, proposal_id: str, decision: str,
         corrected_output: dict | None, decided_by: str, decided_at: datetime,
+        feedback: dict | None = None,
     ) -> None:
         for t in self._transcripts.values():
             if t.tenant_id == tenant_id and t.proposal_id == proposal_id:
@@ -327,6 +328,7 @@ class InMemoryStore:
                 t.corrected_output = corrected_output
                 t.decided_by = decided_by
                 t.decided_at = decided_at
+                t.feedback = feedback
                 t.updated_at = decided_at
 
     async def get_transcript(self, tenant_id: str, transcript_id: str) -> Transcript | None:

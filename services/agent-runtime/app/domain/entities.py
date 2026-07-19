@@ -213,6 +213,10 @@ class Transcript:
     corrected_output: dict | None = None   # the human-corrected args (edit)
     decided_by: str | None = None
     decided_at: datetime | None = None
+    # The four Agent-in-the-Loop correction signals (adoption+rationale, pairwise
+    # preference, knowledge_relevance, missing_knowledge) — first-class retraining
+    # inputs joined in at decision time. None until decided.
+    feedback: dict | None = None
     created_at: datetime = field(default_factory=now)
     updated_at: datetime = field(default_factory=now)
 

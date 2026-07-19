@@ -238,10 +238,17 @@ class ProposalService:
         # run's transcript (best-effort; an approved/edited proposal is a gold
         # (input -> corrected-output) training pair).
         if self._transcripts is not None:
+            # 4-signal correction capture (P1): the human's message becomes the
+            # decision RATIONALE, and any structured knowledge feedback the reviewer
+            # supplied (decision.feedback) rides along. All four Agent-in-the-Loop
+            # signals land on the transcript as first-class retraining inputs.
+            hk = (decided.decision or {}).get("feedback") or {}
             await self._transcripts.attach_decision(
                 tenant_id=tenant_id, proposal_id=proposal_id, action=action,
                 edited_args=edited_args, decided_by=actor_sub,
-                decided_at=decided.updated_at)
+                decided_at=decided.updated_at, rationale=message,
+                knowledge_relevance=hk.get("knowledge_relevance"),
+                missing_knowledge=hk.get("missing_knowledge"))
 
         event = {"approved": "proposal.approved", "edited_approved": "proposal.edited_approved",
                  "rejected": "proposal.rejected", "cancelled": "proposal.cancelled"}[new_status]

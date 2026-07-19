@@ -649,6 +649,7 @@ class SqlStore:
     async def attach_transcript_decision(
         self, *, tenant_id: str, proposal_id: str, decision: str,
         corrected_output: dict | None, decided_by: str, decided_at: datetime,
+        feedback: dict | None = None,
     ) -> None:
         """Join the human decision onto the run's transcript (the training
         signal). No-op if no transcript exists for the proposal."""
@@ -656,10 +657,12 @@ class SqlStore:
             await s.execute(text(
                 """UPDATE agent_transcripts
                      SET decision=:d, corrected_output=cast(:co as jsonb),
+                         feedback=cast(:fb as jsonb),
                          decided_by=:by, decided_at=:at, updated_at=now()
                    WHERE proposal_id=cast(:pid as uuid)"""),
                 {"d": decision,
                  "co": _j(corrected_output) if corrected_output is not None else None,
+                 "fb": _j(feedback) if feedback is not None else None,
                  "by": decided_by, "at": decided_at, "pid": proposal_id})
 
     async def get_transcript(self, tenant_id: str, transcript_id: str) -> Transcript | None:
@@ -985,6 +988,7 @@ def _transcript(r) -> Transcript:
         proposal_id=str(r["proposal_id"]) if r["proposal_id"] else None,
         model=r["model"], usage=_load(r["usage"]) or {}, consent=bool(r["consent"]),
         decision=r["decision"], corrected_output=_load(r["corrected_output"]),
+        feedback=_load(r.get("feedback")),
         decided_by=r["decided_by"], decided_at=r["decided_at"],
         created_at=r["created_at"], updated_at=r["updated_at"])
 
