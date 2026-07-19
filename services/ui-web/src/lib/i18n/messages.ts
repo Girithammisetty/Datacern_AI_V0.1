@@ -273,6 +273,8 @@ export const en = {
   "dashboards.filteredBy": "Filtered by",
   "dashboards.clearFilters": "Clear all",
   "dashboards.createCasesFromSelection": "Create cases",
+  "dashboards.createCasesFromGrid": "Create cases from these records",
+  "dashboards.allRecords": "All records",
   "dashboards.createCasesTitle": "Create cases from selection",
   "dashboards.createCasesClose": "Close",
   "dashboards.createCasesNotDrillable":

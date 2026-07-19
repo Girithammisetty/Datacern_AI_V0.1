@@ -58,7 +58,9 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
   // resolved to its backing dataset + column, then the proven dataset-rows grid
   // opens pre-filtered to that segment so the manager can open cases from the
   // real underlying records (anchored to dataset_urn + row_pk, dashboard-tagged).
-  const [drill, setDrill] = useState<{ chartId: string; field: string; value: string } | null>(null);
+  // value=null → drill the whole grid (all records) rather than one clicked
+  // segment, so a manager can browse the grid and bulk-select without a filter.
+  const [drill, setDrill] = useState<{ chartId: string; field: string; value: string | null } | null>(null);
   const drillQ = useChartDrillTarget(drill?.chartId ?? null, drill?.field ?? null, {
     enabled: !!drill,
   });
@@ -177,6 +179,21 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
                         <div className="flex items-center gap-2">
                           {/* AC-4: provenance badge on AI-generated charts. */}
                           <ProvenanceBadge provenance={chart.provenance} />
+                          {/* A manager consuming a grid can bulk-create cases from
+                              its records directly — no chart-click required. */}
+                          {field && (chart.chartType === "grid_chart" || chart.chartType === "pivot_table_chart") && (
+                            <Can gate={cap("case.case.create")}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={t("dashboards.createCasesFromGrid")}
+                                title={t("dashboards.createCasesFromGrid")}
+                                onClick={() => setDrill({ chartId: chart.id, field, value: null })}
+                              >
+                                <Briefcase />
+                              </Button>
+                            </Can>
+                          )}
                           <Can gate={FEATURE_GATES.createDashboard}>
                             <Button
                               variant="ghost"
@@ -292,7 +309,14 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
                       </Dialog.Title>
                       {drill && (
                         <Dialog.Description className="text-sm text-muted-foreground">
-                          {(chartNames.get(drill.chartId) ?? drill.field)}: <span className="font-medium">{drill.value}</span>
+                          {drill.value != null ? (
+                            <>
+                              {(chartNames.get(drill.chartId) ?? drill.field)}:{" "}
+                              <span className="font-medium">{drill.value}</span>
+                            </>
+                          ) : (
+                            <span className="font-medium">{chartNames.get(drill.chartId) ?? t("dashboards.allRecords")}</span>
+                          )}
                         </Dialog.Description>
                       )}
                     </div>
@@ -313,7 +337,11 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
                       datasetId={drillTarget.datasetId}
                       datasetUrn={drillTarget.datasetUrn}
                       dashboardUrn={dash.urn}
-                      initialFilters={[{ col: drillTarget.column, op: "eq", value: drill?.value ?? "" }]}
+                      initialFilters={
+                        drill?.value != null
+                          ? [{ col: drillTarget.column, op: "eq", value: drill.value }]
+                          : []
+                      }
                     />
                   )}
                 </Dialog.Content>
