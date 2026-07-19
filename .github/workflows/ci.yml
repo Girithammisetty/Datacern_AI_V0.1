@@ -501,6 +501,13 @@ jobs:
       # Fails closed (die()) on any unrecoverable precondition (docker,
       # ollama, postgres, opensearch unreachable); non-fatal per-service
       # degradation is still caught next by tests-live/global-setup.ts.
+      # up.sh drives the harness via $PY = deploy/e2e/.venv/bin/python (JWKS
+      # signer, platform seed, journey driver). That venv only exists locally,
+      # so CI must materialize it from deploy/e2e/pyproject.toml before boot.
+      - name: Provision the e2e harness venv (deploy/e2e/.venv)
+        working-directory: deploy/e2e
+        run: uv sync --frozen || uv sync
+
       - name: Boot the real platform (deploy/local/up.sh)
         working-directory: deploy/local
         run: ./up.sh
