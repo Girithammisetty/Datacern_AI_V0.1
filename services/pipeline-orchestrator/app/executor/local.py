@@ -277,6 +277,8 @@ class LocalTrainingExecutor:
             versions = client.search_model_versions(f"name='{name}'")
             if versions:
                 return str(max(int(v.version) for v in versions))
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:  # noqa: BLE001 — registry lookup failed; fall back but make it traceable
+            logger.exception(
+                "model version lookup failed for %s; falling back to version '1'", name
+            )
         return "1"

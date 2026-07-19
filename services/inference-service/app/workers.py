@@ -112,16 +112,20 @@ class WorkerSet:
                         if s.next_fire_at is not None and s.next_fire_at <= datetime.now(UTC)
                     ]
                 for sch in due:
-                    with contextlib.suppress(Exception):
+                    try:
                         await self.c.schedules.fire(sch)
+                    except Exception:  # noqa: BLE001
+                        logger.exception("schedule fire failed (%s)", sch.id)
             except Exception:  # noqa: BLE001
                 logger.exception("scheduler tick error")
             await asyncio.sleep(self.settings.scheduler_tick_seconds)
 
     async def _reaper_loop(self) -> None:
         while not self._stop.is_set():
-            with contextlib.suppress(Exception):
+            try:
                 await self.c.inference.reap("*")
+            except Exception:  # noqa: BLE001
+                logger.exception("reaper loop error")
             await asyncio.sleep(60.0)
 
     async def stop(self) -> None:

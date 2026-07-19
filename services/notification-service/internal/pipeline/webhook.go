@@ -65,7 +65,9 @@ func (p *Pipeline) AttemptWebhook(ctx context.Context, ep *domain.WebhookEndpoin
 				probe = probe.Add(webhook.ProbeInterval)
 			}
 		}
-		_ = p.Store.UpdateDeliveryStatus(ctx, env.TenantID, deliveryID, domain.StatusQueued, "", "circuit open", attempt-1, &probe, nil)
+		if err := p.Store.UpdateDeliveryStatus(ctx, env.TenantID, deliveryID, domain.StatusQueued, "", "circuit open", attempt-1, &probe, nil); err != nil {
+			p.log().Warn("persist webhook delivery status failed", "delivery", deliveryID, "status", domain.StatusQueued, "reason", "circuit open", "err", err)
+		}
 		return
 	}
 
@@ -74,14 +76,20 @@ func (p *Pipeline) AttemptWebhook(ctx context.Context, ep *domain.WebhookEndpoin
 	if p.Limiter != nil {
 		if ok, err := p.Limiter.AllowWebhook(ctx, ep.ID.String()); err == nil && !ok {
 			next := now.Add(time.Second)
-			_ = p.Store.UpdateDeliveryStatus(ctx, env.TenantID, deliveryID, domain.StatusQueued, "", "rate limited", attempt-1, &next, nil)
+			if err := p.Store.UpdateDeliveryStatus(ctx, env.TenantID, deliveryID, domain.StatusQueued, "", "rate limited", attempt-1, &next, nil); err != nil {
+				p.log().Warn("persist webhook delivery status failed", "delivery", deliveryID, "status", domain.StatusQueued, "reason", "rate limited", "err", err)
+			}
 			return
 		}
 	}
 
 	status, err := p.Webhook.Deliver(ctx, ep, env, now)
 	if err == nil {
-		_ = p.Store.UpdateDeliveryStatus(ctx, env.TenantID, deliveryID, domain.StatusDelivered, "", "", attempt, nil, nil)
+		if uerr := p.Store.UpdateDeliveryStatus(ctx, env.TenantID, deliveryID, domain.StatusDelivered, "", "", attempt, nil, nil); uerr != nil {
+			// A persistent failure to record "delivered" leaves the row queued,
+			// so the sweeper will re-deliver the same event (duplicate). Surface it.
+			p.log().Warn("persist webhook delivery status failed", "delivery", deliveryID, "status", domain.StatusDelivered, "err", uerr)
+		}
 		p.bump(func(m *Metrics) prometheus.Counter { return m.WebhookSent })
 		p.onWebhookSuccess(ctx, ep, env)
 		return
@@ -143,10 +151,15 @@ func (p *Pipeline) onWebhookFailure(ctx context.Context, ep *domain.WebhookEndpo
 
 	next, ok := webhook.NextRetryAt(now, attempt)
 	if ok {
-		_ = p.Store.UpdateDeliveryStatus(ctx, env.TenantID, deliveryID, domain.StatusQueued, "", cause, attempt, &next, nil)
+		if err := p.Store.UpdateDeliveryStatus(ctx, env.TenantID, deliveryID, domain.StatusQueued, "", cause, attempt, &next, nil); err != nil {
+			p.log().Warn("persist webhook delivery status failed", "delivery", deliveryID, "status", domain.StatusQueued, "attempt", attempt, "err", err)
+		}
 	} else {
-		// Schedule exhausted → mark failed (dead-lettered).
-		_ = p.Store.UpdateDeliveryStatus(ctx, env.TenantID, deliveryID, domain.StatusFailed, "", cause, attempt, nil, nil)
+		// Schedule exhausted → mark failed (dead-lettered). A persistent failure
+		// to record this leaves the row queued and risks endless re-delivery.
+		if err := p.Store.UpdateDeliveryStatus(ctx, env.TenantID, deliveryID, domain.StatusFailed, "", cause, attempt, nil, nil); err != nil {
+			p.log().Warn("persist webhook delivery status failed", "delivery", deliveryID, "status", domain.StatusFailed, "attempt", attempt, "err", err)
+		}
 	}
 
 	ep.ConsecutiveFailures++

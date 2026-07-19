@@ -13,7 +13,6 @@ falls back to the in-process/in-memory dev wiring (no workers).
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from contextlib import asynccontextmanager
 
@@ -133,10 +132,12 @@ def create_app(container: Container | None = None) -> FastAPI:
                 producer, consumers, tasks = await _start_workers(container)
             except Exception:  # noqa: BLE001
                 logger.exception("ai-gateway worker startup failed")
-            with contextlib.suppress(Exception):
+            try:
                 from app.registration import register_actions
 
                 await register_actions(container.settings)
+            except Exception:  # noqa: BLE001
+                logger.exception("ai-gateway action registration error")
         yield
         for t in tasks:
             t.cancel()

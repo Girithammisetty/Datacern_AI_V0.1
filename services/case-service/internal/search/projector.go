@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/google/uuid"
 
@@ -58,6 +59,9 @@ func (p *Projector) Reindex(ctx context.Context, tenant uuid.UUID) (int, error) 
 	for _, id := range ids {
 		c, err := p.Store.GetCase(ctx, tenant, id)
 		if err != nil {
+			// Skip this case but do not silently drop it from the rebuilt index:
+			// a transient read failure means a stale/missing doc; leave a trail.
+			slog.Warn("reindex: skipping case that failed to read", "case_id", id, "err", err)
 			continue
 		}
 		text, _ := p.Store.CaseCommentText(ctx, tenant, id)

@@ -70,15 +70,19 @@ def create_app(container: Container | None = None) -> FastAPI:
         producer = None
         # Seed the built-in scorer registry rows for the platform tenant.
         platform_tenant = settings.register_tenant_id or "00000000-0000-0000-0000-000000000000"
-        with contextlib.suppress(Exception):
+        try:
             await container.scorer_service.seed_builtins(
                 CallCtx(tenant_id=platform_tenant, actor={"type": "service", "id": "eval-service"})
             )
+        except Exception:  # noqa: BLE001
+            logger.exception("eval scorer registry seed error")
         if settings.use_real_adapters:
-            with contextlib.suppress(Exception):
+            try:
                 from app.registration import register_actions
 
                 await register_actions(settings)
+            except Exception:  # noqa: BLE001
+                logger.exception("eval action registration error")
             # Outbox dispatcher (relays committed eval.events.v1 rows to Redpanda).
             engine = container.extras.get("engine")
             if engine is not None:
@@ -100,7 +104,7 @@ def create_app(container: Container | None = None) -> FastAPI:
 
                 tasks.append(asyncio.create_task(_relay_loop()))
             # Flywheel + SLO Kafka consumers.
-            with contextlib.suppress(Exception):
+            try:
                 from windrose_common.kafka import KafkaConfig, KafkaProducerClient
 
                 from app.events.consumer import KafkaTopicConsumer
@@ -122,6 +126,8 @@ def create_app(container: Container | None = None) -> FastAPI:
                     consumers.append(c)
                     tasks.append(asyncio.create_task(c.run()))
                 logger.info("eval flywheel/SLO consumers started (%d topics)", len(consumers))
+            except Exception:  # noqa: BLE001
+                logger.exception("eval flywheel/SLO consumer startup failed")
         try:
             yield
         finally:

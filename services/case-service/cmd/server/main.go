@@ -224,6 +224,13 @@ func (a *creatorAdapter) AutoCreateFromInference(ctx context.Context, tenant uui
 	wsRaw, _ := payload["workspace_id"].(string)
 	ws, err := uuid.Parse(wsRaw)
 	if err != nil {
+		// Don't silently drop an auto_case=true inference.completed event: a
+		// bad/missing workspace_id means no case gets created. Ack (return nil)
+		// so a malformed payload can't wedge the consumer, but leave a trail.
+		datasetURN, _ := payload["dataset_urn"].(string)
+		queryURN, _ := payload["query_urn"].(string)
+		slog.Error("auto-create: dropping inference.completed event with unparseable workspace_id",
+			"tenant", tenant, "workspace_id", wsRaw, "dataset_urn", datasetURN, "query_urn", queryURN, "err", err)
 		return nil
 	}
 	datasetURN, _ := payload["dataset_urn"].(string)
