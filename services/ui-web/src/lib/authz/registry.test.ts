@@ -30,12 +30,15 @@ const MANAGER = toCapabilitySet({
     "case.case.assign",
     "ai.proposal.read",
     "chart.dashboard.read",
-    // manager CONSUMES dashboards and may LIGHTLY EDIT existing charts, but does
-    // not author new ones or delete them (no *.create / *.delete), and is not a
-    // semantic-model browser (no semantic.model.list → no Semantic Models nav).
+    // manager authors oversight dashboards + charts: full create/edit/delete.
+    "chart.dashboard.create",
     "chart.dashboard.update",
+    "chart.dashboard.delete",
+    "chart.chart.create",
     "chart.chart.update",
+    "chart.chart.delete",
     "semantic.model.read",
+    "semantic.model.list",
     "usage.report.read",
     // manager also subscribes dashboards to scheduled report digests (NOTIF-FR-060)
     "notification.report.read",
@@ -134,10 +137,9 @@ describe("role-based nav gating (four personas => four different apps)", () => {
 });
 
 describe("dashboard authoring feature gate (chart.dashboard.create)", () => {
-  it("datascientist can create dashboards/charts; manager + adjuster cannot", () => {
+  it("manager + datascientist can create dashboards/charts; adjuster cannot", () => {
+    expect(allows(FEATURE_GATES.createDashboard, MANAGER)).toBe(true);
     expect(allows(FEATURE_GATES.createDashboard, DATASCIENTIST)).toBe(true);
-    // manager is now a consumer + light editor: no create/delete authoring.
-    expect(allows(FEATURE_GATES.createDashboard, MANAGER)).toBe(false);
     // adjuster holds only chart.dashboard.read → sees the nav but not the create controls
     expect(allows(FEATURE_GATES.createDashboard, ADJUSTER)).toBe(false);
     expect(navKeys(ADJUSTER)).toContain("dashboards");
@@ -147,14 +149,15 @@ describe("dashboard authoring feature gate (chart.dashboard.create)", () => {
     expect(FEATURE_GATES.createDashboard).toEqual(cap("chart.dashboard.create"));
   });
 
-  it("manager can lightly edit existing charts but not create or delete them", () => {
-    // Consumer + light editing: update yes; create / delete no.
+  it("the split gates resolve to the right fine-grained capabilities", () => {
+    // Edit/create/delete are distinct gates so a role can be granted them
+    // independently; a full-author manager holds all three.
+    expect(FEATURE_GATES.editChart).toEqual(cap("chart.chart.update"));
+    expect(FEATURE_GATES.deleteChart).toEqual(cap("chart.chart.delete"));
+    expect(FEATURE_GATES.deleteDashboard).toEqual(cap("chart.dashboard.delete"));
     expect(allows(FEATURE_GATES.editChart, MANAGER)).toBe(true);
-    expect(allows(FEATURE_GATES.createDashboard, MANAGER)).toBe(false);
-    expect(allows(FEATURE_GATES.deleteChart, MANAGER)).toBe(false);
-    expect(allows(FEATURE_GATES.deleteDashboard, MANAGER)).toBe(false);
-    // No semantic-model browsing → the "Semantic Models" nav item is hidden.
-    expect(navKeys(MANAGER)).not.toContain("semanticModels");
+    expect(allows(FEATURE_GATES.deleteChart, MANAGER)).toBe(true);
+    expect(allows(FEATURE_GATES.deleteDashboard, MANAGER)).toBe(true);
   });
 });
 

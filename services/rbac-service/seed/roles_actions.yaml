@@ -654,21 +654,23 @@ roles:
       # Copilot grounding retrieval via OBO (see Case Analyst).
       - memory.memory.read
       # Dashboards nav (registry "dashboards" -> chart.dashboard.read). The
-      # manager CONSUMES dashboards and may LIGHTLY EDIT existing charts, but does
-      # not author new ones or delete them (that stays with Analyst / Data
-      # Scientist). So: read/list + update only — no *.create / *.delete.
+      # manager oversees AND authors dashboards (no-code chart editor): full
+      # create/edit/delete of dashboards + charts, and creates cases from grids.
       - chart.dashboard.read
       - chart.dashboard.list
+      - chart.dashboard.create
       - chart.dashboard.update
+      - chart.dashboard.delete
       - chart.chart.read
       - chart.chart.list
+      - chart.chart.create
       - chart.chart.update
+      - chart.chart.delete
       # Chart rendering forwards the caller token to semantic-service (compile)
-      # + query-service (execute the compiled SQL + read results). READ the
-      # governed metric layer to render/edit charts, but no .list — the manager
-      # is not a semantic-model browser (no "Semantic Models" nav; that gates on
-      # semantic.model.list), and authoring models stays with Data Scientist.
+      # + query-service (execute the compiled SQL + read results). model.list
+      # also powers the chart editor's model picker.
       - semantic.model.read
+      - semantic.model.list
       - semantic.compile.execute
       - query.execution.execute
       - query.execution.read
