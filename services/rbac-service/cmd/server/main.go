@@ -82,6 +82,19 @@ func run() error {
 	otelShutdown := otelx.InitFromEnv(ctx, "rbac-service")
 	defer func() { _ = otelShutdown(context.Background()) }()
 
+	// Stabilization guard (rule: no fake/mock/stub in a runtime path). When
+	// REQUIRE_REAL_ADAPTERS=true — set in every real deploy — the service REFUSES
+	// to boot on an in-memory/fake adapter instead of silently faking success.
+	// Absent (local unit dev), the loud-warn fallbacks below keep dev
+	// self-contained. This is what stops a misconfigured prod (e.g. a secret that
+	// ships KAFKA_BROKERS=false) from coming up "healthy" while dropping events
+	// into a map.
+	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
+	mustReal := func(realEnv, adapter string) {
+		slog.Error("REQUIRE_REAL_ADAPTERS=true but " + realEnv + " is unset — refusing to boot on the " + adapter + " fallback")
+		os.Exit(1)
+	}
+
 	dbURL := env("DATABASE_URL", "postgres://rbac:rbac@localhost:5432/rbac?sslmode=disable")
 	if env("RUN_MIGRATIONS", "true") == "true" {
 		migrateURL := env("MIGRATE_DATABASE_URL", dbURL) // schema-owner URL
@@ -166,6 +179,9 @@ func run() error {
 	var pub events.EventPublisher
 	brokers := env("KAFKA_BROKERS", "localhost:9092")
 	if brokers == "false" {
+		if requireReal {
+			mustReal("KAFKA_BROKERS", "in-memory event publisher (outbox events would not reach Kafka)")
+		}
 		slog.Warn("KAFKA_BROKERS=false; using in-memory event publisher (events are not durable)")
 		pub = events.NewInMemoryPublisher()
 	} else {

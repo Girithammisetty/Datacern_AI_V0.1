@@ -46,6 +46,16 @@ func main() {
 	otelShutdown := otelx.InitFromEnv(ctx, "tool-registry")
 	defer func() { _ = otelShutdown(context.Background()) }()
 
+	// Stabilization guard (rule: no fake/mock/stub in a runtime path). When
+	// REQUIRE_REAL_ADAPTERS=true — set in every real deploy — the service REFUSES
+	// to boot on an in-memory/fake adapter instead of silently faking success.
+	// Absent (local dev), the loud-warn fallbacks below keep dev self-contained.
+	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
+	mustReal := func(realEnv, adapter string) {
+		slog.Error("REQUIRE_REAL_ADAPTERS=true but " + realEnv + " is unset — refusing to boot on the " + adapter + " fallback")
+		os.Exit(1)
+	}
+
 	dbURL := env("DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/tool_plane?sslmode=disable")
 	// Migrations need DDL/ownership + role creation, so they run under a
 	// privileged role (MIGRATE_DATABASE_URL, default = DATABASE_URL). The runtime
@@ -111,7 +121,7 @@ func main() {
 	}
 
 	// Outbox relay → real Kafka (Redpanda) unless KAFKA_BROKERS=false.
-	startRelay(ctx, st)
+	startRelay(ctx, st, requireReal, mustReal)
 
 	addr := env("LISTEN_ADDR", ":8090")
 	httpSrv := &http.Server{Addr: addr, Handler: otelx.WrapHandler(srv.Router(), "tool-registry"), ReadHeaderTimeout: 10 * time.Second}
@@ -131,10 +141,13 @@ func main() {
 // startRelay wires the transactional-outbox relay to the real go-common Kafka
 // producer (MASTER-FR-034). KAFKA_BROKERS=false uses the in-memory publisher for
 // broker-less local dev only.
-func startRelay(ctx context.Context, st *store.PG) {
+func startRelay(ctx context.Context, st *store.PG, requireReal bool, mustReal func(string, string)) {
 	var pub events.Publisher
 	brokers := env("KAFKA_BROKERS", "localhost:9092")
 	if brokers == "false" {
+		if requireReal {
+			mustReal("KAFKA_BROKERS", "in-memory publisher (outbox events would not reach Kafka)")
+		}
 		slog.Warn("KAFKA_BROKERS=false; in-memory publisher (events not durable; dev only)")
 		pub = events.NewInMemory()
 	} else {

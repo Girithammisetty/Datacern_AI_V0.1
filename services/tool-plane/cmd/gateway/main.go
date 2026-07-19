@@ -47,6 +47,16 @@ func main() {
 	otelShutdown := otelx.InitFromEnv(ctx, "mcp-gateway")
 	defer func() { _ = otelShutdown(context.Background()) }()
 
+	// Stabilization guard (rule: no fake/mock/stub in a runtime path). When
+	// REQUIRE_REAL_ADAPTERS=true — set in every real deploy — the service REFUSES
+	// to boot on an in-memory/fake adapter instead of silently faking success.
+	// Absent (local dev), the loud-warn fallbacks below keep dev self-contained.
+	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
+	mustReal := func(realEnv, adapter string) {
+		slog.Error("REQUIRE_REAL_ADAPTERS=true but " + realEnv + " is unset — refusing to boot on the " + adapter + " fallback")
+		os.Exit(1)
+	}
+
 	dbURL := env("DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/tool_plane?sslmode=disable")
 	// The registry applies migrations; the gateway retries a lightweight apply so
 	// it is safe to start either first. Migrations run under a privileged role
@@ -139,7 +149,7 @@ func main() {
 	// health against declared SLAs each minute and quarantines on sustained breach.
 	go runSLASweep(ctx, st, health)
 
-	startRelay(ctx, st)
+	startRelay(ctx, st, requireReal, mustReal)
 
 	addr := env("LISTEN_ADDR", ":8091")
 	httpSrv := &http.Server{Addr: addr, Handler: otelx.WrapHandler(gw.Router(), "mcp-gateway"), ReadHeaderTimeout: 10 * time.Second}
@@ -156,10 +166,13 @@ func main() {
 	}
 }
 
-func startRelay(ctx context.Context, st *store.PG) {
+func startRelay(ctx context.Context, st *store.PG, requireReal bool, mustReal func(string, string)) {
 	var pub events.Publisher
 	brokers := env("KAFKA_BROKERS", "localhost:9092")
 	if brokers == "false" {
+		if requireReal {
+			mustReal("KAFKA_BROKERS", "in-memory publisher (outbox events would not reach Kafka)")
+		}
 		slog.Warn("KAFKA_BROKERS=false; in-memory publisher (events not durable; dev only)")
 		pub = events.NewInMemory()
 	} else {

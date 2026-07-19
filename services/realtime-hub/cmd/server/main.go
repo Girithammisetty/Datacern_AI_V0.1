@@ -76,6 +76,21 @@ func main() {
 		log.Warn("otel init failed; continuing without tracing", "err", err)
 	}
 
+	// Stabilization guard (rule: no fake/mock/stub in a runtime path). When
+	// REQUIRE_REAL_ADAPTERS=true — set in every real deploy — the service REFUSES
+	// to boot on an in-memory/no-op fallback instead of silently faking success.
+	// Absent (local unit dev), the loud-warn fallbacks below keep dev
+	// self-contained. Redis pub/sub, the OPA authorizer, and the JWKS verifier
+	// have NO fake path here (always the real client), so only the two config-
+	// selected no-op fallbacks below are guarded: the nil Postgres store (drops
+	// the durable RLS stream-ticket audit + routing_rules config) and the
+	// NoopAuditor / disabled Kafka fan-in.
+	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
+	mustReal := func(realEnv, adapter string) {
+		log.Error("REQUIRE_REAL_ADAPTERS=true but "+realEnv+" is unset — refusing to boot on the "+adapter+" fallback")
+		os.Exit(1)
+	}
+
 	// Redis (replay Streams, pub/sub, tickets, counters, leases) — required.
 	redisAddr := env("REDIS_ADDR", "localhost:6379")
 	rc := redisx.NewFromEnv(redisAddr, os.Getenv)
@@ -122,6 +137,9 @@ func main() {
 			log.Warn("routing rule seed failed", "err", err)
 		}
 	} else {
+		if requireReal {
+			mustReal("DATABASE_URL", "nil store (durable RLS stream-ticket audit + routing_rules config silently disabled)")
+		}
 		log.Warn("DATABASE_URL unset; ticket audit + routing_rules config disabled (Redis-only dev)")
 	}
 
@@ -191,6 +209,9 @@ func main() {
 		defer consumer.Close()
 		log.Info("kafka fan-in started (broadcast mode)", "brokers", brokers, "pod", podID)
 	} else {
+		if requireReal {
+			mustReal("KAFKA_BROKERS", "NoopAuditor + disabled Kafka fan-in (security audit events dropped; events would not reach Kafka)")
+		}
 		log.Warn("KAFKA_BROKERS=false; Kafka fan-in disabled (internal-publish path only)")
 	}
 

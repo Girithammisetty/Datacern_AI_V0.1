@@ -47,6 +47,17 @@ func main() {
 	otelShutdown := otelx.InitFromEnv(ctx, "query-service")
 	defer func() { _ = otelShutdown(context.Background()) }()
 
+	// Stabilization guard (rule: no fake/mock/stub in a runtime path). When
+	// REQUIRE_REAL_ADAPTERS=true — set in every real deploy — the service REFUSES
+	// to boot on an in-memory/fake adapter instead of silently faking success.
+	// Absent (local unit dev), the loud-warn fallbacks below keep dev
+	// self-contained.
+	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
+	mustReal := func(realEnv, adapter string) {
+		slog.Error("REQUIRE_REAL_ADAPTERS=true but " + realEnv + " is unset — refusing to boot on the " + adapter + " fallback")
+		os.Exit(1)
+	}
+
 	dbURL := env("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/query?sslmode=disable")
 	// Migrations need DDL/ownership + role creation, so they run under a
 	// privileged role (MIGRATE_DATABASE_URL, default = DATABASE_URL). The runtime
@@ -84,6 +95,9 @@ func main() {
 	if base := os.Getenv("DATASET_SERVICE_URL"); base != "" {
 		resolver = datasets.NewHTTP(base)
 	} else {
+		if requireReal {
+			mustReal("DATASET_SERVICE_URL", "in-memory static dataset resolver")
+		}
 		slog.Warn("DATASET_SERVICE_URL unset; using empty static resolver (dev only)")
 		resolver = datasets.NewStatic()
 	}
@@ -200,6 +214,9 @@ func main() {
 	var pub events.Publisher
 	brokers := env("KAFKA_BROKERS", "localhost:9092")
 	if brokers == "false" {
+		if requireReal {
+			mustReal("KAFKA_BROKERS", "in-memory publisher (outbox events would not reach Kafka)")
+		}
 		slog.Warn("KAFKA_BROKERS=false; using in-memory publisher (events are not durable; local dev only)")
 		pub = events.NewInMemory()
 	} else {

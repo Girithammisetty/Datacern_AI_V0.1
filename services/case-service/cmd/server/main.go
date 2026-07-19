@@ -55,6 +55,16 @@ func main() {
 	otelShutdown := otelx.InitFromEnv(ctx, "case-service")
 	defer func() { _ = otelShutdown(context.Background()) }()
 
+	// Stabilization guard (rule: no fake/mock/stub in a runtime path). When
+	// REQUIRE_REAL_ADAPTERS=true — set in every real deploy — the service REFUSES
+	// to boot on an in-memory/fake adapter instead of silently faking success.
+	// Absent (local dev), the loud-warn fallbacks below keep dev self-contained.
+	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
+	mustReal := func(realEnv, adapter string) {
+		slog.Error("REQUIRE_REAL_ADAPTERS=true but " + realEnv + " is unset — refusing to boot on the " + adapter + " fallback")
+		os.Exit(1)
+	}
+
 	dbURL := env("DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/case?sslmode=disable")
 	// Migrations need DDL/ownership + role creation, so they run under a
 	// privileged role (MIGRATE_DATABASE_URL, default = DATABASE_URL). The runtime
@@ -148,6 +158,9 @@ func main() {
 	brokers := env("KAFKA_BROKERS", "localhost:9092")
 	var pub events.Publisher
 	if brokers == "false" {
+		if requireReal {
+			mustReal("KAFKA_BROKERS", "in-memory publisher (outbox events would not reach Kafka)")
+		}
 		slog.Warn("KAFKA_BROKERS=false; in-memory publisher (events not durable; dev only)")
 		pub = events.NewInMemory()
 	} else {
