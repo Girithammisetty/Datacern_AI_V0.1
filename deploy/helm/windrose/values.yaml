@@ -96,6 +96,7 @@ config:
   AUDIT_URL: http://audit-service:8322
   NOTIFICATION_URL: http://notification-service:8323
   EVAL_URL: http://eval-service:8324
+  PACK_URL: http://pack-service:8309
   BFF_URL: http://bff-graphql:4000
 
 # --- Secrets -------------------------------------------------------------------
@@ -199,6 +200,8 @@ externalSecrets:
     - SEMANTIC_MIGRATE_URL
     - EVAL_DATABASE_URL
     - EVAL_MIGRATE_URL
+    - PACK_DATABASE_URL
+    - PACK_MIGRATE_URL
 
 # --- ServiceAccount ------------------------------------------------------------
 # Workload-identity annotations are cloud-specific (IRSA / GKE WI / AAD) — set in
@@ -816,6 +819,27 @@ services:
       - name: EVAL_OPA_URL
         valueFrom: { configMapKeyRef: { name: windrose-config, key: OPA_URL } }
       - name: EVAL_RBAC_URL
+        valueFrom: { configMapKeyRef: { name: windrose-config, key: RBAC_URL } }
+
+  - name: pack-service
+    language: python
+    port: 8309
+    migrate: true
+    ingress: internal
+    replicas: 1
+    resources: *res-medium
+    # Prefix PACK_. Reads DB/migrate/redis/opa/rbac (NO kafka). Listed in
+    # deploy/services.yaml but was previously missing from this chart list.
+    env:
+      - name: PACK_DATABASE_URL
+        valueFrom: { secretKeyRef: { name: windrose-secrets, key: PACK_DATABASE_URL } }
+      - name: PACK_MIGRATE_URL
+        valueFrom: { secretKeyRef: { name: windrose-secrets, key: PACK_MIGRATE_URL } }
+      - name: PACK_REDIS_URL
+        valueFrom: { secretKeyRef: { name: windrose-secrets, key: REDIS_URL } }
+      - name: PACK_OPA_URL
+        valueFrom: { configMapKeyRef: { name: windrose-config, key: OPA_URL } }
+      - name: PACK_RBAC_URL
         valueFrom: { configMapKeyRef: { name: windrose-config, key: RBAC_URL } }
 
   - name: bff-graphql
