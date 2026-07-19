@@ -13,7 +13,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from packctl.installer import INSTALL_ORDER, install  # noqa: E402
-from packctl.manifest import load_manifest  # noqa: E402
+from packctl.manifest import load_manifest, KNOWN_DEFERRED_KINDS  # noqa: E402
+
+# The currently-deferred kind (whatever it is) — so promoting a kind to
+# SUPPORTED never re-stales this fixture's deferred example.
+_DEFERRED = KNOWN_DEFERRED_KINDS[0]
 
 
 class RecordingClient:
@@ -67,6 +71,11 @@ class RecordingClient:
         self._record("ontology", identity, "create", None, entity_key)
         return entity_key
 
+    def ensure_write_adapter(self, identity, name, connector_type, config, direction="outgoing"):
+        self.calls.append(("write_adapters", name, connector_type, direction))
+        self._record("write_adapters", identity, "create", None, name)
+        return name
+
 
 def _write_pack(tmp_path: Path) -> Path:
     (tmp_path / "pack.yaml").write_text(textwrap.dedent("""
@@ -87,8 +96,8 @@ def _write_pack(tmp_path: Path) -> Path:
           decision_models:
             - { file: "decisions.yaml", identity: "triage_table" }
         deferred:
-          - { kind: connection_templates, reason: "not in core" }
-    """))
+          - { kind: __DEFERRED__, reason: "not in core" }
+    """).replace("__DEFERRED__", _DEFERRED))
     (tmp_path / "decisions.yaml").write_text(textwrap.dedent("""
         - identity: triage_table
           name: "Triage table"
@@ -152,7 +161,7 @@ def test_ledger_records_actions_and_deferred(tmp_path):
     ledger = json.loads(result.ledger_path.read_text())
     assert ledger["result"] == "installed"
     assert ledger["pack"] == "order-test"
-    assert ledger["deferred"][0]["kind"] == "connection_templates"
+    assert ledger["deferred"][0]["kind"] == _DEFERRED
     assert any(a["kind"] == "datasets" and a["action"] == "create"
                for a in ledger["actions"])
 
@@ -210,3 +219,32 @@ def test_ontology_component_materializes_entities(tmp_path):
     assert ("ontology", "invoice", "Invoice", 1, 0) in client.calls
     assert any(a["kind"] == "ontology" and a["action"] == "create"
                and a["detail"] == "vendor" for a in client.actions)
+
+
+def test_write_adapters_component_materializes(tmp_path):
+    """The write_adapters kind (inc12) declares each governed SoR write-back as an
+    outgoing ingestion connection via ensure_write_adapter."""
+    (tmp_path / "pack.yaml").write_text(textwrap.dedent("""
+        pack_manifest: 1
+        name: wa-test
+        version: 1.0.0
+        publisher: { id: pub-w, name: W }
+        description: "write adapters install"
+        components:
+          write_adapters:
+            - { file: "adapters.yaml", identity: "wa" }
+    """))
+    (tmp_path / "adapters.yaml").write_text(textwrap.dedent("""
+        - name: "ERP payment write-back"
+          connector_type: postgres
+          config: { host: erp.internal, database: ap }
+        - name: "Vendor portal post"
+          connector_type: http_api
+          config: { url: "https://portal.example/api" }
+    """))
+    manifest = load_manifest(tmp_path)
+    client = RecordingClient()
+    result = install(manifest, client, ledger_dir=tmp_path / "ledgers")
+    assert result.ok
+    assert ("write_adapters", "ERP payment write-back", "postgres", "outgoing") in client.calls
+    assert ("write_adapters", "Vendor portal post", "http_api", "outgoing") in client.calls

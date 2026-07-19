@@ -35,6 +35,7 @@ INSTALL_ORDER = (
     "dashboards", "dispositions", "case_fields", "case_schemas", "ontology",
     "decision_models", "cases", "roles", "agent_configs", "guardrails",
     "memories", "pipelines", "display_labels", "eval_sets", "model_archetypes",
+    "write_adapters", "connection_templates",
 )
 
 
@@ -190,6 +191,25 @@ def install(manifest: Manifest, client: PlatformClient,
                         attributes=e.get("attributes", []),
                         relationships=e.get("relationships", []),
                         description=e.get("description", ""))
+
+            elif kind == "write_adapters":
+                # Governed SoR write-back adapters (inc12): each is an OUTGOING
+                # ingestion connection declared with skip_test + empty secrets;
+                # the tenant completes credentials and every write is proposal-
+                # mode four-eyes. Idempotent by name; reversible.
+                for a in doc:
+                    client.ensure_write_adapter(
+                        comp.identity, a["name"], a["connector_type"],
+                        a.get("config", {}), a.get("direction", "outgoing"))
+
+            elif kind == "connection_templates":
+                # Governed SOURCE connector templates (inc13): pre-declared
+                # INCOMING ingestion connections (skip_test + empty secrets; the
+                # tenant completes credentials). Mirror of write_adapters.
+                for a in doc:
+                    client.ensure_connection_template(
+                        comp.identity, a["name"], a["connector_type"],
+                        a.get("config", {}), a.get("direction", "incoming"))
 
             failed_now = any_failed(client)
             if failed_now and not keep_going:

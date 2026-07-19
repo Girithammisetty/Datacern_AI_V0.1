@@ -12,7 +12,12 @@ import pytest
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from packctl.manifest import ManifestError, load_manifest  # noqa: E402
+from packctl.manifest import ManifestError, load_manifest, KNOWN_DEFERRED_KINDS  # noqa: E402
+
+# Use whatever kind is CURRENTLY deferred (declared but not yet materializable)
+# as the deferred/unknown example, so promoting a kind to SUPPORTED never
+# re-stales these fixtures (history: guardrails -> ontology -> connection_templates).
+_DEFERRED = KNOWN_DEFERRED_KINDS[0]
 
 
 def _write_pack(tmp_path: Path, manifest_yaml: str, files: dict[str, str] | None = None) -> Path:
@@ -36,8 +41,8 @@ components:
   dispositions:
     - { file: "cases/dispositions.yaml", identity: "dispositions" }
 deferred:
-  - { kind: connection_templates, reason: "not in core yet" }
-"""
+  - { kind: __DEFERRED__, reason: "not in core yet" }
+""".replace("__DEFERRED__", _DEFERRED)
 
 
 def test_valid_manifest_loads(tmp_path):
@@ -45,7 +50,7 @@ def test_valid_manifest_loads(tmp_path):
     m = load_manifest(pack)
     assert m.name == "test-pack" and m.version == "1.0.0"
     assert len(m.components) == 1 and m.components[0].kind == "dispositions"
-    assert m.deferred[0]["kind"] == "connection_templates"
+    assert m.deferred[0]["kind"] == _DEFERRED
 
 
 def test_missing_manifest_file(tmp_path):
@@ -72,7 +77,7 @@ def test_envelope_validation(tmp_path, field, value, pointer):
 
 
 def test_unknown_kind_rejected_with_deferred_hint(tmp_path):
-    bad = VALID.replace("dispositions:", "connection_templates:")
+    bad = VALID.replace("dispositions:", _DEFERRED + ":")
     pack = _write_pack(tmp_path, bad, {"cases/dispositions.yaml": "[]"})
     with pytest.raises(ManifestError) as e:
         load_manifest(pack)
@@ -101,7 +106,7 @@ def test_duplicate_identity_rejected(tmp_path):
 
 
 def test_installable_kind_cannot_be_deferred(tmp_path):
-    bad = VALID.replace("kind: connection_templates", "kind: dashboards")
+    bad = VALID.replace("kind: " + _DEFERRED, "kind: dashboards")
     pack = _write_pack(tmp_path, bad, {"cases/dispositions.yaml": "[]"})
     with pytest.raises(ManifestError) as e:
         load_manifest(pack)
