@@ -8,7 +8,7 @@ RBAC/OPA, four-eyes proposals, immutable audit) woven through every plane.
 - Architecture: [`docs/platform/PLATFORM_ARCHITECTURE.md`](docs/platform/PLATFORM_ARCHITECTURE.md)
 - Service specs (BRDs): [`docs/brd/`](docs/brd/) — start with [`00_MASTER_BRD.md`](docs/brd/00_MASTER_BRD.md)
 - Feature design notes: [`docs/design/`](docs/design/)
-- Repo-specific engineering rules: [`CONVENTIONS.md`](CONVENTIONS.md) · agent workflow: [`AGENTS_GUIDE.md`](AGENTS_GUIDE.md)
+- Repo-specific engineering rules: [`CONVENTIONS.md`](docs/platform/CONVENTIONS.md) · agent workflow: [`AGENTS_GUIDE.md`](docs/platform/AGENTS_GUIDE.md)
 
 ## Services
 
@@ -99,7 +99,7 @@ Every service implements the shared requirements in
 [`docs/brd/00_MASTER_BRD.md`](docs/brd/00_MASTER_BRD.md): tenancy/RLS, JWT claims,
 the URN scheme `wr:<tenant>:<service>:<type>/<id>`, the error envelope, cursor
 pagination, outbox events, and OTel. Repo-specific rules live in
-[`CONVENTIONS.md`](CONVENTIONS.md).
+[`CONVENTIONS.md`](docs/platform/CONVENTIONS.md).
 
 ## Build status
 

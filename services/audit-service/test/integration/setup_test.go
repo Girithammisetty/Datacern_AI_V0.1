@@ -1,3 +1,5 @@
+//go:build integration
+
 // Package integration is audit-service's Docker-backed tier. It runs against the
 // REAL local infra in deploy/docker-compose.dev.yml — ClickHouse (append-only
 // store), Redpanda/Kafka, Postgres (RLS as the non-owner audit_rw role), Redis,
