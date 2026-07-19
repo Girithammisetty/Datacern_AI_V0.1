@@ -53,6 +53,15 @@ _ROUTER_OWNED_KEYS = {"target_agent_key", "routing_rationale", "usage", "trace",
                      "delegate_outcome"}
 
 
+def _safe_delegate_target(target: str, runners) -> str:
+    """The orchestrator only ever dispatches to an allow-listed, REGISTERED delegate.
+    A self-asserted / unknown / unregistered target falls back to the safe default —
+    an injected classifier can never route the caller to an off-list agent (P1)."""
+    if target in _ALLOWED and target in runners:
+        return target
+    return _DEFAULT
+
+
 def build_meta_router_graph(deps: GraphDeps):
     async def classify(state: dict) -> dict:
         query = state.get("query", "") or ""
@@ -95,7 +104,18 @@ def build_meta_router_graph(deps: GraphDeps):
         # importing and RUNNERS is fully populated.
         from app.graphs import RUNNERS
 
-        target = state["target_agent_key"]
+        requested = state["target_agent_key"]
+        # Defense-in-depth (P1): re-assert the routing allow-list at the orchestrator
+        # handoff. The classifier already clamps to _ALLOWED, but the dispatch step
+        # must NOT trust a target that isn't an approved, registered delegate — reject
+        # a self-asserted/unknown target and fall back to the safe default (logged),
+        # never dispatch outside the allow-list.
+        target = _safe_delegate_target(requested, RUNNERS)
+        if target != requested:
+            state.setdefault("trace", []).append(
+                {"event": "routing_target_rejected", "requested": requested,
+                 "fell_back_to": target})
+            state["target_agent_key"] = target
         _, runner = RUNNERS[target]
         delegate_inputs = {k: v for k, v in state.items() if k not in _ROUTER_OWNED_KEYS}
         state["delegate_outcome"] = await runner(deps, delegate_inputs)

@@ -52,3 +52,33 @@ def sign_card(key: SigningKey, card: dict) -> str:
         {"card_digest": payload_digest}, key.private_pem, algorithm="RS256",
         headers={"kid": key.kid},
     )
+
+
+def verify_card(
+    public_pem: str, card: dict, signature: str, *, expected_agent_key: str | None = None,
+) -> bool:
+    """Verify a detached A2A card signature — the counterpart to ``sign_card`` (P1).
+
+    An inter-agent handoff must carry a VERIFIABLE identity claim, not be trusted by
+    workflow position (MS AI Red Team: reject self-asserted roles at handoffs). This
+    confirms the JWS was produced by the holder of the private key AND that the card
+    body is unmodified (recomputed canonical digest must match). When
+    ``expected_agent_key`` is given, the card's self-declared ``x-windrose.agent_key``
+    must match it — so a card cannot assert an identity other than the one the caller
+    resolved it for. Returns False on any signature/tamper/identity mismatch (never
+    raises)."""
+    if not signature or not isinstance(card, dict):
+        return False
+    body = {k: v for k, v in card.items() if k != "signature"}
+    expected_digest = canonical_json(body).hex()
+    try:
+        claims = pyjwt.decode(signature, public_pem, algorithms=["RS256"])
+    except pyjwt.InvalidTokenError:
+        return False
+    if claims.get("card_digest") != expected_digest:
+        return False
+    if expected_agent_key is not None:
+        claimed = (card.get("x-windrose") or {}).get("agent_key")
+        if claimed != expected_agent_key:
+            return False
+    return True
