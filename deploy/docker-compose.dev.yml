@@ -32,6 +32,14 @@ services:
         --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
         --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
     ports: ["9092:9092", "8081:8081"]
+    # Persist the log so the Kafka buffer survives a container restart. The audit
+    # consumer's at-least-once design leans on "Kafka is the recovery buffer"
+    # (audit-service ingest/consumer.go, BR-6): it never commits an offset until
+    # ClickHouse confirms the insert, so events pile up here during a store
+    # (ClickHouse) outage. Without a durable volume a restart during that window
+    # wipes the un-consumed buffer and those audit events are lost.
+    volumes:
+      - redpandadata:/var/lib/redpanda/data
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
       interval: 5s
@@ -254,3 +262,4 @@ volumes:
   pgdata: {}
   miniodata: {}
   icebergdata: {}
+  redpandadata: {}
