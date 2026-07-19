@@ -112,6 +112,13 @@ class ProposalService:
         # demand a human. Defense-in-depth with policy.py's destructive/admin block.
         if effect.get("risk") == "high":
             auto = False
+        # Rule-of-Two (Meta/Databricks): an agent must not simultaneously hold
+        # sensitive-data access + untrusted-input exposure + autonomous state-change.
+        # When the run consumed untrusted external input (attached-document
+        # evidence, marked untrusted_input), force human approval — the approval
+        # gate removes the autonomous-state-change leg, keeping it at two of three.
+        if effect.get("untrusted_input"):
+            auto = False
         if auto:
             decided = await self._store.decide_proposal(
                 tenant_id=run.tenant_id, proposal_id=pid, new_status="approved",

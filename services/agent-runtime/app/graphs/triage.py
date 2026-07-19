@@ -21,6 +21,13 @@ from langgraph.graph import END, StateGraph
 from app.adapters.memory import GroundingDegraded
 from app.domain.urn import case_urn
 from app.graphs.base import GraphDeps, GraphOutcome, WriteIntent, register
+from app.graphs.evidence_guard import (
+    EVIDENCE_PREAMBLE,
+    FENCE_CLOSE,
+    FENCE_OPEN,
+    detect_injection,
+    sanitize_evidence,
+)
 from app.graphs.persona import caller_persona
 from app.prompts import system_prompt
 
@@ -154,7 +161,8 @@ def build_triage_graph(deps: GraphDeps):
             predicted_effect={
                 "summary": _effect_summary(d, state.get("dispositions", [])),
                 "citations": d.get("citations", []),
-                "reversibility": "reversible", "blast_radius": 1})
+                "reversibility": "reversible", "blast_radius": 1,
+                **_evidence_effect_flags(state)})
         state.setdefault("trace", []).append(
             {"event": "proposal_created", "tool_id": TRIAGE_TOOL_ID})
         return state
@@ -188,6 +196,20 @@ async def _fetch_evidence(deps: GraphDeps, state: dict) -> list[dict]:
                 {"event": "evidence_grounding_failed", "error": type(exc).__name__})
     state["evidence_docs"] = docs
     if docs:
+        # Rule-of-Two: reading attached documents is untrusted external input. Mark
+        # it so the proposal is forced through human approval (never auto-executed)
+        # — the human-approval gate removes the autonomous-state-change leg.
+        state["untrusted_evidence"] = True
+        # XPIA detection: flag injection signatures so the trace records them and
+        # the approver is warned. Visible, never silently swallowed.
+        flagged = {d.get("filename"): detect_injection(d.get("text") or "")
+                   for d in docs if d.get("text")}
+        flags = sorted({sig for sigs in flagged.values() for sig in sigs})
+        if flags:
+            state["evidence_injection_flags"] = flags
+            state.setdefault("trace", []).append(
+                {"event": "evidence_injection_detected", "signatures": flags,
+                 "files": [fn for fn, sigs in flagged.items() if sigs][:10]})
         state.setdefault("trace", []).append(
             {"event": "evidence_grounded", "docs": len(docs),
              "extracted": sum(1 for d in docs if d.get("extracted")),
@@ -197,20 +219,23 @@ async def _fetch_evidence(deps: GraphDeps, state: dict) -> list[dict]:
 
 def _format_evidence(docs: list[dict]) -> str:
     """Render the extracted evidence documents as a labelled prompt section the
-    model can cite from. Documents we could not extract still appear (so the
-    model knows they exist and can ask a human / flag it), but with no body."""
+    model can cite from. Untrusted document content is wrapped in a defensive
+    frame (EVIDENCE_PREAMBLE) + fence and run through sanitize_evidence so an
+    uploaded file cannot inject instructions (XPIA defense). Documents we could
+    not extract still appear (with no body) so nothing is silently hidden."""
     if not docs:
         return ""
-    parts = ["Attached case evidence documents (actual extracted text — cite by "
-             "filename when used):"]
+    parts = [EVIDENCE_PREAMBLE, FENCE_OPEN,
+             "Attached case evidence documents (cite by filename when used):"]
     for d in docs:
         fn = d.get("filename", "evidence")
         ct = d.get("content_type", "")
         if d.get("extracted") and d.get("text"):
-            parts.append(f"--- {fn} ({ct}) ---\n{d['text']}")
+            parts.append(f"--- {fn} ({ct}) ---\n{sanitize_evidence(d['text'])}")
         else:
             note = d.get("note") or "content not extractable"
             parts.append(f"--- {fn} ({ct}) --- [{note}]")
+    parts.append(FENCE_CLOSE)
     return "\n".join(parts) + "\n"
 
 
@@ -293,6 +318,18 @@ def _effect_summary(d: dict, dispositions: list[dict]) -> str:
     priority = str(d.get("severity", "medium")).capitalize()
     return (f'Recommends resolving this claim as "{label}" '
             f"and setting priority to {priority}.")
+
+
+def _evidence_effect_flags(state: dict) -> dict:
+    """predicted_effect flags for an agent that consumed untrusted evidence:
+    ``untrusted_input`` (Rule-of-Two → ProposalService forces human approval) and
+    any ``injection_flags`` surfaced to warn the approver."""
+    out: dict = {}
+    if state.get("untrusted_evidence"):
+        out["untrusted_input"] = True
+    if state.get("evidence_injection_flags"):
+        out["injection_flags"] = state["evidence_injection_flags"]
+    return out
 
 
 def _resolve_disposition_id(code: str, dispositions: list[dict], state: dict) -> str:

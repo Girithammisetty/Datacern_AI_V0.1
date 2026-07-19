@@ -78,6 +78,20 @@ async def test_high_risk_never_self_approvable_even_if_tenant_allows():
     assert "distinct approver" in str(ei.value)
 
 
+async def test_untrusted_input_forces_human_approval_rule_of_two():
+    c = _container()
+    run = await _run(c)
+    # An otherwise low-risk, reversible single-case write, but the run consumed
+    # untrusted evidence → Rule-of-Two forces manual even when policy says auto.
+    intent = _intent()
+    intent.predicted_effect["untrusted_input"] = True
+    policy = {"case-triage": {"write-proposal": {"reversible": "auto"}}}
+    prop, executed = await c.proposal_service.create_from_intent(
+        run=run, intent=intent, obo_user="u-77", auto_execute_policy=policy)
+    assert prop.predicted_effect["untrusted_input"] is True
+    assert executed is False and prop.status == "pending"
+
+
 async def test_high_risk_bulk_write_not_auto_executed_despite_policy():
     c = _container()
     run = await _run(c)

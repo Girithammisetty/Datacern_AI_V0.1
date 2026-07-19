@@ -164,6 +164,14 @@ export function ProposalDetail({ proposal }: { proposal: Proposal }) {
                 Agent’s description (unverified): {String(proposal.predictedEffect.agent_summary)}
               </p>
             )}
+            {Array.isArray(proposal.predictedEffect.injection_flags) &&
+              (proposal.predictedEffect.injection_flags as unknown[]).length > 0 && (
+                <p className="mt-2 rounded bg-destructive/10 px-2 py-1 text-xs text-destructive">
+                  ⚠ Possible prompt-injection detected in the attached evidence (
+                  {(proposal.predictedEffect.injection_flags as string[]).join(", ")}). Review
+                  the documents before approving.
+                </p>
+              )}
           </section>
         )}
         {citations.length > 0 && (

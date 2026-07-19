@@ -41,6 +41,7 @@ from app.graphs.triage import (
     TRIAGE_TOOL_VERSION,
     _disposition_label,
     _effect_summary,
+    _evidence_effect_flags,
     _extract_json,
     _fetch_evidence,
     _format_evidence,
@@ -176,7 +177,8 @@ def build_persona_copilot_graph(deps: GraphDeps):
             predicted_effect={
                 "summary": _effect_summary(d, state.get("dispositions", [])),
                 "citations": d.get("citations", []),
-                "reversibility": "reversible", "blast_radius": 1})
+                "reversibility": "reversible", "blast_radius": 1,
+                **_evidence_effect_flags(state)})
         state.setdefault("trace", []).append(
             {"event": "proposal_created", "tool_id": TRIAGE_TOOL_ID})
         return state
