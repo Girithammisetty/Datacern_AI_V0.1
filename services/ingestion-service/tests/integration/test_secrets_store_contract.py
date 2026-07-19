@@ -283,8 +283,17 @@ def store(request, localstack_endpoint) -> SecretsStore:
     if kind.startswith("aws"):
         return _aws_factory_maker(localstack_endpoint)()
     if kind.startswith("azure"):
+        # The Azure adapter imports the azure SDK at call time (azure.core /
+        # keyvault); skip this backend when the SDK isn't installed (no Azure
+        # cloud account / SDK in this env) rather than failing the contract.
+        pytest.importorskip(
+            "azure.core.exceptions",
+            reason="azure SDK not installed (no Azure account/SDK in this env)")
         return _azure_factory()
     if kind.startswith("gcp"):
+        pytest.importorskip(
+            "google.cloud.secretmanager",
+            reason="gcp SDK not installed (no GCP account/SDK in this env)")
         return _gcp_factory()
     raise AssertionError(kind)  # pragma: no cover
 
