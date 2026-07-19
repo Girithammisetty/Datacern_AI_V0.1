@@ -25,6 +25,7 @@ services:
   - { name: agent-runtime,         language: python, path: services/agent-runtime,        port: 8306, db: agent_runtime, migrate: true,  ingress: internal, needs: [postgres, kafka, redis, opa, temporal] }
   - { name: memory-service,        language: python, path: services/memory-service,       port: 8307, db: memory,        migrate: true,  ingress: internal, needs: [postgres, kafka, redis, opa, embeddings] }
   - { name: case-service,          language: go,     path: services/case-service,         port: 8308, db: case_svc,      migrate: true,  ingress: internal, needs: [postgres, kafka, redis, opa, opensearch] }
+  - { name: pack-service,          language: python, path: services/pack-service,         port: 8309, db: pack,          migrate: true,  ingress: internal, needs: [postgres, redis, opa] }
   - { name: tool-registry,         language: go,     path: services/tool-plane,           dockerfile: Dockerfile.registry, port: 8310, db: tool_plane, migrate: true,  ingress: internal, needs: [postgres, opa] }
   - { name: mcp-gateway,           language: go,     path: services/tool-plane,           dockerfile: Dockerfile.gateway,  port: 8311, db: ~,          migrate: false, ingress: internal, needs: [opa] }
   - { name: ai-gateway,            language: python, path: services/ai-gateway,           port: 8312, db: ai_gateway,    migrate: true,  ingress: internal, needs: [postgres, kafka, redis, opa, llmproviders] }

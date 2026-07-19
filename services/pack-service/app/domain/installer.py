@@ -20,7 +20,8 @@ identity.
 from __future__ import annotations
 
 import uuid
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from app.config import Settings
 from app.domain import catalog
@@ -113,7 +114,7 @@ def plan(client, manifest) -> list[dict]:
             continue
         for name in _component_names(manifest, comp):
             action = "exists" if name in existing.get(comp.kind, set()) else "create"
-            ops.append({"kind": comp.kind, "identity": comp.identity, "name": name, "action": action})
+            ops.append({"kind": comp.kind, "identity": comp.identity, "name": name, "action": action})  # noqa: E501
     return ops
 
 
@@ -262,79 +263,79 @@ def run_install(client, manifest, origin_of: Callable[[str, str], str]) -> list[
             if kind == "dispositions":
                 for d in doc:
                     do("dispositions", comp, d["code"],
-                       lambda d=d: client.ensure_disposition(
+                       lambda d=d, comp=comp: client.ensure_disposition(
                            comp.identity, d["code"], d["label"], d["category"],
                            d.get("requires_note", False)))
             elif kind == "case_fields":
                 for f in doc:
                     do("case_fields", comp, f["name"],
-                       lambda f=f: client.ensure_case_field(
+                       lambda f=f, comp=comp: client.ensure_case_field(
                            comp.identity, f["name"], f["data_type"],
                            f.get("purpose", "both"), f.get("field_meta")))
             elif kind == "case_schemas":
                 for sc in doc:
                     do("case_schemas", comp, sc["schema_key"],
-                       lambda sc=sc: client.ensure_case_schema(
+                       lambda sc=sc, comp=comp: client.ensure_case_schema(
                            comp.identity, sc["schema_key"], sc["name"],
                            sc.get("fields", []), sc.get("description", "")))
             elif kind == "display_labels":
                 for lbl in doc:
                     do("display_labels", comp, lbl["key"],
-                       lambda lbl=lbl: client.ensure_label(
+                       lambda lbl=lbl, comp=comp: client.ensure_label(
                            comp.identity, lbl["key"], lbl["value"]))
             elif kind == "guardrails":
                 for gd in doc:
                     env = _guardrail_envelope(gd, client.workspace_id)
                     do("guardrails", comp, gd["agent_key"],
-                       lambda gd=gd, env=env: client.ensure_guardrail(
+                       lambda gd=gd, env=env, comp=comp: client.ensure_guardrail(
                            comp.identity, gd["agent_key"], env))
             elif kind == "agent_configs":
                 for ac in doc:
                     do("agent_configs", comp, ac["agent_key"],
-                       lambda ac=ac: ac["agent_key"] if client.ensure_agent_config(
+                       lambda ac=ac, comp=comp: ac["agent_key"] if client.ensure_agent_config(
                            comp.identity, ac["agent_key"], ac.get("prompt_params", {}),
                            ac.get("enabled", True)) else None)
             elif kind == "eval_sets":
                 for es in doc:
                     do("eval_sets", comp, es["dataset_key"],
-                       lambda es=es: client.ensure_eval_set(
+                       lambda es=es, comp=comp: client.ensure_eval_set(
                            comp.identity, es["dataset_key"], es["agent_key"],
                            es.get("cases", []), es.get("description", "")))
             elif kind == "model_archetypes":
                 for a in doc:
                     do("model_archetypes", comp, a["archetype_key"],
-                       lambda a=a: client.ensure_archetype(
+                       lambda a=a, comp=comp: client.ensure_archetype(
                            comp.identity, a["archetype_key"], a["name"], a["task_type"],
                            a.get("target"), a.get("description", ""),
                            a.get("expected_metrics"), a.get("governance_notes")))
             elif kind == "ontology":
                 for ent in doc:
                     do("ontology", comp, ent["entity_key"],
-                       lambda ent=ent: client.ensure_ontology_entity(
+                       lambda ent=ent, comp=comp: client.ensure_ontology_entity(
                            comp.identity, ent["entity_key"], ent["name"],
                            ent.get("attributes"), ent.get("relationships"),
                            ent.get("description", "")))
             elif kind == "write_adapters":
                 for wa in doc:
                     do("write_adapters", comp, wa["name"],
-                       lambda wa=wa: client.ensure_write_adapter(
+                       lambda wa=wa, comp=comp: client.ensure_write_adapter(
                            comp.identity, wa["name"], wa["connector_type"],
                            wa.get("config", {}), wa.get("direction", "outgoing")))
             elif kind == "connection_templates":
                 for ct in doc:
                     do("connection_templates", comp, ct["name"],
-                       lambda ct=ct: client.ensure_connection_template(
+                       lambda ct=ct, comp=comp: client.ensure_connection_template(
                            comp.identity, ct["name"], ct["connector_type"],
                            ct.get("config", {}), ct.get("direction", "incoming")))
             elif kind == "roles":
                 for role in doc:
                     do("roles", comp, role["name"],
-                       lambda role=role: client.ensure_role(
+                       lambda role=role, comp=comp: client.ensure_role(
                            comp.identity, role["name"], role["actions"]))
             elif kind == "decision_models":
                 for dm in (doc if isinstance(doc, list) else [doc]):
                     do("decision_models", comp, dm["name"],
-                       lambda dm=dm: client.ensure_decision_model(
+                       lambda dm=dm, comp=comp: client.ensure_decision_model(
                            dm.get("identity", comp.identity), dm["name"], dm["rules"],
                            dm.get("default_outcome")))
 
@@ -393,11 +394,11 @@ def run_uninstall(client, ledger: list[dict]) -> list[dict]:
         elif kind == "write_adapters" and tid:
             ok = client.delete_write_adapter(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,
-                             "detail": "write adapter (outgoing connection) removed" if ok else "delete failed"})
+                             "detail": "write adapter (outgoing connection) removed" if ok else "delete failed"})  # noqa: E501
         elif kind == "connection_templates" and tid:
             ok = client.delete_connection_template(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,
-                             "detail": "source connector (incoming connection) removed" if ok else "delete failed"})
+                             "detail": "source connector (incoming connection) removed" if ok else "delete failed"})  # noqa: E501
         elif kind == "display_labels" and tid:
             ok = client.delete_label(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,
@@ -474,7 +475,7 @@ def _semantic_draft(client, name: str, desc: str, definition: dict):
 
     e = client.endpoints
     author = client.author_token()
-    r = client._req("GET", f"{e.semantic}/api/v1/models?filter[workspace_id]={client.workspace_id}", author)
+    r = client._req("GET", f"{e.semantic}/api/v1/models?filter[workspace_id]={client.workspace_id}", author)  # noqa: E501
     model = None
     if r.status_code == 200:
         for m in r.json().get("data", []):
@@ -553,7 +554,7 @@ def run_data_chain(client, manifest, origin_of):
             ref = entity.pop("dataset", None)
             if ref and dataset_urns.get(ref):
                 entity["dataset_urn"] = dataset_urns[ref]
-        mid, published, detail = _semantic_draft(client, doc["name"], doc.get("description", ""), definition)
+        mid, published, detail = _semantic_draft(client, doc["name"], doc.get("description", ""), definition)  # noqa: E501
         action = "failed" if mid is None else ("noop" if published else "submitted")
         records.append(_rec("semantic_models", doc["name"], origin_of,
                             action=action, target_id=mid,
@@ -566,15 +567,15 @@ def run_data_chain(client, manifest, origin_of):
         for i, vq in enumerate(doc):
             e = client.endpoints
             author = client.author_token()
-            cr = client._req("POST", f"{e.semantic}/api/v1/verified-queries", author, headers=JSON_H,
+            cr = client._req("POST", f"{e.semantic}/api/v1/verified-queries", author, headers=JSON_H,  # noqa: E501
                              json={"workspace_id": client.workspace_id, "nl_text": vq["nl_text"],
                                    "sql_text": vq["sql_text"], "model": vq.get("model"),
                                    "tags": vq.get("tags", [])})
             if cr.status_code == 201:
                 vid = cr.json()["data"]["id"]
-                client._req("POST", f"{e.semantic}/api/v1/verified-queries/{vid}/submit", author, headers=JSON_H, json={})
+                client._req("POST", f"{e.semantic}/api/v1/verified-queries/{vid}/submit", author, headers=JSON_H, json={})  # noqa: E501
                 records.append(_rec("verified_queries", f"{comp.identity}_{i}", origin_of,
-                                    action="submitted", target_id=vid, detail="submitted — awaiting approval"))
+                                    action="submitted", target_id=vid, detail="submitted — awaiting approval"))  # noqa: E501
             else:
                 # 409 = already present (idempotent) → noop; else honest failure.
                 records.append(_rec("verified_queries", f"{comp.identity}_{i}", origin_of,
@@ -671,7 +672,7 @@ def run_complete(client, manifest, origin_of):
         doc = load_component_file(manifest, comp)
         _mid, pub = _semantic_published(client, doc["name"])
         if not pub:
-            return [], False, f"semantic model {doc['name']!r} is not published yet — a steward must approve it first"
+            return [], False, f"semantic model {doc['name']!r} is not published yet — a steward must approve it first"  # noqa: E501
 
     from packctl.manifest import load_component_file  # noqa: PLC0415
 
@@ -681,7 +682,7 @@ def run_complete(client, manifest, origin_of):
     for comp in manifest.components_of("saved_queries"):
         for q in (load_component_file(manifest, comp) or []):
             e = client.endpoints
-            r = client._req("GET", f"{e.query}/api/v1/queries?workspace_id={client.workspace_id}", client.author_token())
+            r = client._req("GET", f"{e.query}/api/v1/queries?workspace_id={client.workspace_id}", client.author_token())  # noqa: E501
             if r.status_code == 200:
                 for row in r.json().get("data", []):
                     if row.get("name") == q["name"]:
@@ -692,13 +693,18 @@ def run_complete(client, manifest, origin_of):
         for chart in spec.get("charts", []):
             chart["sources"] = _expand_sources(client, chart.get("sources", []), saved_query_ids)
         res = client.ensure_dashboard(comp.identity, spec)
-        act = client.actions[-1] if client.actions else {}
         did = res.get("id") if isinstance(res, dict) else None
-        records.append(_rec("dashboards", spec.get("name", comp.identity), origin_of,
-                            action=("create" if did else "failed"),
-                            target_id=did, urn=(f"wr:{client.tenant_id}:chart:dashboard/{did}" if did else None),
-                            reversible=bool(did),
-                            detail=f"{res.get('warmed', 0)}/{res.get('total', 0)} charts resolve data" if isinstance(res, dict) else ""))
+        records.append(_rec(
+            "dashboards", spec.get("name", comp.identity), origin_of,
+            action=("create" if did else "failed"),
+            target_id=did,
+            urn=(f"wr:{client.tenant_id}:chart:dashboard/{did}" if did else None),
+            reversible=bool(did),
+            detail=(
+                f"{res.get('warmed', 0)}/{res.get('total', 0)} charts resolve data"
+                if isinstance(res, dict) else ""
+            ),
+        ))
     return records, True, "dashboards materialized"
 
 
@@ -824,7 +830,7 @@ def _purpose_norm(v) -> str:
 
 
 def _field_intended(entry: dict) -> dict:
-    return {"data_type": entry.get("data_type"), "purpose": _purpose_norm(entry.get("purpose", "both")),
+    return {"data_type": entry.get("data_type"), "purpose": _purpose_norm(entry.get("purpose", "both")),  # noqa: E501
             "field_meta": entry.get("field_meta") or {}}
 
 
@@ -896,7 +902,7 @@ def detect_drift(client, ledger: list[dict], manifest) -> list[dict]:
             if _canon(want) == _canon(got):
                 rows.append(_drift_row(r, "in_sync", True, ""))
             else:
-                changed = sorted(k for k in want if _canon({k: want.get(k)}) != _canon({k: got.get(k)}))
+                changed = sorted(k for k in want if _canon({k: want.get(k)}) != _canon({k: got.get(k)}))  # noqa: E501
                 rows.append(_drift_row(r, "modified", True,
                                        f"changed: {', '.join(changed)}"))
         elif kind in present:

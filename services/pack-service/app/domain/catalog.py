@@ -68,7 +68,7 @@ def get_pack(name: str) -> dict | None:
         return None
     m = manifest.load_manifest(pack_dir)
     detail = _summary(m)
-    detail["deferred"] = [{"kind": d.get("kind"), "reason": d.get("reason", "")} for d in m.deferred]
+    detail["deferred"] = [{"kind": d.get("kind"), "reason": d.get("reason", "")} for d in m.deferred]  # noqa: E501
     return detail
 
 

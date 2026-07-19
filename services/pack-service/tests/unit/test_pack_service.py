@@ -9,7 +9,7 @@ import pytest
 
 from app.domain import catalog, installer
 
-REPO_PACKS = Path(__file__).resolve().parents[3] / "packs"
+REPO_PACKS = Path(__file__).resolve().parents[4] / "packs"
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +38,7 @@ def test_get_pack_detail_and_missing():
 
 def test_origin_tag_and_urn_id():
     of = installer.origin_tag("card-disputes", "1.0.0")
-    assert of("dispositions", "dispositions") == "pack:card-disputes@1.0.0:dispositions/dispositions"
+    assert of("dispositions", "dispositions") == "pack:card-disputes@1.0.0:dispositions/dispositions"  # noqa: E501
     assert installer._urn_id("wr:t:query:query/abc-123") == "abc-123"
     assert installer._urn_id(None) is None
 
@@ -267,7 +267,7 @@ def test_diff_plan_added_removed_retained(tmp_path):
         {"kind": "case_fields", "identity": "lc_alpha", "reversible": True, "target_id": "id-a"},
         {"kind": "case_fields", "identity": "lc_bravo", "reversible": True, "target_id": "id-b"},
         {"kind": "case_fields", "identity": "lc_charlie", "reversible": True, "target_id": "id-c"},
-        {"kind": "display_labels", "identity": "lc.demo.title", "reversible": True, "target_id": "lc.demo.title"},
+        {"kind": "display_labels", "identity": "lc.demo.title", "reversible": True, "target_id": "lc.demo.title"},  # noqa: E501
     ]
     # target version drops charlie, adds delta, keeps alpha/bravo + the label.
     tgt = tmp_path / "v2"
@@ -332,15 +332,15 @@ def test_detect_drift_in_sync_modified_missing_unverified(tmp_path):
     # live: alpha matches, bravo's field_meta was hand-edited, charlie was deleted.
     live_fields = [
         {"name": "lc_alpha", "data_type": "string", "purpose": "both", "field_meta": {}},
-        {"name": "lc_bravo", "data_type": "string", "purpose": "both", "field_meta": {"label": "EDITED"}},
+        {"name": "lc_bravo", "data_type": "string", "purpose": "both", "field_meta": {"label": "EDITED"}},  # noqa: E501
     ]
     client = _DriftClient(live_fields)
     ledger = [
-        {"kind": "case_fields", "identity": "lc_alpha", "tombstoned": False, "target_id": "a", "origin": "o"},
-        {"kind": "case_fields", "identity": "lc_bravo", "tombstoned": False, "target_id": "b", "origin": "o"},
-        {"kind": "case_fields", "identity": "lc_charlie", "tombstoned": False, "target_id": "c", "origin": "o"},
-        {"kind": "pipelines", "identity": "some_pipe", "tombstoned": False, "target_id": "p", "origin": "o"},
-        {"kind": "case_fields", "identity": "lc_ghost", "tombstoned": True, "target_id": "g", "origin": "o"},
+        {"kind": "case_fields", "identity": "lc_alpha", "tombstoned": False, "target_id": "a", "origin": "o"},  # noqa: E501
+        {"kind": "case_fields", "identity": "lc_bravo", "tombstoned": False, "target_id": "b", "origin": "o"},  # noqa: E501
+        {"kind": "case_fields", "identity": "lc_charlie", "tombstoned": False, "target_id": "c", "origin": "o"},  # noqa: E501
+        {"kind": "pipelines", "identity": "some_pipe", "tombstoned": False, "target_id": "p", "origin": "o"},  # noqa: E501
+        {"kind": "case_fields", "identity": "lc_ghost", "tombstoned": True, "target_id": "g", "origin": "o"},  # noqa: E501
     ]
     rows = installer.detect_drift(client, ledger, manifest)
     by = {r["identity"]: r for r in rows}
@@ -354,12 +354,12 @@ def test_detect_drift_in_sync_modified_missing_unverified(tmp_path):
 
 def test_detect_drift_without_snapshot_is_presence_only():
     # no manifest (a pre-inc14 install) → content kinds fall back to presence.
-    client = _DriftClient([{"name": "lc_alpha", "data_type": "string", "purpose": "both", "field_meta": {}}])
+    client = _DriftClient([{"name": "lc_alpha", "data_type": "string", "purpose": "both", "field_meta": {}}])  # noqa: E501
     ledger = [
-        {"kind": "case_fields", "identity": "lc_alpha", "tombstoned": False, "target_id": "a", "origin": "o"},
-        {"kind": "case_fields", "identity": "lc_gone", "tombstoned": False, "target_id": "z", "origin": "o"},
+        {"kind": "case_fields", "identity": "lc_alpha", "tombstoned": False, "target_id": "a", "origin": "o"},  # noqa: E501
+        {"kind": "case_fields", "identity": "lc_gone", "tombstoned": False, "target_id": "z", "origin": "o"},  # noqa: E501
     ]
     rows = installer.detect_drift(client, ledger, None)
     by = {r["identity"]: r for r in rows}
-    assert by["lc_alpha"]["status"] == "in_sync" and not by["lc_alpha"]["contentChecked"]  # presence only
+    assert by["lc_alpha"]["status"] == "in_sync" and not by["lc_alpha"]["contentChecked"]  # presence only  # noqa: E501
     assert by["lc_gone"]["status"] == "missing"
