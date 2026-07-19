@@ -1310,6 +1310,25 @@ export interface CaseField {
   updatedAt?: string | null;
 }
 
+/** One embedded field def on a typed case schema (case-service inc10). */
+export interface CaseSchemaField {
+  name: string;
+  dataType?: string | null;
+  label?: string | null;
+  required?: boolean | null;
+}
+/** A governed typed case SCHEMA — a named case TYPE binding a field set. */
+export interface CaseSchema {
+  id: ID;
+  workspaceId?: ID | null;
+  schemaKey: string;
+  name: string;
+  description?: string | null;
+  fields: CaseSchemaField[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export type SlaOnBreach = "auto_unassign" | "escalate" | "notify_only";
 
 /** The PUT /sla-policy echo. WRITE-ONLY: the backend has no read route. */

@@ -68,6 +68,7 @@ export const qk = {
   caseOperation: (id: string) => ["cases", "operation", id] as const,
   dispositions: () => ["cases", "dispositions"] as const,
   caseFields: (queryUrn?: string) => ["cases", "caseFields", queryUrn ?? null] as const,
+  caseSchemas: () => ["cases", "caseSchemas"] as const,
 
   proposals: (filters: unknown) => ["agentic", "proposals", filters] as const,
   proposal: (id: string) => ["agentic", "proposal", id] as const,

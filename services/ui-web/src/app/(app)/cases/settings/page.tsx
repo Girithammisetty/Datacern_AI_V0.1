@@ -12,12 +12,14 @@ import { Button } from "@/components/ui/button";
 import {
   useDispositions, useCreateDisposition, useUpdateDisposition,
   useCaseFields, useCreateCaseField, useUpdateCaseField, useDeleteCaseField,
+  useCaseSchemas, useCreateCaseSchema, useDeleteCaseSchema,
   usePutCaseSlaPolicy, useUsers,
 } from "@/lib/graphql/hooks";
 import { useToasts } from "@/stores/ui";
 import { GraphQLRequestError } from "@/lib/graphql/client";
 import type {
   Disposition, DispositionCategory, CaseField, CaseFieldDataType, CaseFieldPurpose, SlaOnBreach,
+  CaseSchema, CaseSchemaField,
 } from "@/lib/graphql/types";
 
 const CATEGORIES: DispositionCategory[] = [
@@ -44,6 +46,7 @@ export default function CaseSettingsPage() {
           {[
             ["dispositions", "Dispositions"],
             ["fields", "Case fields"],
+            ["schemas", "Case types"],
             ["sla", "SLA policy"],
           ].map(([v, label]) => (
             <Tabs.Trigger
@@ -61,6 +64,9 @@ export default function CaseSettingsPage() {
         </Tabs.Content>
         <Tabs.Content value="fields">
           <CaseFieldsPanel />
+        </Tabs.Content>
+        <Tabs.Content value="schemas">
+          <CaseSchemasPanel />
         </Tabs.Content>
         <Tabs.Content value="sla">
           <SlaPolicyPanel />
@@ -564,6 +570,221 @@ function CaseFieldsPanel() {
           Orphan existing values (required when the field is in use on open cases)
         </label>
       </ConfirmDialog>
+    </div>
+  );
+}
+
+/* ---------------------------- case types (schemas) ------------------------- */
+
+type DraftField = { name: string; dataType: CaseFieldDataType; label: string; required: boolean };
+const EMPTY_FIELD: DraftField = { name: "", dataType: "string", label: "", required: false };
+
+/** Typed case SCHEMAS (GET/POST/DELETE /case-schemas, inc10): named case TYPES
+ * binding a distinct embedded field set. Capability packs install these; here a
+ * tenant admin authors them directly. Create + delete (the service exposes no
+ * update — a schema is replaced by delete + recreate). */
+function CaseSchemasPanel() {
+  const query = useCaseSchemas();
+  const push = useToasts((s) => s.push);
+  const toastError = useErrorToast();
+  const create = useCreateCaseSchema();
+  const del = useDeleteCaseSchema();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [schemaKey, setSchemaKey] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [fields, setFields] = useState<DraftField[]>([{ ...EMPTY_FIELD }]);
+
+  const [deleting, setDeleting] = useState<CaseSchema | null>(null);
+
+  const rows = query.data ?? [];
+
+  const resetForm = () => {
+    setSchemaKey("");
+    setName("");
+    setDescription("");
+    setFields([{ ...EMPTY_FIELD }]);
+  };
+
+  const setField = (i: number, patch: Partial<DraftField>) =>
+    setFields((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+
+  const columns: Column<CaseSchema>[] = [
+    { id: "key", header: "Key", width: 220, cell: (s) => <span className="font-mono">{s.schemaKey}</span> },
+    { id: "name", header: "Name", cell: (s) => <span className="font-medium">{s.name}</span> },
+    {
+      id: "fields", header: "Fields",
+      cell: (s) =>
+        s.fields.length === 0 ? (
+          <span className="text-muted-foreground">none</span>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {s.fields.map((f: CaseSchemaField) => (
+              <Badge key={f.name} variant="outline">
+                {f.label || f.name}
+                {f.dataType && <span className="ml-1 opacity-60">{f.dataType}</span>}
+                {f.required && <span className="ml-1 text-destructive">*</span>}
+              </Badge>
+            ))}
+          </div>
+        ),
+    },
+    {
+      id: "actions", header: "", width: 80,
+      cell: (s) => (
+        <Can gate={FEATURE_GATES.deleteCaseSchema}>
+          <Button size="sm" variant="ghost" onClick={() => setDeleting(s)}>
+            Delete
+          </Button>
+        </Can>
+      ),
+    },
+  ];
+
+  const submit = () => {
+    const key = schemaKey.trim();
+    const nm = name.trim();
+    if (!key || !nm || create.isPending) return;
+    const cleanFields = fields
+      .filter((f) => f.name.trim())
+      .map((f) => ({ name: f.name.trim(), dataType: f.dataType, label: f.label.trim() || undefined, required: f.required }));
+    create.mutate(
+      { schemaKey: key, name: nm, description: description.trim() || undefined, fields: cleanFields },
+      {
+        onSuccess: () => {
+          setCreateOpen(false);
+          resetForm();
+          push({ title: "Case type created", variant: "success" });
+        },
+        onError: toastError("Create failed"),
+      },
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <p className="text-sm text-muted-foreground">
+          Named case types binding a distinct field set (e.g. Duplicate review, Banking-change verification).
+        </p>
+        <Can gate={FEATURE_GATES.manageCaseSchemas}>
+          <Button size="sm" className="ml-auto" onClick={() => setCreateOpen(true)}>
+            New case type
+          </Button>
+        </Can>
+      </div>
+
+      <AsyncBoundary
+        isLoading={query.isLoading}
+        isError={query.isError}
+        error={query.error}
+        isEmpty={!query.isLoading && rows.length === 0}
+        emptyTitle="No case types yet"
+        emptyHint="Install a capability pack that ships case types, or add one above."
+        onRetry={() => query.refetch()}
+      >
+        <DataTable ariaLabel="Case types" rows={rows} columns={columns} rowId={(s) => s.id} />
+      </AsyncBoundary>
+
+      <ConfirmDialog
+        open={createOpen}
+        onOpenChange={(o) => {
+          setCreateOpen(o);
+          if (!o) resetForm();
+        }}
+        title="New case type"
+        description="Key is the stable identifier (duplicates are rejected); name is what analysts see. Fields are the typed inputs this case type collects."
+        confirmLabel={create.isPending ? "Creating…" : "Create"}
+        onConfirm={submit}
+      >
+        <div className="mt-3 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="schema-key">Key</Label>
+              <Input id="schema-key" value={schemaKey} onChange={(e) => setSchemaKey(e.target.value)} placeholder="duplicate_review" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="schema-name">Name</Label>
+              <Input id="schema-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Duplicate review" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="schema-desc">Description</Label>
+            <Input id="schema-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Reviews a suspected duplicate invoice pair." />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Fields</Label>
+            {fields.map((f, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                <Input
+                  aria-label={`Field ${i + 1} name`}
+                  value={f.name}
+                  onChange={(e) => setField(i, { name: e.target.value })}
+                  placeholder="field_name"
+                  className="w-40"
+                />
+                <select
+                  aria-label={`Field ${i + 1} type`}
+                  value={f.dataType}
+                  onChange={(e) => setField(i, { dataType: e.target.value as CaseFieldDataType })}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  {DATA_TYPES.map((dt) => <option key={dt} value={dt}>{dt}</option>)}
+                </select>
+                <Input
+                  aria-label={`Field ${i + 1} label`}
+                  value={f.label}
+                  onChange={(e) => setField(i, { label: e.target.value })}
+                  placeholder="Label"
+                  className="w-40"
+                />
+                <label className="flex items-center gap-1 text-sm">
+                  <input type="checkbox" checked={f.required} onChange={(e) => setField(i, { required: e.target.checked })} />
+                  required
+                </label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={`Remove field ${i + 1}`}
+                  onClick={() => setFields((fs) => (fs.length > 1 ? fs.filter((_, j) => j !== i) : fs))}
+                >
+                  ✕
+                </Button>
+              </div>
+            ))}
+            <Button type="button" size="sm" variant="outline" onClick={() => setFields((fs) => [...fs, { ...EMPTY_FIELD }])}>
+              Add field
+            </Button>
+          </div>
+        </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={!!deleting}
+        onOpenChange={(o) => {
+          if (!o) setDeleting(null);
+        }}
+        title={`Delete case type "${deleting?.name ?? ""}"`}
+        description="Removes the case type. Cases already created keep their stored field values."
+        confirmLabel={del.isPending ? "Deleting…" : "Delete"}
+        destructive
+        onConfirm={() => {
+          if (!deleting || del.isPending) return;
+          del.mutate(
+            { schemaKey: deleting.schemaKey },
+            {
+              onSuccess: () => {
+                setDeleting(null);
+                push({ title: "Case type deleted", variant: "success" });
+              },
+              onError: toastError("Delete failed"),
+            },
+          );
+        }}
+      />
     </div>
   );
 }

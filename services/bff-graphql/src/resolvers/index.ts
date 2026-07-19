@@ -15,6 +15,7 @@ import {
   mapUser, mapDataset, mapProfile, mapCase, mapDashboard, mapChart,
   // Tier 4b: case ops (lifecycle, comments/timeline, export, catalog, SLA).
   mapCaseComment, mapCaseActivity, mapCaseOperation, mapDisposition, mapCaseField, mapCaseSlaPolicy,
+  mapCaseSchema,
   mapChartType, mapChartShapedData,
   mapProposal, mapAgentRun, mapAgentKillSwitch, mapToolKillSwitch, mapExperiment, mapRun, mapModel,
   mapRegistryModel, mapPromotion, mapInferenceJob,
@@ -1059,6 +1060,10 @@ export const resolvers = {
       const rows = await ctx.clients.case.caseFields(a.queryUrn);
       return rows.map((d) => mapCaseField(ctx, d));
     },
+
+    // ---- inc17: typed case-schema registry (governed case-TYPE editor) -------
+    caseSchemas: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      ctx.clients.case.caseSchemas().then((rows) => rows.map(mapCaseSchema)),
 
     proposalsInbox: async (
       _p: unknown,
@@ -2369,6 +2374,31 @@ export const resolvers = {
 
     deleteCaseField: (_p: unknown, a: { id: string; orphan?: boolean }, ctx: GraphQLContext) =>
       ctx.clients.case.deleteCaseField(a.id, a.orphan).then(() => true),
+
+    // ---- inc17: typed case-schema registry writes ---------------------------
+    createCaseSchema: (
+      _p: unknown,
+      a: {
+        input: {
+          schemaKey: string; name: string; description?: string;
+          fields?: { name: string; dataType?: string; label?: string; required?: boolean }[];
+        };
+      },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.case
+        .createCaseSchema({
+          schema_key: a.input.schemaKey,
+          name: a.input.name,
+          description: a.input.description,
+          fields: (a.input.fields ?? []).map((f) => ({
+            name: f.name, data_type: f.dataType, label: f.label, required: f.required,
+          })),
+        })
+        .then(mapCaseSchema),
+
+    deleteCaseSchema: (_p: unknown, a: { schemaKey: string }, ctx: GraphQLContext) =>
+      ctx.clients.case.deleteCaseSchema(a.schemaKey),
 
     putCaseSlaPolicy: (
       _p: unknown,

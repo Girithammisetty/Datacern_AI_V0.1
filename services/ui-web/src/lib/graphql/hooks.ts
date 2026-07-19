@@ -1636,6 +1636,36 @@ export function useDeleteCaseField() {
   });
 }
 
+// ---- inc17: typed case-schema registry (governed case-TYPE editor) ----------
+export function useCaseSchemas() {
+  return useQuery({
+    queryKey: qk.caseSchemas(),
+    queryFn: () => graphqlRequest<ops.CaseSchemasResult>(ops.CASE_SCHEMAS, {}).then((r) => r.caseSchemas),
+  });
+}
+
+export function useCreateCaseSchema() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      schemaKey: string;
+      name: string;
+      description?: string;
+      fields?: { name: string; dataType?: string; label?: string; required?: boolean }[];
+    }) => graphqlRequest<ops.CreateCaseSchemaResult>(ops.CREATE_CASE_SCHEMA, { input }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["cases", "caseSchemas"] }),
+  });
+}
+
+export function useDeleteCaseSchema() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { schemaKey: string }) =>
+      graphqlRequest<ops.DeleteCaseSchemaResult>(ops.DELETE_CASE_SCHEMA, vars),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["cases", "caseSchemas"] }),
+  });
+}
+
 /** Replace the workspace SLA policy. Write-only downstream (no GET route) —
  * the returned echo is the only readback there is. */
 export function usePutCaseSlaPolicy() {

@@ -13,6 +13,7 @@ import type {
   CaseOperation,
   Disposition,
   CaseField,
+  CaseSchema,
   CaseSlaPolicy,
   Chart,
   ChartShapedData,
@@ -1604,6 +1605,33 @@ export const DELETE_CASE_FIELD = /* GraphQL */ `
 `;
 export interface DeleteCaseFieldResult {
   deleteCaseField: boolean;
+}
+
+// ---- inc17: typed case-schema registry (governed case-TYPE editor) ----------
+const CASE_SCHEMA_FIELDS = `
+  id workspaceId schemaKey name description
+  fields { name dataType label required }
+  createdAt updatedAt
+`;
+export const CASE_SCHEMAS = /* GraphQL */ `
+  query CaseSchemas { caseSchemas { ${CASE_SCHEMA_FIELDS} } }
+`;
+export interface CaseSchemasResult {
+  caseSchemas: CaseSchema[];
+}
+export const CREATE_CASE_SCHEMA = /* GraphQL */ `
+  mutation CreateCaseSchema($input: CreateCaseSchemaInput!) {
+    createCaseSchema(input: $input) { ${CASE_SCHEMA_FIELDS} }
+  }
+`;
+export interface CreateCaseSchemaResult {
+  createCaseSchema: CaseSchema;
+}
+export const DELETE_CASE_SCHEMA = /* GraphQL */ `
+  mutation DeleteCaseSchema($schemaKey: ID!) { deleteCaseSchema(schemaKey: $schemaKey) }
+`;
+export interface DeleteCaseSchemaResult {
+  deleteCaseSchema: boolean;
 }
 
 export const PUT_CASE_SLA_POLICY = /* GraphQL */ `

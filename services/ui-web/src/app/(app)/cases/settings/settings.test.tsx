@@ -38,12 +38,21 @@ const dispositionsResult = {
   ],
 };
 
+const caseSchemasResult = {
+  caseSchemas: [
+    { id: "s-1", workspaceId: "ws", schemaKey: "duplicate_review", name: "Duplicate review",
+      description: "", createdAt: null, updatedAt: null,
+      fields: [{ name: "root_cause", dataType: "string", label: "Root cause", required: true }] },
+  ],
+};
+
 beforeEach(() => {
   requests.length = 0;
   handler = (doc: string) => {
     if (doc.includes("query Me")) return meResult;
     if (doc.includes("query Dispositions")) return dispositionsResult;
     if (doc.includes("query CaseFields")) return { caseFields: [] };
+    if (doc.includes("query CaseSchemas")) return caseSchemasResult;
     if (doc.includes("query Users")) {
       return { users: { nodes: [], pageInfo: { nextCursor: null, hasMore: false } } };
     }
@@ -95,6 +104,51 @@ describe("Case settings — dispositions catalog", () => {
         requiresNote: true,
       });
       expect(call?.vars?.idempotencyKey).toBeTruthy();
+    });
+  });
+});
+
+describe("Case settings — case types (schemas, inc17)", () => {
+  it("lists case schemas in the grid after selecting the Case types tab", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<CaseSettingsPage />);
+    await user.click(await screen.findByRole("tab", { name: "Case types" }));
+    await waitFor(() => {
+      const grid = screen.getByRole("grid", { name: "Case types" });
+      expect(grid).toHaveAttribute("aria-rowcount", "1");
+    });
+    expect(requests.some((r) => r.doc.includes("query CaseSchemas"))).toBe(true);
+  });
+
+  it("createCaseSchema sends the composed key/name/fields", async () => {
+    handler = (doc: string, vars: any) => {
+      if (doc.includes("query Me")) return meResult;
+      if (doc.includes("query Dispositions")) return dispositionsResult;
+      if (doc.includes("query CaseFields")) return { caseFields: [] };
+      if (doc.includes("query CaseSchemas")) return caseSchemasResult;
+      if (doc.includes("mutation CreateCaseSchema")) {
+        return { createCaseSchema: { id: "s-new", workspaceId: "ws", ...vars.input, createdAt: null, updatedAt: null } };
+      }
+      return {};
+    };
+    const user = userEvent.setup();
+    renderWithProviders(<CaseSettingsPage />);
+
+    await user.click(await screen.findByRole("tab", { name: "Case types" }));
+    await user.click(await screen.findByRole("button", { name: "New case type" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Key"), "banking_change_verification");
+    await user.type(within(dialog).getByLabelText("Name"), "Banking change verification");
+    await user.type(within(dialog).getByLabelText("Field 1 name"), "new_iban");
+    await user.click(within(dialog).getByRole("button", { name: "Create" }));
+
+    await waitFor(() => {
+      const call = requests.find((r) => r.doc.includes("mutation CreateCaseSchema"));
+      expect(call?.vars?.input?.schemaKey).toBe("banking_change_verification");
+      expect(call?.vars?.input?.name).toBe("Banking change verification");
+      expect(call?.vars?.input?.fields).toEqual([
+        { name: "new_iban", dataType: "string", label: undefined, required: false },
+      ]);
     });
   });
 });

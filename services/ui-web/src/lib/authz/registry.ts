@@ -646,6 +646,10 @@ export const FEATURE_GATES = {
   /** Create/delete custom case-field configs (case-service POST|DELETE
    * /case-fields — authorized as the case update verb). */
   manageCaseFields: cap("case.case.update"),
+  /** Register a typed case schema (case-service POST /case-schemas, inc10). */
+  manageCaseSchemas: cap("case.schema.create"),
+  /** Remove a typed case schema (case-service DELETE /case-schemas/{key}). */
+  deleteCaseSchema: cap("case.schema.delete"),
   /** Replace the workspace SLA policy (case-service PUT /sla-policy). */
   manageSlaPolicy: cap("case.case.admin"),
 

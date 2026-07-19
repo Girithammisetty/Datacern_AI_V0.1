@@ -129,6 +129,26 @@ export interface CaseFieldDTO {
   updated_at?: string;
 }
 
+/** A governed typed case SCHEMA (case-service inc10 registry): a named case
+ * TYPE binding a distinct set of embedded field defs. Distinct from the flat
+ * case-field catalog. Workspace is derived from the JWT claim, not the body. */
+export interface CaseSchemaFieldDTO {
+  name?: string;
+  data_type?: string;
+  label?: string;
+  required?: boolean;
+}
+export interface CaseSchemaDTO {
+  id: string;
+  workspace_id?: string;
+  schema_key: string;
+  name: string;
+  description?: string;
+  fields?: CaseSchemaFieldDTO[];
+  created_at?: string;
+  updated_at?: string;
+}
+
 /** The thin PUT /sla-policy echo (case-service, CASE-FR-012). There is NO GET
  * route for the current policy — this is only ever the write response. */
 export interface CaseSlaPolicyDTO {
@@ -454,6 +474,36 @@ export class CaseClient {
     await this.http.delete<void>(`/api/v1/case-fields/${encodeURIComponent(id)}`, {
       query: { orphan: orphan ? "true" : undefined },
     });
+  }
+
+  // ---- typed case schemas: governed case-TYPE registry (inc10) ---------------
+
+  /** GET /case-schemas — the workspace's typed case types (case.schema.read).
+   * Workspace is derived from the JWT claim, not a query param. */
+  async caseSchemas(): Promise<CaseSchemaDTO[]> {
+    const r = await this.http.get<{ data: CaseSchemaDTO[] }>("/api/v1/case-schemas");
+    return r.data ?? [];
+  }
+
+  /** POST /case-schemas (201; idempotent by schema_key within the workspace;
+   * case.schema.create). Workspace comes from the claim. */
+  async createCaseSchema(body: {
+    schema_key: string;
+    name: string;
+    description?: string;
+    fields?: CaseSchemaFieldDTO[];
+  }): Promise<CaseSchemaDTO> {
+    const r = await this.http.post<{ data: CaseSchemaDTO } | CaseSchemaDTO>(
+      "/api/v1/case-schemas",
+      { body },
+    );
+    return unwrap<CaseSchemaDTO>(r);
+  }
+
+  /** DELETE /case-schemas/{key} (204; case.schema.delete). */
+  async deleteCaseSchema(schemaKey: string): Promise<boolean> {
+    await this.http.delete<void>(`/api/v1/case-schemas/${encodeURIComponent(schemaKey)}`);
+    return true;
   }
 
   // ---- Tier 4b: SLA policy -----------------------------------------------------

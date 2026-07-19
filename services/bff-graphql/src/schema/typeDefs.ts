@@ -1754,6 +1754,29 @@ export const typeDefs = gql`
     updatedAt: DateTime
   }
 
+  "One embedded field def on a typed case schema (case-service inc10)."
+  type CaseSchemaField { name: String! dataType: String label: String required: Boolean }
+  """A governed typed case SCHEMA: a named case TYPE (duplicate_review,
+  banking_change_verification, …) binding a distinct set of embedded field defs.
+  Capability packs install these; distinct from the flat CaseField catalog."""
+  type CaseSchema {
+    id: ID!
+    workspaceId: ID
+    schemaKey: ID!
+    name: String!
+    description: String
+    fields: [CaseSchemaField!]!
+    createdAt: DateTime
+    updatedAt: DateTime
+  }
+  input CaseSchemaFieldInput { name: String! dataType: String label: String required: Boolean }
+  input CreateCaseSchemaInput {
+    schemaKey: ID!
+    name: String!
+    description: String
+    fields: [CaseSchemaFieldInput!]
+  }
+
   """The PUT /sla-policy echo (case-service, CASE-FR-012). WRITE-ONLY contract:
   the service exposes no GET for the current policy, so this is only ever the
   response to putCaseSlaPolicy — never a fabricated read."""
@@ -3733,6 +3756,10 @@ export const typeDefs = gql`
     """Custom case-field configs, optionally scoped to one saved query
     (case-service GET /case-fields?query_urn=). Needs case.case.read."""
     caseFields(queryUrn: String): [CaseField!]!
+    """The workspace's typed case schemas — named case TYPES binding a field set
+    (case-service GET /case-schemas, workspace from the JWT claim). Needs
+    case.schema.read."""
+    caseSchemas: [CaseSchema!]!
 
     proposalsInbox(status: ProposalStatus = PENDING, agentKey: String, first: Int = 50, after: String): ProposalConnection!
     proposal(id: ID!): Proposal
@@ -4608,6 +4635,11 @@ export const typeDefs = gql`
     retry with orphan: true to strand those values deliberately. Needs
     case.case.update."""
     deleteCaseField(id: ID!, orphan: Boolean): Boolean!
+    """Register a typed case schema (case-service POST /case-schemas, 201;
+    idempotent by schemaKey within the workspace). Needs case.schema.create."""
+    createCaseSchema(input: CreateCaseSchemaInput!): CaseSchema!
+    "Remove a typed case schema (case-service DELETE /case-schemas/{key}). Needs case.schema.delete."
+    deleteCaseSchema(schemaKey: ID!): Boolean!
 
     """Replace the workspace SLA policy (case-service PUT /sla-policy). Only
     non-zero/non-empty fields override the platform defaults (24h warn,

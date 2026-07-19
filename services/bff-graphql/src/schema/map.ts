@@ -13,6 +13,7 @@ import type {
   CaseDTO,
   // Tier 4b: case ops (lifecycle, comments/timeline, export, catalog, SLA).
   CaseCommentDTO, CaseActivityDTO, CaseOperationDTO, DispositionDTO, CaseFieldDTO, CaseSlaPolicyDTO,
+  CaseSchemaDTO,
 } from "../clients/case.js";
 import type { DashboardDTO, ChartDTO, ChartTypeDTO, ChartShapedDataDTO } from "../clients/chart.js";
 import type {
@@ -653,6 +654,26 @@ export function mapCaseField(ctx: GraphQLContext, d: CaseFieldDTO) {
     dataType: d.data_type ?? null,
     purpose: purposeString(d.purpose),
     fieldMeta: d.field_meta ?? null,
+    createdAt: d.created_at ?? null,
+    updatedAt: d.updated_at ?? null,
+  };
+}
+
+export function mapCaseSchema(d: CaseSchemaDTO) {
+  return {
+    __typename: "CaseSchema" as const,
+    id: d.id,
+    workspaceId: d.workspace_id ?? null,
+    schemaKey: d.schema_key,
+    name: d.name,
+    description: d.description ?? null,
+    fields: (d.fields ?? []).map((f) => ({
+      __typename: "CaseSchemaField" as const,
+      name: f.name ?? "",
+      dataType: f.data_type ?? null,
+      label: f.label ?? null,
+      required: f.required ?? null,
+    })),
     createdAt: d.created_at ?? null,
     updatedAt: d.updated_at ?? null,
   };
