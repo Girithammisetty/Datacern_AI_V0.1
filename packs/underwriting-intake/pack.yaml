@@ -57,13 +57,3 @@ deferred:
       require agent-runtime graph-module registration (BRD 23 BR-12). This
       pack specializes the existing case-triage + analytics agents via
       TenantAgentConfig prompt_params + tenant-scope RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (agency-management and broker-portal
-      systems: Applied Epic, Vertafore AMS360; submission-intake email/ACORD
-      extraction feeds; clearance systems; loss-run retrieval services;
-      D&B/experian-style firmographic enrichment; cat-modeling exposure
-      feeds) require customer credentials and pack-service connector
-      materialization. The pack ships seed datasets in the exact landing
-      shape; production connectors are configured through the product
-      Data > Connections UI.

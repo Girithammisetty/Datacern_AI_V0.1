@@ -49,10 +49,3 @@ deferred:
       registration (a Core code surface, BRD 23 BR-12). This pack specializes
       the existing case-triage + analytics agents via TenantAgentConfig
       prompt_params + tenant-scope RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      INS-FR-060 SoR connectors (Facets, HealthEdge, QNXT, Guidewire, Epic
-      FHIR, EDI 837/835/278) require customer credentials and pack-service
-      connector materialization. The pack ships seed datasets in the exact
-      landing shape; production connectors are configured through the product
-      Data > Connections UI.

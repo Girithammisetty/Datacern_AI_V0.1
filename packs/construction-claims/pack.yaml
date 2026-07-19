@@ -57,13 +57,3 @@ deferred:
       agent-runtime graph-module registration (BRD 23 BR-12). This pack
       specializes the existing case-triage + analytics agents via
       TenantAgentConfig prompt_params + tenant-scope RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (project-controls and PMIS platforms:
-      Procore, Autodesk Construction Cloud, Oracle Primavera P6 and Unifier,
-      e-Builder, Kahua; ERP/cost systems: CMiC, Sage 300 CRE, Viewpoint
-      Vista; document management for daily reports, RFIs, submittals and
-      boring logs) require customer credentials and pack-service connector
-      materialization. The pack ships seed datasets in the exact landing
-      shape; production connectors are configured through the product
-      Data > Connections UI.

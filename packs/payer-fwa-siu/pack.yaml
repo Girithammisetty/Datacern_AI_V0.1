@@ -54,11 +54,3 @@ deferred:
       (BRD 23 BR-12). This pack specializes the existing case-triage +
       analytics agents via TenantAgentConfig prompt_params + tenant-scope
       RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      FWA-FR-080 read connectors (Facets/HealthEdge/QNXT/Amisys, EDI
-      837/835, NPPES, LEIE, OIG-CIA, state exclusion lists, NPDB, SAM.gov,
-      NHCAA feeds, member CRM, provider directory) require customer
-      credentials and pack-service connector materialization. The pack
-      ships seed datasets in the exact landing shape those connectors
-      produce; production connectors are configured via Data > Connections.

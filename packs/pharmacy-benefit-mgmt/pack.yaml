@@ -53,11 +53,3 @@ deferred:
       (a Core code surface, BRD 23 BR-12). This pack specializes the existing
       case-triage + analytics agents via TenantAgentConfig prompt_params +
       tenant-scope RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      RX-FR-080 read connectors (RxClaim, MedImpact, ScriptCheck, CoverMyMeds
-      ePA, Surescripts RTPB, NCPDP EDI, dispensing feeds, Micromedex/First
-      Databank/Lexi-Comp, formulary configs, member CRM) require customer
-      credentials/licenses and pack-service connector materialization. The
-      pack ships seed datasets in the exact landing shape; production
-      connectors are configured through the product Data > Connections UI.

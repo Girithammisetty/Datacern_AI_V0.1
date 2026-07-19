@@ -57,13 +57,3 @@ deferred:
       registration (BRD 23 BR-12). This pack specializes the existing
       case-triage + analytics agents via TenantAgentConfig prompt_params +
       tenant-scope RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (IRS transcript/e-Services correspondence
-      feeds, state DOR portal inboxes, ERP tax engines: SAP/Oracle/NetSuite
-      and rate providers such as Vertex/Avalara-class services,
-      exemption-certificate management systems, payroll providers' agency
-      notice feeds, mailroom OCR/scanning services) require customer
-      credentials and pack-service connector materialization. The pack ships
-      seed datasets in the exact landing shape; production connectors are
-      configured through the product Data > Connections UI.

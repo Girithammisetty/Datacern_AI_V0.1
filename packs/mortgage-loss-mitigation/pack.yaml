@@ -55,13 +55,3 @@ deferred:
       agent-runtime graph-module registration (BRD 23 BR-12). This pack
       specializes the existing case-triage + analytics agents via
       TenantAgentConfig prompt_params + tenant-scope RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (servicing systems of record: Black Knight
-      MSP, Sagent LoanServ, FICS; default-management platforms; document
-      intake/OCR pipelines for hardship packages; GSE servicing portals and
-      HUD/FHA reporting rails; credit and income-verification vendors)
-      require customer credentials and pack-service connector
-      materialization. The pack ships seed datasets in the exact landing
-      shape; production connectors are configured through the product
-      Data > Connections UI.

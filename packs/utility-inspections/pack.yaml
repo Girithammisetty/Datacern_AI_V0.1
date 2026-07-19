@@ -56,12 +56,3 @@ deferred:
       registration (BRD 23 BR-12). This pack specializes the existing
       case-triage + analytics agents via TenantAgentConfig prompt_params +
       tenant-scope RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (asset registries / GIS: Esri ArcGIS Utility
-      Network-class systems; work management: Maximo/SAP PM-class EAM;
-      drone/aerial-AI analytics platforms; LiDAR vegetation-analytics
-      vendors; SCADA/historian feeds; leak-survey instrument exports) require
-      customer credentials and pack-service connector materialization. The
-      pack ships seed datasets in the exact landing shape; production
-      connectors are configured through the product Data > Connections UI.

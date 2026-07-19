@@ -56,13 +56,3 @@ deferred:
       (BRD 23 BR-12). This pack specializes the existing case-triage +
       analytics agents via TenantAgentConfig prompt_params + tenant-scope
       RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (OEM warranty systems: SAP Warranty
-      Management / Oracle depot-repair-class modules; dealer management
-      systems (DMS) claim feeds; telematics/hour-meter platforms;
-      parts-return and failure-analysis tracking; supplier quality portals;
-      NHTSA campaign feeds for vehicle OEMs) require customer credentials
-      and pack-service connector materialization. The pack ships seed
-      datasets in the exact landing shape; production connectors are
-      configured through the product Data > Connections UI.

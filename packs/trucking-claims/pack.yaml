@@ -57,13 +57,3 @@ deferred:
       registration (BRD 23 BR-12). This pack specializes the existing
       case-triage + analytics agents via TenantAgentConfig prompt_params +
       tenant-scope RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (TMS platforms: McLeod/TMW/MercuryGate-class
-      systems; telematics and video-safety platforms: ELD, forward-camera,
-      harsh-event feeds; FMCSA registration/safety data services; load-board
-      and carrier-identity monitoring; reefer telematics/temperature-download
-      providers; claims mailboxes/EDI) require customer credentials and
-      pack-service connector materialization. The pack ships seed datasets in
-      the exact landing shape; production connectors are configured through
-      the product Data > Connections UI.

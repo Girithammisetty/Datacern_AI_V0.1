@@ -56,11 +56,3 @@ deferred:
       the existing case-triage + analytics agents via TenantAgentConfig
       prompt_params + tenant-scope RAG grounding instead; BR-2 (no autonomous
       billing) holds because agent-runtime is proposal-mode only.
-  - kind: connection_templates
-    reason: >-
-      CMM-FR-110 EHR/RPM/telephony connectors (epic_ambulatory, athenahealth,
-      eclinicalworks, nextgen, cerner_ambulatory, rpm_optimize_health,
-      rpm_cadence, rpm_ihealth, phone_rc, telehealth_doxy) require customer
-      credentials and pack-service connector materialization. The pack ships
-      seed datasets in the exact landing shape; production connectors are
-      configured through the product Data > Connections UI.

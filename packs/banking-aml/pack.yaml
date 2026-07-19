@@ -55,12 +55,3 @@ deferred:
       require agent-runtime graph-module registration (BRD 23 BR-12). This
       pack specializes the existing case-triage + analytics agents via
       TenantAgentConfig prompt_params + tenant-scope RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      AML-FR-100 read connectors (core banking: FIS/Fiserv/Jack Henry/Temenos;
-      transaction monitoring: Actimize/SAS AML/Oracle FSA/Napier/Feedzai;
-      sanctions data: OFAC SDN/EU/UN/HMT via World-Check/Dow Jones; adverse
-      media; beneficial ownership; SWIFT/Fedwire/ACH; FinCEN 314(a)) require
-      customer credentials and pack-service connector materialization. The
-      pack ships seed datasets in the exact landing shape; production
-      connectors are configured through the product Data > Connections UI.

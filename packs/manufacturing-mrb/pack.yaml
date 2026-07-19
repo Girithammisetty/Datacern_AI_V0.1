@@ -59,13 +59,3 @@ deferred:
       BR-12). This pack specializes the existing case-triage + analytics
       agents via TenantAgentConfig prompt_params + tenant-scope RAG
       grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (QMS platforms: ETQ Reliance, MasterControl,
-      Arena, Greenlight Guru; ERP quality modules: SAP QM, Oracle Quality;
-      MES/SPC systems and CMM/inspection-result feeds; PLM for drawing and
-      characteristic data; supplier portals for certs and SCAR responses)
-      require customer credentials and pack-service connector
-      materialization. The pack ships seed datasets in the exact landing
-      shape; production connectors are configured through the product
-      Data > Connections UI.

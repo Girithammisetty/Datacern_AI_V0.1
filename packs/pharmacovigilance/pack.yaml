@@ -53,12 +53,3 @@ deferred:
       (BRD 23 BR-12). This pack specializes the existing case-triage +
       analytics agents via TenantAgentConfig prompt_params + tenant-scope
       RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (safety databases: Oracle Argus, ArisGlobal
-      LifeSphere, Veeva Vault Safety; intake channels: call center, medical
-      information, E2B(R3) gateways, literature monitoring services; MedDRA
-      dictionary subscription) require customer credentials and pack-service
-      connector materialization. The pack ships seed datasets in the exact
-      landing shape; production connectors are configured through the
-      product Data > Connections UI.

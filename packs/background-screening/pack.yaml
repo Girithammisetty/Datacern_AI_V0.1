@@ -57,12 +57,3 @@ deferred:
       (BRD 23 BR-12). This pack specializes the existing case-triage +
       analytics agents via TenantAgentConfig prompt_params + tenant-scope
       RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (court-record aggregators and county/state
-      repositories, DMV/MVR rails, education clearinghouses and registrar
-      verification services, employment-verification bureaus, sanctions and
-      registry lists, and the customer's ATS/HRIS for order intake) require
-      customer credentials and pack-service connector materialization. The
-      pack ships seed datasets in the exact landing shape; production
-      connectors are configured through the product Data > Connections UI.

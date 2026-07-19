@@ -63,6 +63,8 @@ components:
     - { file: "ontology/entities.yaml", identity: "ap_ontology" }
   write_adapters:
     - { file: "writeback/adapters.yaml", identity: "ap_writeback" }
+  connection_templates:
+    - { file: "connections/sources.yaml", identity: "ap_sources" }
 deferred:
   - kind: agent_recipes
     reason: >-
@@ -72,12 +74,3 @@ deferred:
       BR-12). This pack specializes the existing case-triage + analytics
       agents via TenantAgentConfig prompt_params + tenant-scope RAG
       grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (ERP AP subledgers: SAP S/4HANA, Oracle
-      Fusion, NetSuite; P2P suites: Coupa, Ariba, Ivalua; invoice-capture/
-      OCR platforms; bank payment gateways for run schedules; vendor-master
-      and TIN/sanctions screening services) require customer credentials
-      and pack-service connector materialization. The pack ships seed
-      datasets in the exact landing shape; production connectors are
-      configured through the product Data > Connections UI.

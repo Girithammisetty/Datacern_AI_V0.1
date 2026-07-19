@@ -55,12 +55,3 @@ deferred:
       (BRD 23 BR-12). This pack specializes the existing case-triage +
       analytics agents via TenantAgentConfig prompt_params + tenant-scope
       RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (core processors: FIS/Fiserv/TSYS/Marqeta/
-      Galileo; network dispute rails: Visa Resolve Online (VROL), Mastercom;
-      fraud platforms; ATM operator journals; carrier tracking APIs for
-      delivery-confirmation evidence) require customer credentials and
-      pack-service connector materialization. The pack ships seed datasets
-      in the exact landing shape; production connectors are configured
-      through the product Data > Connections UI.

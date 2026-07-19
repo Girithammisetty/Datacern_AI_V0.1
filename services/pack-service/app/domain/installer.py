@@ -33,7 +33,7 @@ from app.domain import catalog
 # a deferred kind; they're reported `deferred` in the plan, not faked.)
 INC1_KINDS = ("dispositions", "case_fields", "case_schemas", "display_labels", "guardrails",
               "agent_configs", "eval_sets", "model_archetypes", "ontology", "write_adapters",
-              "roles", "decision_models")
+              "connection_templates", "roles", "decision_models")
 
 # inc2 data chain, in dependency order. datasets ingest first; the semantic
 # model + verified queries are authored + SUBMITTED as governed drafts (NOT
@@ -51,7 +51,8 @@ INC2_PHASE2_KINDS = ("dashboards",)
 # for it yet — a real, surfaced gap in the materialization contract (PKG-FR-030).
 REVERSIBLE_KINDS = {"roles", "saved_queries", "dashboards", "case_fields", "case_schemas",
                     "display_labels", "guardrails", "agent_configs", "pipelines",
-                    "memories", "model_archetypes", "ontology", "write_adapters"}
+                    "memories", "model_archetypes", "ontology", "write_adapters",
+                    "connection_templates"}
 
 
 def _packctl_client():
@@ -194,6 +195,8 @@ def _component_names(manifest, comp) -> list[str]:
         return [e["entity_key"] for e in doc]
     if comp.kind == "write_adapters":
         return [wa["name"] for wa in doc]
+    if comp.kind == "connection_templates":
+        return [ct["name"] for ct in doc]
     if comp.kind == "display_labels":
         return [lbl["key"] for lbl in doc]
     if comp.kind == "guardrails":
@@ -317,6 +320,12 @@ def run_install(client, manifest, origin_of: Callable[[str, str], str]) -> list[
                        lambda wa=wa: client.ensure_write_adapter(
                            comp.identity, wa["name"], wa["connector_type"],
                            wa.get("config", {}), wa.get("direction", "outgoing")))
+            elif kind == "connection_templates":
+                for ct in doc:
+                    do("connection_templates", comp, ct["name"],
+                       lambda ct=ct: client.ensure_connection_template(
+                           comp.identity, ct["name"], ct["connector_type"],
+                           ct.get("config", {}), ct.get("direction", "incoming")))
             elif kind == "roles":
                 for role in doc:
                     do("roles", comp, role["name"],
@@ -385,6 +394,10 @@ def run_uninstall(client, ledger: list[dict]) -> list[dict]:
             ok = client.delete_write_adapter(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,
                              "detail": "write adapter (outgoing connection) removed" if ok else "delete failed"})
+        elif kind == "connection_templates" and tid:
+            ok = client.delete_connection_template(tid)
+            outcomes.append({"ledger_id": row["id"], "deleted": ok,
+                             "detail": "source connector (incoming connection) removed" if ok else "delete failed"})
         elif kind == "display_labels" and tid:
             ok = client.delete_label(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,

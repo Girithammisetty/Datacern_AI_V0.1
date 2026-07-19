@@ -49,11 +49,13 @@ def test_inc1_kinds_and_reversibility_contract():
     assert set(installer.INC1_KINDS) == {"dispositions", "case_fields", "case_schemas",
                                          "display_labels", "guardrails", "agent_configs",
                                          "eval_sets", "model_archetypes", "ontology",
-                                         "write_adapters", "roles", "decision_models"}
+                                         "write_adapters", "connection_templates",
+                                         "roles", "decision_models"}
     assert "model_archetypes" in installer.REVERSIBLE_KINDS  # DELETE /archetypes/{key}
     assert "case_schemas" in installer.REVERSIBLE_KINDS  # DELETE /case-schemas/{key}
     assert "ontology" in installer.REVERSIBLE_KINDS  # DELETE /ontology/entities/{key}
     assert "write_adapters" in installer.REVERSIBLE_KINDS  # DELETE /connections/{id}
+    assert "connection_templates" in installer.REVERSIBLE_KINDS  # DELETE /connections/{id}
     assert "saved_queries" not in installer.INC1_KINDS  # needs its datasets first
     # Roles/case_fields carry a real Core delete verb → reversible; dispositions/
     # decision tables do not (tombstoned honestly on uninstall).
@@ -205,3 +207,8 @@ def test_plan_materializes_case_fields(tmp_path):
     wa_ops = [o for o in ops if o["kind"] == "write_adapters"]
     assert wa_ops and all(o["action"] == "create" for o in wa_ops)
     assert "AP ERP payment-control write-back" in {o["name"] for o in wa_ops}
+    # connection_templates (inc13) — governed incoming source connectors, the
+    # mirror of write_adapters (skip_test declaration, tenant completes creds).
+    ct_ops = [o for o in ops if o["kind"] == "connection_templates"]
+    assert ct_ops and all(o["action"] == "create" for o in ct_ops)
+    assert "ERP AP subledger (read)" in {o["name"] for o in ct_ops}

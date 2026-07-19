@@ -579,6 +579,39 @@ class PlatformClient:
                       self.author_token())
         return r.status_code in (200, 204)
 
+    # ---- connection templates (ingestion-service governed INCOMING sources) --
+    def ensure_connection_template(self, identity: str, name: str, connector_type: str,
+                                   config: dict, direction: str = "incoming") -> str | None:
+        """Pre-declare a governed SOURCE connector template as an INCOMING
+        ingestion connection (ERP AP subledgers, P2P suites, invoice-capture/OCR
+        drops). The mirror of ensure_write_adapter: skip_test + EMPTY secrets, so
+        the pack ships the expected source connectors as a governed starting
+        point and the tenant supplies real credentials via the product Data >
+        Connections UI. Idempotent by name; requires ingestion.connection.create.
+        Returns the connection id for reversal."""
+        tok = self.author_token()
+        base = f"{self.endpoints.ingestion}/api/v1/connections"
+        g = self._req("GET", f"{base}?filter[traffic_direction]=incoming&limit=200", tok)
+        if g.status_code == 200:
+            for cn in g.json().get("data", []):
+                if cn.get("name") == name:
+                    self._record("connection_templates", identity, "noop", None, name)
+                    return cn.get("id")
+        r = self._req("POST", base, tok, headers=JSON,
+                      json={"workspace_id": self.workspace_id, "name": name,
+                            "connector_type": connector_type, "config": config,
+                            "secrets": {}, "traffic_direction": direction, "skip_test": True})
+        if r.status_code in (200, 201):
+            cid = (r.json().get("data") or {}).get("id")
+            self._record("connection_templates", identity, "create", None, name)
+            return cid
+        self._record("connection_templates", identity, "failed", None,
+                     f"{name}: {r.status_code} {r.text[:150]}")
+        return None
+
+    def delete_connection_template(self, connection_id: str) -> bool:
+        return self.delete_write_adapter(connection_id)
+
     # ---- display labels (identity-service per-tenant label registry) --------
     def ensure_label(self, identity: str, key: str, value: str) -> str | None:
         """Set one per-tenant UI label override (BRD 23 inc3), e.g.

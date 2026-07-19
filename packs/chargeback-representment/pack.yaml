@@ -56,14 +56,3 @@ deferred:
       registration (BRD 23 BR-12). This pack specializes the existing
       case-triage + analytics agents via TenantAgentConfig prompt_params +
       tenant-scope RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (PSP/acquirer dispute APIs and webhook
-      feeds; network dispute rails via the acquirer — Visa Resolve Online,
-      Mastercom; pre-dispute alert rails — Verifi RDR/Order Insight,
-      Ethoca-style alert feeds; order-management/OMS and e-commerce
-      platforms; carrier tracking APIs for delivery-confirmation evidence;
-      device-fingerprint/antifraud platforms for CE 3.0 elements) require
-      customer credentials and pack-service connector materialization. The
-      pack ships seed datasets in the exact landing shape; production
-      connectors are configured through the product Data > Connections UI.

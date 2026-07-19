@@ -52,13 +52,16 @@ SUPPORTED_KINDS = (
     "case_schemas",       # case-service typed case types (inc10)
     "ontology",           # dataset-service domain entity-type registry (inc11)
     "write_adapters",     # ingestion-service governed outgoing connections (inc12)
+    "connection_templates",  # ingestion-service governed incoming source connectors (inc13)
 )
 
 # Deferred kinds we RECOGNIZE (from BRD 23/24..31) so packs can declare them
 # for the future pack-service without packctl pretending to install them.
+# agent_recipes is the last honest deferral: it needs real agent-runtime
+# graph-MODULE code (LangGraph), not config — the pack specializes the existing
+# case-triage/analytics agents via agent_configs instead.
 KNOWN_DEFERRED_KINDS = (
     "agent_recipes",
-    "connection_templates",
 )
 
 

@@ -1,0 +1,29 @@
+# Governed SOURCE connector templates (ingestion-service INCOMING connections,
+# inc13). The mirror of writeback/adapters.yaml: each pre-declares an expected
+# read connector for the AP vertical — ERP AP subledger, P2P suite, invoice-
+# capture/OCR drop — as a governed incoming connection with skip_test + EMPTY
+# secrets. The pack ships the connector SHAPE/target as a starting point; the
+# tenant supplies real host + credentials via Data > Connections, and the config
+# below is a template the tenant completes, never a live secret. (The pack also
+# ships seed datasets in the exact landing shape so the vertical is usable on
+# day one before the live connectors are wired.)
+- name: "ERP AP subledger (read)"
+  connector_type: postgres
+  config:
+    host: erp-ap.internal
+    port: 5432
+    database: ap_subledger
+    username: windrose_read
+    ssl_mode: require
+- name: "Coupa P2P suite (read)"
+  connector_type: http_api
+  config:
+    method: GET
+    url: https://your-tenant.coupahost.com/api/purchase_orders
+- name: "Invoice-capture / OCR drop (read)"
+  connector_type: sftp
+  config:
+    host: ocr-capture.internal
+    port: 22
+    username: windrose_read
+    root_directory: /exports/invoices

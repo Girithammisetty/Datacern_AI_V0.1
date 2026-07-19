@@ -57,13 +57,3 @@ deferred:
       BR-12). This pack specializes the existing case-triage + analytics
       agents via TenantAgentConfig prompt_params + tenant-scope RAG
       grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (moderation/enforcement platforms and
-      queues, classifier scoring stores, user-report pipelines, identity and
-      session-anomaly systems for compromised-account evidence, brand-rights
-      registries for counterfeit authorization checks, out-of-court dispute
-      settlement body intake feeds) require customer credentials and
-      pack-service connector materialization. The pack ships seed datasets
-      in the exact landing shape; production connectors are configured
-      through the product Data > Connections UI.

@@ -58,12 +58,3 @@ deferred:
       (BRD 23 BR-12). This pack specializes the existing case-triage +
       analytics agents via TenantAgentConfig prompt_params + tenant-scope
       RAG grounding instead.
-  - kind: connection_templates
-    reason: >-
-      Production read connectors (e-OSCAR ACDV/AUD feeds; Metro 2 furnishing
-      extracts from core banking, card, auto, mortgage, student-loan and
-      collections servicing platforms; FTC IdentityTheft.gov report intake;
-      credit-monitoring dispute portals; letter-vendor mail intake) require
-      customer credentials and pack-service connector materialization. The
-      pack ships seed datasets in the exact landing shape; production
-      connectors are configured through the product Data > Connections UI.

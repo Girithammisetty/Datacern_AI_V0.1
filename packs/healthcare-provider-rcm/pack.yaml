@@ -53,11 +53,3 @@ deferred:
       existing case-triage + analytics agents via TenantAgentConfig
       prompt_params + tenant-scope RAG grounding instead; all writes remain
       proposal-mode per BR-1 (RCM_AUTONOMOUS_BILLING_FORBIDDEN).
-  - kind: connection_templates
-    reason: >-
-      RCM-FR-090 read connectors (Epic Resolute FHIR/HL7v2, Athenahealth
-      Collector, eCW, NextGen, Cerner Millennium, EDI 837/835/276/277/275,
-      Waystar, Change Healthcare, Availity) require customer credentials and
-      pack-service connector materialization. The pack ships seed datasets in
-      the exact landing shape (837 claims, 835 remit lines, denials, A/R
-      aging); production connectors are configured through Data > Connections.
