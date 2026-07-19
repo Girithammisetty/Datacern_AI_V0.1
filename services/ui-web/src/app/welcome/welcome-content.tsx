@@ -8,11 +8,14 @@ import {
   Check,
   ChevronDown,
   Cpu,
-  Database,
+  HeartPulse,
+  Landmark,
   MessageSquareText,
   Network,
+  Scale,
   ShieldCheck,
   Sparkles,
+  Umbrella,
   Workflow,
   X,
 } from "lucide-react";
@@ -119,17 +122,16 @@ const CAPS = [
   },
 ] as const;
 
-/* the real specialist agents, shown as a moving roster */
-const AGENTS = [
-  "Case Triage",
-  "Analytics",
-  "Governance",
-  "Onboarding",
-  "Dashboard Designer",
-  "Model Training",
-  "ML Engineer",
-  "Inference",
-  "Meta Router",
+/* the specialist AI agents, as a moving roster — business-facing roles, each with
+ * the job it does. (Internal orchestration agents like routing/inference plumbing
+ * are intentionally not surfaced here.) */
+const AGENTS: [string, string][] = [
+  ["Claims Triage Agent", "reads each case and drafts the disposition"],
+  ["Analytics Copilot", "answers data questions in plain language"],
+  ["Governance & Compliance Agent", "checks every action against policy"],
+  ["Data Onboarding Agent", "profiles new data and gets it decision-ready"],
+  ["Reporting Designer Agent", "builds the dashboards your team needs"],
+  ["Model Ops Agent", "trains, evaluates and promotes your models"],
 ];
 
 const STEPS = [
@@ -138,15 +140,57 @@ const STEPS = [
   ["It learns and improves", "Each decision becomes training data. Quality climbs, the routine gets automated, and your team is freed for the hard calls."],
 ];
 
-const SOLUTIONS = [
-  ["Insurance Claims", "Resolve denials, appeals and prior authorizations faster — with the reasoning attached to every call."],
-  ["Provider Revenue Cycle", "Lift clean-claim rates, work denials down and recover the revenue you've earned."],
-  ["Fraud, Waste & Abuse", "Surface suspect claims and providers, then run each investigation to a defensible close."],
-  ["Care Management", "Enroll, track and bill chronic-care and remote-monitoring programs without leaving revenue behind."],
-  ["Pharmacy Benefits", "Speed authorization turnaround while protecting patient safety and rebate capture."],
-  ["Post-Acute Care", "Run episodes and assessments cleanly and stay ahead of readmissions."],
-  ["Financial Crime / AML", "Monitor transactions, screen for sanctions and reach filing decisions you can stand behind."],
-  ["...and your operation next", "New solutions install onto the same platform — your teams learn the tool once and reuse it everywhere."],
+/* Solutions organized by industry — each is a real installable capability pack.
+ * Grouped so a buyer sees their world (payer, bank, carrier, ops) and the exact
+ * queues Windrose runs for them. */
+const INDUSTRIES = [
+  {
+    name: "Healthcare — Payers & Providers",
+    icon: HeartPulse,
+    blurb: "Claims, care and revenue decisions, with the reasoning attached to every call.",
+    useCases: [
+      ["Claims Adjudication & Appeals", "Resolve denials, appeals and prior authorizations faster."],
+      ["Provider Revenue Cycle", "Lift clean-claim rates and recover the revenue you've earned."],
+      ["Payment Integrity (FWA / SIU)", "Surface suspect claims and providers, then close each case defensibly."],
+      ["Care Management", "Enroll, track and bill chronic-care and remote-monitoring programs."],
+      ["Pharmacy Benefits (PBM)", "Speed authorization turnaround while protecting safety and rebates."],
+      ["Post-Acute Care", "Run episodes and assessments cleanly and stay ahead of readmissions."],
+    ],
+  },
+  {
+    name: "Banking & Financial Services",
+    icon: Landmark,
+    blurb: "Monitor, adjudicate and file with a decision you can stand behind.",
+    useCases: [
+      ["Financial Crime & AML", "Monitor transactions, screen sanctions and reach defensible filing decisions."],
+      ["Card Disputes & Chargebacks", "Adjudicate disputes and representment with the evidence attached."],
+      ["Credit Bureau Disputes", "Investigate and resolve consumer disputes inside the regulatory clock."],
+      ["Mortgage Loss Mitigation", "Work borrowers through options consistently and on time."],
+      ["Underwriting Intake", "Turn messy application packages into a clean, ranked decision."],
+    ],
+  },
+  {
+    name: "Insurance — P&C & Specialty",
+    icon: Umbrella,
+    blurb: "Triage and resolve claims across lines with a consistent, auditable call.",
+    useCases: [
+      ["Auto & Trucking Claims", "Triage severity, spot leakage and route each claim to the right desk."],
+      ["Workers' Compensation", "Manage claims and reserves with the reasoning captured end to end."],
+      ["Construction & Property", "Handle defect and property claims with the evidence in one place."],
+      ["Warranty Claims", "Validate coverage and settle warranty claims at scale."],
+    ],
+  },
+  {
+    name: "Risk, Trust & Operations",
+    icon: Scale,
+    blurb: "The judgment-heavy back-office queues, standardized and sped up.",
+    useCases: [
+      ["AP Invoice Audit", "Catch duplicate, non-compliant and over-billed invoices before they pay."],
+      ["Background & Seller Vetting", "Adjudicate screening and marketplace-vetting cases against policy."],
+      ["Trust & Safety Appeals", "Review enforcement appeals quickly and consistently."],
+      ["Tax Notice Resolution", "Classify notices, draft the response and track each to closure."],
+    ],
+  },
 ] as const;
 
 const TRUST = [
@@ -179,7 +223,7 @@ function HeroMock() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Bot className="size-4 text-primary" />
-            Case Triage agent
+            Claims Triage Agent
           </div>
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
             Proposal
@@ -395,22 +439,24 @@ export default function WelcomeContent() {
           </div>
         </div>
 
-        {/* moving agent roster */}
+        {/* moving agent roster — the agentic workforce */}
         <div className="border-y border-border/60 bg-card/40 py-4">
           <div className="mx-auto max-w-6xl overflow-hidden px-6">
             <div className="flex items-center gap-3">
-              <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Your AI team
+              <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-primary">
+                <Sparkles className="size-3.5" />
+                Agentic AI at work
               </span>
               <div className="wr-marquee-wrap flex-1">
                 <div className="wr-marquee flex gap-2">
-                  {[...AGENTS, ...AGENTS].map((a, i) => (
+                  {[...AGENTS, ...AGENTS].map(([name, role], i) => (
                     <span
                       key={i}
-                      className="flex shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-3 py-1.5 text-xs text-muted-foreground"
+                      className="flex shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-3 py-1.5 text-xs"
                     >
-                      <Bot className="size-3.5 text-primary" />
-                      {a}
+                      <Bot className="size-3.5 shrink-0 text-primary" />
+                      <span className="font-medium text-foreground">{name}</span>
+                      <span className="text-muted-foreground">— {role}</span>
                     </span>
                   ))}
                 </div>
@@ -556,25 +602,48 @@ export default function WelcomeContent() {
       {/* solutions */}
       <section id="solutions" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
         <Reveal>
-          <h2 className="text-3xl font-bold tracking-tight">Built for your domain, ready to run</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Built for your industry, ready to run</h2>
           <p className="mt-3 max-w-2xl text-muted-foreground">
-            Start from a solution shaped for your operation — the data, the metrics, the work queues
-            and the domain expertise already in place — instead of a blank slate.
+            Start from a solution shaped for your operation — the data model, the metrics, the work
+            queues and the domain expertise already in place — instead of a blank slate. Each is an
+            installable capability pack, organized by the industry and the decisions it runs.
           </p>
         </Reveal>
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {SOLUTIONS.map(([name, body], i) => (
-            <Reveal key={name} delay={(i % 4) * 70}>
-              <div className="group h-full rounded-2xl border border-border/70 bg-card p-5 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm">
-                <div className="flex items-center gap-2">
-                  <Database className="size-4 text-primary" />
-                  <h3 className="text-sm font-semibold">{name}</h3>
+        <div className="mt-10 grid gap-5 lg:grid-cols-2">
+          {INDUSTRIES.map((ind, i) => {
+            const Icon = ind.icon;
+            return (
+              <Reveal key={ind.name} delay={(i % 2) * 90}>
+                <div className="h-full rounded-2xl border border-border/70 bg-card p-6 transition-all hover:border-primary/40 hover:shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Icon className="size-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-base font-semibold">{ind.name}</h3>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{ind.blurb}</p>
+                    </div>
+                  </div>
+                  <ul className="mt-5 grid gap-3 border-t border-border/50 pt-4 sm:grid-cols-2">
+                    {ind.useCases.map(([name, body]) => (
+                      <li key={name} className="flex gap-2">
+                        <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                        <div>
+                          <div className="text-sm font-medium leading-snug">{name}</div>
+                          <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{body}</div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{body}</p>
-              </div>
-            </Reveal>
-          ))}
+              </Reveal>
+            );
+          })}
         </div>
+        <p className="mx-auto mt-8 max-w-2xl text-center text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">…and your operation next.</span> New solutions
+          install onto the same governed platform — your teams learn the tool once and reuse it everywhere.
+        </p>
       </section>
 
       {/* trust */}
