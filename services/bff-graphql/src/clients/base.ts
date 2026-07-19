@@ -18,6 +18,7 @@
  * production and integration use the real global fetch.
  */
 import { DownstreamError, type DownstreamEnvelope } from "../errors/errors.js";
+import { activeTraceparent } from "../tracing.js";
 
 export type FetchImpl = typeof fetch;
 
@@ -146,8 +147,12 @@ export class ServiceClient {
     };
     // --- JWT passthrough: forward the user's token untouched (BFF-FR-010).
     if (this.ctx.authorization) h["authorization"] = this.ctx.authorization;
-    // --- trace propagation (BFF-FR-012).
-    if (this.ctx.traceparent) h["traceparent"] = this.ctx.traceparent;
+    // --- trace propagation (BFF-FR-012). Prefer the BFF's OWN active span so
+    // the downstream service parents under this hop (UI -> BFF -> service);
+    // forwarding the inbound header verbatim would make them siblings of the
+    // BFF instead. Falls back to passthrough when tracing is disabled.
+    const traceparent = activeTraceparent() ?? this.ctx.traceparent;
+    if (traceparent) h["traceparent"] = traceparent;
     if (this.ctx.traceId) h["x-trace-id"] = this.ctx.traceId;
     if (opts.idempotencyKey) h["idempotency-key"] = opts.idempotencyKey;
     return { ...h, ...(opts.headers ?? {}) };

@@ -49,7 +49,8 @@ Windrose does not ship an observability backend; it exports to **yours**
 (Datadog, Honeycomb, Grafana Cloud, New Relic, Splunk Observability, or a
 self-hosted OTel Collector / Jaeger / Tempo). Every service already contains
 the real exporter code (`libs/go-common/otelx`, `libs/py-common/windrose_common/
-otelx.py`); this is a Helm/config wiring problem, not a code problem.
+otelx.py`, and `services/bff-graphql/src/tracing.ts` for the Node BFF); this is
+a Helm/config wiring problem, not a code problem.
 
 ### Traces (OTLP)
 
@@ -68,10 +69,15 @@ zero exporter construction, so this is genuinely opt-in, not "on but pointed
 nowhere").
 
 **Protocol — read carefully, this differs from some vendor docs**: as of this
-writing, **both** Go and Python services export via **OTLP/gRPC only**:
+writing, Go, Python **and** the Node BFF export via **OTLP/gRPC only**:
 
 - Go: `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc`
   (`libs/go-common/otelx/otelx.go`).
+- Node (bff-graphql): `@opentelemetry/exporter-trace-otlp-grpc`
+  (`services/bff-graphql/src/tracing.ts`). Manual instrumentation — one SERVER
+  span per `/graphql` request parented under the inbound `traceparent`, and the
+  BFF's own span context stamped onto downstream calls so services parent under
+  the BFF hop. No `--require` preload / ESM loader hook needed.
 - Python: `opentelemetry-exporter-otlp-proto-grpc`'s `OTLPSpanExporter`
   (`libs/py-common/windrose_common/otelx.py`) — **not** the HTTP exporter,
   despite OTel's Python SDK supporting both. There is currently no

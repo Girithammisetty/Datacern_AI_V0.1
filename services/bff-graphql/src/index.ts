@@ -16,6 +16,7 @@ import { makeApolloServer } from "./server.js";
 import { buildContext, type IncomingHeaders } from "./context.js";
 import { makeJwks } from "./auth/jwt.js";
 import { loadManifest } from "./plugins/persistedQueries.js";
+import { initTracing, withServerSpan } from "./tracing.js";
 import { GraphQLError } from "graphql";
 
 /** Max accepted request body. This BFF only ingests GraphQL operations and
@@ -47,22 +48,13 @@ function headerVal(v: string | string[] | undefined): string | undefined {
 }
 
 export async function main(): Promise<http.Server> {
-  // TODO(observability): env-gated OpenTelemetry tracing — DEFERRED.
-  // The Go/Python services trace via go-common/otelx + py-common/otelx, both
-  // gated on WINDROSE_OTEL_ENABLED / OTEL_EXPORTER_OTLP_ENDPOINT (clean no-op
-  // when unset, never crash on an unreachable collector). Mirroring that here
-  // would tie the UI→backend boundary into distributed traces: bootstrap a
-  // NodeSDK BEFORE this line (it must patch http before the module graph loads,
-  // so it belongs in a `--require`d preload, not inline), auto-instrument the
-  // node:http server + outbound fetch to the domain services, propagate the
-  // incoming `traceparent` (already read in buildContext), and export OTLP to
-  // OTEL_EXPORTER_OTLP_ENDPOINT only when WINDROSE_OTEL_ENABLED is truthy — a
-  // no-op otherwise, with the exporter configured to fail silently so a down
-  // collector never destabilizes the BFF.
-  // NOT wired: this needs new deps not in package.json (@opentelemetry/sdk-node,
-  // instrumentation-http, instrumentation-graphql, exporter-trace-otlp-grpc/http)
-  // plus a preload entrypoint. Adding them half-way risks the request hot path,
-  // so tracing is intentionally left out until those deps + a preload land.
+  // Env-gated OpenTelemetry tracing (see ./tracing.ts). Same contract as the
+  // Go/Python services — WINDROSE_OTEL_ENABLED / OTEL_EXPORTER_OTLP_ENDPOINT —
+  // and a genuine no-op when unset. Manual instrumentation, so no `--require`
+  // preload or ESM loader hook is needed: the two seams that matter are the
+  // inbound /graphql server span below and the outbound ServiceClient
+  // traceparent (clients/base.ts).
+  initTracing("bff-graphql");
   const cfg = loadConfig();
   const manifest = loadManifest(); // hash->document artifact (empty by default)
   const jwks = makeJwks(cfg);
@@ -87,69 +79,81 @@ export async function main(): Promise<http.Server> {
       return json(res, 404, { error: { code: "NOT_FOUND", message: "no such route" } });
     }
 
-    // Reject oversized bodies fast: a declared Content-Length over the cap, or
-    // an actual stream that exceeds it mid-read (readBody throws).
-    const declaredLen = Number(headerVal(req.headers["content-length"]) ?? "0");
-    if (declaredLen > MAX_BODY_BYTES) {
-      return json(res, 413, { errors: [{ message: "Request body too large" }] });
-    }
-    let bodyText = "";
-    if (req.method === "POST") {
-      try {
-        bodyText = await readBody(req);
-      } catch (e) {
-        if (e instanceof PayloadTooLargeError) {
+    // One SERVER span per GraphQL request, parented under the caller's inbound
+    // traceparent so the UI's trace flows THROUGH the BFF instead of skipping
+    // it. The span stays active for the whole handler, which is what lets
+    // ServiceClient stamp the BFF's own span context onto downstream calls.
+    // A pure pass-through call when tracing is disabled.
+    await withServerSpan(
+      `${req.method ?? "POST"} /graphql`,
+      headerVal(req.headers["traceparent"]),
+      { "http.request.method": req.method ?? "POST", "url.path": path },
+      async () => {
+        // Reject oversized bodies fast: a declared Content-Length over the cap, or
+        // an actual stream that exceeds it mid-read (readBody throws).
+        const declaredLen = Number(headerVal(req.headers["content-length"]) ?? "0");
+        if (declaredLen > MAX_BODY_BYTES) {
           return json(res, 413, { errors: [{ message: "Request body too large" }] });
         }
-        throw e;
-      }
-    }
-    const incoming: IncomingHeaders = {
-      authorization: headerVal(req.headers["authorization"]),
-      traceparent: headerVal(req.headers["traceparent"]),
-      "x-trace-id": headerVal(req.headers["x-trace-id"]),
-    };
+        let bodyText = "";
+        if (req.method === "POST") {
+          try {
+            bodyText = await readBody(req);
+          } catch (e) {
+            if (e instanceof PayloadTooLargeError) {
+              return json(res, 413, { errors: [{ message: "Request body too large" }] });
+            }
+            throw e;
+          }
+        }
+        const incoming: IncomingHeaders = {
+          authorization: headerVal(req.headers["authorization"]),
+          traceparent: headerVal(req.headers["traceparent"]),
+          "x-trace-id": headerVal(req.headers["x-trace-id"]),
+        };
 
-    // Edge auth first: fail fast on a missing/invalid JWT (BFF-FR-010).
-    let ctx;
-    try {
-      ctx = await buildContext({ config: cfg, jwks }, incoming);
-    } catch (e) {
-      const err = e instanceof GraphQLError ? e : new GraphQLError("Unauthenticated");
-      return json(res, 401, { errors: [{ message: err.message, extensions: err.extensions }] });
-    }
+        // Edge auth first: fail fast on a missing/invalid JWT (BFF-FR-010).
+        let ctx;
+        try {
+          ctx = await buildContext({ config: cfg, jwks }, incoming);
+        } catch (e) {
+          const err = e instanceof GraphQLError ? e : new GraphQLError("Unauthenticated");
+          return json(res, 401, { errors: [{ message: err.message, extensions: err.extensions }] });
+        }
 
-    const headers = new HeaderMap();
-    for (const [k, v] of Object.entries(req.headers)) {
-      if (typeof v === "string") headers.set(k, v);
-      else if (Array.isArray(v)) headers.set(k, v.join(","));
-    }
+        const headers = new HeaderMap();
+        for (const [k, v] of Object.entries(req.headers)) {
+          if (typeof v === "string") headers.set(k, v);
+          else if (Array.isArray(v)) headers.set(k, v.join(","));
+        }
 
-    let parsedBody: unknown;
-    try {
-      parsedBody = bodyText ? JSON.parse(bodyText) : {};
-    } catch {
-      return json(res, 400, { errors: [{ message: "Invalid JSON in request body" }] });
-    }
+        let parsedBody: unknown;
+        try {
+          parsedBody = bodyText ? JSON.parse(bodyText) : {};
+        } catch {
+          return json(res, 400, { errors: [{ message: "Invalid JSON in request body" }] });
+        }
 
-    const httpResp = await apollo.executeHTTPGraphQLRequest({
-      httpGraphQLRequest: {
-        method: req.method ?? "POST",
-        headers,
-        search: url.search ?? "",
-        body: parsedBody,
+        const httpResp = await apollo.executeHTTPGraphQLRequest({
+          httpGraphQLRequest: {
+            method: req.method ?? "POST",
+            headers,
+            search: url.search ?? "",
+            body: parsedBody,
+          },
+          context: async () => ctx,
+        });
+
+        res.statusCode = httpResp.status ?? 200;
+        for (const [k, v] of httpResp.headers) res.setHeader(k, v);
+        if (httpResp.body.kind === "complete") {
+          res.end(httpResp.body.string);
+        } else {
+          for await (const chunk of httpResp.body.asyncIterator) res.write(chunk);
+          res.end();
+        }
       },
-      context: async () => ctx,
-    });
-
-    res.statusCode = httpResp.status ?? 200;
-    for (const [k, v] of httpResp.headers) res.setHeader(k, v);
-    if (httpResp.body.kind === "complete") {
-      res.end(httpResp.body.string);
-    } else {
-      for await (const chunk of httpResp.body.asyncIterator) res.write(chunk);
-      res.end();
-    }
+    );
   });
 
   await new Promise<void>((resolve) => server.listen(cfg.port, resolve));
