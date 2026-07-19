@@ -212,3 +212,83 @@ def test_plan_materializes_case_fields(tmp_path):
     ct_ops = [o for o in ops if o["kind"] == "connection_templates"]
     assert ct_ops and all(o["action"] == "create" for o in ct_ops)
     assert "ERP AP subledger (read)" in {o["name"] for o in ct_ops}
+
+
+# ---- inc14: version lifecycle (upgrade + rollback) --------------------------
+
+def _write_case_field_pack(root: Path, version: str, field_names: list[str],
+                           label_value: str) -> None:
+    """Author a minimal, self-contained pack (case_fields + one display label) at
+    a given version — the fixture the diff/snapshot tests exercise."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "pack.yaml").write_text(
+        "pack_manifest: 1\n"
+        "name: lifecycle-fixture\n"
+        f"version: {version}\n"
+        "description: lifecycle test fixture\n"
+        "publisher: {id: test}\n"
+        "components:\n"
+        "  case_fields:\n"
+        "    - {file: fields.yaml, identity: lc_fields}\n"
+        "  display_labels:\n"
+        "    - {file: labels.yaml, identity: lc_labels}\n"
+    )
+    (root / "fields.yaml").write_text(
+        "".join(f"- {{name: {n}, data_type: string, purpose: both}}\n" for n in field_names))
+    (root / "labels.yaml").write_text(f"- {{key: lc.demo.title, value: {label_value!r}}}\n")
+
+
+def _load(pack_dir: Path):
+    catalog._packctl()  # ensure packs dir (with packctl) is importable
+    from packctl.manifest import load_manifest  # noqa: PLC0415
+    return load_manifest(pack_dir)
+
+
+def test_snapshot_bundle_roundtrips(tmp_path):
+    src = tmp_path / "v1"
+    _write_case_field_pack(src, "1.0.0", ["lc_alpha", "lc_bravo"], "V1")
+    manifest = _load(src)
+    snap = installer.snapshot_bundle(manifest)
+    assert snap["version"] == "1.0.0"
+    assert set(snap["files"]) == {"pack.yaml", "fields.yaml", "labels.yaml"}
+
+    # rehydrate the stored bundle into a *different* dir and it re-validates equal.
+    dest = tmp_path / "restored"
+    dest.mkdir()
+    restored = installer.rehydrate_bundle(snap, str(dest))
+    assert restored.version == "1.0.0"
+    assert {(c.kind, c.identity) for c in restored.components} == \
+           {(c.kind, c.identity) for c in manifest.components}
+
+
+def test_diff_plan_added_removed_retained(tmp_path):
+    # prior version materialized case fields [alpha, bravo, charlie] + the label.
+    prior_ledger = [
+        {"kind": "case_fields", "identity": "lc_alpha", "reversible": True, "target_id": "id-a"},
+        {"kind": "case_fields", "identity": "lc_bravo", "reversible": True, "target_id": "id-b"},
+        {"kind": "case_fields", "identity": "lc_charlie", "reversible": True, "target_id": "id-c"},
+        {"kind": "display_labels", "identity": "lc.demo.title", "reversible": True, "target_id": "lc.demo.title"},
+    ]
+    # target version drops charlie, adds delta, keeps alpha/bravo + the label.
+    tgt = tmp_path / "v2"
+    _write_case_field_pack(tgt, "1.1.0", ["lc_alpha", "lc_bravo", "lc_delta"], "V2")
+    diff = installer.diff_plan(prior_ledger, _load(tgt))
+
+    assert {d["name"] for d in diff["added"]} == {"lc_delta"}
+    assert {d["name"] for d in diff["removed"]} == {"lc_charlie"}
+    assert {d["name"] for d in diff["retained"]} == {"lc_alpha", "lc_bravo", "lc.demo.title"}
+    # the removed set carries the real ledger ROW (with target_id) for reversal.
+    assert diff["removed_rows"][0]["target_id"] == "id-c"
+
+
+def test_diff_plan_ignores_tombstoned_rows(tmp_path):
+    # a tombstoned prior row is not "live" — re-adding its object counts as added.
+    prior_ledger = [
+        {"kind": "case_fields", "identity": "lc_alpha", "tombstoned": True, "reversible": True},
+    ]
+    tgt = tmp_path / "v"
+    _write_case_field_pack(tgt, "1.0.0", ["lc_alpha"], "V")
+    diff = installer.diff_plan(prior_ledger, _load(tgt))
+    # neither the tombstoned field nor the (never-installed) label is live → both add.
+    assert {d["name"] for d in diff["added"]} == {"lc_alpha", "lc.demo.title"}
+    assert diff["removed"] == []

@@ -16,22 +16,51 @@ def _row(m) -> dict:
 async def create_install(
     conn: AsyncConnection, *, install_id: str, tenant_id: str, workspace_id: str,
     pack_name: str, pack_version: str, status: str, plan: list[dict],
-    created_by: str | None,
+    created_by: str | None, operation: str = "install",
+    supersedes: str | None = None, manifest_snapshot: dict | None = None,
 ) -> None:
     await conn.execute(
         text(
             """
             INSERT INTO installs
-              (id, tenant_id, workspace_id, pack_name, pack_version, status, plan, created_by)
+              (id, tenant_id, workspace_id, pack_name, pack_version, status, plan,
+               created_by, operation, supersedes, manifest_snapshot)
             VALUES
-              (:id, :tid, :ws, :name, :ver, :status, :plan, :by)
+              (:id, :tid, :ws, :name, :ver, :status, :plan,
+               :by, :op, :supersedes, CAST(:snap AS jsonb))
             """
         ),
         {
             "id": install_id, "tid": tenant_id, "ws": workspace_id,
             "name": pack_name, "ver": pack_version, "status": status,
-            "plan": json.dumps(plan), "by": created_by,
+            "plan": json.dumps(plan), "by": created_by, "op": operation,
+            "supersedes": supersedes,
+            "snap": json.dumps(manifest_snapshot or {}),
         },
+    )
+
+
+async def supersede_install(conn: AsyncConnection, install_id: str, superseded_by: str) -> None:
+    """Retire a prior install: it is replaced by a newer one (upgrade/rollback)."""
+    await conn.execute(
+        text(
+            """
+            UPDATE installs
+               SET status = 'superseded', superseded_by = :by, updated_at = now()
+             WHERE id = :id
+            """
+        ),
+        {"id": install_id, "by": superseded_by},
+    )
+
+
+async def tombstone_all_ledger(conn: AsyncConnection, install_id: str) -> None:
+    """Transfer object ownership off a superseded install: mark ALL its ledger
+    rows tombstoned so a later uninstall of it never reverses objects the newer
+    install now owns (removed objects were already reversed before this call)."""
+    await conn.execute(
+        text("UPDATE materialized_objects SET tombstoned = true WHERE install_id = :id"),
+        {"id": install_id},
     )
 
 

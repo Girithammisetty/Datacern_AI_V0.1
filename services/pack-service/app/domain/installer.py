@@ -702,6 +702,90 @@ def run_complete(client, manifest, origin_of):
     return records, True, "dashboards materialized"
 
 
+# ---- version lifecycle: upgrade + rollback (PKG-FR-003/026) -----------------
+
+def snapshot_bundle(manifest) -> dict:
+    """Capture the pack bundle (pack.yaml + every referenced component file) as
+    text, keyed by path relative to the pack dir. Stored on the install row so a
+    later ROLLBACK can re-apply THIS exact version verbatim even after the
+    on-disk pack has moved on — the snapshot is the durable version record while
+    the signed OCI registry (PKG-FR-005) is deferred."""
+    from pathlib import Path  # noqa: PLC0415
+
+    root = Path(manifest.pack_dir)
+    files: dict[str, str] = {"pack.yaml": (root / "pack.yaml").read_text()}
+    for comp in manifest.components:
+        if comp.file not in files:
+            files[comp.file] = (root / comp.file).read_text()
+    return {"name": manifest.name, "version": manifest.version, "files": files}
+
+
+def rehydrate_bundle(snapshot: dict, dest_dir: str):
+    """Write a stored bundle back to a temp pack dir and load it as a validated
+    Manifest — the authoritative component set of that version, independent of
+    whatever is on disk now. Used by rollback to re-apply a prior version."""
+    from pathlib import Path  # noqa: PLC0415
+
+    from packctl.manifest import load_manifest  # noqa: PLC0415
+
+    root = Path(dest_dir)
+    for rel, text in (snapshot.get("files") or {}).items():
+        p = root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+    return load_manifest(root)
+
+
+def _target_object_names(manifest) -> list[tuple[str, str]]:
+    """Every (kind, object-name) a manifest would materialize — the SAME names
+    the ledger records per object, so a diff over the ledger lines up 1:1."""
+    out: list[tuple[str, str]] = []
+    for comp in manifest.components:
+        for name in _component_names(manifest, comp):
+            out.append((comp.kind, name))
+    return out
+
+
+def diff_plan(prior_ledger: list[dict], target_manifest) -> dict:
+    """Version diff (PKG-FR-003): compare the objects a target version would
+    materialize against a prior install's LIVE ledger (non-tombstoned rows).
+    Returns added / removed / retained as {kind, name} lists plus the prior
+    ledger ROWS to reverse for the removed set. Pure — no Core calls."""
+    target_set = set(_target_object_names(target_manifest))
+    live = [(r["kind"], r["identity"], r) for r in prior_ledger if not r.get("tombstoned")]
+    live_keys = {(k, n) for k, n, _ in live}
+
+    added = [{"kind": k, "name": n} for (k, n) in sorted(target_set) if (k, n) not in live_keys]
+    retained = [{"kind": k, "name": n} for (k, n) in sorted(target_set) if (k, n) in live_keys]
+    removed_rows = [r for (k, n, r) in live if (k, n) not in target_set]
+    removed = [{"kind": r["kind"], "name": r["identity"]} for r in removed_rows]
+    return {"added": added, "removed": removed, "retained": retained,
+            "removed_rows": removed_rows}
+
+
+def run_upgrade(client, target_manifest, prior_ledger, origin_of):
+    """Apply a target version over a prior install — the shared core of both
+    upgrade and rollback. Materializes the target (idempotent: added objects
+    create, retained objects no-op) and REVERSES the components the target no
+    longer contains. Pack-reversibility from the prior install is carried onto
+    retained rows so the new install stays fully reversible on a later uninstall.
+    Returns (new_ledger, pending_dashboards, removed_outcomes, diff)."""
+    diff = diff_plan(prior_ledger, target_manifest)
+    new_ledger, pending = run_install(client, target_manifest, origin_of)
+
+    # A retained object was created by the pack in the PRIOR version, so although
+    # this run sees it as a no-op (it already exists) it remains pack-owned and
+    # reversible — we still hold its id via the idempotent ensure_*.
+    prior_reversible = {(r["kind"], r["identity"]) for r in prior_ledger if r.get("reversible")}
+    for row in new_ledger:
+        if (row["kind"], row["identity"]) in prior_reversible \
+                and row.get("target_id") and row["kind"] in REVERSIBLE_KINDS:
+            row["reversible"] = True
+
+    removed_outcomes = run_uninstall(client, diff["removed_rows"])
+    return new_ledger, pending, removed_outcomes, diff
+
+
 def _unbind_role_group(client, e, tok, *, role_name: str, role_id: str) -> None:
     """Unbind a pack role from its same-named permission group and drop the
     group, so the role becomes deletable (rbac 409s on a still-bound role)."""
