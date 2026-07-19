@@ -104,6 +104,10 @@ def build_persona_copilot_graph(deps: GraphDeps):
                     auth_token=deps.obo_token or "", top_k=5,
                     snapshot_ver=deps.memory_snapshot_ver)
             except GroundingDegraded as exc:
+                # Mark low-confidence (P2 oversight escalation) so the proposal is
+                # forced to a human — the copilot decided without precedent grounding.
+                state["grounding_degraded"] = {"status": exc.status_code,
+                                               "source": "memory-service"}
                 state.setdefault("trace", []).append(
                     {"event": "grounding_degraded", "source": "memory-service",
                      "status": exc.status_code})

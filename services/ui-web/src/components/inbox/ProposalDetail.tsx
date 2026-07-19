@@ -172,6 +172,12 @@ export function ProposalDetail({ proposal }: { proposal: Proposal }) {
                   the documents before approving.
                 </p>
               )}
+            {proposal.predictedEffect.low_confidence === true && (
+              <p className="mt-2 rounded bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-400">
+                ⚠ Low confidence: {String(proposal.predictedEffect.low_confidence_reason ??
+                  "the agent decided on thin evidence")}. Escalated for your review.
+              </p>
+            )}
           </section>
         )}
         {citations.length > 0 && (

@@ -119,6 +119,11 @@ class ProposalService:
         # gate removes the autonomous-state-change leg, keeping it at two of three.
         if effect.get("untrusted_input"):
             auto = False
+        # Human-oversight escalation (P2, EDDOps D6): a low-confidence run (grounding
+        # degraded — the agent decided on thin/absent precedent) must be arbitrated
+        # by a human, never auto-executed, even for an otherwise low-risk write.
+        if effect.get("low_confidence"):
+            auto = False
         if auto:
             decided = await self._store.decide_proposal(
                 tenant_id=run.tenant_id, proposal_id=pid, new_status="approved",

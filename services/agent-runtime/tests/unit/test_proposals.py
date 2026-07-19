@@ -92,6 +92,20 @@ async def test_untrusted_input_forces_human_approval_rule_of_two():
     assert executed is False and prop.status == "pending"
 
 
+async def test_low_confidence_escalates_to_human_no_auto_execute():
+    c = _container()
+    run = await _run(c)
+    # A low-risk, reversible write, but the run's grounding was degraded → the
+    # human-oversight policy escalates it (never auto-executes).
+    intent = _intent()
+    intent.predicted_effect["low_confidence"] = True
+    policy = {"case-triage": {"write-proposal": {"reversible": "auto"}}}
+    prop, executed = await c.proposal_service.create_from_intent(
+        run=run, intent=intent, obo_user="u-77", auto_execute_policy=policy)
+    assert prop.predicted_effect["low_confidence"] is True
+    assert executed is False and prop.status == "pending"
+
+
 async def test_high_risk_bulk_write_not_auto_executed_despite_policy():
     c = _container()
     run = await _run(c)

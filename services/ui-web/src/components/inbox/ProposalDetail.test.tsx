@@ -60,6 +60,20 @@ describe("ProposalDetail (UI-FR-033)", () => {
     expect(screen.getByText(/Agent’s description \(unverified\)/)).toBeInTheDocument();
   });
 
+  it("warns the approver when a low-confidence run was escalated for review", () => {
+    const lowConf: Proposal = {
+      ...proposal,
+      predictedEffect: {
+        summary: "Case reassigned",
+        low_confidence: true,
+        low_confidence_reason: "grounding degraded — precedent/evidence was unavailable",
+      },
+    };
+    renderWithProviders(<ProposalDetail proposal={lowConf} />);
+    expect(screen.getByText(/Low confidence/i)).toBeInTheDocument();
+    expect(screen.getByText(/Escalated for your review/i)).toBeInTheDocument();
+  });
+
   it("renders the evidence citations the recommendation is grounded in", () => {
     const withCitations: Proposal = {
       ...proposal,

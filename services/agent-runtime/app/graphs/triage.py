@@ -321,14 +321,20 @@ def _effect_summary(d: dict, dispositions: list[dict]) -> str:
 
 
 def _evidence_effect_flags(state: dict) -> dict:
-    """predicted_effect flags for an agent that consumed untrusted evidence:
-    ``untrusted_input`` (Rule-of-Two → ProposalService forces human approval) and
-    any ``injection_flags`` surfaced to warn the approver."""
+    """predicted_effect flags derived from how the run was grounded:
+    ``untrusted_input`` (Rule-of-Two → ProposalService forces human approval),
+    ``injection_flags`` (surfaced to warn the approver), and ``low_confidence``
+    (P2 human-oversight escalation: when grounding degraded — memory/precedent
+    unavailable — the agent decided on thin evidence, so the proposal must go to a
+    human rather than auto-execute)."""
     out: dict = {}
     if state.get("untrusted_evidence"):
         out["untrusted_input"] = True
     if state.get("evidence_injection_flags"):
         out["injection_flags"] = state["evidence_injection_flags"]
+    if state.get("grounding_degraded"):
+        out["low_confidence"] = True
+        out["low_confidence_reason"] = "grounding degraded — precedent/evidence was unavailable"
     return out
 
 
