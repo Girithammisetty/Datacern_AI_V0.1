@@ -5,19 +5,35 @@ import {
   ArrowRight,
   BarChart3,
   Bot,
+  Building2,
+  Car,
   Check,
   ChevronDown,
   Cpu,
+  CreditCard,
+  Factory,
+  FlaskConical,
+  Gavel,
+  GraduationCap,
+  HardHat,
   HeartPulse,
+  Home,
   Landmark,
   MessageSquareText,
   Network,
+  Plane,
+  Radio,
+  Rocket,
   Scale,
   ShieldCheck,
+  ShoppingBag,
   Sparkles,
+  Sprout,
+  Truck,
   Umbrella,
   Workflow,
   X,
+  Zap,
 } from "lucide-react";
 import { WindroseLogo } from "@/components/brand/WindroseLogo";
 import { Button } from "@/components/ui/button";
@@ -218,6 +234,32 @@ const INDUSTRIES = [
   },
 ] as const;
 
+/* The wider industry map — Windrose runs ANY judgment-heavy, data-driven decision
+ * queue, not just the four flagship packs above. Each entry names the industry and
+ * a representative decision it automates. Icon + name + example. */
+const MORE_INDUSTRIES: [React.ComponentType<{ className?: string }>, string, string][] = [
+  [HeartPulse, "Healthcare & Life Sciences", "Prior auth, claims, payment integrity"],
+  [Landmark, "Banking & Capital Markets", "AML alerts, disputes, credit decisions"],
+  [Umbrella, "Insurance", "Claim triage, leakage, settlements"],
+  [Building2, "Government & Public Sector", "Benefits, eligibility, case adjudication"],
+  [Factory, "Manufacturing & Industrial", "Quality dispositions, MRB, warranty"],
+  [ShoppingBag, "Retail & Consumer Goods", "Returns, chargebacks, seller vetting"],
+  [Zap, "Energy & Utilities", "Inspections, outage triage, safety cases"],
+  [Radio, "Telecom & Media", "Fraud, provisioning, content appeals"],
+  [Truck, "Transportation & Logistics", "Freight claims, safety, exceptions"],
+  [FlaskConical, "Pharma & Biotech", "Pharmacovigilance, device complaints"],
+  [CreditCard, "Fintech & Payments", "Onboarding/KYC, disputes, risk"],
+  [Home, "Real Estate & Mortgage", "Underwriting intake, loss mitigation"],
+  [Gavel, "Legal & Compliance", "Contract review, sanctions, filings"],
+  [GraduationCap, "Education", "Admissions, aid, integrity cases"],
+  [Plane, "Travel & Hospitality", "Refunds, chargebacks, fraud"],
+  [Car, "Automotive", "Warranty, recalls, defect claims"],
+  [Rocket, "Aerospace & Defense", "Nonconformance, compliance, audits"],
+  [Sprout, "Agriculture & Food", "Inspections, quality, traceability"],
+  [HardHat, "Construction & Engineering", "Defect claims, safety, change orders"],
+  [ShieldCheck, "Technology & Trust/Safety", "Abuse review, appeals, moderation"],
+];
+
 const TRUST = [
   ["Your data stays yours", "Cleanly isolated for your organization — never mingled, never shared."],
   ["Least-privilege access", "Everyone sees and does exactly what their role allows, and nothing more."],
@@ -225,12 +267,43 @@ const TRUST = [
   ["A tamper-evident trail", "Who decided what, when, and on what evidence — captured for every action, ready for any review."],
 ] as const;
 
+/* Category comparison — how decision intelligence differs from BI and raw AI.
+ * cols map to [dimension, traditional BI, AI/ML models, Windrose DI]. */
+const COMPARE_COLS = ["Traditional BI", "AI / ML models", "Decision Intelligence"] as const;
+const COMPARE: [string, string, string, string][] = [
+  ["What it delivers", "Dashboards & reports", "Predictions & scores", "A governed decision + its reasoning"],
+  ["Unit of work", "A metric or a chart", "A model output", "A case, handled end to end"],
+  ["Who acts on it", "An analyst reads, then acts by hand", "A person interprets the score", "Agents draft, your expert approves, the action is taken"],
+  ["Evidence & audit", "Numbers, no per-decision trail", "Often a black box", "Every decision has evidence, an owner and a trail"],
+  ["Governance", "Access control", "Model governance (sometimes)", "Four-eyes, row-level isolation, policy-as-code, immutable audit"],
+  ["Learning loop", "Static until rebuilt", "Retrained offline", "Every human correction trains the next model"],
+  ["Consistency", "Depends on the analyst", "Consistent scores", "Consistent, policy-driven determinations"],
+  ["Time to value", "Build the dashboards", "Build & train the models", "Install a solution pack for the decision"],
+];
+
 const FAQ = [
-  ["Does the AI ever act on its own?", "No. Agents draft recommendations and the copilot proposes changes, but a person approves, adjusts or rejects every outcome. Sensitive changes need a second reviewer too."],
-  ["How is this different from a BI tool or a chatbot?", "Windrose is built around the decision, not the dashboard or the chat window. It reads the evidence, drafts the call, records who decided and why, and learns from every correction — end to end, under governance."],
-  ["Will it work with our existing data and stack?", "Bring data as files or from your sources; it's profiled on arrival and queryable quickly. Metrics and models are defined on top, so you keep your system of record."],
-  ["How do we get started?", "Begin from a solution shaped for your domain — the data model, metrics, work queues and expertise already in place — instead of a blank slate."],
-  ["How do you keep AI costs from spiraling?", "Work is routed across model tiers, and repetitive decisions migrate onto models you own — so scaling volume doesn't mean scaling the bill."],
+  ["What is decision intelligence?",
+    "It's the discipline — and this platform — of turning your data, your policy and AI into governed, auditable decisions at scale. Not a dashboard that reports the past or a model that predicts it: a system that makes the call, attaches the evidence, and keeps a person accountable for every one."],
+  ["What exactly is “agentic AI”?",
+    "A chatbot answers a question; a model returns a score. An agentic AI takes on multi-step work: it reads the evidence, checks it against your rules, uses tools to gather what it needs, and drafts a decision or action — then hands it to a person to approve. Windrose runs a team of these specialist agents (triage, analytics, governance and more), each scoped to what it's allowed to see and do. They propose; they never act on their own."],
+  ["How is this different from BI or analytics?",
+    "BI tells you what happened and leaves the decision to you. Windrose is built around the decision itself: it reads the case, drafts the call with cited evidence, records who decided and why, and learns from every correction — end to end, under governance. Dashboards are one capability inside it, not the point."],
+  ["How is it different from just using an LLM or an ML model?",
+    "An LLM or model gives you an output; you still have to ground it, govern it, route the work, capture the audit trail and close the loop. Windrose is that surrounding system — grounding on your governed data, four-eyes approval, immutable audit, and a correction-to-retrain loop — with the models plugged in where they help."],
+  ["Does the AI ever act on its own?",
+    "No. Agents draft recommendations and the copilot proposes changes, but a person approves, adjusts or rejects every outcome. Sensitive changes require a second reviewer (four-eyes) before they go live."],
+  ["Do the agents replace my team?",
+    "No — they do the reading and drafting so your experts spend their time on judgment, not busywork. People stay accountable for every determination; the routine gets automated and the hard calls get more attention."],
+  ["How do you prevent hallucinations and wrong decisions?",
+    "Answers and drafts are grounded in your governed data and cite the evidence they used. Nothing is a silent write — every decision is gated by a human, sensitive ones by a second reviewer. Models are evaluated against your benchmarks before they're ever promoted, and every action is logged for review."],
+  ["Is our data secure and compliant?",
+    "Your data is cleanly isolated for your organization (row-level security), everyone operates under least-privilege access, the changes that matter need a second set of eyes, and every action lands in a tamper-evident trail. You can bring your own identity provider, secrets store and cloud."],
+  ["Will it work with our existing data, models and stack?",
+    "Bring data as files or from your sources; it's profiled on arrival and queryable quickly. Define metrics and models on top, or plug in models you already own — you keep your system of record."],
+  ["How quickly can we get value?",
+    "Start from a solution pack shaped for your domain — the data model, metrics, work queues and expertise already in place — instead of a blank slate. New verticals install onto the same governed core."],
+  ["How do you keep AI costs from spiraling?",
+    "Work is routed across model tiers, and repetitive decisions migrate onto smaller models you own — so scaling volume doesn't mean scaling the bill."],
 ];
 
 /* ------------------------------------------------------------------ */
@@ -243,8 +316,8 @@ function Dot({ className = "" }: { className?: string }) {
 function HeroMock() {
   return (
     <div className="wr-float relative w-full max-w-md">
-      <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-primary/20 blur-2xl" />
-      <div className="rounded-2xl border border-border/70 bg-card/95 p-5 shadow-2xl backdrop-blur">
+      <div className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/30 via-emerald-500/20 to-lime-400/20 blur-3xl" />
+      <div className="wr-glass wr-ring wr-glow rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Bot className="size-4 text-primary" />
@@ -407,8 +480,15 @@ export default function WelcomeContent() {
   const Cap = CAPS[tab];
 
   return (
-    <main id="main" className="min-h-screen bg-background text-foreground">
+    <main id="main" className="dark relative isolate min-h-screen bg-background text-foreground">
       <style>{WR_CSS}</style>
+
+      {/* page-wide next-gen backdrop: deep gradient wash + subtle grid + drifting aurora */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(80rem_50rem_at_50%_-10%,hsl(var(--primary)/0.12),transparent_60%)]" />
+        <div className="wr-grid absolute inset-0" />
+        <div className="wr-aurora absolute -top-40 left-1/2 h-[38rem] w-[70rem] -translate-x-1/2 rounded-full opacity-60" />
+      </div>
 
       {/* header */}
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur">
@@ -420,6 +500,7 @@ export default function WelcomeContent() {
           <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
             <a href="#industries" className="transition-colors hover:text-foreground">Industries</a>
             <a href="#capabilities" className="transition-colors hover:text-foreground">Platform</a>
+            <a href="#difference" className="transition-colors hover:text-foreground">Why DI</a>
             <a href="#how" className="transition-colors hover:text-foreground">How it works</a>
             <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
           </nav>
@@ -436,7 +517,7 @@ export default function WelcomeContent() {
               <Sparkles className="size-3.5" />
               AI decision intelligence
             </span>
-            <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.05] tracking-tight md:text-6xl">
+            <h1 className="wr-glowtext mt-6 text-balance text-4xl font-bold leading-[1.03] tracking-tight md:text-6xl">
               AI agents that decide,
               <br />
               with your experts{" "}
@@ -500,21 +581,26 @@ export default function WelcomeContent() {
             Solutions by industry
           </span>
           <h2 className="mt-5 text-balance text-3xl font-bold tracking-tight md:text-4xl">
-            Built for the decisions your industry runs on
+            Decision intelligence for every industry
           </h2>
           <p className="mt-3 max-w-2xl text-muted-foreground">
-            Windrose ships as capability packs shaped for your operation — the data model, the metrics,
-            the work queues and the domain expertise already in place. Start where your backlog is.
+            If a team reads evidence, applies a policy and makes a call — at volume and under scrutiny —
+            Windrose runs it. Four domains ship deep today; the same governed platform adapts to any
+            data-driven decision queue.
           </p>
         </Reveal>
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
+
+        <div className="mt-9 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Flagship solutions — built deep
+        </div>
+        <div className="mt-4 grid gap-5 sm:grid-cols-2">
           {INDUSTRIES.map((ind, i) => {
             const Icon = ind.icon;
             return (
               <Reveal key={ind.id} delay={(i % 2) * 80}>
                 <a
                   href={`#ind-${ind.id}`}
-                  className="group flex h-full flex-col rounded-2xl border border-border/70 bg-card p-6 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+                  className="group relative flex h-full flex-col rounded-2xl wr-glass wr-ring p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_28px_80px_-30px_hsl(var(--primary)/0.6)]"
                 >
                   <div className="flex items-start justify-between">
                     <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
@@ -527,7 +613,7 @@ export default function WelcomeContent() {
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{ind.tag}</p>
                   <div className="mt-4 flex flex-wrap gap-1.5">
                     {ind.useCases.slice(0, 3).map(([n]) => (
-                      <span key={n} className="rounded-full border border-border/70 bg-background px-2.5 py-0.5 text-[11px] text-muted-foreground">
+                      <span key={n} className="rounded-full border border-border/70 bg-background/60 px-2.5 py-0.5 text-[11px] text-muted-foreground">
                         {n}
                       </span>
                     ))}
@@ -541,6 +627,34 @@ export default function WelcomeContent() {
               </Reveal>
             );
           })}
+        </div>
+
+        {/* the wider industry map — Windrose runs any data-driven decision */}
+        <div className="mt-14">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h3 className="text-xl font-bold tracking-tight">…and any other decision that runs on data</h3>
+            <span className="text-sm text-muted-foreground">Same platform · same governance</span>
+          </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {MORE_INDUSTRIES.map(([Icon, name, ex], i) => (
+              <Reveal key={name} delay={(i % 4) * 40}>
+                <div className="group flex h-full items-start gap-3 rounded-xl wr-glass wr-ring p-3.5 transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-30px_hsl(var(--primary)/0.6)]">
+                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                    <Icon className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold leading-tight">{name}</div>
+                    <div className="mt-0.5 text-xs leading-snug text-muted-foreground">{ex}</div>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+          <p className="mt-7 max-w-2xl text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Don&apos;t see yours?</span> Windrose isn&apos;t
+            built around an industry — it&apos;s built around the decision. New verticals install as
+            capability packs onto the same core, so any judgment-heavy queue is a fit.
+          </p>
         </div>
       </section>
 
@@ -599,8 +713,9 @@ export default function WelcomeContent() {
           </div>
 
           {/* active panel */}
-          <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-card to-card/40 p-7">
-            <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-primary/10 blur-2xl" />
+          <div className="wr-glass wr-ring wr-glow relative overflow-hidden rounded-2xl p-7">
+            <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-primary/20 blur-2xl" />
+            <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-16 size-48 rounded-full bg-emerald-500/15 blur-2xl" />
             <div key={Cap.key} className="wr-swap relative">
               <div className="text-xs font-semibold uppercase tracking-widest text-primary">{Cap.eyebrow}</div>
               <h3 className="mt-2 text-xl font-bold tracking-tight">{Cap.title}</h3>
@@ -636,6 +751,87 @@ export default function WelcomeContent() {
         </div>
       </section>
 
+      {/* how decision intelligence is different — BI vs AI vs DI */}
+      <section id="difference" className="scroll-mt-16 border-t border-border/60">
+        <div className="mx-auto max-w-6xl px-6 py-20">
+          <Reveal>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
+              <Sparkles className="size-3.5" />
+              Why decision intelligence
+            </span>
+            <h2 className="mt-5 text-balance text-3xl font-bold tracking-tight md:text-4xl">
+              A different category from BI and AI
+            </h2>
+            <p className="mt-3 max-w-2xl text-muted-foreground">
+              Business intelligence tells you what happened. AI models predict what might. Decision
+              intelligence makes the call — governed, evidenced and accountable — and learns from every one.
+            </p>
+          </Reveal>
+
+          <Reveal delay={80}>
+            <div className="mt-10 overflow-x-auto">
+              <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left align-top text-sm">
+                <thead>
+                  <tr>
+                    <th className="w-[22%] px-4 pb-4 align-bottom text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                      By this measure
+                    </th>
+                    {COMPARE_COLS.map((c, i) => {
+                      const di = i === COMPARE_COLS.length - 1;
+                      return (
+                        <th
+                          key={c}
+                          className={`px-4 pb-4 pt-3 align-bottom text-base font-bold ${
+                            di ? "rounded-t-xl bg-primary/10 text-primary" : "text-foreground/70"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            {di && <WindroseLogo className="size-4" />}
+                            {di ? "Windrose" : c}
+                          </span>
+                          {di && (
+                            <span className="mt-0.5 block text-xs font-medium normal-case tracking-normal text-primary/80">
+                              Decision Intelligence
+                            </span>
+                          )}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPARE.map(([dim, bi, ai, di], r) => {
+                    const last = r === COMPARE.length - 1;
+                    return (
+                      <tr key={dim}>
+                        <td className="border-t border-border/60 px-4 py-4 font-semibold text-foreground">{dim}</td>
+                        <td className="border-t border-border/60 px-4 py-4 text-muted-foreground">{bi}</td>
+                        <td className="border-t border-border/60 px-4 py-4 text-muted-foreground">{ai}</td>
+                        <td
+                          className={`border-t border-primary/20 bg-primary/[0.06] px-4 py-4 font-medium text-foreground ${
+                            last ? "rounded-b-xl" : ""
+                          }`}
+                        >
+                          <span className="flex items-start gap-2">
+                            <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                            {di}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Reveal>
+
+          <p className="mt-5 max-w-2xl text-sm text-muted-foreground">
+            Keep your dashboards and your models — Windrose adds a governed decision layer on top, so the
+            insight actually becomes an auditable action.
+          </p>
+        </div>
+      </section>
+
       {/* how it works */}
       <section id="how" className="border-t border-border/60 bg-card/50">
         <div className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
@@ -648,8 +844,8 @@ export default function WelcomeContent() {
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             {STEPS.map(([title, body], i) => (
               <Reveal key={title} delay={i * 90}>
-                <div className="relative h-full rounded-2xl border border-border/70 bg-background p-7">
-                  <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                <div className="wr-glass wr-ring relative h-full rounded-2xl p-7">
+                  <div className="flex size-9 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary ring-1 ring-primary/30">
                     {i + 1}
                   </div>
                   <h3 className="mt-4 text-lg font-semibold">{title}</h3>
@@ -714,8 +910,8 @@ export default function WelcomeContent() {
 
                 {/* solutions that ship */}
                 <Reveal delay={90}>
-                  <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-sm">
-                    <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  <div className="wr-glass wr-ring rounded-2xl p-6 shadow-[0_24px_70px_-40px_hsl(var(--primary)/0.5)]">
+                    <div className="text-xs font-semibold uppercase tracking-widest text-primary">
                       Solutions that ship
                     </div>
                     <ul className="mt-4 space-y-4">
@@ -775,7 +971,7 @@ export default function WelcomeContent() {
       {/* faq */}
       <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-6 py-20">
         <h2 className="text-center text-3xl font-bold tracking-tight">Questions, answered</h2>
-        <div className="mt-8 divide-y divide-border/60 rounded-2xl border border-border/70 bg-card">
+        <div className="wr-glass wr-ring mt-8 divide-y divide-border/60 rounded-2xl">
           {FAQ.map(([q, a], i) => {
             const open = faq === i;
             return (
@@ -800,9 +996,10 @@ export default function WelcomeContent() {
 
       {/* closing CTA */}
       <section className="relative overflow-hidden border-t border-border/60">
-        <div aria-hidden className="wr-mesh pointer-events-none absolute inset-0 -z-10 opacity-70" />
+        <div aria-hidden className="wr-mesh pointer-events-none absolute inset-0 -z-10 opacity-80" />
+        <div aria-hidden className="wr-aurora pointer-events-none absolute left-1/2 top-0 -z-10 h-72 w-[48rem] -translate-x-1/2 rounded-full opacity-50" />
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-6 py-24 text-center">
-          <WindroseLogo className="size-12" />
+          <WindroseLogo className="size-12 drop-shadow-[0_0_28px_hsl(var(--primary)/0.6)]" />
           <h2 className="text-balance text-3xl font-bold tracking-tight md:text-4xl">
             Many directions. One confident, auditable bearing.
           </h2>
@@ -1016,12 +1213,49 @@ const WR_CSS = `
 .wr-marquee-wrap{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);}
 .wr-marquee{width:max-content;animation:wr-marquee 26s linear infinite;}
 @keyframes wr-marquee{to{transform:translateX(-50%)}}
+/* NVIDIA-style palette: near-black canvas + signature green (~#76B900), scoped to
+ * the marketing page. #main (id) overrides the .dark class it also carries. */
+#main{
+  --background:0 0% 4%;
+  --foreground:0 0% 96%;
+  --card:0 0% 8%;
+  --card-foreground:0 0% 96%;
+  --primary:82 95% 43%;
+  --primary-foreground:0 0% 6%;
+  --border:0 0% 16%;
+  --muted:0 0% 13%;
+  --muted-foreground:0 0% 62%;
+}
+/* accent hues: green (primary ~82) → emerald (146) → lime (95), on black */
 .wr-mesh{background:
-  radial-gradient(40rem 40rem at 15% -10%, hsl(var(--primary) / 0.14), transparent 60%),
-  radial-gradient(30rem 30rem at 95% 0%, hsl(var(--primary) / 0.10), transparent 55%);}
-.wr-grad{background-image:linear-gradient(90deg,hsl(var(--primary)),hsl(var(--primary) / 0.55));}
+  radial-gradient(55rem 42rem at 10% -12%, hsl(var(--primary) / 0.26), transparent 60%),
+  radial-gradient(46rem 40rem at 92% -8%, hsl(146 80% 42% / 0.20), transparent 58%),
+  radial-gradient(50rem 44rem at 58% 6%, hsl(95 90% 50% / 0.12), transparent 62%);}
+.wr-grid{background-image:
+  linear-gradient(hsl(var(--primary) / 0.06) 1px, transparent 1px),
+  linear-gradient(90deg, hsl(var(--primary) / 0.06) 1px, transparent 1px);
+  background-size:54px 54px;
+  -webkit-mask-image:radial-gradient(120% 90% at 50% -5%, #000, transparent 72%);
+  mask-image:radial-gradient(120% 90% at 50% -5%, #000, transparent 72%);}
+.wr-aurora{background:linear-gradient(115deg,
+  hsl(var(--primary) / 0.5), hsl(146 80% 42% / 0.45), hsl(95 90% 50% / 0.38), hsl(var(--primary) / 0.5));
+  background-size:300% 300%;filter:blur(64px);animation:wr-aurora 20s ease infinite;}
+@keyframes wr-aurora{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.wr-glass{background:linear-gradient(180deg, hsl(var(--card) / 0.75), hsl(var(--card) / 0.4));
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid hsl(var(--primary) / 0.08);}
+.wr-glow{box-shadow:0 0 0 1px hsl(var(--primary) / 0.16), 0 24px 70px -28px hsl(var(--primary) / 0.5);}
+.wr-glow-soft{box-shadow:0 20px 60px -30px hsl(146 80% 45% / 0.5);}
+/* gradient border ring drawn with a masked pseudo-element */
+.wr-ring{position:relative;}
+.wr-ring::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+  background:linear-gradient(140deg, hsl(var(--primary) / 0.7), transparent 42%, hsl(146 80% 46% / 0.6));
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;}
+.wr-grad{background-image:linear-gradient(100deg, hsl(var(--primary)), hsl(95 90% 55%), hsl(146 80% 50%));}
+.wr-glowtext{text-shadow:0 0 34px hsl(var(--primary) / 0.3);}
 @media (prefers-reduced-motion: reduce){
-  .wr-float,.wr-pulse,.wr-grow,.wr-marquee,.wr-swap{animation:none!important;}
+  .wr-float,.wr-pulse,.wr-grow,.wr-marquee,.wr-swap,.wr-aurora{animation:none!important;}
   .wr-reveal{opacity:1!important;transform:none!important;}
   .wr-grow{width:82%;}
 }
