@@ -67,12 +67,3 @@ deferred:
       customer credentials and pack-service connector materialization. The
       pack ships seed datasets in the exact landing shape; production
       connectors are configured through the product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (answer an ACDV via e-OSCAR, furnish Metro 2
-      corrections/deletions to the CRAs, apply or rescind a 605B block, mark
-      an account disputed, send the reinvestigation-results and frivolous-
-      determination notices) execute only behind pack-service's
-      materialization contract and customer credentials; every such write
-      stays proposal-mode with human approval — no autonomous change to what
-      is reported about a consumer, ever.

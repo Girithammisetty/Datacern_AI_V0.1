@@ -69,13 +69,3 @@ deferred:
       materialization. The pack ships seed datasets in the exact landing
       shape; production connectors are configured through the product
       Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (write the approved disposition back to the QMS/ERP
-      nonconformance record, issue a SCAR through the supplier portal, place
-      or lift a stock/ship hold in MES/ERP, generate a concession/waiver
-      request package to the customer or design authority, open an escape
-      notification) execute only behind pack-service's materialization
-      contract and customer credentials; every such write stays
-      proposal-mode with human approval — no autonomous material release,
-      hold, or supplier action, ever.

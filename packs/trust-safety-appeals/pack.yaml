@@ -67,12 +67,3 @@ deferred:
       pack-service connector materialization. The pack ships seed datasets
       in the exact landing shape; production connectors are configured
       through the product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (restore content or account on the enforcement system,
-      lift or modify an enforcement action, expunge strikes from a
-      compromise window, send the statement-of-reasons / appeal-outcome
-      notice, route corrected labels into classifier retraining sets)
-      execute only behind pack-service's materialization contract and
-      customer credentials; every such write stays proposal-mode with human
-      approval — no autonomous restoration, removal, or strike change, ever.

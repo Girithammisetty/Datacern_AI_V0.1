@@ -67,12 +67,3 @@ deferred:
       pack-service connector materialization. The pack ships seed datasets in
       the exact landing shape; production connectors are configured through
       the product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (issue claim payment or settlement in the TMS/AP system,
-      send acknowledgment/denial letters, file recovery claims against
-      upstream carriers, suspend a carrier in the carrier-management system,
-      assign driver coaching in the telematics platform) execute only behind
-      pack-service's materialization contract and customer credentials; every
-      such write stays proposal-mode with human approval — no autonomous
-      claim payment, carrier suspension, or coaching assignment, ever.

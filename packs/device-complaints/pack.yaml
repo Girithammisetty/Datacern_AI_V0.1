@@ -67,12 +67,3 @@ deferred:
       connector materialization. The pack ships seed datasets in the exact
       landing shape; production connectors are configured through the
       product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (submit eMDR via the FDA Electronic Submissions
-      Gateway, file EU MDR vigilance reports / EUDAMED entries, open CAPA
-      records in the eQMS, issue complaint-acknowledgment and
-      device-return-request letters) execute only behind pack-service's
-      materialization contract and customer credentials; every such write
-      stays proposal-mode with human approval — no autonomous regulatory
-      submission, ever.

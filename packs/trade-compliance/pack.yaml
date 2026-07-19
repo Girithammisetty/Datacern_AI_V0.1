@@ -66,13 +66,3 @@ deferred:
       pack-service connector materialization. The pack ships seed datasets
       in the exact landing shape; production connectors are configured
       through the product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (file post-summary corrections / corrected entries via
-      the broker, transmit hold/release instructions to the forwarder or
-      broker system, draft prior-disclosure and voluntary self-disclosure
-      packages for CBP/OFAC/BIS, submit license applications) execute only
-      behind pack-service's materialization contract and customer
-      credentials; every such write stays proposal-mode with human
-      approval — no autonomous holds, releases, filings, or disclosures,
-      ever.

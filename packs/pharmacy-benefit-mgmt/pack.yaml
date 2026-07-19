@@ -61,10 +61,3 @@ deferred:
       credentials/licenses and pack-service connector materialization. The
       pack ships seed datasets in the exact landing shape; production
       connectors are configured through the product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      RX-FR-080 write adapters (RxClaim PA decision post-back, CoverMyMeds
-      ePA response, Surescripts approval/denial, MTM CMR document upload,
-      adherence intervention log) execute only behind pack-service's
-      materialization contract and customer credentials; all platform-side
-      writes remain proposal-mode per BR-1/BR-10.

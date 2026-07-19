@@ -125,6 +125,11 @@ roles:
       - rbac.grant.share
       - ingestion.connection.read
       - ingestion.connection.list
+      # inc12: the use-case admin declares governed SoR write-back adapters
+      # (outgoing connections) a pack install materializes; writes stay
+      # proposal-mode + four-eyes at execution.
+      - ingestion.connection.create
+      - ingestion.connection.delete
       - ingestion.ingestion.read
       - ingestion.ingestion.list
       - dataset.dataset.read

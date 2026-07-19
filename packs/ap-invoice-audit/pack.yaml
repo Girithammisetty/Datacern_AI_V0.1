@@ -61,6 +61,8 @@ components:
     - { file: "models/archetypes.yaml", identity: "scoring_archetypes" }
   ontology:
     - { file: "ontology/entities.yaml", identity: "ap_ontology" }
+  write_adapters:
+    - { file: "writeback/adapters.yaml", identity: "ap_writeback" }
 deferred:
   - kind: agent_recipes
     reason: >-
@@ -79,12 +81,3 @@ deferred:
       and pack-service connector materialization. The pack ships seed
       datasets in the exact landing shape; production connectors are
       configured through the product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (place/release payment blocks in the ERP, park or
-      reject invoices back to the vendor portal, post negotiated credit
-      memos, update vendor-master banking details after verification)
-      execute only behind pack-service's materialization contract and
-      customer credentials; every such write stays proposal-mode with
-      human approval — no autonomous payment movement or vendor-master
-      change, ever.

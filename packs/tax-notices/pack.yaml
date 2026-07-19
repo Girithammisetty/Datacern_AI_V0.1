@@ -67,12 +67,3 @@ deferred:
       credentials and pack-service connector materialization. The pack ships
       seed datasets in the exact landing shape; production connectors are
       configured through the product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (file a notice response or protest through an agency
-      portal, submit a penalty-abatement request, remit an assessed payment,
-      file an amended return through the compliance engine, update the
-      exemption-certificate repository, register for a new jurisdiction)
-      execute only behind pack-service's materialization contract and
-      customer credentials; every such write stays proposal-mode with human
-      approval — no autonomous filing, payment, or registration, ever.

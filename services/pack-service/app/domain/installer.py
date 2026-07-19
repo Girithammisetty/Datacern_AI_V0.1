@@ -32,8 +32,8 @@ from app.domain import catalog
 # their own. (saved_queries/dashboards need the pack's datasets first, which is
 # a deferred kind; they're reported `deferred` in the plan, not faked.)
 INC1_KINDS = ("dispositions", "case_fields", "case_schemas", "display_labels", "guardrails",
-              "agent_configs", "eval_sets", "model_archetypes", "ontology", "roles",
-              "decision_models")
+              "agent_configs", "eval_sets", "model_archetypes", "ontology", "write_adapters",
+              "roles", "decision_models")
 
 # inc2 data chain, in dependency order. datasets ingest first; the semantic
 # model + verified queries are authored + SUBMITTED as governed drafts (NOT
@@ -51,7 +51,7 @@ INC2_PHASE2_KINDS = ("dashboards",)
 # for it yet — a real, surfaced gap in the materialization contract (PKG-FR-030).
 REVERSIBLE_KINDS = {"roles", "saved_queries", "dashboards", "case_fields", "case_schemas",
                     "display_labels", "guardrails", "agent_configs", "pipelines",
-                    "memories", "model_archetypes", "ontology"}
+                    "memories", "model_archetypes", "ontology", "write_adapters"}
 
 
 def _packctl_client():
@@ -192,6 +192,8 @@ def _component_names(manifest, comp) -> list[str]:
         return [sc["schema_key"] for sc in doc]
     if comp.kind == "ontology":
         return [e["entity_key"] for e in doc]
+    if comp.kind == "write_adapters":
+        return [wa["name"] for wa in doc]
     if comp.kind == "display_labels":
         return [lbl["key"] for lbl in doc]
     if comp.kind == "guardrails":
@@ -309,6 +311,12 @@ def run_install(client, manifest, origin_of: Callable[[str, str], str]) -> list[
                            comp.identity, ent["entity_key"], ent["name"],
                            ent.get("attributes"), ent.get("relationships"),
                            ent.get("description", "")))
+            elif kind == "write_adapters":
+                for wa in doc:
+                    do("write_adapters", comp, wa["name"],
+                       lambda wa=wa: client.ensure_write_adapter(
+                           comp.identity, wa["name"], wa["connector_type"],
+                           wa.get("config", {}), wa.get("direction", "outgoing")))
             elif kind == "roles":
                 for role in doc:
                     do("roles", comp, role["name"],
@@ -373,6 +381,10 @@ def run_uninstall(client, ledger: list[dict]) -> list[dict]:
             ok = client.delete_ontology_entity(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,
                              "detail": "ontology entity removed" if ok else "delete failed"})
+        elif kind == "write_adapters" and tid:
+            ok = client.delete_write_adapter(tid)
+            outcomes.append({"ledger_id": row["id"], "deleted": ok,
+                             "detail": "write adapter (outgoing connection) removed" if ok else "delete failed"})
         elif kind == "display_labels" and tid:
             ok = client.delete_label(tid)
             outcomes.append({"ledger_id": row["id"], "deleted": ok,

@@ -62,11 +62,3 @@ deferred:
       connector materialization. The pack ships seed datasets in the exact
       landing shape; production connectors are configured through the
       product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (E2B(R3) submission to FDA FAERS and EudraVigilance,
-      case status write-back to the safety database, follow-up letter
-      dispatch) execute only behind pack-service's materialization contract
-      and customer gateway credentials; every such write stays proposal-mode
-      with Safety Officer approval — no autonomous regulatory submission,
-      ever.

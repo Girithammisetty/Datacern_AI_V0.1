@@ -61,11 +61,3 @@ deferred:
       pack-service connector materialization. The pack ships seed datasets in
       the exact landing shape (837 claims, 835 remit lines, denials, A/R
       aging); production connectors are configured through Data > Connections.
-  - kind: write_adapters
-    reason: >-
-      RCM-FR-090 write adapters (Epic charge/claim/note, Athena/eCW/Cerner
-      claim update, Waystar/Availity submission, outbound EDI 837 corrected
-      claim + EDI 276 status inquiry) execute only behind pack-service's
-      materialization contract and customer credentials; per BRD 26 BR-1 the
-      coding-write adapter refuses without a signed grant and all
-      platform-side writes remain proposal-mode.

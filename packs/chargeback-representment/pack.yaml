@@ -67,12 +67,3 @@ deferred:
       customer credentials and pack-service connector materialization. The
       pack ships seed datasets in the exact landing shape; production
       connectors are configured through the product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (submit representment/second presentment via the
-      PSP/acquirer API, accept liability, issue the refund on the commerce
-      platform, respond to pre-dispute alerts, accept or continue
-      pre-arbitration, add a customer to the block-list) execute only behind
-      pack-service's materialization contract and customer credentials;
-      every such write stays proposal-mode with human approval — no
-      autonomous filing, refund, or block-list mutation, ever.

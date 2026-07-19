@@ -69,12 +69,3 @@ deferred:
       connector materialization. The pack ships seed datasets in the exact
       landing shape; production connectors are configured through the
       product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (post an eligibility decision to the benefits system of
-      record, issue or release payments, establish overpayment debts, send
-      adverse-action and appeal-rights notices, docket fair hearings)
-      execute only behind pack-service's materialization contract and
-      customer credentials; every such write stays proposal-mode with human
-      approval — no autonomous benefit denial, termination, or debt
-      establishment, ever.

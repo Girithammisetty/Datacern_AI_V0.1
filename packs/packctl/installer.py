@@ -32,7 +32,7 @@ from .manifest import Manifest, load_component_file
 
 INSTALL_ORDER = (
     "datasets", "semantic_models", "verified_queries", "saved_queries",
-    "dashboards", "dispositions", "case_fields", "case_schemas",
+    "dashboards", "dispositions", "case_fields", "case_schemas", "ontology",
     "decision_models", "cases", "roles", "agent_configs", "guardrails",
     "memories", "pipelines", "display_labels", "eval_sets", "model_archetypes",
 )
@@ -179,6 +179,17 @@ def install(manifest: Manifest, client: PlatformClient,
                     client.ensure_pipeline(comp.identity, p["algorithm"],
                                            p["name"], urn,
                                            p.get("mode", "train"))
+
+            elif kind == "ontology":
+                # Governed entity-TYPE registry (inc11): register each domain
+                # type with its attributes + typed relationships. Idempotent by
+                # entity_key; reversible via delete_ontology_entity.
+                for e in doc:
+                    client.ensure_ontology_entity(
+                        comp.identity, e["entity_key"], e["name"],
+                        attributes=e.get("attributes", []),
+                        relationships=e.get("relationships", []),
+                        description=e.get("description", ""))
 
             failed_now = any_failed(client)
             if failed_now and not keep_going:

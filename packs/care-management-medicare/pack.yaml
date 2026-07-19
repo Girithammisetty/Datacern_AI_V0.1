@@ -64,10 +64,3 @@ deferred:
       credentials and pack-service connector materialization. The pack ships
       seed datasets in the exact landing shape; production connectors are
       configured through the product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      CMM-FR-111/112 SoR write adapters (epic/athena/ecw care-activity,
-      care-plan, and billing-candidate writes with Idempotency-Key
-      case_id:proposal_id) execute only behind pack-service's materialization
-      contract and customer credentials; all platform-side writes remain
-      proposal-mode (BR-2 CMM_AUTONOMOUS_BILLING_FORBIDDEN).

@@ -62,10 +62,3 @@ deferred:
       credentials and pack-service connector materialization. The pack
       ships seed datasets in the exact landing shape those connectors
       produce; production connectors are configured via Data > Connections.
-  - kind: write_adapters
-    reason: >-
-      FWA-FR-080 write adapters (core-admin case flag, recovery record,
-      DOJ e-referral delivery, provider sanction flag, member payback
-      notification) execute only behind pack-service's materialization
-      contract and customer credentials; BR-1/BR-8 keep every platform-side
-      write proposal-mode, and AC-8 forbids autonomous recovery writes.

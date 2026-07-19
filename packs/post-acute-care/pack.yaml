@@ -57,9 +57,3 @@ deferred:
       connector materialization. The pack ships seed datasets in the exact
       landing shape; production connectors are configured through the product
       Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      PAC-FR-090 write adapters (OASIS/MDS assessment drafts to EHR, care-plan
-      update, referral response, hospice certification narrative) execute only
-      behind pack-service's materialization contract and customer credentials;
-      all platform-side writes remain proposal-mode per BR-1.

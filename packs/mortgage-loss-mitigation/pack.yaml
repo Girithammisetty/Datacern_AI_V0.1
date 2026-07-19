@@ -65,12 +65,3 @@ deferred:
       materialization. The pack ships seed datasets in the exact landing
       shape; production connectors are configured through the product
       Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (send acknowledgment/decision/denial letters, book
-      forbearance plans and trial modifications on the servicing system,
-      place and release foreclosure-process holds, submit workout cases to
-      GSE/FHA/VA investor portals) execute only behind pack-service's
-      materialization contract and customer credentials; every such write
-      stays proposal-mode with human approval — no autonomous foreclosure
-      action, letter issuance, or investor filing, ever.

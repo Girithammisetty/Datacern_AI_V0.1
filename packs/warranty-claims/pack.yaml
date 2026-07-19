@@ -66,12 +66,3 @@ deferred:
       and pack-service connector materialization. The pack ships seed
       datasets in the exact landing shape; production connectors are
       configured through the product Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (post claim payment/denial to the warranty system,
-      issue supplier debit memos, route a claim to a recall campaign, send
-      dealer decision notices, order parts return for failure analysis)
-      execute only behind pack-service's materialization contract and
-      customer credentials; every such write stays proposal-mode with human
-      approval — no autonomous claim payment, denial, or supplier debit,
-      ever.

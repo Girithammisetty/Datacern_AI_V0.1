@@ -541,6 +541,44 @@ class PlatformClient:
                       self.author_token())
         return r.status_code in (200, 204)
 
+    # ---- write adapters (ingestion-service governed OUTGOING connections) ----
+    def ensure_write_adapter(self, identity: str, name: str, connector_type: str,
+                             config: dict, direction: str = "outgoing") -> str | None:
+        """Declare a governed SoR write-back adapter as an OUTGOING ingestion
+        connection (the decision-writeback surface: db_upsert via a postgres
+        connector, http_post via an http_api connector). skip_test + EMPTY
+        secrets: the pack declares the adapter shape/target, the tenant supplies
+        real credentials via the product Data > Connections UI, and every write
+        executes proposal-mode with four-eyes — no autonomous SoR change. Nothing
+        is faked (the connection is real + governed, just unverified until the
+        tenant completes it). Idempotent by name; requires
+        ingestion.connection.create. Returns the connection id for reversal."""
+        tok = self.author_token()
+        base = f"{self.endpoints.ingestion}/api/v1/connections"
+        g = self._req("GET", f"{base}?filter[traffic_direction]=outgoing&limit=200", tok)
+        if g.status_code == 200:
+            for cn in g.json().get("data", []):
+                if cn.get("name") == name:
+                    self._record("write_adapters", identity, "noop", None, name)
+                    return cn.get("id")
+        r = self._req("POST", base, tok, headers=JSON,
+                      json={"workspace_id": self.workspace_id, "name": name,
+                            "connector_type": connector_type, "config": config,
+                            "secrets": {}, "traffic_direction": direction, "skip_test": True})
+        if r.status_code in (200, 201):
+            cid = (r.json().get("data") or {}).get("id")
+            self._record("write_adapters", identity, "create", None, name)
+            return cid
+        self._record("write_adapters", identity, "failed", None,
+                     f"{name}: {r.status_code} {r.text[:150]}")
+        return None
+
+    def delete_write_adapter(self, connection_id: str) -> bool:
+        r = self._req("DELETE",
+                      f"{self.endpoints.ingestion}/api/v1/connections/{connection_id}",
+                      self.author_token())
+        return r.status_code in (200, 204)
+
     # ---- display labels (identity-service per-tenant label registry) --------
     def ensure_label(self, identity: str, key: str, value: str) -> str | None:
         """Set one per-tenant UI label override (BRD 23 inc3), e.g.

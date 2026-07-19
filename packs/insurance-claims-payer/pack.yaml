@@ -56,8 +56,3 @@ deferred:
       connector materialization. The pack ships seed datasets in the exact
       landing shape; production connectors are configured through the product
       Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      INS-FR-061 SoR write adapters (Facets PA decision, Guidewire notes, EDI
-      responses) execute only behind pack-service's materialization contract
-      and customer credentials; all platform-side writes remain proposal-mode.

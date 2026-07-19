@@ -67,12 +67,3 @@ deferred:
       materialization. The pack ships seed datasets in the exact landing
       shape; production connectors are configured through the product
       Data > Connections UI.
-  - kind: write_adapters
-    reason: >-
-      Write adapters (execute a change order in the contract/ERP system,
-      post a backcharge, release or hold a progress payment, issue a formal
-      claim determination letter, transmit a surety notice) execute only
-      behind pack-service's materialization contract and customer
-      credentials; every such write stays proposal-mode with human approval
-      — no autonomous change-order execution, payment movement, or default
-      declaration, ever.
