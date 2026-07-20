@@ -40,6 +40,10 @@ FILE_FORMATS: tuple[str, ...] = (
     # "hl7v2" is delimiter-separated like x12; delimiters come from the MSH header
     # and rows are dispatched by message type (domain/hl7v2.py).
     "hl7v2",
+    # "iso20022"/"acord" are XML: they REUSE this module's DTD hardening + spool
+    # and add only semantic field mapping (domain/xml_standards.py).
+    "iso20022",
+    "acord",
 )
 MAX_SAMPLES = 20
 SAMPLE_VALUE_TRUNC = 256
@@ -475,6 +479,14 @@ def decode_stream(
         from app.domain.hl7v2 import decode_hl7v2
 
         return decode_hl7v2(chunks, opts.batch_size, stats)
+    if opts.file_format == "iso20022":
+        from app.domain.xml_standards import decode_iso20022
+
+        return decode_iso20022(chunks, opts.batch_size, stats)
+    if opts.file_format == "acord":
+        from app.domain.xml_standards import decode_acord
+
+        return decode_acord(chunks, opts.batch_size, stats)
     raise PermanentJobError(
         ErrorCategory.DECODE_ERROR, f"unsupported file_format {opts.file_format!r}"
     )

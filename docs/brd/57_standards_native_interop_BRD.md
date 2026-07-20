@@ -332,10 +332,27 @@ X12. Dispatched by message type: ADT emits one patient/event row per message;
 ORU emits one row per OBX observation. Tolerates `\r`, `\n` and `\r\n` segment
 terminators; a stream not starting with MSH is refused (Rule 2). 9 tests.
 
-**inc-3e/2c (next).** ISO 20022 (STD-FR-030), ACORD (STD-FR-031). Then the
-transport/governance remainder: bind additional transports (SFTP file drop is the
-common clearinghouse pattern; today only the `http_api` connector carries
-outbound X12), acknowledgements (STD-FR-014),
+**inc-3e — BUILT.** ISO 20022 (STD-FR-030) + ACORD (STD-FR-031) decode.
+`xml_standards.py` + `"iso20022"`/`"acord"` in the registry. These are XML, so
+they REUSE decode.py's DTD/billion-laughs guard + bounded spool + namespace
+stripping — the module adds only semantic mapping, never re-implements XML
+parsing and never relaxes the guard (a `test_billion_laughs_dtd_rejected`
+confirms the guard is inherited). ISO 20022 camt.05x → one row per `Ntry`
+(amount, Cr/Dr, booking/value date, remittance); ACORD → one row per policy
+element (number, insured, LOB, dates, premium). A non-conforming root is refused
+by name (Rule 2). 7 tests. **This completes every standards family the BRD named:
+X12 (837/835/271/277 in + 837 out), FHIR, HL7v2, ISO 20022, ACORD.**
+
+Bug found + fixed in this pass (worth recording): the XML find helper used
+`_find(...) or parent`, but an ElementTree element with NO children is FALSY —
+so the fallback silently mis-scoped AND tripped a DeprecationWarning. Replaced
+with explicit `is None` checks (`_sub_text`); the suite now passes under
+`-W error::DeprecationWarning`.
+
+**Remaining (transport + acks, deferred).** Bind additional transports (SFTP file
+drop is the common clearinghouse pattern; today only the `http_api` connector
+carries outbound X12) and the FHIR REST connector (paginated `_since` +
+SMART-on-FHIR auth), acknowledgements (STD-FR-014),
 837→277CA→835 correlation (STD-FR-015), trading-partner registry (STD-FR-040)
 and duplicate ISA rejection (STD-FR-043). **inc-3+**: 835/834/270/271/276/277
 decode, then FHIR/HL7v2, then ISO 20022/ACORD.
