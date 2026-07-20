@@ -50,10 +50,11 @@ ISA_LEN = 106
 #: Transaction sets this build decodes into rows. Each has its OWN row schema
 #: (a remittance is not a claim), so the envelope machinery is shared and the
 #: row building is dispatched to a per-transaction-set handler.
-SUPPORTED_TRANSACTION_SETS = ("837", "835")
+SUPPORTED_TRANSACTION_SETS = ("837", "835", "271", "277")
 #: Recognised but not yet decoded — refused by name so the operator gets a real
-#: reason rather than an empty dataset (BR-2/AC-8).
-KNOWN_TRANSACTION_SETS = ("834", "270", "271", "276", "277", "997", "999")
+#: reason rather than an empty dataset (BR-2/AC-8). 270/276 are the outbound
+#: INQUIRY halves (we send them); the platform decodes the RESPONSES (271/277).
+KNOWN_TRANSACTION_SETS = ("834", "270", "276", "997", "999")
 
 # --- hardening caps ---------------------------------------------------------
 # X12 is attacker-reachable (a partner drops a file on our SFTP), so the parser
@@ -106,6 +107,37 @@ REMIT_COLUMNS: list[str] = [
     "patient_responsibility",
     "adjustments",
     "service_line_count",
+    "loop_path",
+    "raw_segments",
+]
+
+#: 271 — one row per eligibility/benefit (EB) segment for a subscriber.
+ELIGIBILITY_COLUMNS: list[str] = [
+    *_ENVELOPE_COLUMNS,
+    "information_source",     # 2100A payer/source name
+    "subscriber_id",         # NM1 IL member id
+    "subscriber_name",
+    "benefit_status",        # EB01 eligibility/benefit code (1=active, 6=inactive, …)
+    "coverage_level",        # EB02 (IND/FAM/…)
+    "service_type",          # EB03 service type code
+    "plan_description",      # EB05
+    "benefit_amount",        # EB07 monetary amount
+    "benefit_percent",       # EB08 percentage
+    "loop_path",
+    "raw_segments",
+]
+
+#: 277 — one row per claim status response (STC) for a claim.
+CLAIM_STATUS_COLUMNS: list[str] = [
+    *_ENVELOPE_COLUMNS,
+    "information_source",    # 2100A payer name
+    "provider_id",           # 2100C provider NM1
+    "claim_id",              # TRN02 / REF claim identifier (echoes 837 CLM01)
+    "status_category",       # STC01 first component: category code (A0/A1/…)
+    "status_code",           # STC01 second component: status code
+    "status_effective_date",  # STC02
+    "total_charge",          # STC04
+    "paid_amount",           # STC05
     "loop_path",
     "raw_segments",
 ]
@@ -173,6 +205,32 @@ class _Remit:
     patient_resp: str = ""  # CLP05 patient responsibility
     service_lines: int = 0
     adjustments: list[str] = field(default_factory=list)
+    raw: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class _Benefit:
+    """One EB (eligibility/benefit) row in flight (271)."""
+
+    status: str = ""
+    coverage_level: str = ""
+    service_type: str = ""
+    plan: str = ""
+    amount: str = ""
+    percent: str = ""
+    raw: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class _ClaimStatus:
+    """One STC (claim status) row in flight (277)."""
+
+    claim_id: str = ""
+    category: str = ""
+    code: str = ""
+    effective_date: str = ""
+    total_charge: str = ""
+    paid: str = ""
     raw: list[str] = field(default_factory=list)
 
 
@@ -360,7 +418,130 @@ class _RemitHandler:
         self.clp = None
 
 
-_HANDLERS = {"837": _ClaimHandler, "835": _RemitHandler}
+class _EligibilityHandler:
+    """271 — subscriber eligibility/benefit response. One row per EB segment.
+
+    Subscriber context (NM1 IL id + name) and the information source (2100A payer)
+    are captured once and repeated on each benefit row, so a benefit line is
+    self-describing. A 271 with no EB (e.g. AAA reject) yields zero rows — an
+    honest empty result, not a failure.
+    """
+
+    columns = ELIGIBILITY_COLUMNS
+
+    def __init__(self, env: _Envelope) -> None:
+        self.env = env
+        self.source = ""
+        self.subscriber_id = ""
+        self.subscriber_name = ""
+        self._ctx = ""
+        self.eb: _Benefit | None = None
+
+    def feed(self, tag: str, elements: list[str], raw: str, d: Delimiters, out: list) -> None:
+        if self.eb is not None and len(self.eb.raw) < MAX_RAW_SEGMENTS_PER_CLAIM:
+            self.eb.raw.append(raw)
+        if tag == "NM1":
+            q = _el(elements, 1).strip()
+            self._ctx = q
+            if q in ("PR", "P5", "2B", "36"):     # information source (payer/plan)
+                self.source = _el(elements, 3).strip()
+            elif q == "IL":                        # subscriber
+                last = _el(elements, 3).strip()
+                first = _el(elements, 4).strip()
+                self.subscriber_name = f"{last} {first}".strip()
+                self.subscriber_id = _el(elements, 9).strip()
+        elif tag == "EB":
+            self.flush(out)
+            self.eb = _Benefit(
+                status=_el(elements, 1).strip(),
+                coverage_level=_el(elements, 2).strip(),
+                service_type=_el(elements, 3).strip(),
+                plan=_el(elements, 5).strip(),
+                amount=_el(elements, 7).strip(),
+                percent=_el(elements, 8).strip(),
+                raw=[raw],
+            )
+
+    def flush(self, out: list) -> None:
+        b = self.eb
+        if b is None:
+            return
+        out.append([
+            *_env_prefix(self.env),
+            self.source, self.subscriber_id, self.subscriber_name,
+            b.status, b.coverage_level, b.service_type, b.plan, b.amount, b.percent,
+            "ISA/GS/ST(271)/2110",
+            "\n".join(b.raw[:MAX_RAW_SEGMENTS_PER_CLAIM]),
+        ])
+        self.eb = None
+
+
+class _ClaimStatusHandler:
+    """277 — claim status response. One row per STC segment.
+
+    TRN02 (or REF) carries the claim identifier that echoes the 837's CLM01, so a
+    277 row correlates back to the claim the same way an 835 does.
+    """
+
+    columns = CLAIM_STATUS_COLUMNS
+
+    def __init__(self, env: _Envelope) -> None:
+        self.env = env
+        self.source = ""
+        self.provider = ""
+        self.claim_id = ""
+        self._ctx = ""
+        self.stc: _ClaimStatus | None = None
+
+    def feed(self, tag: str, elements: list[str], raw: str, d: Delimiters, out: list) -> None:
+        if self.stc is not None and len(self.stc.raw) < MAX_RAW_SEGMENTS_PER_CLAIM:
+            self.stc.raw.append(raw)
+        if tag == "NM1":
+            q = _el(elements, 1).strip()
+            self._ctx = q
+            if q in ("PR", "AY", "41"):            # payer / information source
+                self.source = _el(elements, 3).strip()
+            elif q in ("1P", "85", "82"):          # provider
+                self.provider = _el(elements, 9).strip()
+        elif tag == "TRN":
+            self.claim_id = _el(elements, 2).strip()
+        elif tag == "REF" and _el(elements, 1).strip() in ("1K", "D9", "BLT"):
+            # payer/clearinghouse claim control number if no TRN
+            if not self.claim_id:
+                self.claim_id = _el(elements, 2).strip()
+        elif tag == "STC":
+            self.flush(out)
+            first = _el(elements, 1).split(d.component)
+            self.stc = _ClaimStatus(
+                claim_id=self.claim_id,
+                category=first[0].strip() if first else "",
+                code=first[1].strip() if len(first) > 1 else "",
+                effective_date=_el(elements, 2).strip(),
+                total_charge=_el(elements, 4).strip(),
+                paid=_el(elements, 5).strip(),
+                raw=[raw],
+            )
+
+    def flush(self, out: list) -> None:
+        s = self.stc
+        if s is None:
+            return
+        out.append([
+            *_env_prefix(self.env),
+            self.source, self.provider, s.claim_id,
+            s.category, s.code, s.effective_date, s.total_charge, s.paid,
+            "ISA/GS/ST(277)/2200",
+            "\n".join(s.raw[:MAX_RAW_SEGMENTS_PER_CLAIM]),
+        ])
+        self.stc = None
+
+
+_HANDLERS = {
+    "837": _ClaimHandler,
+    "835": _RemitHandler,
+    "271": _EligibilityHandler,
+    "277": _ClaimStatusHandler,
+}
 
 
 async def decode_x12(

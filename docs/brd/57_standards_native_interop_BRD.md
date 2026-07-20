@@ -303,7 +303,16 @@ Fixture note worth recording: my first 835 fixture put the payment date at BPR15
 but BPR16 is the effective-entry date per 005010 — the handler was right, the
 fixture was one element short. Fixed the fixture, not the parser.
 
-**inc-3b/2c (next).** Bind additional transports (SFTP file drop is the common
+**inc-3b — BUILT.** 271 eligibility-response + 277 claim-status-response decode
+(STD-FR-011). Each is a new handler on the shared envelope (`_EligibilityHandler`
+2110 EB rows with subscriber + payer context; `_ClaimStatusHandler` 2200 STC rows
+keyed on TRN02/REF claim id, which correlates to the 837 like 835 does). The
+**inquiry** halves (270/276) are deliberately refused as recognised-but-not-
+decoded — the platform SENDS those and ingests the responses. 8 new tests. This
+completes the **full healthcare X12 inbound set: 837, 835, 271, 277** — every
+read connector BRD 26/27 named except the 275 attachment.
+
+**inc-3c/2c (next).** Bind additional transports (SFTP file drop is the common
 clearinghouse pattern; today only the `http_api` connector carries X12), then
 acknowledgements (STD-FR-014),
 837→277CA→835 correlation (STD-FR-015), trading-partner registry (STD-FR-040)
