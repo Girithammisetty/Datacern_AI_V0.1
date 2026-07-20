@@ -312,9 +312,23 @@ decoded — the platform SENDS those and ingests the responses. 8 new tests. Thi
 completes the **full healthcare X12 inbound set: 837, 835, 271, 277** — every
 read connector BRD 26/27 named except the 275 attachment.
 
-**inc-3c/2c (next).** Bind additional transports (SFTP file drop is the common
-clearinghouse pattern; today only the `http_api` connector carries X12), then
-acknowledgements (STD-FR-014),
+**inc-3c — BUILT.** HL7 FHIR R4 decode (STD-FR-020's decode half). `fhir.py` +
+`"fhir"` in the registry. Accepts both a **Bundle** (JSON object with `entry[]`)
+and **NDJSON** (FHIR Bulk `$export`), auto-detected. Dispatches by `resourceType`
+to a mapper for Patient/Coverage/Claim/ClaimResponse/ExplanationOfBenefit/
+Encounter → a generic governed row (resource_type/id/patient_ref/status/
+identifier/code/amount/period) with the full raw resource kept for lineage.
+Unmapped types are SKIPPED (a Bundle legitimately mixes types — an
+OperationOutcome must not become a bogus row nor fail the decode); a resource
+with no `resourceType`, or broken JSON, is refused (Rule 2). 12 tests. NOTE: the
+REST transport half — paginated `_since` incremental sync + SMART-on-FHIR auth
+via SecretsStore (STD-FR-020/021) — is a connector and a separate increment; this
+is the decode a file drop or that connector both feed.
+
+**inc-3d/2c (next).** HL7v2 decode (STD-FR-022), ISO 20022 (STD-FR-030), ACORD
+(STD-FR-031). Then the transport/governance remainder: bind additional
+transports (SFTP file drop is the common clearinghouse pattern; today only the
+`http_api` connector carries outbound X12), acknowledgements (STD-FR-014),
 837→277CA→835 correlation (STD-FR-015), trading-partner registry (STD-FR-040)
 and duplicate ISA rejection (STD-FR-043). **inc-3+**: 835/834/270/271/276/277
 decode, then FHIR/HL7v2, then ISO 20022/ACORD.

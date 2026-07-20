@@ -33,6 +33,10 @@ FILE_FORMATS: tuple[str, ...] = (
     # is a self-describing envelope: its delimiters come from the ISA header and
     # its shape from the transaction set, so the grammar lives in domain/x12.py.
     "x12",
+    # "fhir" is JSON, but a FHIR Bundle/NDJSON is dispatched by resourceType into
+    # governed rows rather than flattened generically (domain/fhir.py). It
+    # auto-detects Bundle vs Bulk-Data NDJSON.
+    "fhir",
 )
 MAX_SAMPLES = 20
 SAMPLE_VALUE_TRUNC = 256
@@ -460,6 +464,10 @@ def decode_stream(
         from app.domain.x12 import decode_x12
 
         return decode_x12(chunks, opts.batch_size, stats)
+    if opts.file_format == "fhir":
+        from app.domain.fhir import decode_fhir
+
+        return decode_fhir(chunks, opts.batch_size, stats)
     raise PermanentJobError(
         ErrorCategory.DECODE_ERROR, f"unsupported file_format {opts.file_format!r}"
     )
