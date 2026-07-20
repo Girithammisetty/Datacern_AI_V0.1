@@ -200,6 +200,23 @@ def _fail(msg: str) -> PermanentJobError:
     return PermanentJobError(ErrorCategory.DECODE_ERROR, msg)
 
 
+def parse_isa_identity(prefix: bytes) -> tuple[str, str, str]:
+    """Peek an X12 stream's ISA header and return (sender_id, receiver_id,
+    isa_control_number) WITHOUT a full decode.
+
+    Used by the duplicate-ISA guard (STD-FR-043), which must run before any
+    row is staged — reusing `decode_x12` itself for that would mean decoding
+    the whole interchange twice. Raises the same `PermanentJobError` a full
+    decode would for a short/malformed prefix; callers that can't use this
+    result should let the real decode surface its own error rather than
+    duplicate that validation here.
+    """
+    text = prefix.decode("latin-1")
+    delims = Delimiters.from_isa(text)
+    elements = text[: ISA_LEN - 1].split(delims.element)
+    return _el(elements, 6).strip(), _el(elements, 8).strip(), _el(elements, 13).strip()
+
+
 @dataclass(slots=True)
 class Delimiters:
     element: str

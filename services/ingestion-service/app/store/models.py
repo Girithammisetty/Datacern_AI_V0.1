@@ -108,6 +108,55 @@ class Writeback(TimestampMixin, Base):
     )
 
 
+class X12ControlSequence(TimestampMixin, Base):
+    """Per-trading-partner monotonic outbound control-number counter (BRD 57
+    STD-FR-013, BR-6). `x12_out.render_837` is deliberately a pure function and
+    does not decide control numbers itself; this table is where Core owns that
+    decision — durable across restarts, one row per (tenant, sender, receiver)."""
+
+    __tablename__ = "x12_control_sequences"
+
+    id: Mapped[str] = mapped_column(UUIDType, primary_key=True, default=uuid7)
+    tenant_id: Mapped[str] = mapped_column(UUIDType, nullable=False)
+    sender_id: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    receiver_id: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    isa_seq: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, default=0)
+    gs_seq: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, default=0)
+    st_seq: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, default=0)
+
+    __table_args__ = (
+        sa.Index(
+            "uq_x12_control_seq_partner",
+            "tenant_id", "sender_id", "receiver_id",
+            unique=True,
+        ),
+    )
+
+
+class X12SeenInterchange(TimestampMixin, Base):
+    """A previously-processed inbound X12 ISA control number, per trading
+    partner (BRD 57 STD-FR-043, AC-5). The unique constraint IS the guard — a
+    replayed ISA control number fails to insert, which is how a duplicate is
+    detected under concurrent ingestion of the same file."""
+
+    __tablename__ = "x12_seen_interchanges"
+
+    id: Mapped[str] = mapped_column(UUIDType, primary_key=True, default=uuid7)
+    tenant_id: Mapped[str] = mapped_column(UUIDType, nullable=False)
+    sender_id: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    receiver_id: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    isa_control_number: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    ingestion_id: Mapped[str | None] = mapped_column(UUIDType)
+
+    __table_args__ = (
+        sa.Index(
+            "uq_x12_seen_interchange",
+            "tenant_id", "sender_id", "receiver_id", "isa_control_number",
+            unique=True,
+        ),
+    )
+
+
 class Ingestion(TimestampMixin, Base):
     __tablename__ = "ingestions"
 

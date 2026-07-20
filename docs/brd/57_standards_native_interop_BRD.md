@@ -385,13 +385,59 @@ landed.
   superseded) stays refused-by-name and is now the "recognised but not decoded"
   example test. 10 tests.
 
-**Remaining (transport + registry, deferred).** Bind additional transports
-(SFTP file drop is the common clearinghouse pattern; today only the `http_api`
-connector carries outbound X12) and the FHIR REST connector (paginated `_since`
-+ SMART-on-FHIR auth); 277CA (claim acknowledgment — a distinct BHT/2200D
-grammar from the 277 claim-status response already built, not yet done);
-trading-partner registry (STD-FR-040); duplicate ISA rejection (STD-FR-043,
-needs a persistence layer keyed by trading partner — this decoder is currently
-a pure stream function with no store dependency, so this is a bigger seam than
-the others and is left deliberately out until a concrete trading-partner
-registry exists to key it off of).
+**inc-5 — BUILT.** Control-number persistence (STD-FR-013, BR-6, AC-6) and
+duplicate-ISA rejection (STD-FR-043, AC-5) — the two Cross-cutting FRs that
+needed real state, which is why they'd been deferred through inc-1..4 (every
+other module in this BRD is deliberately a pure function). Migration `0008`
+adds two tenant-isolated (RLS) tables, keyed on (tenant, sender_id,
+receiver_id) rather than a formal trading-partner registry — STD-FR-040
+doesn't exist yet, and sender/receiver ARE the partner identity carried in
+every ISA, so this is the narrowest correct key today, not a placeholder.
+- **`x12_control_sequences`** (BR-6/AC-6). `app/domain/x12_control.py::
+  reserve_control_numbers` atomically advances a per-partner ISA/GS/ST
+  counter, row-locked (`with_for_update`) with a nested-transaction retry for
+  the first-ever reservation race. Wired into `writebacks.py::enqueue()`:
+  Core now generates these numbers itself and **overrides any caller-supplied
+  isa_control/gs_control/st_control** — before this increment those three
+  fields were 100% caller-supplied with no persistence anywhere (confirmed by
+  grep before starting), meaning nothing stopped two proposals reusing the
+  same ISA number. `render_837`/`render_for_writeback` stay pure functions
+  unchanged; the sequence lives one layer up, in the caller, matching how
+  `x12_out.py` was already documented ("control numbers supplied by the
+  caller, which owns the per-partner monotonic sequence").
+- **`x12_seen_interchanges`** (STD-FR-043/AC-5). `check_and_record_isa`
+  speculatively inserts inside a SAVEPOINT; the UNIQUE constraint on (tenant,
+  sender, receiver, isa_control_number) is the actual guard, so it's correct
+  under concurrent ingestion of the same file, not just a check-then-act
+  race. A new `x12.py::parse_isa_identity` peeks just the ISA header (no full
+  decode) so the guard can run BEFORE any row is staged (BR-2: zero rows on a
+  replay); wired into `runner.py::_attempt_file` via a `_peek_prefix` helper
+  that reads the prefix then replays it, so `decode_stream` sees the file
+  unchanged.
+- **Scope, stated honestly:** wired into the file-upload path
+  (`_attempt_file`), verified through the REAL upload API (create → init →
+  PUT parts → complete → inline runner), not the domain function in
+  isolation — two ingestions of byte-identical X12 content, second one fails
+  with `rows_appended: 0` and the ISA number in the error. The connector-poll
+  path (`ObjectSourceIngestor.ingest`, used by SFTP/S3/GCS/Azure pollers)
+  does NOT yet have this guard wired in — it's a separate call site that
+  doesn't currently carry `tenant_id` through to where `decode_stream` is
+  invoked, a larger wire-up left for when that path is next touched.
+- 16 new tests (513 total, up from 497): counter monotonicity + per-partner/
+  per-tenant isolation + durability-across-a-fresh-session (proving the
+  counter lives in the database, not memory), duplicate-ISA accept/reject/
+  cross-partner/cross-tenant, and the writeback-API-level override test.
+
+**Remaining (transport + narrower registry gaps, deferred).** Bind additional
+transports (SFTP file drop is the common clearinghouse pattern; today only
+the `http_api` connector carries outbound X12, and the object-store/SFTP
+POLL path's decode call site doesn't yet carry the duplicate-ISA guard — see
+inc-5 above) and the FHIR REST connector (paginated `_since` + SMART-on-FHIR
+auth); 277CA (claim acknowledgment — a distinct BHT/2200D grammar from the
+277 claim-status response already built, not yet done); a formal
+trading-partner registry (STD-FR-040 — inc-5's (tenant, sender, receiver) key
+is a correct interim substitute, not this); ISO 20022 `pacs.002/008` read and
+`pain.001` write (only `camt.05x` read exists); outbound 276 (only 837
+outbound exists); 837→277CA→835 materialized onto the owning case row (the
+three currently correlate only via a shared `claim_id` column, joinable in a
+query but not materialized by any pipeline).

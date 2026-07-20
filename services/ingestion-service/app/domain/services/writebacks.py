@@ -29,7 +29,7 @@ import sqlalchemy as sa
 from app.api.auth import Principal
 from app.api.schemas import WritebackCreate
 from app.container import Container
-from app.domain import x12_out
+from app.domain import x12_control, x12_out
 from app.domain.drivers.http import _guard_host, _guard_url
 from app.domain.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.domain.secrets import connection_secret_path
@@ -156,8 +156,27 @@ class WritebackService:
             # claim that cannot be expressed as conformant X12 fails HERE and so
             # never becomes a pending proposal someone could approve.
             payload = body.payload
-            if x12_out.is_x12_writeback(body.target):
-                payload = x12_out.render_for_writeback(payload, body.target)
+            target = body.target
+            if x12_out.is_x12_writeback(target):
+                # BR-6/STD-FR-013: Core owns the monotonic per-partner control-
+                # number sequence, not the caller. Any isa_control/gs_control/
+                # st_control the caller supplied is IGNORED and replaced —
+                # trusting caller-supplied values would let a bug or a replay
+                # reuse a number a trading partner will reject. sender_id +
+                # receiver_id are the partner identity (STD-FR-040's registry
+                # doesn't exist yet, so this is the narrowest correct key).
+                sender_id = str(target.get("sender_id") or "").strip()
+                receiver_id = str(target.get("receiver_id") or "").strip()
+                if not sender_id or not receiver_id:
+                    raise ValidationFailedError(
+                        "X12 writeback: target is missing control field(s) "
+                        "['sender_id', 'receiver_id']"
+                    )
+                isa, gs, st = await x12_control.reserve_control_numbers(
+                    session, principal.tenant_id, sender_id, receiver_id
+                )
+                target = {**target, "isa_control": isa, "gs_control": gs, "st_control": st}
+                payload = x12_out.render_for_writeback(payload, target)
 
             wb = Writeback(
                 tenant_id=principal.tenant_id,
@@ -166,7 +185,7 @@ class WritebackService:
                 decision_kind=body.decision_kind,
                 decision_ref=body.decision_ref,
                 idempotency_key=body.idempotency_key,
-                target=body.target,
+                target=target,
                 payload=payload,
                 status="pending_approval",
                 approval_mode="four_eyes",

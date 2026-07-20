@@ -50,6 +50,33 @@ from app.events.outbox import emit_event
 from app.store.models import Connection, Ingestion
 
 
+async def _peek_prefix(
+    chunks: AsyncIterator[bytes], n: int
+) -> tuple[bytes, AsyncIterator[bytes]]:
+    """Read at least `n` bytes from `chunks` without losing any of them.
+
+    Returns the prefix (>= n bytes unless the stream is shorter) and a NEW
+    async iterator that replays every consumed chunk before continuing the
+    original stream, so a caller can peek without disturbing what a normal
+    consumer (e.g. `decode_stream`) sees.
+    """
+    buf = b""
+    consumed: list[bytes] = []
+    async for chunk in chunks:
+        consumed.append(chunk)
+        buf += chunk
+        if len(buf) >= n:
+            break
+
+    async def _rest() -> AsyncIterator[bytes]:
+        for c in consumed:
+            yield c
+        async for c in chunks:
+            yield c
+
+    return buf[:n], _rest()
+
+
 class _ProgressReporter:
     """Throttled ingestion.progress emission (ING-FR-026, AC-6)."""
 
@@ -266,6 +293,34 @@ class IngestionRunner:
             async for chunk in self.c.object_store.open_stream(key):
                 yield chunk
 
+    async def _guard_x12_duplicate(
+        self, tenant_id: str, ingestion_id: str, byte_iter: AsyncIterator[bytes]
+    ) -> AsyncIterator[bytes]:
+        """STD-FR-043/AC-5: reject a replayed inbound ISA control number before
+        any row is staged. Peeks the ISA header (without a full decode), checks
+        + records it against `x12_seen_interchanges`, then replays the peeked
+        bytes back onto the stream so `decode_stream` sees the file unchanged.
+
+        If the prefix isn't even a parseable ISA, this is a no-op: the real
+        decoder will raise its own, better-worded envelope error on the same
+        bytes moments later rather than this duplicating that validation.
+        """
+        from app.domain import x12_control
+        from app.domain.x12 import ISA_LEN, parse_isa_identity
+
+        prefix, rest = await _peek_prefix(byte_iter, ISA_LEN)
+        try:
+            sender_id, receiver_id, isa_control = parse_isa_identity(prefix)
+        except PermanentJobError:
+            return rest
+        async with self.c.db.tenant_session(tenant_id) as session:
+            await x12_control.check_and_record_isa(
+                session, tenant_id, sender_id, receiver_id, isa_control,
+                ingestion_id=ingestion_id,
+            )
+            await session.commit()
+        return rest
+
     async def _attempt_file(self, tenant_id: str, ingestion_id: str) -> None:
         async with self.c.db.tenant_session(tenant_id) as session:
             ing = (
@@ -295,8 +350,11 @@ class IngestionRunner:
         )
         progress = _ProgressReporter(self, tenant_id, ingestion_id, phase="decoding")
 
+        byte_iter = self._concat_parts([p.storage_key for p in parts])
+        if file_format == "x12":
+            byte_iter = await self._guard_x12_duplicate(tenant_id, ingestion_id, byte_iter)
+
         async def batches() -> AsyncIterator[RowBatch]:
-            byte_iter = self._concat_parts([p.storage_key for p in parts])
             async for batch in decode_stream(byte_iter, opts, stats):
                 await progress.bump(len(batch.rows))
                 yield batch
