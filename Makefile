@@ -1,6 +1,7 @@
 SERVICES := $(wildcard services/*)
 
-.PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up down
+.PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up up-clean down \
+        demo-list demo-load demo-clean demo-clean-all
 
 # Capstone: provision the WHOLE platform locally and open it in a browser for
 # hands-on end-user testing. Preflight -> infra -> migrate+boot all 22 services
@@ -13,9 +14,36 @@ SERVICES := $(wildcard services/*)
 up:
 	deploy/local/up.sh $(ARGS)
 
+# Boot the platform with NO vertical demo data (tenant + personas only), so you
+# start from a clean slate and load exactly the pack you want with `demo-load`.
+up-clean:
+	deploy/local/up.sh --platform-only $(ARGS)
+
 # Stop every native service. `make down ARGS=--infra` also stops Docker infra.
 down:
 	deploy/local/down.sh $(ARGS)
+
+# ---- Demo pack control -----------------------------------------------------
+# Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway
+# `wr-demo-<pack>` tenant for a demo, then tear it down cleanly afterwards. The
+# main `demo.windrose` tenant is never touched. Needs the stack up (`make up`).
+#   make demo-list                       # packs you can load + demos loaded now
+#   make demo-load PACK=card-disputes    # spin up wr-demo-card-disputes
+#   make demo-clean PACK=card-disputes   # tear it down
+#   make demo-clean-all                  # tear down every wr-demo-* tenant
+demo-list:
+	@packs/demo.sh list
+
+demo-load:
+	@[ -n "$(PACK)" ] || { echo "usage: make demo-load PACK=<pack>  (see: make demo-list)"; exit 2; }
+	@packs/demo.sh load $(PACK)
+
+demo-clean:
+	@[ -n "$(PACK)" ] || { echo "usage: make demo-clean PACK=<pack>  (see: make demo-list)"; exit 2; }
+	@packs/demo.sh clean $(PACK)
+
+demo-clean-all:
+	@packs/demo.sh clean-all
 
 # Repo-level end-to-end proof: boots the full real stack (infra + every money-path
 # service, no fakes in the path) and drives the insurance claims triage-and-governance
