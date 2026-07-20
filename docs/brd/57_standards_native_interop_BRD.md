@@ -357,10 +357,41 @@ so the fallback silently mis-scoped AND tripped a DeprecationWarning. Replaced
 with explicit `is None` checks (`_sub_text`); the suite now passes under
 `-W error::DeprecationWarning`.
 
-**Remaining (transport + acks, deferred).** Bind additional transports (SFTP file
-drop is the common clearinghouse pattern; today only the `http_api` connector
-carries outbound X12) and the FHIR REST connector (paginated `_since` +
-SMART-on-FHIR auth), acknowledgements (STD-FR-014),
-837→277CA→835 correlation (STD-FR-015), trading-partner registry (STD-FR-040)
-and duplicate ISA rejection (STD-FR-043). **inc-3+**: 835/834/270/271/276/277
-decode, then FHIR/HL7v2, then ISO 20022/ACORD.
+**inc-4 — BUILT.** X12 acknowledgements (STD-FR-014), the TA1/999 half of the
+Remaining list above. Both close the loop on inc-2's outbound governance: after
+Windrose transmits an approved 837, a trading partner's ack tells us whether it
+landed.
+- **TA1 (interchange-level ack).** Unlike every other X12 shape handled so far,
+  TA1 has no ST/SE wrapper — it is a single segment carried directly in an
+  interchange, often with no GS at all (a dedicated ack interchange). Handled
+  as a special case in `decode_x12`'s dispatch rather than a `_HANDLERS` entry:
+  it flushes whatever row schema is already in flight first (so one batch never
+  mixes two shapes), then yields its own single-row batch. One row: acked
+  interchange control number/date/time, ack code (A/E/R), note code.
+- **999 (implementation acknowledgment).** Fits the existing envelope/handler
+  pattern exactly — it is itself carried in an ISA/GS/ST..SE/GE/IEA envelope
+  (GS01=`FA`) — so `_AckHandler` is a new `_HANDLERS` entry, not new plumbing.
+  One row per acknowledged transaction set (an AK2/AK5 pair): functional-group
+  context (AK1), the acked transaction set id/control number (AK201/AK202),
+  the ack code + error codes (AK501-506), segment-level error codes (IK304 per
+  IK3), and the group's own disposition (AK901). **Design note:** AK9 is a
+  TRAILER — it is read AFTER every AK2/AK5 unit — so `_AckHandler` holds all
+  units in memory and only appends them to `out` at `flush()` (called once, at
+  SE), by which point AK9 has been seen. This is the one handler that departs
+  from "emit as the loop closes"; every other handler emits per-loop because
+  its context is a header (read first), not a trailer.
+- `999` moves from `KNOWN_TRANSACTION_SETS` (recognised-but-refused) to
+  `SUPPORTED_TRANSACTION_SETS`; `997` (the pre-5010 functional ack 999
+  superseded) stays refused-by-name and is now the "recognised but not decoded"
+  example test. 10 tests.
+
+**Remaining (transport + registry, deferred).** Bind additional transports
+(SFTP file drop is the common clearinghouse pattern; today only the `http_api`
+connector carries outbound X12) and the FHIR REST connector (paginated `_since`
++ SMART-on-FHIR auth); 277CA (claim acknowledgment — a distinct BHT/2200D
+grammar from the 277 claim-status response already built, not yet done);
+trading-partner registry (STD-FR-040); duplicate ISA rejection (STD-FR-043,
+needs a persistence layer keyed by trading partner — this decoder is currently
+a pure stream function with no store dependency, so this is a bigger seam than
+the others and is left deliberately out until a concrete trading-partner
+registry exists to key it off of).

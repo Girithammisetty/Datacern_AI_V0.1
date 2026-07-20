@@ -32,9 +32,13 @@ Design notes that matter:
   same PII-egress guardrails as any other governed column. Treat this decoder's
   output as regulated data, not as logs.
 
-inc-1 supports 837 (professional/institutional) claims. 835/834/270/271/276/277
-are recognised transaction sets that this build does not yet decode: they are
-refused BY NAME (AC-8) instead of silently yielding nothing.
+Decodes 837 (claims), 835 (remittance), 271 (eligibility), 277 (claim status),
+834 (enrollment), 999 (implementation acknowledgment) and the interchange-level
+TA1 acknowledgment. 270/276 are the outbound INQUIRY halves we send, not
+decode; 997 (the pre-5010 functional ack, superseded by 999) and 277CA (claim
+acknowledgment, a distinct BHT/2200D grammar from 277) are recognised but not
+yet decoded: they are refused BY NAME (AC-8) instead of silently yielding
+nothing.
 """
 
 from __future__ import annotations
@@ -50,11 +54,11 @@ ISA_LEN = 106
 #: Transaction sets this build decodes into rows. Each has its OWN row schema
 #: (a remittance is not a claim), so the envelope machinery is shared and the
 #: row building is dispatched to a per-transaction-set handler.
-SUPPORTED_TRANSACTION_SETS = ("837", "835", "271", "277", "834")
+SUPPORTED_TRANSACTION_SETS = ("837", "835", "271", "277", "834", "999")
 #: Recognised but not yet decoded — refused by name so the operator gets a real
 #: reason rather than an empty dataset (BR-2/AC-8). 270/276 are the outbound
 #: INQUIRY halves (we send them); the platform decodes the RESPONSES (271/277).
-KNOWN_TRANSACTION_SETS = ("270", "276", "997", "999")
+KNOWN_TRANSACTION_SETS = ("270", "276", "997")
 
 # --- hardening caps ---------------------------------------------------------
 # X12 is attacker-reachable (a partner drops a file on our SFTP), so the parser
@@ -157,6 +161,37 @@ ENROLLMENT_COLUMNS: list[str] = [
     "raw_segments",
 ]
 
+#: 999 — implementation acknowledgment. One row per acknowledged transaction
+#: set (an AK2/AK5 pair); AK1 (functional-group context) and AK9 (the group's
+#: own disposition, a TRAILER) are repeated onto every row.
+ACK_COLUMNS: list[str] = [
+    *_ENVELOPE_COLUMNS,
+    "acked_functional_id_code",        # AK101, e.g. "HC"
+    "acked_group_control_number",      # AK102, echoes the acked interchange's GS06
+    "acked_transaction_set_id",        # AK201, e.g. "837"
+    "acked_transaction_set_control_number",  # AK202, echoes the acked ST02
+    "transaction_ack_code",            # AK501: A=accepted E=accepted-with-errors
+                                        # M=rejected(missing)  R=rejected  W/X=other
+    "transaction_error_codes",         # AK502-506, comma-joined
+    "segment_error_codes",             # IK304 per IK3, comma-joined
+    "group_ack_code",                  # AK901
+    "loop_path",
+    "raw_segments",
+]
+
+#: TA1 — interchange-level acknowledgment. A single segment carried directly in
+#: an interchange (no ST/SE wrapper, and often no GS at all); one row per TA1.
+TA1_COLUMNS: list[str] = [
+    "interchange_control_number",      # this ack interchange's OWN ISA13
+    "sender_id",
+    "receiver_id",
+    "acked_interchange_control_number",  # TA101 — the ISA13 being acknowledged
+    "acked_interchange_date",          # TA102
+    "acked_interchange_time",          # TA103
+    "interchange_ack_code",            # TA104: A=accepted E=accepted-with-errors R=rejected
+    "interchange_note_code",           # TA105
+]
+
 #: Back-compat alias: the 837 schema was the original single schema.
 COLUMNS = CLAIM_COLUMNS
 
@@ -257,6 +292,18 @@ class _Coverage:
     plan: str = ""            # HD04
     begin: str = ""          # DTP*348
     end: str = ""            # DTP*349
+    raw: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class _AckUnit:
+    """One AK2/AK5 transaction-set acknowledgment in flight (999)."""
+
+    ts_id: str = ""
+    ts_control: str = ""
+    ack_code: str = ""
+    error_codes: list[str] = field(default_factory=list)
+    segment_error_codes: list[str] = field(default_factory=list)
     raw: list[str] = field(default_factory=list)
 
 
@@ -621,12 +668,82 @@ class _EnrollmentHandler:
         self.hd = None
 
 
+class _AckHandler:
+    """999 — implementation acknowledgment. One row per acknowledged transaction
+    set (an AK2/AK5 pair).
+
+    AK9 is a TRAILER — it reports the functional group's overall disposition
+    but arrives after every AK2/AK5 unit has already been read. Rather than
+    stamp a group_ack_code we don't have yet, all units are held in memory and
+    only appended to `out` at flush() (called once, at SE), by which point AK9
+    has been seen. A 999 acknowledges a whole functional group in one message,
+    so this is bounded the same way the other envelope caps already bound a
+    hostile file — no separate cap needed (Rule 7).
+    """
+
+    columns = ACK_COLUMNS
+
+    def __init__(self, env: _Envelope) -> None:
+        self.env = env
+        self.group_functional_id = ""
+        self.group_control = ""
+        self.group_ack_code = ""
+        self.units: list[_AckUnit] = []
+        self.unit: _AckUnit | None = None
+
+    def _close_unit(self) -> None:
+        if self.unit is not None:
+            self.units.append(self.unit)
+            self.unit = None
+
+    def feed(self, tag: str, elements: list[str], raw: str, d: Delimiters, out: list) -> None:
+        if self.unit is not None and len(self.unit.raw) < MAX_RAW_SEGMENTS_PER_CLAIM:
+            self.unit.raw.append(raw)
+        if tag == "AK1":
+            self.group_functional_id = _el(elements, 1).strip()
+            self.group_control = _el(elements, 2).strip()
+        elif tag == "AK2":
+            self._close_unit()
+            self.unit = _AckUnit(
+                ts_id=_el(elements, 1).strip(),
+                ts_control=_el(elements, 2).strip(),
+                raw=[raw],
+            )
+        elif tag == "IK3" and self.unit is not None:
+            code = _el(elements, 4).strip()   # IK304: implementation syntax error code
+            if code:
+                self.unit.segment_error_codes.append(code)
+        elif tag == "AK5" and self.unit is not None:
+            self.unit.ack_code = _el(elements, 1).strip()
+            for i in range(2, 7):             # AK502..AK506
+                code = _el(elements, i).strip()
+                if code:
+                    self.unit.error_codes.append(code)
+        elif tag == "AK9":
+            self.group_ack_code = _el(elements, 1).strip()
+
+    def flush(self, out: list) -> None:
+        self._close_unit()
+        for u in self.units:
+            out.append([
+                *_env_prefix(self.env),
+                self.group_functional_id, self.group_control,
+                u.ts_id, u.ts_control,
+                u.ack_code, ",".join(u.error_codes), ",".join(u.segment_error_codes),
+                self.group_ack_code,
+                "ISA/GS/ST(999)/AK2",
+                "\n".join(u.raw[:MAX_RAW_SEGMENTS_PER_CLAIM]),
+            ])
+        self.units = []
+
+
 _HANDLERS = {
     "837": _ClaimHandler,
     "835": _RemitHandler,
     "271": _EligibilityHandler,
     "277": _ClaimStatusHandler,
     "834": _EnrollmentHandler,
+    "999": _AckHandler,
 }
 
 
@@ -709,6 +826,21 @@ async def decode_x12(
             if iea02 != env.isa13:
                 raise _fail(f"X12 control mismatch: IEA02 {iea02!r} != ISA13 {env.isa13!r}")
             seen_iea = True
+        elif tag == "TA1":
+            # Interchange-level ack: no ST/SE wrapper, so it is not a "handler"
+            # row — flush whatever schema is in flight first so one batch never
+            # mixes two row shapes, then yield the TA1 row as its own batch.
+            if rows:
+                stats.rows_ok += len(rows)
+                yield RowBatch(columns=list(last_columns), rows=rows)
+                rows = []
+            last_columns = TA1_COLUMNS
+            stats.rows_ok += 1
+            yield RowBatch(columns=TA1_COLUMNS, rows=[[
+                env.isa13, env.isa06, env.isa08,
+                _el(elements, 1).strip(), _el(elements, 2).strip(), _el(elements, 3).strip(),
+                _el(elements, 4).strip(), _el(elements, 5).strip(),
+            ]])
         elif handler is not None:
             handler.feed(tag, elements, raw, delims, rows)
 
