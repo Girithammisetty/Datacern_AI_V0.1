@@ -20,8 +20,11 @@ operational alert rather than something to silently paper over, and "this number
 belonged to a transmission a human refused" is a better audit story than
 "approved bytes and sent bytes differ".
 
-inc-2 renders 837 (professional). Other transaction sets refuse by name rather
-than emitting a structurally-plausible message for the wrong spec (Rule 2).
+Renders 837 (professional claim) and 276 (claim status request, STD-FR-012).
+Other transaction sets refuse by name rather than emitting a
+structurally-plausible message for the wrong spec (Rule 2). 276 is
+outbound-only, matching x12.py's decode side: this platform SENDS status
+inquiries and DECODES the 277 responses to them, never the reverse.
 """
 
 from __future__ import annotations
@@ -35,7 +38,7 @@ from app.domain.x12 import Delimiters
 
 #: ISA is fixed-width; these are the exact field widths in element order.
 _ISA_WIDTHS = (2, 10, 2, 10, 2, 15, 2, 15, 6, 4, 1, 5, 9, 1, 1, 1)
-SUPPORTED_OUTBOUND = ("837",)
+SUPPORTED_OUTBOUND = ("837", "276")
 
 
 def _fail(msg: str) -> PermanentJobError:
@@ -204,6 +207,90 @@ def render_837(
     return _isa(control, d) + d.segment.join(segments) + d.segment
 
 
+def render_276(
+    inquiries: list[dict[str, Any]],
+    control: OutboundControl,
+    *,
+    payer_id: str,
+    payer_name: str,
+    provider_npi: str,
+    provider_name: str,
+    subscriber_id: str,
+    subscriber_last: str,
+    subscriber_first: str,
+    delimiters: Delimiters | None = None,
+) -> str:
+    """Render one interchange containing a batch of 276 claim-status requests.
+
+    Header-level payer/provider/subscriber context, matching the same
+    simplification `render_837` already makes (one subscriber per interchange,
+    not per claim) rather than looping a full 2000A-2000D hierarchy. Each
+    inquiry loops only its own tracking info (TRN02), using `claim_id` — the
+    SAME field name `render_837`'s claims use — so a partner's eventual 277
+    response, which echoes the requester's TRN, correlates back through
+    `x12.py`'s `_ClaimStatusHandler` (which already reads TRN02 as claim_id)
+    the same way an 835 already correlates to its 837.
+    """
+    if not inquiries:
+        raise _fail("X12 render: refusing to render an interchange with zero status inquiries")
+    d = delimiters or Delimiters(element="*", component=":", segment="~")
+    _safe(payer_id, d, "payer_id")
+    _safe(payer_name, d, "payer_name")
+    _safe(provider_npi, d, "provider_npi")
+    _safe(provider_name, d, "provider_name")
+    _safe(subscriber_id, d, "subscriber_id")
+    _safe(subscriber_last, d, "subscriber_last")
+    _safe(subscriber_first, d, "subscriber_first")
+    for name in ("sender_id", "receiver_id", "isa_control", "gs_control", "st_control",
+                 "date_yymmdd", "time_hhmm", "date_ccyymmdd", "usage_indicator"):
+        _safe(str(getattr(control, name)), d, f"control.{name}")
+
+    body: list[str] = [
+        d.element.join(["ST", "276", control.st_control]),
+        d.element.join(
+            ["BHT", "0010", "13", control.st_control, control.date_ccyymmdd, control.time_hhmm]
+        ),
+        d.element.join(["NM1", "PR", "2", payer_name, "", "", "", "", "PI", payer_id]),
+        d.element.join(["NM1", "1P", "2", provider_name, "", "", "", "", "XX", provider_npi]),
+        d.element.join(
+            ["NM1", "IL", "1", subscriber_last, subscriber_first, "", "", "", "MI", subscriber_id]
+        ),
+    ]
+    for inquiry in inquiries:
+        claim_id = str(inquiry.get("claim_id") or "").strip()
+        if not claim_id:
+            raise _fail("X12 render: status inquiry is missing claim_id (TRN02)")
+        _safe(claim_id, d, "claim_id")
+        body.append(d.element.join(["TRN", "1", claim_id]))
+        payer_claim_ctrl = str(inquiry.get("payer_claim_control_number") or "").strip()
+        if payer_claim_ctrl:
+            _safe(payer_claim_ctrl, d, f"inquiry {claim_id!r} payer_claim_control_number")
+            body.append(d.element.join(["REF", "1K", payer_claim_ctrl]))
+        total_charge = str(inquiry.get("total_charge") or "").strip()
+        if total_charge:
+            _safe(total_charge, d, f"inquiry {claim_id!r} total_charge")
+            body.append(d.element.join(["AMT", "T3", total_charge]))
+        service_date = str(inquiry.get("service_date") or "").strip()
+        if service_date:
+            _safe(service_date, d, f"inquiry {claim_id!r} service_date")
+            body.append(d.element.join(["DTP", "472", "D8", service_date]))
+    # SE01 counts ST..SE inclusive; +1 for the SE segment itself (same
+    # convention as render_837, cross-checked in tests since 276 has no
+    # decoder to round-trip through -- it is outbound-only).
+    body.append(d.element.join(["SE", str(len(body) + 1), control.st_control]))
+
+    segments = [
+        d.element.join(
+            ["GS", "HR", control.sender_id.strip(), control.receiver_id.strip(),
+             control.date_ccyymmdd, control.time_hhmm, control.gs_control, "X", "005010X212"]
+        ),
+        *body,
+        d.element.join(["GE", "1", control.gs_control]),
+        d.element.join(["IEA", "1", control.isa_control]),
+    ]
+    return _isa(control, d) + d.segment.join(segments) + d.segment
+
+
 def checksum(rendered: str) -> str:
     """SHA-256 of the exact bytes to be transmitted.
 
@@ -235,12 +322,13 @@ def render_for_writeback(
 
     Returns the payload augmented with the exact bytes + their checksum, so
     `GET /writebacks/{id}` shows the approver the literal message (BR-1). A
-    render failure raises here, at enqueue — a claim that cannot be expressed as
-    conformant X12 must never become a pending proposal someone could approve.
+    render failure raises here, at enqueue — a claim (or status inquiry) that
+    cannot be expressed as conformant X12 must never become a pending proposal
+    someone could approve. Dispatches on `target.transaction_set`: each
+    outbound shape has its own required payload key and identity fields, so
+    there is no single generic schema to validate against.
     """
-    claims = payload.get("claims")
-    if not isinstance(claims, list):
-        raise _fail("X12 writeback: payload.claims must be a list of claims")
+    transaction_set = str(target.get("transaction_set") or "837")
     missing = [
         k for k in ("sender_id", "receiver_id", "isa_control", "gs_control", "st_control")
         if not str(target.get(k) or "").strip()
@@ -259,13 +347,45 @@ def render_for_writeback(
         date_ccyymmdd=str(target.get("date_ccyymmdd") or "20000101"),
         usage_indicator=str(target.get("usage_indicator") or "P"),
     )
-    rendered = render_837(
-        claims,
-        control,
-        billing_provider_npi=str(target.get("billing_provider_npi") or ""),
-        subscriber_id=str(target.get("subscriber_id") or ""),
-        transaction_set=str(target.get("transaction_set") or "837"),
-    )
+
+    if transaction_set == "837":
+        claims = payload.get("claims")
+        if not isinstance(claims, list):
+            raise _fail("X12 writeback: payload.claims must be a list of claims")
+        rendered = render_837(
+            claims,
+            control,
+            billing_provider_npi=str(target.get("billing_provider_npi") or ""),
+            subscriber_id=str(target.get("subscriber_id") or ""),
+            transaction_set=transaction_set,
+        )
+    elif transaction_set == "276":
+        inquiries = payload.get("inquiries")
+        if not isinstance(inquiries, list):
+            raise _fail("X12 writeback: payload.inquiries must be a list for a 276 request")
+        missing_276 = [
+            k for k in ("payer_id", "payer_name", "provider_npi", "provider_name",
+                        "subscriber_id", "subscriber_last", "subscriber_first")
+            if not str(target.get(k) or "").strip()
+        ]
+        if missing_276:
+            raise _fail(f"X12 writeback: 276 target is missing field(s) {missing_276!r}")
+        rendered = render_276(
+            inquiries,
+            control,
+            payer_id=str(target["payer_id"]),
+            payer_name=str(target["payer_name"]),
+            provider_npi=str(target["provider_npi"]),
+            provider_name=str(target["provider_name"]),
+            subscriber_id=str(target["subscriber_id"]),
+            subscriber_last=str(target["subscriber_last"]),
+            subscriber_first=str(target["subscriber_first"]),
+        )
+    else:
+        raise _fail(
+            f"X12 writeback: transaction set {transaction_set!r} is not supported for "
+            f"outbound; this build renders {', '.join(SUPPORTED_OUTBOUND)}"
+        )
     return {**payload, RENDERED_KEY: rendered, CHECKSUM_KEY: checksum(rendered)}
 
 

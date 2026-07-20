@@ -418,26 +418,47 @@ every ISA, so this is the narrowest correct key today, not a placeholder.
   (`_attempt_file`), verified through the REAL upload API (create → init →
   PUT parts → complete → inline runner), not the domain function in
   isolation — two ingestions of byte-identical X12 content, second one fails
-  with `rows_appended: 0` and the ISA number in the error. The connector-poll
-  path (`ObjectSourceIngestor.ingest`, used by SFTP/S3/GCS/Azure pollers)
-  does NOT yet have this guard wired in — it's a separate call site that
-  doesn't currently carry `tenant_id` through to where `decode_stream` is
-  invoked, a larger wire-up left for when that path is next touched.
+  with `rows_appended: 0` and the ISA number in the error. **Correction to
+  the note this section originally carried:** it's not that the
+  connector-poll path's decode call site merely lacks `tenant_id` — investigated
+  further and `ObjectSourceIngestor.ingest()` (the object-store/SFTP/S3/GCS/
+  Azure decode-and-stage path) and the `fetchers` registry (SFTP/HTTP →
+  object-store) both have **zero call sites anywhere in the runtime** (`grep`
+  confirms it). SFTP/object-store-polled ingestion doesn't execute at all yet
+  on this branch — a pre-existing ingestion-service gap, not specific to X12,
+  and too large to fold into this BRD's scope. Once that path is wired up,
+  it needs the same duplicate-ISA guard `_attempt_file` has.
 - 16 new tests (513 total, up from 497): counter monotonicity + per-partner/
   per-tenant isolation + durability-across-a-fresh-session (proving the
   counter lives in the database, not memory), duplicate-ISA accept/reject/
   cross-partner/cross-tenant, and the writeback-API-level override test.
 
-**Remaining (transport + narrower registry gaps, deferred).** Bind additional
-transports (SFTP file drop is the common clearinghouse pattern; today only
-the `http_api` connector carries outbound X12, and the object-store/SFTP
-POLL path's decode call site doesn't yet carry the duplicate-ISA guard — see
-inc-5 above) and the FHIR REST connector (paginated `_since` + SMART-on-FHIR
-auth); 277CA (claim acknowledgment — a distinct BHT/2200D grammar from the
-277 claim-status response already built, not yet done); a formal
-trading-partner registry (STD-FR-040 — inc-5's (tenant, sender, receiver) key
-is a correct interim substitute, not this); ISO 20022 `pacs.002/008` read and
-`pain.001` write (only `camt.05x` read exists); outbound 276 (only 837
-outbound exists); 837→277CA→835 materialized onto the owning case row (the
-three currently correlate only via a shared `claim_id` column, joinable in a
-query but not materialized by any pipeline).
+**inc-6 — BUILT.** Outbound 276 (claim status request, the second half of
+STD-FR-012 — 837 was inc-2a). `x12_out.py::render_276` mirrors `render_837`'s
+simplification (one payer/provider/subscriber per interchange, not per-claim
+looping); `render_for_writeback` now dispatches on `target.transaction_set`
+between 837 and 276, each with its own required payload key and identity
+fields, rather than assuming 837. TRN02 carries `claim_id` — the SAME field
+837's claims use — so a partner's 277 response (which echoes the requester's
+TRN) correlates back through the already-built `_ClaimStatusHandler` the same
+way an 835 already correlates to its 837. Rides the identical BR-1/BR-6
+machinery inc-2b/inc-5 built: propose-time render, checksum, four-eyes, and
+Core-generated control numbers shared with 837 on the SAME per-partner
+sequence (an 837 then a 276 to the same payer get consecutive numbers, not
+independent ones). 276 has no decoder (it's outbound-only, matching the
+decode side's existing refusal), so unlike 837 it can't be round-trip
+validated — tests instead parse the rendered segments directly and
+cross-check the same conformance rules a decoder would (SE01 count,
+ST02==SE02, envelope control numbers). 17 new tests (530 total).
+
+**Remaining (transport + narrower registry gaps, deferred).** Bind SFTP/
+object-store-polled ingestion execution itself (see the inc-5 correction
+above — this doesn't run at all yet, independent of X12) and the FHIR REST
+connector (paginated `_since` + SMART-on-FHIR auth); 277CA (claim
+acknowledgment — a distinct BHT/2200D grammar from the 277 claim-status
+response already built, not yet done); a formal trading-partner registry
+(STD-FR-040 — inc-5's (tenant, sender, receiver) key is a correct interim
+substitute, not this); ISO 20022 `pacs.002/008` read and `pain.001` write
+(only `camt.05x` read exists); 837→277CA→835 materialized onto the owning
+case row (the three currently correlate only via a shared `claim_id` column,
+joinable in a query but not materialized by any pipeline).
