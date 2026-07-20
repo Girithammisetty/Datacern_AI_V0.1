@@ -13,7 +13,16 @@ import pytest
 
 from app.domain.errors import PermanentJobError
 from app.domain.x12 import Delimiters, decode_x12
-from app.domain.x12_out import OutboundControl, checksum, render_837
+from app.domain.x12_out import (
+    CHECKSUM_KEY,
+    RENDERED_KEY,
+    OutboundControl,
+    approved_bytes,
+    checksum,
+    is_x12_writeback,
+    render_837,
+    render_for_writeback,
+)
 from tests.unit.test_x12 import _rows  # noqa: F401  (shared stream helper style)
 
 
@@ -231,3 +240,77 @@ def test_refuses_overlong_isa_field():
         render_837(CLAIMS, _control(sender_id="X" * 20),
                    billing_provider_npi="1", subscriber_id="M")
     assert "fixed width" in str(e.value)
+
+
+# ---- inc-2b: the governed writeback path (BR-1) -----------------------------
+
+TARGET = {
+    "format": "x12", "transaction_set": "837",
+    "sender_id": "SENDER", "receiver_id": "RECEIVER",
+    "isa_control": "000000123", "gs_control": "77", "st_control": "0001",
+    "billing_provider_npi": "1234567893", "subscriber_id": "MEMBER123",
+}
+
+
+def test_detects_x12_writebacks_only():
+    assert is_x12_writeback(TARGET)
+    assert not is_x12_writeback({"path": "/claims"})
+    assert not is_x12_writeback(None)
+
+
+async def test_propose_time_render_is_visible_and_round_trips():
+    """The approver sees the literal bytes (payload is exposed by
+    serialize_writeback), and those bytes are a real interchange."""
+    out = render_for_writeback({"claims": CLAIMS}, TARGET)
+    assert out[RENDERED_KEY].startswith("ISA*")
+    assert out[CHECKSUM_KEY] == checksum(out[RENDERED_KEY])
+    assert out["claims"] == CLAIMS  # source data preserved for lineage
+    rows, cols = await _decode(out[RENDERED_KEY])
+    assert [dict(zip(cols, r, strict=True))["claim_id"] for r in rows] == ["CLAIM-A", "CLAIM-B"]
+
+
+def test_unrenderable_claim_never_becomes_a_pending_proposal():
+    """Rendering at enqueue means a bad claim fails BEFORE anyone can approve it."""
+    with pytest.raises(PermanentJobError):
+        render_for_writeback({"claims": [{"claim_id": "X"}]}, TARGET)  # no charge
+
+
+def test_injection_is_refused_at_propose_time():
+    evil = {"claims": [{"claim_id": "A~NM1*85*2*ATTACKER", "total_charge": "1.00"}]}
+    with pytest.raises(PermanentJobError) as e:
+        render_for_writeback(evil, TARGET)
+    assert "reserved delimiter" in str(e.value)
+
+
+def test_missing_control_fields_refused():
+    with pytest.raises(PermanentJobError) as e:
+        render_for_writeback({"claims": CLAIMS}, {**TARGET, "isa_control": ""})
+    assert "isa_control" in str(e.value)
+
+
+def test_claims_must_be_a_list():
+    with pytest.raises(PermanentJobError) as e:
+        render_for_writeback({"claims": "not-a-list"}, TARGET)
+    assert "must be a list" in str(e.value)
+
+
+def test_approved_bytes_returns_exactly_what_was_rendered():
+    payload = render_for_writeback({"claims": CLAIMS}, TARGET)
+    assert approved_bytes(payload) == payload[RENDERED_KEY]
+
+
+def test_tampering_after_approval_refuses_to_transmit():
+    """THE governance property. If the stored interchange is mutated between
+    approval and delivery, the checksum no longer matches and we refuse to put
+    bytes on the wire that no human approved."""
+    payload = render_for_writeback({"claims": CLAIMS}, TARGET)
+    tampered = {**payload, RENDERED_KEY: payload[RENDERED_KEY].replace("CLAIM-A", "CLAIM-Z")}
+    with pytest.raises(PermanentJobError) as e:
+        approved_bytes(tampered)
+    assert "does not match the approved checksum" in str(e.value)
+
+
+def test_missing_rendered_interchange_refuses():
+    with pytest.raises(PermanentJobError) as e:
+        approved_bytes({"claims": CLAIMS})
+    assert "no rendered interchange" in str(e.value)

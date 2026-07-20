@@ -29,6 +29,7 @@ import sqlalchemy as sa
 from app.api.auth import Principal
 from app.api.schemas import WritebackCreate
 from app.container import Container
+from app.domain import x12_out
 from app.domain.drivers.http import _guard_host, _guard_url
 from app.domain.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.domain.secrets import connection_secret_path
@@ -147,6 +148,17 @@ class WritebackService:
             # tenant's SoR with no second-party approval, defeating the control
             # this subsystem exists to enforce. Auto-delivery, if ever offered,
             # is an admin-set connection policy, never a per-request field.
+            # Standards-native outbound (BRD 57 BR-1): render the interchange NOW,
+            # at propose time, and pin it with a checksum. The approver must see
+            # the literal bytes that will be transmitted — assembling them later,
+            # during delivery, would let the wire differ from what was reviewed
+            # and make four-eyes approval of an outbound claim meaningless. A
+            # claim that cannot be expressed as conformant X12 fails HERE and so
+            # never becomes a pending proposal someone could approve.
+            payload = body.payload
+            if x12_out.is_x12_writeback(body.target):
+                payload = x12_out.render_for_writeback(payload, body.target)
+
             wb = Writeback(
                 tenant_id=principal.tenant_id,
                 workspace_id=body.workspace_id,
@@ -155,7 +167,7 @@ class WritebackService:
                 decision_ref=body.decision_ref,
                 idempotency_key=body.idempotency_key,
                 target=body.target,
-                payload=body.payload,
+                payload=payload,
                 status="pending_approval",
                 approval_mode="four_eyes",
                 requested_by=principal.sub,
@@ -396,8 +408,21 @@ class WritebackService:
         # link-local / private (non-loopback) addresses. follow_redirects=False
         # so a 3xx can't bounce the request to an internal target post-guard.
         _guard_url(url)
+        # Standards-native outbound: transmit the EXACT bytes rendered at propose
+        # time, after re-proving they still match the checksum the approver
+        # signed off on. Any mutation of the row between approval and delivery
+        # refuses to send rather than putting unapproved bytes on the wire (BR-1).
+        x12_body: str | None = None
+        if x12_out.RENDERED_KEY in (wb.payload or {}):
+            x12_body = x12_out.approved_bytes(wb.payload)
+            headers["Content-Type"] = "application/edi-x12"
         async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
-            resp = await client.request(method, url, json=wb.payload, headers=headers)
+            if x12_body is not None:
+                resp = await client.request(
+                    method, url, content=x12_body.encode("latin-1"), headers=headers
+                )
+            else:
+                resp = await client.request(method, url, json=wb.payload, headers=headers)
         if resp.status_code >= 300:
             # Do NOT include resp.text — last_error is readable via the API and
             # echoing an upstream body would make this an SSRF exfil oracle.

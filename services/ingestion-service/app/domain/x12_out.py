@@ -211,3 +211,80 @@ def checksum(rendered: str) -> str:
     sending precisely what the approver saw (BR-1).
     """
     return hashlib.sha256(rendered.encode("latin-1")).hexdigest()
+
+
+# --- writeback integration (BR-1) -------------------------------------------
+# An outbound interchange rides the EXISTING proposal-mode writeback spine: no
+# new approval code, no second governance path. The only thing added here is
+# that the bytes are produced at PROPOSE time and pinned by checksum, so what a
+# human approves is byte-identical to what leaves the building.
+
+X12_FORMAT = "x12"
+RENDERED_KEY = "x12_rendered"
+CHECKSUM_KEY = "x12_checksum"
+
+
+def is_x12_writeback(target: dict[str, Any] | None) -> bool:
+    return bool(target) and str(target.get("format", "")).lower() == X12_FORMAT
+
+
+def render_for_writeback(
+    payload: dict[str, Any], target: dict[str, Any]
+) -> dict[str, Any]:
+    """Render the interchange at PROPOSE time and pin it into the payload.
+
+    Returns the payload augmented with the exact bytes + their checksum, so
+    `GET /writebacks/{id}` shows the approver the literal message (BR-1). A
+    render failure raises here, at enqueue — a claim that cannot be expressed as
+    conformant X12 must never become a pending proposal someone could approve.
+    """
+    claims = payload.get("claims")
+    if not isinstance(claims, list):
+        raise _fail("X12 writeback: payload.claims must be a list of claims")
+    missing = [
+        k for k in ("sender_id", "receiver_id", "isa_control", "gs_control", "st_control")
+        if not str(target.get(k) or "").strip()
+    ]
+    if missing:
+        raise _fail(f"X12 writeback: target is missing control field(s) {missing!r}")
+
+    control = OutboundControl(
+        sender_id=str(target["sender_id"]),
+        receiver_id=str(target["receiver_id"]),
+        isa_control=str(target["isa_control"]),
+        gs_control=str(target["gs_control"]),
+        st_control=str(target["st_control"]),
+        date_yymmdd=str(target.get("date_yymmdd") or "000101"),
+        time_hhmm=str(target.get("time_hhmm") or "0000"),
+        date_ccyymmdd=str(target.get("date_ccyymmdd") or "20000101"),
+        usage_indicator=str(target.get("usage_indicator") or "P"),
+    )
+    rendered = render_837(
+        claims,
+        control,
+        billing_provider_npi=str(target.get("billing_provider_npi") or ""),
+        subscriber_id=str(target.get("subscriber_id") or ""),
+        transaction_set=str(target.get("transaction_set") or "837"),
+    )
+    return {**payload, RENDERED_KEY: rendered, CHECKSUM_KEY: checksum(rendered)}
+
+
+def approved_bytes(payload: dict[str, Any]) -> str:
+    """Return the exact bytes to transmit, proving they are the approved ones.
+
+    Defence in depth for BR-1: the checksum was computed before a human approved
+    the message, so re-verifying it at delivery detects any mutation of the row
+    between approval and transmission. A mismatch refuses to send rather than
+    transmitting bytes nobody approved.
+    """
+    rendered = payload.get(RENDERED_KEY)
+    if not isinstance(rendered, str) or not rendered:
+        raise _fail("X12 writeback: no rendered interchange stored on this writeback")
+    expected = payload.get(CHECKSUM_KEY)
+    actual = checksum(rendered)
+    if expected != actual:
+        raise _fail(
+            "X12 writeback: rendered interchange does not match the approved checksum "
+            "(the message changed after approval); refusing to transmit"
+        )
+    return rendered

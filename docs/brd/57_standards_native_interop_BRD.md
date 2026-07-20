@@ -268,10 +268,26 @@ fields, service lines, identity fields, control fields) is now delimiter-checked
 against the delimiters actually in use, and refused rather than mangled (Rule 2).
 Regression-pinned with the exact payload.
 
-**inc-2b (next).** Wire the renderer into the writeback spine as an `x12`
-delivery kind: render + checksum at `enqueue`, four-eyes via the existing
-`approve()` (no new governance code), transmit the stored bytes, and bind a
-transport (SFTP/clearinghouse HTTP). Then acknowledgements (STD-FR-014),
+**inc-2b — BUILT.** The renderer now rides the governed writeback spine, closing
+**BR-1** end to end. Two surgical changes to `writebacks.py` and **no new
+governance code** — four-eyes is inherited, exactly as intended:
+1. `enqueue()` renders the interchange when `target.format == "x12"` and stores
+   the bytes + checksum on the writeback. Because `serialize_writeback` exposes
+   `payload`, `GET /writebacks/{id}` shows the approver the **literal message**.
+   A claim that cannot be expressed as conformant X12 fails at enqueue and never
+   becomes a pending proposal someone could approve.
+2. `_deliver_http_post()` transmits those exact bytes with
+   `Content-Type: application/edi-x12`, after **re-verifying the checksum**.
+
+That last check is the governance property worth naming: if the stored
+interchange is mutated between approval and delivery, the checksum no longer
+matches and delivery **refuses** rather than putting bytes on the wire that no
+human approved. Pinned by `test_tampering_after_approval_refuses_to_transmit`.
+The non-X12 JSON path is untouched (its 6 existing tests still pass).
+
+**inc-2c (next).** Bind additional transports (SFTP file drop is the common
+clearinghouse pattern; today only the `http_api` connector carries X12), then
+acknowledgements (STD-FR-014),
 837→277CA→835 correlation (STD-FR-015), trading-partner registry (STD-FR-040)
 and duplicate ISA rejection (STD-FR-043). **inc-3+**: 835/834/270/271/276/277
 decode, then FHIR/HL7v2, then ISO 20022/ACORD.
