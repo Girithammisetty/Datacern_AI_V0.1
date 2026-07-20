@@ -235,8 +235,43 @@ Honest boundaries of inc-1:
   structurally exact but synthetic. First real payer file is where companion-
   guide reality will bite.
 
-**inc-2 (next).** Outbound serialization through the writeback spine + four-eyes
-(**BR-1**, STD-FR-012), acknowledgements (STD-FR-014), 837→277CA→835 correlation
-(STD-FR-015), trading-partner registry (STD-FR-040), duplicate ISA rejection
-(STD-FR-043). **inc-3+**: 835/834/270/271/276/277 decode, then FHIR/HL7v2, then
-ISO 20022/ACORD.
+**inc-2a — BUILT.** Outbound 837 serialization: `app/domain/x12_out.py`
+(`render_837`, `OutboundControl`, `checksum`). Delivers **STD-FR-012**'s render
+half. 21 unit tests.
+
+The governance decision, recorded because it is not reversible cheaply:
+**rendering happens at PROPOSE time, not at transmit time.** BR-1 requires the
+approver to see the exact message that will be transmitted; assembling the
+interchange during delivery would let the bytes on the wire differ from the bytes
+reviewed, which makes four-eyes approval of an outbound claim meaningless. So the
+caller renders, stores the result plus its `checksum`, routes THAT through the
+existing four-eyes spine, and transmits the stored bytes verbatim. Accepted
+consequence: a rejected proposal burns its control numbers, leaving a gap — BR-6
+already treats gaps as an operational alert, and "a human refused this
+transmission" is a better audit story than "approved bytes ≠ sent bytes".
+`render_837` is therefore a PURE function (control numbers are caller-supplied),
+which is what makes the propose-time checksum meaningful.
+
+Verification of note: the round-trip test renders then decodes with the inc-1
+decoder, which independently validates SE01 segment counts and every
+control-number pairing — so the two halves check each other, and a serializer
+off-by-one fails in CI rather than at a trading partner.
+
+**Security finding fixed in this increment — EDI injection.** X12 has NO escape
+mechanism, so a delimiter inside a data element is indistinguishable from a real
+one: a `~` terminates the segment early and everything after it parses as a NEW
+segment. This was verified against the renderer before the guard existed — a
+claim id of `GOOD~NM1*85*2*ATTACKER*****XX*9999999999` produced a second
+billing-provider NM1 with an attacker-controlled NPI, i.e. **claim forgery that
+reroutes payment**. Every caller-supplied value that reaches a segment (claim
+fields, service lines, identity fields, control fields) is now delimiter-checked
+against the delimiters actually in use, and refused rather than mangled (Rule 2).
+Regression-pinned with the exact payload.
+
+**inc-2b (next).** Wire the renderer into the writeback spine as an `x12`
+delivery kind: render + checksum at `enqueue`, four-eyes via the existing
+`approve()` (no new governance code), transmit the stored bytes, and bind a
+transport (SFTP/clearinghouse HTTP). Then acknowledgements (STD-FR-014),
+837→277CA→835 correlation (STD-FR-015), trading-partner registry (STD-FR-040)
+and duplicate ISA rejection (STD-FR-043). **inc-3+**: 835/834/270/271/276/277
+decode, then FHIR/HL7v2, then ISO 20022/ACORD.
