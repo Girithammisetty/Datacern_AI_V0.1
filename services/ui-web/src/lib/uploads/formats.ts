@@ -1,8 +1,12 @@
 /**
  * File-upload data-source formats. The `key` is the exact `fileFormat` string
  * ingestion-service validates against decode.FILE_FORMATS (csv/json/parquet/
- * avro/xml). Detection maps a file extension to a format so the wizard can
- * pre-select; the user can always override via the picker.
+ * avro/xml/x12/fhir/hl7v2/iso20022/acord). Detection maps a file extension to
+ * a format so the wizard can pre-select; the user can always override via the
+ * picker. FHIR/ISO 20022/ACORD deliberately have NO auto-detected extensions
+ * — they're JSON- or XML-shaped like the generic json/xml formats, and
+ * guessing from ".json"/".xml" alone would misclassify an ordinary upload as
+ * a standards-native one. The user must pick them explicitly.
  */
 
 export interface UploadFormat {
@@ -18,6 +22,11 @@ export const UPLOAD_FORMATS: UploadFormat[] = [
   { key: "parquet", label: "Parquet", extensions: ["parquet", "pq"], hint: "Columnar Apache Parquet file." },
   { key: "avro", label: "Avro", extensions: ["avro"], hint: "Apache Avro object-container file." },
   { key: "xml", label: "XML", extensions: ["xml"], hint: "One row per repeated element under the document root." },
+  { key: "x12", label: "X12 EDI", extensions: ["edi", "x12", "837", "835", "834", "277", "271"], hint: "ASC X12 healthcare EDI (837/835/834/271/277/999/TA1) — delimiters read from the ISA header." },
+  { key: "fhir", label: "FHIR", extensions: [], hint: "HL7 FHIR R4 — a Bundle or Bulk Data NDJSON of resources." },
+  { key: "hl7v2", label: "HL7 v2", extensions: ["hl7"], hint: "Pipe-delimited HL7 v2.x (ADT/ORU) — delimiters read from the MSH header." },
+  { key: "iso20022", label: "ISO 20022", extensions: [], hint: "camt.05x bank/account statement XML." },
+  { key: "acord", label: "ACORD", extensions: [], hint: "ACORD XML — P&C application or loss run." },
 ];
 
 /** Best-effort format from the file extension, or null when unrecognised. */

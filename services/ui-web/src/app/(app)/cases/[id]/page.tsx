@@ -28,6 +28,42 @@ import { formatLocal } from "@/lib/utils";
 import { summarizeProjection, DeadlineChip } from "@/components/cases/projection";
 import type { Case, CaseActivity, CaseEvidence, Severity } from "@/lib/graphql/types";
 
+/**
+ * Starting skeletons for the sync-to-SoR dialog's "Insert template" row
+ * (BRD 57). Field names match `x12_out.py`'s `render_for_writeback` exactly —
+ * `sender_id`/`receiver_id` are the trading-partner identity (control
+ * numbers are Core-assigned, not supplied here).
+ */
+const SYNC_TEMPLATES: Record<string, { label: string; target: object; payload: object }> = {
+  json: { label: "Generic JSON", target: {}, payload: {} },
+  x12_837: {
+    label: "X12 837 — corrected claim",
+    target: {
+      format: "x12", transaction_set: "837",
+      sender_id: "YOUR_TRADING_ID", receiver_id: "PAYER_TRADING_ID",
+      billing_provider_npi: "1234567890", subscriber_id: "MEMBER_ID",
+    },
+    payload: {
+      claims: [{
+        claim_id: "CLAIM-ID", total_charge: "100.00", place_of_service: "11",
+        diagnosis_codes: ["Z0000"],
+        service_lines: [{ procedure_code: "99213", charge: "100.00" }],
+      }],
+    },
+  },
+  x12_276: {
+    label: "X12 276 — claim status request",
+    target: {
+      format: "x12", transaction_set: "276",
+      sender_id: "YOUR_TRADING_ID", receiver_id: "PAYER_TRADING_ID",
+      payer_id: "PAYER_ID", payer_name: "PAYER NAME",
+      provider_npi: "1234567890", provider_name: "PROVIDER NAME",
+      subscriber_id: "MEMBER_ID", subscriber_last: "LAST", subscriber_first: "FIRST",
+    },
+    payload: { inquiries: [{ claim_id: "CLAIM-ID" }] },
+  },
+};
+
 export default function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const query = useCaseDetail(id);
@@ -259,6 +295,15 @@ function CaseActionsBar({ c }: { c: Case }) {
   );
   const [syncConnectionId, setSyncConnectionId] = useState("");
   const [syncTarget, setSyncTarget] = useState("{}");
+  // BRD 57: this dialog's payload default (below) is a case-disposition
+  // snapshot, which is NOT the shape x12_out.py expects (`{claims:[...]}` /
+  // `{inquiries:[...]}`) — an X12 write-back is a different kind of decision
+  // (e.g. a corrected claim), not a disposition sync. Rather than build a
+  // bespoke form for ~10 rarely-used identity fields on a dialog that stays
+  // fundamentally a generic JSON editor, "Insert template" swaps in a
+  // starting skeleton the user edits — honest about what this screen is.
+  // isa_control/gs_control/st_control are deliberately absent: Core assigns
+  // them per trading partner (BR-6) and ignores anything supplied here.
   const [syncPayload, setSyncPayload] = useState(() =>
     JSON.stringify({ case_id: c.id, case_number: c.caseNumber, disposition_id: c.dispositionId ?? null,
       severity: c.severity, resolution_note: c.resolutionNote ?? null, resolved_at: c.resolvedAt ?? null }, null, 2),
@@ -581,6 +626,26 @@ function CaseActionsBar({ c }: { c: Case }) {
       >
         <div className="mt-3 space-y-3">
           <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Insert template</p>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(SYNC_TEMPLATES).map(([key, tpl]) => (
+                <Button
+                  key={key}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={createWriteback.isPending}
+                  onClick={() => {
+                    setSyncTarget(JSON.stringify(tpl.target, null, 2));
+                    setSyncPayload(JSON.stringify(tpl.payload, null, 2));
+                  }}
+                >
+                  {tpl.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
             <label htmlFor="sync-connection" className="text-xs text-muted-foreground">
               Target connection
             </label>
@@ -607,7 +672,9 @@ function CaseActionsBar({ c }: { c: Case }) {
           </div>
           <div className="space-y-1.5">
             <label htmlFor="sync-target" className="text-xs text-muted-foreground">
-              Target routing (postgres: {"{schema, table, key_column}"}; http_api: {"{path?, method?}"})
+              Target routing (postgres: {"{schema, table, key_column}"}; http_api: {"{path?, method?}"};
+              X12 EDI: {"{format:\"x12\", transaction_set, sender_id, receiver_id, ...}"} — control
+              numbers are assigned automatically, per trading partner)
             </label>
             <Textarea
               id="sync-target"

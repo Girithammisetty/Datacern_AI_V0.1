@@ -13,6 +13,7 @@ import { useSession } from "@/lib/session/SessionContext";
 import { GraphQLRequestError } from "@/lib/graphql/client";
 import type { Writeback } from "@/lib/graphql/types";
 import { formatLocal } from "@/lib/utils";
+import { X12Preview } from "./X12Preview";
 
 const STATUSES = ["", "pending_approval", "delivering", "delivered", "failed", "rejected"];
 
@@ -150,6 +151,7 @@ export default function AdminWritebacksPage() {
               <pre className="overflow-x-auto rounded bg-muted p-2 text-xs">{JSON.stringify(expanded.payload, null, 2)}</pre>
             </div>
           </div>
+          <X12Preview payload={expanded.payload} />
         </div>
       )}
 
@@ -170,6 +172,7 @@ export default function AdminWritebacksPage() {
           mutate(toDecide.wb.id, { onSuccess: () => setToDecide(null) });
         }}
       >
+        {toDecide?.action === "approve" && <X12Preview payload={toDecide.wb.payload} />}
         {decideError && (
           <p role="alert" className="mt-2 text-xs text-destructive" data-testid="mutation-error">
             {decideError.message}
