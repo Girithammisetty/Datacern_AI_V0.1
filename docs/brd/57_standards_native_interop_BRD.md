@@ -325,10 +325,17 @@ REST transport half — paginated `_since` incremental sync + SMART-on-FHIR auth
 via SecretsStore (STD-FR-020/021) — is a connector and a separate increment; this
 is the decode a file drop or that connector both feed.
 
-**inc-3d/2c (next).** HL7v2 decode (STD-FR-022), ISO 20022 (STD-FR-030), ACORD
-(STD-FR-031). Then the transport/governance remainder: bind additional
-transports (SFTP file drop is the common clearinghouse pattern; today only the
-`http_api` connector carries outbound X12), acknowledgements (STD-FR-014),
+**inc-3d — BUILT.** HL7 v2.x decode (STD-FR-022). `hl7v2.py` + `"hl7v2"` in the
+registry. Delimiters are read from MSH (field sep = the char after `MSH`, MSH-2
+carries component/repetition/subcomponent) — the same data-driven discipline as
+X12. Dispatched by message type: ADT emits one patient/event row per message;
+ORU emits one row per OBX observation. Tolerates `\r`, `\n` and `\r\n` segment
+terminators; a stream not starting with MSH is refused (Rule 2). 9 tests.
+
+**inc-3e/2c (next).** ISO 20022 (STD-FR-030), ACORD (STD-FR-031). Then the
+transport/governance remainder: bind additional transports (SFTP file drop is the
+common clearinghouse pattern; today only the `http_api` connector carries
+outbound X12), acknowledgements (STD-FR-014),
 837→277CA→835 correlation (STD-FR-015), trading-partner registry (STD-FR-040)
 and duplicate ISA rejection (STD-FR-043). **inc-3+**: 835/834/270/271/276/277
 decode, then FHIR/HL7v2, then ISO 20022/ACORD.

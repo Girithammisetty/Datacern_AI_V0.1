@@ -37,6 +37,9 @@ FILE_FORMATS: tuple[str, ...] = (
     # governed rows rather than flattened generically (domain/fhir.py). It
     # auto-detects Bundle vs Bulk-Data NDJSON.
     "fhir",
+    # "hl7v2" is delimiter-separated like x12; delimiters come from the MSH header
+    # and rows are dispatched by message type (domain/hl7v2.py).
+    "hl7v2",
 )
 MAX_SAMPLES = 20
 SAMPLE_VALUE_TRUNC = 256
@@ -468,6 +471,10 @@ def decode_stream(
         from app.domain.fhir import decode_fhir
 
         return decode_fhir(chunks, opts.batch_size, stats)
+    if opts.file_format == "hl7v2":
+        from app.domain.hl7v2 import decode_hl7v2
+
+        return decode_hl7v2(chunks, opts.batch_size, stats)
     raise PermanentJobError(
         ErrorCategory.DECODE_ERROR, f"unsupported file_format {opts.file_format!r}"
     )
