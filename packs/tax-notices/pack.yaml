@@ -1,14 +1,14 @@
 # tax-notices capability pack — Core-neutral edition: corporate tax notice
 # and exemption-certificate resolution for corporate tax departments,
 # tax-compliance BPOs/firms, multi-state retailers and SaaS sellers (sales
-# tax), and payroll providers. Installable TODAY against Windrose Core's
+# tax), and payroll providers. Installable TODAY against Datacern Core's
 # public APIs via packctl; the manifest envelope follows BRD 23
 # (PKG-FR-001/003). Components the current Core cannot materialize are
 # declared under `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: tax-notices
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted corporate tax notice and exemption-certificate resolution:
   notice intake triage with jurisdictional-deadline awareness (response

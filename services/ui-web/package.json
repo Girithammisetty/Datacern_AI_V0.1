@@ -2,7 +2,7 @@
   "name": "ui-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Windrose web application: data, ML, dashboards, cases, admin, and agentic surfaces. Talks to bff-graphql for all data and realtime-hub for streams.",
+  "description": "Datacern web application: data, ML, dashboards, cases, admin, and agentic surfaces. Talks to bff-graphql for all data and realtime-hub for streams.",
   "engines": {
     "node": ">=20 <21"
   },

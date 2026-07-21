@@ -36,7 +36,7 @@ func TestToolFacade_FailsClosedWithoutAllowlist(t *testing.T) {
 	s := &Server{}
 	body := `{"tool_id":"case.apply_disposition","tenant":"t","obo_sub":"u","args":{"case_id":"c"}}`
 	r := httptest.NewRequest("POST", "/internal/v1/mcp/invoke", strings.NewReader(body))
-	r.Header.Set("X-Spiffe-Id", "spiffe://windrose/ns/tools/sa/mcp-gateway")
+	r.Header.Set("X-Spiffe-Id", "spiffe://datacern/ns/tools/sa/mcp-gateway")
 	w := httptest.NewRecorder()
 	s.handleToolFacade(w, r) // no CASE_FACADE_ALLOWED_SPIFFE configured
 	if w.Code != 403 {
@@ -45,11 +45,11 @@ func TestToolFacade_FailsClosedWithoutAllowlist(t *testing.T) {
 }
 
 func TestToolFacade_UnknownToolID(t *testing.T) {
-	t.Setenv("CASE_FACADE_ALLOWED_SPIFFE", "spiffe://windrose/ns/tools/sa/mcp-gateway")
+	t.Setenv("CASE_FACADE_ALLOWED_SPIFFE", "spiffe://datacern/ns/tools/sa/mcp-gateway")
 	s := &Server{}
 	body := `{"tool_id":"case.something_else","tenant":"t","obo_sub":"u","args":{}}`
 	r := httptest.NewRequest("POST", "/internal/v1/mcp/invoke", strings.NewReader(body))
-	r.Header.Set("X-Spiffe-Id", "spiffe://windrose/ns/tools/sa/mcp-gateway")
+	r.Header.Set("X-Spiffe-Id", "spiffe://datacern/ns/tools/sa/mcp-gateway")
 	w := httptest.NewRecorder()
 	s.handleToolFacade(w, r)
 	if w.Code != 404 {
@@ -58,11 +58,11 @@ func TestToolFacade_UnknownToolID(t *testing.T) {
 }
 
 func TestToolFacade_BadTenant(t *testing.T) {
-	t.Setenv("CASE_FACADE_ALLOWED_SPIFFE", "spiffe://windrose/ns/tools/sa/mcp-gateway")
+	t.Setenv("CASE_FACADE_ALLOWED_SPIFFE", "spiffe://datacern/ns/tools/sa/mcp-gateway")
 	s := &Server{}
 	body := `{"tool_id":"case.apply_disposition","tenant":"not-a-uuid","obo_sub":"u","args":{"case_id":"c"}}`
 	r := httptest.NewRequest("POST", "/internal/v1/mcp/invoke", strings.NewReader(body))
-	r.Header.Set("X-Spiffe-Id", "spiffe://windrose/ns/tools/sa/mcp-gateway")
+	r.Header.Set("X-Spiffe-Id", "spiffe://datacern/ns/tools/sa/mcp-gateway")
 	w := httptest.NewRecorder()
 	s.handleToolFacade(w, r)
 	if w.Code != 400 {

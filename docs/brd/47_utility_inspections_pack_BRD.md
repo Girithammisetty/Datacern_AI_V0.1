@@ -1,6 +1,6 @@
 # BRD 47 — `utility-inspections` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32 pattern). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending (Core-neutral via packctl); pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Asset-inspection finding triage and repair/defer decisioning AI for electric and gas utilities: drone-AI/LiDAR/infrared/foot-patrol finding intake with wildfire risk-zone awareness (HFTD Tier 2/3, PSPS-history circuits), gas leak-grading practice, false-detection management with the field-verification detector-training loop, and governed deferral with documented engineering rationale. Sells to electric and gas utilities (especially wildfire-exposed distribution utilities), transmission operators, and inspection-services firms.
 
-**Why this vertical.** Wildfire-mitigation plans, overhead-line clearance standards, gas leak grading, and inspection-cycle rules attach hard clocks and audit exposure to every finding; drone/aerial-AI programs have multiplied finding volume (with material false-positive rates) faster than triage staffing; and the deferred-maintenance record is the decisive fact pattern in post-incident litigation. Every repair/defer call is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Windrose Core, proven by the BRD 24-32 adjudication packs.
+**Why this vertical.** Wildfire-mitigation plans, overhead-line clearance standards, gas leak grading, and inspection-cycle rules attach hard clocks and audit exposure to every finding; drone/aerial-AI programs have multiplied finding volume (with material false-positive rates) faster than triage staffing; and the deferred-maintenance record is the decisive fact pattern in post-incident litigation. Every repair/defer call is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Datacern Core, proven by the BRD 24-32 adjudication packs.
 
 **Business value.** Deadline-breach elimination (make-safe and program-window clocks watched per risk zone), triage throughput (pre-routing across dispatch/verify/schedule/monitor), truck-roll savings (false detections screened to field verification instead of dispatch), detector-precision lift (verification outcomes recycled as training labels), and litigation/audit-ready decision files (every deferral carries its engineering rationale + provenance).
 
@@ -100,7 +100,7 @@ Authored materialization: 3 datasets (findings 26 / assets 30 / circuits 12 — 
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): asset registry/GIS of record, EAM credentials, drone/LiDAR analytics feeds, leak-survey instrument exports.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): asset registry/GIS of record, EAM credentials, drone/LiDAR analytics feeds, leak-survey instrument exports.
 
 ## 7. NFRs (deltas)
 

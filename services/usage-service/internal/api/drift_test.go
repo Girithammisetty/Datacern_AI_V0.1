@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/windrose-ai/usage-service/internal/authz"
+	"github.com/datacern-ai/usage-service/internal/authz"
 )
 
 // canonicalVerbs is rbac's closed action-grammar verb set (RBC-FR-022,

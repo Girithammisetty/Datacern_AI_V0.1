@@ -34,24 +34,24 @@ import (
 	tcredpanda "github.com/testcontainers/testcontainers-go/modules/redpanda"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	gcevent "github.com/windrose-ai/go-common/event"
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	gcoutbox "github.com/windrose-ai/go-common/outbox"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/authjwt"
+	gcevent "github.com/datacern-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/notification-service/internal/api"
-	"github.com/windrose-ai/notification-service/internal/authz"
-	"github.com/windrose-ai/notification-service/internal/channels/email"
-	"github.com/windrose-ai/notification-service/internal/channels/inapp"
-	"github.com/windrose-ai/notification-service/internal/channels/webhook"
-	"github.com/windrose-ai/notification-service/internal/events"
-	"github.com/windrose-ai/notification-service/internal/pipeline"
-	"github.com/windrose-ai/notification-service/internal/ratelimit"
-	"github.com/windrose-ai/notification-service/internal/registry"
-	"github.com/windrose-ai/notification-service/internal/store"
-	"github.com/windrose-ai/notification-service/internal/templates"
-	"github.com/windrose-ai/notification-service/internal/worker"
+	"github.com/datacern-ai/notification-service/internal/api"
+	"github.com/datacern-ai/notification-service/internal/authz"
+	"github.com/datacern-ai/notification-service/internal/channels/email"
+	"github.com/datacern-ai/notification-service/internal/channels/inapp"
+	"github.com/datacern-ai/notification-service/internal/channels/webhook"
+	"github.com/datacern-ai/notification-service/internal/events"
+	"github.com/datacern-ai/notification-service/internal/pipeline"
+	"github.com/datacern-ai/notification-service/internal/ratelimit"
+	"github.com/datacern-ai/notification-service/internal/registry"
+	"github.com/datacern-ai/notification-service/internal/store"
+	"github.com/datacern-ai/notification-service/internal/templates"
+	"github.com/datacern-ai/notification-service/internal/worker"
 )
 
 type harness struct {
@@ -83,8 +83,8 @@ func TestMain(m *testing.M) {
 
 	pgc, err := tcpostgres.Run(ctx, "postgres:16-alpine",
 		tcpostgres.WithDatabase("notification"),
-		tcpostgres.WithUsername("windrose"),
-		tcpostgres.WithPassword("windrose_dev"),
+		tcpostgres.WithUsername("datacern"),
+		tcpostgres.WithPassword("datacern_dev"),
 		tcpostgres.BasicWaitStrategies(),
 	)
 	if err != nil {
@@ -192,11 +192,11 @@ func TestMain(m *testing.M) {
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
 	srv := &api.Server{
 		Store: pg, Authz: authz.AllowAll{}, Registry: reg, WebhookSender: webhookSender,
-		Verifier: authjwt.NewStatic(&key.PublicKey, "windrose-test", "windrose"),
+		Verifier: authjwt.NewStatic(&key.PublicKey, "datacern-test", "datacern"),
 		// SES driver registered for its real status-callback parser (AC-10);
 		// credentials are unset (Send is credential-gated) but ParseStatusCallback
 		// needs none.
-		EmailProviders: map[string]email.Provider{"ses": email.NewSES("us-east-1", "", "", "notifications@windrose.local")},
+		EmailProviders: map[string]email.Provider{"ses": email.NewSES("us-east-1", "", "", "notifications@datacern.local")},
 	}
 
 	h = &harness{pg: pg, appPool: appPool, rc: rc, producer: producer, pipeline: pl, worker: wk,
@@ -244,7 +244,7 @@ func (h *harness) token(t *testing.T, tenant uuid.UUID, sub string) string {
 	t.Helper()
 	claims := jwt.MapClaims{
 		"sub": sub, "tenant_id": tenant.String(), "typ": "user",
-		"iss": "windrose-test", "aud": "windrose",
+		"iss": "datacern-test", "aud": "datacern",
 		"iat": time.Now().Unix(), "exp": time.Now().Add(5 * time.Minute).Unix(),
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)

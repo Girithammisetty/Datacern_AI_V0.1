@@ -1,7 +1,7 @@
 [project]
-name = "windrose-common"
+name = "datacern-common"
 version = "0.1.0"
-description = "Windrose shared plumbing: real adapters for MinIO/S3, Iceberg REST, Vault, Kafka, OPA, Redis, JWKS, OTel, and HTTP helpers."
+description = "Datacern shared plumbing: real adapters for MinIO/S3, Iceberg REST, Vault, Kafka, OPA, Redis, JWKS, OTel, and HTTP helpers."
 requires-python = ">=3.12"
 dependencies = [
     # object storage (S3 API -> MinIO) — real multipart streaming
@@ -71,4 +71,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["windrose_common"]
+packages = ["datacern_common"]

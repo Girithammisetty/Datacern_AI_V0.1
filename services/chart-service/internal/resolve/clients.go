@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/windrose-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/chart-service/internal/domain"
 )
 
 // CompileRequest is the semantic-service POST /compile body (SEM /compile).

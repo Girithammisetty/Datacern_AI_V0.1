@@ -53,11 +53,11 @@ import (
 	tc "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/localstack"
 
-	"github.com/windrose-ai/identity-service/internal/adapters/awskms"
-	"github.com/windrose-ai/identity-service/internal/adapters/azurekeyvault"
-	"github.com/windrose-ai/identity-service/internal/adapters/gcpkms"
-	"github.com/windrose-ai/identity-service/internal/adapters/vault"
-	"github.com/windrose-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/identity-service/internal/adapters/awskms"
+	"github.com/datacern-ai/identity-service/internal/adapters/azurekeyvault"
+	"github.com/datacern-ai/identity-service/internal/adapters/gcpkms"
+	"github.com/datacern-ai/identity-service/internal/adapters/vault"
+	"github.com/datacern-ai/identity-service/internal/keys"
 )
 
 var (
@@ -139,7 +139,7 @@ func newAzureSigner(t *testing.T) keys.Signer {
 		},
 		// version is intentionally ignored beyond stripping it back off `name`
 		// below — this fake only ever creates one version per key name
-		// (Windrose's usage never asks Key Vault for a specific older
+		// (Datacern's usage never asks Key Vault for a specific older
 		// version). Note: azkeys/fake@v1.5.0's generated router folds the
 		// {name}/{version} path segments into `name` for the Sign route
 		// instead of splitting them (verified empirically: Client.Sign(ctx,
@@ -209,7 +209,7 @@ func cases() []signerCase {
 				if !reachable("localhost", "8200") {
 					t.Skip("Vault not reachable at localhost:8200 — is the dev infra up?")
 				}
-				s, err := vault.New(addr, "windrose_dev_root", "")
+				s, err := vault.New(addr, "datacern_dev_root", "")
 				if err != nil {
 					t.Skipf("vault unavailable: %v", err)
 				}

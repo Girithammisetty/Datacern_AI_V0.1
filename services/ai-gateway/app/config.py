@@ -81,7 +81,7 @@ class Settings(BaseSettings):
 
     # Runtime adapter selection (CONVENTIONS.md END STATE). The RUNTIME DEFAULT
     # is True: main.py wires the real shared-infra adapters — Ollama LLM
-    # provider, the windrose_common Kafka producer (Redpanda), the OPA sidecar
+    # provider, the datacern_common Kafka producer (Redpanda), the OPA sidecar
     # and Redis — over a Postgres-backed (RLS) store. The unit tier explicitly
     # sets this False (tests/conftest) so the in-process/in-memory doubles are
     # reachable ONLY from tests. Set AIG_USE_REAL_ADAPTERS=false to run fully
@@ -104,8 +104,8 @@ class Settings(BaseSettings):
     opa_url: str = "http://localhost:8281"
 
     # AuthN (MASTER-FR-010/011). In dev/tests a static PEM is used; prod uses JWKS.
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwt_public_key_pem: str | None = None
     jwks_url: str | None = None
     jwks_ttl_seconds: int = 300
@@ -115,8 +115,8 @@ class Settings(BaseSettings):
     # per-run virtual keys through this path (AIG-FR-032).
     spiffe_header: str = "x-client-spiffe-id"
     internal_allowed_spiffe: list[str] = [
-        "spiffe://windrose/ns/ai/sa/agent-runtime",
-        "spiffe://windrose/ns/ai/sa/eval-service",
+        "spiffe://datacern/ns/ai/sa/agent-runtime",
+        "spiffe://datacern/ns/ai/sa/eval-service",
     ]
 
     platform_tenant_id: str = PLATFORM_TENANT_ID

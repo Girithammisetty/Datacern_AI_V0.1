@@ -31,8 +31,8 @@ runtime email path is fully real via SMTP. No `NotImplementedError` / `ErrNotWir
 
 ```bash
 # Real infra (repo root): make dev-up   # postgres, redpanda, redis, opa, ...
-# Create this service's DB once (owner windrose):
-docker exec windrose-dev-postgres-1 createdb -U windrose notification
+# Create this service's DB once (owner datacern):
+docker exec datacern-dev-postgres-1 createdb -U datacern notification
 export PATH=/opt/homebrew/bin:$PATH
 make run       # boots on :8087 with real adapters (default env)
 # GET /healthz /readyz /metrics ; API under /api/v1

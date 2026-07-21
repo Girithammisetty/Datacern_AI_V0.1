@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/windrose-ai/tool-plane/internal/domain"
-	"github.com/windrose-ai/tool-plane/internal/events"
+	"github.com/datacern-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/events"
 )
 
 // audit emits exactly one ai.tool_invoked.v1 event per attempt with the args

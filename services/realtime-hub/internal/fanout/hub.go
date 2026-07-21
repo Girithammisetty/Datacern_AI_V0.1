@@ -8,7 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/windrose-ai/realtime-hub/internal/metrics"
+	"github.com/datacern-ai/realtime-hub/internal/metrics"
 )
 
 // leader is the minimal surface the hub needs from a Lease (nil = always

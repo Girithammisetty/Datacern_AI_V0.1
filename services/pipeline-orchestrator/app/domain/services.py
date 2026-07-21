@@ -385,7 +385,7 @@ class RunService:
             # can target the experiment-service experiment (by MLflow experiment id or
             # name) so the mirror reconciliation sweep materializes the run into
             # experiment-service; otherwise it lands in the shared orchestrator experiment.
-            # workspace_id rides along as a run tag (windrose.workspace_id after the
+            # workspace_id rides along as a run tag (datacern.workspace_id after the
             # gateway prefixes it) so experiment-service's registry mirror can place
             # the mirrored model in the tenant workspace the run belongs to — the
             # MLflow experiment name is unreliable for that (agent runs land in the

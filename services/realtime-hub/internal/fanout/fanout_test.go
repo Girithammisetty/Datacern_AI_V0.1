@@ -11,7 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/windrose-ai/realtime-hub/internal/metrics"
+	"github.com/datacern-ai/realtime-hub/internal/metrics"
 )
 
 // memBus is an in-memory Bus double (unit tests only, never wired into

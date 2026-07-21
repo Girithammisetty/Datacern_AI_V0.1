@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/windrose-ai/go-common/redisx"
-	"github.com/windrose-ai/notification-service/internal/registry"
+	"github.com/datacern-ai/go-common/redisx"
+	"github.com/datacern-ai/notification-service/internal/registry"
 )
 
 // GroupResolver expands role audiences and group subjects into user ids via the

@@ -8,7 +8,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5" // pgx5 driver
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
-	"github.com/windrose-ai/rbac-service/migrations"
+	"github.com/datacern-ai/rbac-service/migrations"
 )
 
 // Migrate applies all forward migrations (golang-migrate, MASTER-FR-060).

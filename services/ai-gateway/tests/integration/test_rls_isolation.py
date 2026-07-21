@@ -56,9 +56,9 @@ async def test_data_plane_end_to_end_on_postgres_and_redis(client, container):
     r = await client.post("/v1/chat/completions", json=CHAT_BODY,
                           headers=dp_headers(secret))
     assert r.status_code == 200, r.text
-    assert r.headers["x-windrose-rung"] == "0"
+    assert r.headers["x-datacern-rung"] == "0"
     # request logged under tenant A only
-    request_id = r.headers["x-windrose-request-id"]
+    request_id = r.headers["x-datacern-request-id"]
     async with container.uow_factory(TENANT_A) as uow:
         assert (await uow.request_log.get(request_id)) is not None
     async with container.uow_factory(TENANT_B) as uow:

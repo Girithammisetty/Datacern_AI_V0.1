@@ -30,13 +30,13 @@ import (
 	"github.com/stretchr/testify/require"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/windrose-ai/query-service/internal/api"
-	"github.com/windrose-ai/query-service/internal/authz"
-	"github.com/windrose-ai/query-service/internal/datasets"
-	"github.com/windrose-ai/query-service/internal/engine"
-	"github.com/windrose-ai/query-service/internal/exec"
-	"github.com/windrose-ai/query-service/internal/results"
-	"github.com/windrose-ai/query-service/internal/store"
+	"github.com/datacern-ai/query-service/internal/api"
+	"github.com/datacern-ai/query-service/internal/authz"
+	"github.com/datacern-ai/query-service/internal/datasets"
+	"github.com/datacern-ai/query-service/internal/engine"
+	"github.com/datacern-ai/query-service/internal/exec"
+	"github.com/datacern-ai/query-service/internal/results"
+	"github.com/datacern-ai/query-service/internal/store"
 )
 
 // blockingEngine is a controllable engine registered as "warehouse" for
@@ -241,7 +241,7 @@ func TestMain(m *testing.M) {
 	}
 	server := &api.Server{
 		Store: pg, Broker: broker, Results: broker.Results, Authz: authz.AllowAll{},
-		Verifier:     api.NewVerifierStatic(&key.PublicKey, "windrose-test", "windrose"),
+		Verifier:     api.NewVerifierStatic(&key.PublicKey, "datacern-test", "datacern"),
 		ExportSecret: []byte("integration-secret"),
 	}
 	httpSrv := httptest.NewServer(server.Router())
@@ -283,7 +283,7 @@ func (h *harness) token(t *testing.T, tenant uuid.UUID, typ, sub string, extra m
 	t.Helper()
 	claims := jwt.MapClaims{
 		"sub": sub, "tenant_id": tenant.String(), "typ": typ,
-		"iss": "windrose-test", "aud": "windrose",
+		"iss": "datacern-test", "aud": "datacern",
 		"exp": time.Now().Add(5 * time.Minute).Unix(),
 	}
 	for k, v := range extra {

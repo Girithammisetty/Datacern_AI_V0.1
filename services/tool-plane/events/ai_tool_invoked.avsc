@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "ToolInvoked",
-  "namespace": "ai.windrose.tool_plane",
+  "namespace": "ai.datacern.tool_plane",
   "doc": "ai.tool_invoked.v1 — one record per enforcement attempt (allow/deny/error). Carries the args DIGEST (SHA-256 canonical JSON) and affected URN list, never raw argument values (BR-3, MASTER-FR-042). Rides the platform master envelope; this schema documents the envelope payload.",
   "fields": [
     {"name": "invocation_id", "type": "string", "doc": "uuidv7"},

@@ -7,9 +7,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/tool-plane/internal/domain"
-	"github.com/windrose-ai/tool-plane/internal/events"
-	"github.com/windrose-ai/tool-plane/internal/store"
+	"github.com/datacern-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/events"
+	"github.com/datacern-ai/tool-plane/internal/store"
 )
 
 // enablementReq is the per-tenant enablement payload (TPL-FR-004).

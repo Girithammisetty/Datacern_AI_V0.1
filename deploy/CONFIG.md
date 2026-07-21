@@ -1,8 +1,8 @@
-# Windrose — configuration & credentials contract
+# Datacern — configuration & credentials contract
 
 Everything a running cluster needs is **referenced, never hard-coded**. Non-secret
-settings come from a ConfigMap (`windrose-config`); secrets come from a single K8s
-Secret (`windrose-secrets`) that is **synced from the cloud's secret manager** — so
+settings come from a ConfigMap (`datacern-config`); secrets come from a single K8s
+Secret (`datacern-secrets`) that is **synced from the cloud's secret manager** — so
 credentials are filled in *later*, in the cloud console / Terraform vars, and rotated
 without touching images or manifests.
 
@@ -10,8 +10,8 @@ without touching images or manifests.
  cloud secret manager (AWS Secrets Manager | GCP Secret Manager | Azure Key Vault)
         │  (External Secrets Operator, or the CD workflow at deploy time)
         ▼
- K8s Secret  windrose-secrets   ──►  every service Deployment  (envFrom)
- K8s ConfigMap windrose-config  ──►  every service Deployment  (envFrom)
+ K8s Secret  datacern-secrets   ──►  every service Deployment  (envFrom)
+ K8s ConfigMap datacern-config  ──►  every service Deployment  (envFrom)
 ```
 
 ## What you fill in later (secrets)
@@ -39,31 +39,31 @@ Provide these keys in your cloud secret manager under the path in `values-<cloud
 
 `ICEBERG_CATALOG_URI`, `ICEBERG_WAREHOUSE`, `OPA_URL`, `MLFLOW_TRACKING_URI`,
 `TEMPORAL_HOST`, `OPENSEARCH_URL`, `OLLAMA_BASE_URL`, `JWT_ISSUER`, `JWT_AUDIENCE`,
-`WINDROSE_ENV=production`, `WINDROSE_OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`
+`DATACERN_ENV=production`, `DATACERN_OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`
 (see "Observability" below), and the in-cluster service DNS names (e.g.
 `RBAC_URL=http://rbac-service:8302`). These are set from `values-<cloud>.yaml`.
 
 ## Observability — bring your own backend
 
-Windrose does not ship an observability backend; it exports to **yours**
+Datacern does not ship an observability backend; it exports to **yours**
 (Datadog, Honeycomb, Grafana Cloud, New Relic, Splunk Observability, or a
 self-hosted OTel Collector / Jaeger / Tempo). Every service already contains
-the real exporter code (`libs/go-common/otelx`, `libs/py-common/windrose_common/
+the real exporter code (`libs/go-common/otelx`, `libs/py-common/datacern_common/
 otelx.py`, and `services/bff-graphql/src/tracing.ts` for the Node BFF); this is
 a Helm/config wiring problem, not a code problem.
 
 ### Traces (OTLP)
 
-Set two ConfigMap values (`deploy/helm/windrose/values.yaml` → `config:`, or
+Set two ConfigMap values (`deploy/helm/datacern/values.yaml` → `config:`, or
 override per cloud in `values-<cloud>.yaml`):
 
 | Key | Default | Effect |
 |---|---|---|
-| `WINDROSE_OTEL_ENABLED` | `"false"` | Set `"true"` to install the tracer provider. A non-empty `OTEL_EXPORTER_OTLP_ENDPOINT` also implicitly enables it. |
+| `DATACERN_OTEL_ENABLED` | `"false"` | Set `"true"` to install the tracer provider. A non-empty `OTEL_EXPORTER_OTLP_ENDPOINT` also implicitly enables it. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset (commented out) | `host:port` of your collector/vendor endpoint, e.g. `otel-collector.observability.svc:4317`. |
 
 Both are wired but unset by default — every service's tracer provider is a
-true no-op until you set them (verified: unset `WINDROSE_OTEL_ENABLED` and
+true no-op until you set them (verified: unset `DATACERN_OTEL_ENABLED` and
 empty endpoint mean `Enabled()`/`configure_tracing()` both return early with
 zero exporter construction, so this is genuinely opt-in, not "on but pointed
 nowhere").
@@ -79,7 +79,7 @@ writing, Go, Python **and** the Node BFF export via **OTLP/gRPC only**:
   BFF's own span context stamped onto downstream calls so services parent under
   the BFF hop. No `--require` preload / ESM loader hook needed.
 - Python: `opentelemetry-exporter-otlp-proto-grpc`'s `OTLPSpanExporter`
-  (`libs/py-common/windrose_common/otelx.py`) — **not** the HTTP exporter,
+  (`libs/py-common/datacern_common/otelx.py`) — **not** the HTTP exporter,
   despite OTel's Python SDK supporting both. There is currently no
   `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` switch wired in either language.
 
@@ -95,7 +95,7 @@ to work around by misconfiguring the endpoint.
 
 Metrics are **not** part of this OTLP wiring. Every service already exposes a
 Prometheus-format `/metrics` endpoint (`go-common/metricsx`, `py-common/
-windrose_common/metricsx.py` — dependency-free RED registries, no
+datacern_common/metricsx.py` — dependency-free RED registries, no
 `prometheus_client`/vendor SDK needed). Nothing changes here; you have two
 ways to scrape it:
 
@@ -121,9 +121,9 @@ Go services already emit structured JSON to stdout
 to your log forwarder (Fluent Bit, Vector, Datadog Agent, CloudWatch/Cloud
 Logging/Azure Monitor's node-level collector) as-is.
 
-Python services now have the equivalent: `windrose_common.logging.configure_json_logging()`
+Python services now have the equivalent: `datacern_common.logging.configure_json_logging()`
 installs a dependency-free JSON `logging.Formatter` on the root logger
-(`libs/py-common/windrose_common/logging.py`), so Python stdout is
+(`libs/py-common/datacern_common/logging.py`), so Python stdout is
 forwarder-friendly the same way. As of this phase it is wired into
 `eval-service`, `ai-gateway`, and `agent-runtime` as the proof of pattern;
 remaining Python services should add the same one-line call
@@ -138,7 +138,7 @@ unless the registry needs a password):
 
 | CI variable | Example |
 |---|---|
-| `REGISTRY` | `ghcr.io/acme` · `123456789.dkr.ecr.us-east-1.amazonaws.com` · `us-docker.pkg.dev/acme/windrose` · `acme.azurecr.io` |
+| `REGISTRY` | `ghcr.io/acme` · `123456789.dkr.ecr.us-east-1.amazonaws.com` · `us-docker.pkg.dev/acme/datacern` · `acme.azurecr.io` |
 | `IMAGE_TAG` | defaults to the commit SHA |
 
 ## Cloud auth for deploy (CI → cloud, keyless)

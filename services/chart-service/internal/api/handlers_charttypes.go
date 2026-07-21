@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/windrose-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/chart-service/internal/domain"
 )
 
 // handleChartTypes serves the 30-type catalog + per-type JSON Schemas

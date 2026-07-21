@@ -1,7 +1,7 @@
 # BRD 57 — Standards-Native Interop (EDI X12 · HL7/FHIR · ISO 20022 · ACORD)
 
 **Deliverable type:** Core capability (standards format/semantic layer over the existing ingestion transport + writeback spine)
-**Publisher:** Windrose · **Initial version:** 1.0.0 · **Status:** **inc-1 BUILT** (X12 decode spine: STD-FR-010/011 for 837, structural conformance, BR-2/BR-4; `app/domain/x12.py` + `x12` registered in the decoder registry). Remainder DESIGNED — see §8.
+**Publisher:** Datacern · **Initial version:** 1.0.0 · **Status:** **inc-1 BUILT** (X12 decode spine: STD-FR-010/011 for 837, structural conformance, BR-2/BR-4; `app/domain/x12.py` + `x12` registered in the decoder registry). Remainder DESIGNED — see §8.
 **Closes:** the standards-interop gap — Core ships 20 transport drivers but only 5 generic decoders (csv/json/parquet/avro/xml), while BRD 26 (Provider RCM), BRD 27 (Payer FWA/SIU) and the underwriting-intake pack all specify EDI/FHIR/ACORD connectivity at the pack level.
 
 ---
@@ -16,12 +16,12 @@ payment instruction) through the **existing proposal-mode writeback spine** — 
 a machine-readable message to an external party is governed exactly like any
 other real-world side effect.
 
-**Why.** Windrose's ingestion layer today is transport-complete and
+**Why.** Datacern's ingestion layer today is transport-complete and
 format-generic. `services/ingestion-service/app/domain/drivers/` provides ~20
 connectors (S3, SFTP, FTP, HTTP, Postgres/MySQL/MSSQL/Oracle, Snowflake,
 BigQuery, Databricks, Redshift, Salesforce, GCS, Azure Blob …) and
 `app/domain/decode.py` decodes csv/json/parquet/avro/xml. That is the right
-foundation — and it is exactly half the problem. In the verticals Windrose
+foundation — and it is exactly half the problem. In the verticals Datacern
 targets, the payload arriving over SFTP is **not** a CSV; it is a positional,
 loop-structured X12 envelope with its own control numbers, acknowledgement
 protocol and companion-guide dialect. Today a pack that needs 837s must either
@@ -183,7 +183,7 @@ Phasing follows demand from the shipped pack BRDs.
 
 ## 6. Dependencies
 
-Windrose Core: **ingestion-service** (transport drivers + `decode.py` decoder
+Datacern Core: **ingestion-service** (transport drivers + `decode.py` decoder
 registry + the proposal-mode writeback spine), **dataset-service** (governed
 datasets/Iceberg + lineage), **object store** (raw-envelope retention),
 **audit-service** (transmission trail), **BYO-P2 `SecretsStore`** (partner
@@ -359,7 +359,7 @@ with explicit `is None` checks (`_sub_text`); the suite now passes under
 
 **inc-4 — BUILT.** X12 acknowledgements (STD-FR-014), the TA1/999 half of the
 Remaining list above. Both close the loop on inc-2's outbound governance: after
-Windrose transmits an approved 837, a trading partner's ack tells us whether it
+Datacern transmits an approved 837, a trading partner's ack tells us whether it
 landed.
 - **TA1 (interchange-level ack).** Unlike every other X12 shape handled so far,
   TA1 has no ST/SE wrapper — it is a single segment carried directly in an

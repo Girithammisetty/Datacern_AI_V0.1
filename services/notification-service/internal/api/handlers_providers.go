@@ -8,12 +8,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // handleProviderStatus ingests an email provider's delivered/bounce/complaint
 // callback (NOTIF-FR-021, AC-10). It is authenticated by the provider's own
-// signed payload (allowlisted per provider, BR-13), not a Windrose JWT. Hard
+// signed payload (allowlisted per provider, BR-13), not a Datacern JWT. Hard
 // bounces/complaints add the address to the suppression list.
 func (s *Server) handleProviderStatus(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "provider")

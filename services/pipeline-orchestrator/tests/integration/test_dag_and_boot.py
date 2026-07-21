@@ -103,7 +103,7 @@ async def test_app_main_wires_real_adapters_and_local_executor(app_sf):
     assert isinstance(c.deps.mlflow, MlflowGateway)
     assert isinstance(c.deps.manifest_store, S3ManifestStore)
     assert c.settings.executor_backend == "local"
-    # RedisDedupStore from windrose_common.
+    # RedisDedupStore from datacern_common.
     assert type(c.dedup).__name__ == "RedisDedupStore"
 
     # Real OPA + Redis round-trip: a decision returns cleanly (deny-by-default here,

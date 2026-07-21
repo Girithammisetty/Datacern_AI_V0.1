@@ -1,7 +1,7 @@
 # BRD 14 — agent-runtime + agent-registry
 
 **Service:** agent-runtime (execution) + agent-registry (definitions, versions, principals, A2A cards) — one bounded context, two deployables, shared DB · **Language:** Python 3.12 (FastAPI + LangGraph 1.x + Temporal Python SDK) · **Phase:** 2–4
-**Inherits:** `00_MASTER_BRD.md`. Architecture refs: `WINDROSE_PLATFORM_ARCHITECTURE.md` §8.3–8.6, §8.9; `WINDROSE_V3_AGENTIC_ARCHITECTURE.md` §5.5–5.6, §5.8–5.10. Domain lineage: `chat-agent-service` (production analytics agent this rebuild evolves).
+**Inherits:** `00_MASTER_BRD.md`. Architecture refs: `DATACERN_PLATFORM_ARCHITECTURE.md` §8.3–8.6, §8.9; `DATACERN_V3_AGENTIC_ARCHITECTURE.md` §5.5–5.6, §5.8–5.10. Domain lineage: `chat-agent-service` (production analytics agent this rebuild evolves).
 
 ---
 
@@ -127,15 +127,15 @@ Reflection verdict schema (structured output via gateway schema validation): `{i
 
 **A2A agent card example (signed, served per version):**
 ```json
-{"name": "windrose-analytics", "version": "14", "protocolVersion": "1.0",
+{"name": "datacern-analytics", "version": "14", "protocolVersion": "1.0",
  "description": "Conversational analytics over governed semantic-layer data. Read-only.",
- "url": "https://agent-runtime.<cell>.windrose.internal/a2a/analytics",
+ "url": "https://agent-runtime.<cell>.datacern.internal/a2a/analytics",
  "capabilities": {"streaming": true, "pushNotifications": false},
  "skills": [
    {"id": "answer_data_question", "description": "Answer NL questions about dashboards/datasets with citations", "tags": ["analytics", "read-only"]},
    {"id": "explain_chart", "description": "Explain a chart's configuration and drivers", "tags": ["charts"]}],
- "securitySchemes": {"windrose-obo": {"type": "http", "scheme": "bearer"}},
- "x-windrose": {"agent_key": "analytics", "write_mode": "read_only", "eval_score_ref": "gr-01HX"},
+ "securitySchemes": {"datacern-obo": {"type": "http", "scheme": "bearer"}},
+ "x-datacern": {"agent_key": "analytics", "write_mode": "read_only", "eval_score_ref": "gr-01HX"},
  "signature": {"alg": "RS256", "kid": "agent-registry-2026-1", "value": "…"}}
 ```
 
@@ -148,7 +148,7 @@ Reflection verdict schema (structured output via gateway schema validation): `{i
 ### Chat API & streaming
 - **ART-FR-070 (Must)** OpenAI-compatible chat endpoint `POST /api/v1/agents/:agent_key/chat/completions` (messages[], stream, metadata: {session_id?, context_urn?}): creates/resumes a session, starts a run, streams via SSE. Streaming is relayed through **realtime-hub** (`stream_topic = agent_run:<run_id>`): runtime publishes chunks; clients consume from realtime-hub (supports reconnect/replay from last event id). Direct SSE from the runtime allowed for service-to-service callers only.
 - **ART-FR-071 (Must)** Stream event types: `token`, `tool_call_started {tool_id}`, `tool_call_result {digest, citation_refs}`, `proposal_created {proposal_id}`, `reflection {iteration}`, `run_completed {usage, citations[]}`, `error`. UI renders trace + citations from these (agent-run visualizer contract).
-- **ART-FR-072 (Must)** Responses carry AI-disclosure metadata (`x-windrose-ai-generated: true` + `run_completed.provenance`) for Art. 50 labeling; generated artifacts (draft dashboards, triage notes) get provenance fields `{agent_key, agent_version, run_id}` in their proposals.
+- **ART-FR-072 (Must)** Responses carry AI-disclosure metadata (`x-datacern-ai-generated: true` + `run_completed.provenance`) for Art. 50 labeling; generated artifacts (draft dashboards, triage notes) get provenance fields `{agent_key, agent_version, run_id}` in their proposals.
 - **ART-FR-073 (Must)** Proposal APIs: `GET /api/v1/proposals?filter[status]=pending` (approval inbox, paginated), `GET /:id`, `POST /:id/decide {action, message?, edited_args?}` (idempotent per proposal — first decision wins, later attempts 409 CONFLICT).
 
 ## 4. Domain model & data
@@ -188,7 +188,7 @@ Postgres `agent_runtime` DB; standard columns + RLS. Temporal is the workflow st
 
 **Redis keyspace.** `ar:sess:{tenant}:{session_id}` session index + working refs (TTL-managed) · `ar:kill` pub/sub + `ar:kill:set` · `ar:queue:{tenant}` fair-share queue metadata · `ar:pool:{tier}` session-pool gauges.
 
-**Temporal design notes (normative).** One namespace per cell (`windrose-agents-<cell>`); task queues `agents-pool`, `agents-bridge`, `agents-silo-<tenant>`; workflow id = `run:{run_id}` (dedup guarantee); signals: `user_message`, `proposal_decision:{proposal_id}`, `cancel`, `kill`; timers: idle (15m, reset on activity), hard lifetime (8h), proposal expiry (per proposal); activity heartbeats on LLM/tool calls ≥ 10s intervals; workflow history capped by continuing-as-new after 50 turns.
+**Temporal design notes (normative).** One namespace per cell (`datacern-agents-<cell>`); task queues `agents-pool`, `agents-bridge`, `agents-silo-<tenant>`; workflow id = `run:{run_id}` (dedup guarantee); signals: `user_message`, `proposal_decision:{proposal_id}`, `cancel`, `kill`; timers: idle (15m, reset on activity), hard lifetime (8h), proposal expiry (per proposal); activity heartbeats on LLM/tool calls ≥ 10s intervals; workflow history capped by continuing-as-new after 50 turns.
 
 ## 5. API specification
 
@@ -196,7 +196,7 @@ Base `/api/v1`. All errors per MASTER-FR-024; long-running per MASTER-FR-027.
 
 | Method & path | Purpose | Auth | Notable errors |
 |---|---|---|---|
-| `POST /agents/:agent_key/chat/completions` | chat (OpenAI-compatible; stream via realtime-hub topic returned in header `x-windrose-stream-topic`) | user JWT | 402 BUDGET_EXHAUSTED (surfaced), 409 SESSION_EXPIRED, 423 AGENT_KILLED, 429 |
+| `POST /agents/:agent_key/chat/completions` | chat (OpenAI-compatible; stream via realtime-hub topic returned in header `x-datacern-stream-topic`) | user JWT | 402 BUDGET_EXHAUSTED (surfaced), 409 SESSION_EXPIRED, 423 AGENT_KILLED, 429 |
 | `POST /sessions` · `GET /sessions/:id` · `POST /sessions/:id/terminate` | session mgmt | user JWT | 404, 409 |
 | `GET /runs/:id` · `GET /runs/:id/trace` | run status + trace (tool tree, citations) | user JWT / operator | 404 |
 | `POST /runs/:id/cancel` | cancel signal | owning user / tenant admin | 409 (terminal) |
@@ -215,7 +215,7 @@ POST /api/v1/agents/analytics/chat/completions
 {"messages": [{"role": "user", "content": "why did Q3 revenue dip in EMEA?"}],
  "stream": true,
  "metadata": {"session_id": "s-01H8", "context_urn": "wr:t-42:chart:dashboard/d-33"}}
-→ 200, headers: x-windrose-stream-topic: agent_run:r-01H9, x-windrose-ai-generated: true
+→ 200, headers: x-datacern-stream-topic: agent_run:r-01H9, x-datacern-ai-generated: true
 ```
 The client subscribes to realtime-hub `GET /stream?topics=agent_run:r-01H9` (with `Last-Event-ID` on reconnect); non-streaming callers receive the full OpenAI-shape response body when the run completes.
 

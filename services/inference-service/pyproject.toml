@@ -1,7 +1,7 @@
 [project]
 name = "inference-service"
 version = "0.1.0"
-description = "Windrose inference-service: batch scoring jobs, schema-compat validation, scheduled scoring, lineage"
+description = "Datacern inference-service: batch scoring jobs, schema-compat validation, scheduled scoring, lineage"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -21,11 +21,11 @@ dependencies = [
     # real ML model registry + model loading/scoring (MLflow server + sklearn flavor)
     "mlflow>=3.11,<4",
     "scikit-learn>=1.4",
-    "windrose-common",
+    "datacern-common",
 ]
 
 [tool.uv.sources]
-windrose-common = { path = "../../libs/py-common", editable = true }
+datacern-common = { path = "../../libs/py-common", editable = true }
 
 [dependency-groups]
 dev = [

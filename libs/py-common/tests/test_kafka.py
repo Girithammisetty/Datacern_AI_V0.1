@@ -5,14 +5,14 @@ from __future__ import annotations
 
 import pytest
 
-from windrose_common.kafka import (
+from datacern_common.kafka import (
     ConsumeStats,
     KafkaConsumer,
     KafkaEventBus,
     KafkaProducerClient,
     dlq_topic,
 )
-from windrose_common.redisx import RedisDedupStore, build_redis
+from datacern_common.redisx import RedisDedupStore, build_redis
 
 pytestmark = pytest.mark.integration
 

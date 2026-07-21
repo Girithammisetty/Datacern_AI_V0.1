@@ -7,7 +7,7 @@
 # `docker compose down`, so old tenants/cases/datasets persist until dropped.
 # This script drops them, so the next `make up` starts genuinely empty.
 #
-# Wipes EVERYTHING: every tenant (incl. demo.windrose and any wr-demo-* demos),
+# Wipes EVERYTHING: every tenant (incl. demo.datacern and any wr-demo-* demos),
 # every case, dataset, model, dashboard, audit record, and object in MinIO/Iceberg.
 # It does NOT touch source code or git.
 #

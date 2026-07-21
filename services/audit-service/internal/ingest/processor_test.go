@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/audit-service/internal/chain"
-	"github.com/windrose-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/chain"
+	"github.com/datacern-ai/audit-service/internal/domain"
 )
 
 // fakeInserter is an in-memory RecordInserter — a UNIT-TEST DOUBLE ONLY; it is

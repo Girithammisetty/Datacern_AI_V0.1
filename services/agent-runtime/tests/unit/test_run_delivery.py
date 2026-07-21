@@ -43,7 +43,7 @@ async def test_answer_is_streamed_and_persisted(client_and_container):
 
     # (b) hub stream: token (full text as one chunk) -> run_completed -> done,
     # on the topic the chat response advertised, with tenant_id for the hub.
-    topic = r.headers["x-windrose-stream-topic"]
+    topic = r.headers["x-datacern-stream-topic"]
     events = [e for e in c.realtime.events if e["topic"] == topic]
     kinds = [e["event"] for e in events]
     assert kinds == ["token", "run_completed", "done"]

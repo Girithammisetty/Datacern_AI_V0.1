@@ -1,9 +1,9 @@
 # BRD 30 — `banking-aml` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 2 (**first non-healthcare pack**) — ships after the 5-pack healthcare sweep has 2+ production references per pack.
 **Inherits:** `00_MASTER_BRD.md`, `23_pack_service_BRD.md`. Reference pattern: BRD 24.
-**Strategic role:** **cross-industry Core-neutrality proof.** This pack ships against a completely different regulatory family (BSA + OFAC + FinCEN + GLBA) than the healthcare packs (HIPAA + CMS). If it installs cleanly on unmodified Core BRDs 01–23, the pack thesis holds across industries — Test #4 from `WINDROSE_CORE_CAPABILITIES.md` §6, at maximum-difficulty setting.
+**Strategic role:** **cross-industry Core-neutrality proof.** This pack ships against a completely different regulatory family (BSA + OFAC + FinCEN + GLBA) than the healthcare packs (HIPAA + CMS). If it installs cleanly on unmodified Core BRDs 01–23, the pack thesis holds across industries — Test #4 from `DATACERN_CORE_CAPABILITIES.md` §6, at maximum-difficulty setting.
 
 ---
 
@@ -206,9 +206,9 @@ Consumed: `dataset.schema_changed` on connector-owned datasets → surface broke
 
 ## 7. Dependencies
 
-- **Windrose services:** all Core BRDs 01–23 + BRD 17 usage-service + BRD 16 eval-service (with model-risk gating: SR 26-2 aware) + BRD 15 memory-service.
+- **Datacern services:** all Core BRDs 01–23 + BRD 17 usage-service + BRD 16 eval-service (with model-risk gating: SR 26-2 aware) + BRD 15 memory-service.
 - **External systems (customer's):** core banking + AML platform (§3.5); sanctions data providers (customer's subscription); adverse media (customer's subscription); FinCEN BSA e-filing (customer's BSA-E user credential); OFAC feed direct from Treasury.
-- **Regulatory:** Windrose ships FFIEC BSA/AML Examination Manual crosswalk + SR 26-2 model-risk-management templates (supersedes SR 11-7, 2026-04-17) + NYDFS Part 504 attestation template.
+- **Regulatory:** Datacern ships FFIEC BSA/AML Examination Manual crosswalk + SR 26-2 model-risk-management templates (supersedes SR 11-7, 2026-04-17) + NYDFS Part 504 attestation template.
 - **Compliance:** SOC 2 Type II + HITRUST (inherited from Core) + optional FFIEC Cybersecurity Assessment Tool crosswalk for bank tenants + SR 26-2 model-risk documentation package.
 
 ## 8. NFRs (deltas from master)
@@ -245,7 +245,7 @@ Consumed: `dataset.schema_changed` on connector-owned datasets → surface broke
 - **AC-12** Presidio + BSI custom detectors + prompt-log audit sample: no unmasked SSN/TIN/full account number in any hosted-LLM prompt log; self-hosted SLM tier is preferred by default for BSI-sensitive workloads.
 - **AC-13** FinCEN e-filing test-batch submission end-to-end (against FinCEN sandbox) succeeds; test SAR + test CTR both accepted; production credentials gated behind customer BSA-E enrollment.
 - **AC-14** Regulator prep bundle export for an OCC/FDIC/Fed exam period returns signed archive in ≤ 5 min with every AI-touched disposition + model version + reviewer identity + FFIEC-manual crosswalk.
-- **AC-15** **Pack installs cleanly on unmodified Core BRDs 01–23** — **cross-industry Core-neutrality proof** (Test #4 from `WINDROSE_CORE_CAPABILITIES.md` §6 at maximum-difficulty setting: different regulatory family — BSA + OFAC + FinCEN + GLBA vs healthcare's HIPAA + CMS). If this pack requires ANY Core change, the platform thesis fails.
+- **AC-15** **Pack installs cleanly on unmodified Core BRDs 01–23** — **cross-industry Core-neutrality proof** (Test #4 from `DATACERN_CORE_CAPABILITIES.md` §6 at maximum-difficulty setting: different regulatory family — BSA + OFAC + FinCEN + GLBA vs healthcare's HIPAA + CMS). If this pack requires ANY Core change, the platform thesis fails.
 
 ## 10. Out of scope / future
 
@@ -256,7 +256,7 @@ Consumed: `dataset.schema_changed` on connector-owned datasets → surface broke
 - Trade surveillance (equity/FICC — distinct workflow).
 - Non-US regulatory regimes as PRIMARY buyer (UK FCA/PRA, EU AMLD6, Singapore MAS, Hong Kong HKMA, Australia AUSTRAC) — supported as configuration/extensions later; primary buyer stays US to preserve BSA-first narrative.
 - Crypto-native AML (Chainalysis / Elliptic / TRM Labs / Merkle Science own this; evaluate `banking-aml-crypto-native` as extension pack).
-- Retail bank consumer-facing member-services chatbot (permanently out — B2B strategy per WINDROSE_STRATEGY.md §5).
+- Retail bank consumer-facing member-services chatbot (permanently out — B2B strategy per DATACERN_STRATEGY.md §5).
 
 ## Appendix — canonical NL questions (verified queries in semantic-service)
 

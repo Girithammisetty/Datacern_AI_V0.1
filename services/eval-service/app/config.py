@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://eval_app_rt:eval_app_dev@localhost:5432/eval"
 
     # AuthN (MASTER-FR-010/011). In dev/tests a static PEM is used; prod uses JWKS.
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwt_public_key_pem: str | None = None
     jwks_url: str | None = None
     jwks_ttl_seconds: int = 300
@@ -28,17 +28,17 @@ class Settings(BaseSettings):
     # the gate/CI plane over mTLS.
     spiffe_header: str = "x-client-spiffe-id"
     internal_allowed_spiffe: list[str] = [
-        "spiffe://windrose/ns/ci/sa/pipeline",
-        "spiffe://windrose/ns/ai/sa/agent-registry",
-        "spiffe://windrose/ns/ai/sa/agent-runtime",
+        "spiffe://datacern/ns/ci/sa/pipeline",
+        "spiffe://datacern/ns/ai/sa/agent-registry",
+        "spiffe://datacern/ns/ai/sa/agent-runtime",
     ]
     # eval-service's own SPIFFE identity when it calls ai-gateway's internal
     # key-mint path (AIG-FR-032; ai-gateway allowlists this identity).
-    eval_spiffe_id: str = "spiffe://windrose/ns/ai/sa/eval-service"
+    eval_spiffe_id: str = "spiffe://datacern/ns/ai/sa/eval-service"
 
     # Adapter selection. Defaults **True** (CONVENTIONS.md END STATE: real adapters
     # are the default; the in-memory doubles must never be reachable from app.main
-    # wiring). True wires the shared windrose_common adapters against local infra
+    # wiring). True wires the shared datacern_common adapters against local infra
     # (Redpanda, OPA, Redis) + SQL/RLS store. Only the test suite sets it False to
     # reach the unit/dev-tier doubles.
     use_real_adapters: bool = True
@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # ai-gateway's OpenAI-compatible data plane with a virtual key + platform JWT.
     ai_gateway_url: str = "http://localhost:8312"
     ai_gateway_chat_path: str = "/v1/chat/completions"
-    ai_gateway_model: str = "windrose-auto"
+    ai_gateway_model: str = "datacern-auto"
     ai_gateway_virtual_key: str | None = None
     judge_request_class: str = "judge"
     judge_timeout_s: float = 120.0
@@ -69,7 +69,7 @@ class Settings(BaseSettings):
 
     # Fixture warehouse for sql_result_equivalence (BR-4/BR-9): a read-only
     # embedded DuckDB eval schema seeded per dataset version.
-    fixture_warehouse_dir: str = "/tmp/windrose/eval-service/fixtures"
+    fixture_warehouse_dir: str = "/tmp/datacern/eval-service/fixtures"
     sql_execution_ceiling_s: float = 60.0
     fixture_row_cap: int = 100_000
 

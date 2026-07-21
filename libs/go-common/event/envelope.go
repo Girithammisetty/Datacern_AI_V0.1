@@ -1,5 +1,5 @@
 // Package event defines the platform master event envelope (MASTER-FR-031)
-// shared by every Windrose service. It is the single wire contract carried by
+// shared by every Datacern service. It is the single wire contract carried by
 // the kafka producer/consumer and written to each service's transactional
 // outbox. Partition key is always tenant_id.
 package event

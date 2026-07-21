@@ -3,7 +3,7 @@
 ALL model calls go THROUGH ai-gateway (budget/guardrails/metering), never direct
 to Ollama. The gateway is OpenAI-compatible at ``POST /v1/chat/completions`` and
 needs a dual credential: ``Authorization: Bearer <virtual key>`` +
-``X-Windrose-JWT: <jwt>``. ``model`` is a ladder alias ("windrose-auto"), which
+``X-Datacern-JWT: <jwt>``. ``model`` is a ladder alias ("datacern-auto"), which
 the gateway routes to the seeded ``fast-small -> qwen2.5:0.5b`` deployment.
 
 The virtual key is tenant-scoped (ai-gateway rejects a key/tenant mismatch as
@@ -29,7 +29,7 @@ class AiGatewayLlmClient:
         base_url: str,
         *,
         chat_path: str = "/v1/chat/completions",
-        model: str = "windrose-auto",
+        model: str = "datacern-auto",
         virtual_key: str | None = None,
         vkey_provider=None,  # async callable(tenant_id) -> vkey str; takes precedence
         jwt_provider,  # callable(tenant_id) -> jwt str
@@ -68,8 +68,8 @@ class AiGatewayLlmClient:
         if response_format is not None:
             body["response_format"] = response_format
         headers = {
-            "X-Windrose-JWT": self._jwt_provider(tenant_id),
-            "x-windrose-request-class": self._request_class,
+            "X-Datacern-JWT": self._jwt_provider(tenant_id),
+            "x-datacern-request-class": self._request_class,
         }
         if self._vkey_provider is not None:
             headers["Authorization"] = f"Bearer {await self._vkey_provider(tenant_id)}"
@@ -88,5 +88,5 @@ class AiGatewayLlmClient:
             input_tokens=int(usage.get("prompt_tokens", 0)),
             output_tokens=int(usage.get("completion_tokens", 0)),
             model=str(data.get("model", self._model)),
-            deployment=resp.headers.get("x-windrose-deployment"),
+            deployment=resp.headers.get("x-datacern-deployment"),
         )

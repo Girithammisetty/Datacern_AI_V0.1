@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 
-	"github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/go-common/event"
 )
 
 // Handler processes one decoded envelope. Returning an error triggers retry;

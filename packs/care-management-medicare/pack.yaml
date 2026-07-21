@@ -1,7 +1,7 @@
 # care-management-medicare capability pack (BRD 25) — Core-neutral edition.
 # The first provider-side vertical: Medicare care-management program family
 # (CCM / PCM / TCM / BHI / CoCM / RPM / RTM / APCM 2025) for practices, FQHCs,
-# RHCs, and ambulatory groups. Installable TODAY against Windrose Core's
+# RHCs, and ambulatory groups. Installable TODAY against Datacern Core's
 # public APIs via packctl; the manifest envelope follows BRD 23 (PKG-FR-001/
 # 003) so this bundle is forward-compatible with pack-service when it ships.
 # Components the current Core cannot materialize are declared under `deferred`
@@ -10,7 +10,7 @@
 pack_manifest: 1
 name: care-management-medicare
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted Medicare care management (CCM/PCM/TCM/BHI/CoCM/RPM/RTM/APCM) for
   providers, FQHCs, and health-system ambulatory groups: enrollment-funnel and

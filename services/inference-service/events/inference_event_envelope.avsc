@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "InferenceEventEnvelope",
-  "namespace": "windrose.inference.events.v1",
+  "namespace": "datacern.inference.events.v1",
   "doc": "Master event envelope (MASTER-FR-031) for inference.events.v1. Partition key = tenant_id.",
   "fields": [
     {"name": "event_id", "type": "string", "doc": "UUIDv7"},

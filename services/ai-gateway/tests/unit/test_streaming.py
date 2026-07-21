@@ -15,7 +15,7 @@ from tests.conftest import (
 )
 
 STREAM_BODY = {
-    "model": "windrose-auto",
+    "model": "datacern-auto",
     "stream": True,
     "stream_options": {"include_usage": True},
     "messages": [{"role": "user", "content": "stream me the numbers"}],
@@ -139,7 +139,7 @@ async def test_cached_stream_replayed_as_sse(client, container):
     await client.post("/v1/chat/completions", json=body, headers=dp_headers(secret))
     r = await client.post("/v1/chat/completions", json=body,
                           headers=dp_headers(secret))
-    assert r.headers["x-windrose-cache"] == "hit"
+    assert r.headers["x-datacern-cache"] == "hit"
     assert r.headers["content-type"].startswith("text/event-stream")
     assert r.text.strip().endswith("data: [DONE]")
     event = container.bus.on_topic("ai.token_usage.v1")[-1]

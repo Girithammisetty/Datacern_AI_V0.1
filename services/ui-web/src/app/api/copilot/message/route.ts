@@ -11,7 +11,7 @@
  * agent-runtime's chat surface is
  * `POST /api/v1/agents/{agent_key}/chat/completions` (OpenAI-shaped: a `messages`
  * array + `metadata`); it returns `{data:{run_id, session_id}}` and an
- * `x-windrose-stream-topic: agent_run:{run_id}` header — the realtime-hub topic
+ * `x-datacern-stream-topic: agent_run:{run_id}` header — the realtime-hub topic
  * the browser subscribes to for token streaming.
  *
  * The copilot has NO mutation capability except decideProposal/submitFeedback
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "agent unavailable", status: res.status }, { status: 502 });
     }
     // agent-runtime publishes streamed tokens to this realtime-hub topic.
-    const streamTopic = res.headers.get("x-windrose-stream-topic");
+    const streamTopic = res.headers.get("x-datacern-stream-topic");
     const json = (await res.json().catch(() => ({}))) as {
       data?: { run_id?: string; session_id?: string };
       run_id?: string;

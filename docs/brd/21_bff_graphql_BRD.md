@@ -1,7 +1,7 @@
 # BRD 21 — bff-graphql
 
 **Service:** bff-graphql · **Language:** TypeScript (Node 22) · **Runtime:** Apollo Router (federation v2) + per-domain subgraphs · **Phase:** 0–5 · **Status:** Approved for build
-**Inherits:** `00_MASTER_BRD.md`. Architecture: `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6 (bff-graphql row: "GraphQL federation over the above for the UI; owns UI-shaped queries, no business logic").
+**Inherits:** `00_MASTER_BRD.md`. Architecture: `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6 (bff-graphql row: "GraphQL federation over the above for the UI; owns UI-shaped queries, no business logic").
 
 ---
 

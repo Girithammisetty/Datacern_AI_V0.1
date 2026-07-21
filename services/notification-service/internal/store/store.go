@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gcevent "github.com/windrose-ai/go-common/event"
+	gcevent "github.com/datacern-ai/go-common/event"
 )
 
 // Sentinel errors mapped onto the API error catalog by the api package.

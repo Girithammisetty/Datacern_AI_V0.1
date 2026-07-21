@@ -26,10 +26,10 @@ from typing import Any
 
 from app.domain.ports import GpuTrainerNotConfigured, TrainingResult, TrainingSpec
 
-DEFAULT_APP = "windrose-slm-trainer"
+DEFAULT_APP = "datacern-slm-trainer"
 DEFAULT_FUNCTION = "train_lora"
 #: Volume the deployed app writes adapters into (slm_modal_app.ADAPTER_VOLUME).
-ADAPTER_VOLUME = "windrose-slm-adapters"
+ADAPTER_VOLUME = "datacern-slm-adapters"
 
 
 class ModalGpuTrainer:

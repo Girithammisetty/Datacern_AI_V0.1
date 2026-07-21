@@ -34,7 +34,7 @@ async def test_ac6_case_resolved_consumed_from_real_kafka(app_engine, admin_engi
     if not _reachable_ollama():
         pytest.skip(f"Ollama unreachable at {OLLAMA_URL}")
 
-    from windrose_common.kafka import KafkaConfig, KafkaProducerClient
+    from datacern_common.kafka import KafkaConfig, KafkaProducerClient
 
     app_sf = async_sessionmaker(app_engine, expire_on_commit=False)
     admin_sf = async_sessionmaker(admin_engine, expire_on_commit=False)

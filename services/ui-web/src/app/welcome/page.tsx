@@ -10,9 +10,9 @@ import WelcomeContent from "./welcome-content";
  * statement about what the product does; mock UI is clearly illustrative.
  */
 export const metadata = {
-  title: "Windrose AI — AI agents that decide, with your experts in command",
+  title: "Datacern AI — AI agents that decide, with your experts in command",
   description:
-    "Windrose AI puts a team of specialist AI agents to work on your highest-stakes decisions — claims, authorizations, alerts, investigations. Agents draft, a copilot assists, your experts decide, and every correction trains the next model. Governed end to end.",
+    "Datacern AI puts a team of specialist AI agents to work on your highest-stakes decisions — claims, authorizations, alerts, investigations. Agents draft, a copilot assists, your experts decide, and every correction trains the next model. Governed end to end.",
 };
 
 export default function WelcomePage() {

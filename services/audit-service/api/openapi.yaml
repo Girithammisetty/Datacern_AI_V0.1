@@ -3,7 +3,7 @@ info:
   title: audit-service API
   version: "1.0.0"
   description: >
-    Immutable system of record for the Windrose platform (BRD 18). Admin-only
+    Immutable system of record for the Datacern platform (BRD 18). Admin-only
     search over the append-only ClickHouse audit store, dual-attribution
     queries, per-tenant-per-day hash-chain verification, WORM export listing and
     compliance evidence packs. All endpoints require an RS256 JWT and are gated

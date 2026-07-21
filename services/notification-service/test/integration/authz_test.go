@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/notification-service/internal/authz"
-	"github.com/windrose-ai/notification-service/internal/register"
+	"github.com/datacern-ai/notification-service/internal/authz"
+	"github.com/datacern-ai/notification-service/internal/register"
 )
 
 // rbac's canonical verb set + action grammar, replicated (rbac's ParseAction is

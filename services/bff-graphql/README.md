@@ -1,6 +1,6 @@
 # bff-graphql
 
-The single GraphQL endpoint for **ui-web** on the Windrose insurance-claims
+The single GraphQL endpoint for **ui-web** on the Datacern insurance-claims
 platform (BRD 21). It is a **UI-shaped aggregation layer** over the domain
 services' REST APIs: it composes and reshapes page-shaped data so the browser
 issues one query instead of a dozen REST calls. It contains **no business logic

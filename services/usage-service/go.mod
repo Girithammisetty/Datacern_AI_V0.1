@@ -1,4 +1,4 @@
-module github.com/windrose-ai/usage-service
+module github.com/datacern-ai/usage-service
 
 go 1.26.5
 
@@ -10,7 +10,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
-	github.com/windrose-ai/go-common v0.0.0
+	github.com/datacern-ai/go-common v0.0.0
 )
 
 require (
@@ -45,4 +45,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/windrose-ai/go-common => ../../libs/go-common
+replace github.com/datacern-ai/go-common => ../../libs/go-common

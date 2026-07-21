@@ -18,9 +18,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/audit-service/internal/chstore"
-	"github.com/windrose-ai/audit-service/internal/domain"
-	"github.com/windrose-ai/audit-service/internal/worm"
+	"github.com/datacern-ai/audit-service/internal/chstore"
+	"github.com/datacern-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/worm"
 )
 
 // Builder produces packs.

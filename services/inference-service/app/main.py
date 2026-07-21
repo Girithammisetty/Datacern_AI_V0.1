@@ -101,8 +101,8 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.state.token_verifier = container.token_verifier
     app.state.authz = container.authz
 
-    from windrose_common.metricsx import RedMiddleware, instrument_app
-    from windrose_common.otelx import configure_tracing
+    from datacern_common.metricsx import RedMiddleware, instrument_app
+    from datacern_common.otelx import configure_tracing
     configure_tracing("inference-service")
     app.add_middleware(AuthMiddleware)
     app.add_middleware(TraceMiddleware)

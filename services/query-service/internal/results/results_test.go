@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/windrose-ai/query-service/internal/engine"
+	"github.com/datacern-ai/query-service/internal/engine"
 )
 
 // QRY-FR-063 edge type mapping.

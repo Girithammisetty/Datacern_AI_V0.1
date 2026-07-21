@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/rbac-service/internal/projection"
-	"github.com/windrose-ai/rbac-service/internal/store"
+	"github.com/datacern-ai/rbac-service/internal/projection"
+	"github.com/datacern-ai/rbac-service/internal/store"
 )
 
 // Checker is the SQL ground-truth fallback path (RBC-FR-045): it loads a

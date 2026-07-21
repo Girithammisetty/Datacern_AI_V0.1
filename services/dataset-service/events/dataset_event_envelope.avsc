@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "DatasetEventEnvelope",
-  "namespace": "ai.windrose.dataset.events.v1",
+  "namespace": "ai.datacern.dataset.events.v1",
   "doc": "Envelope for every event on dataset.events.v1 (MASTER-FR-031). Partition key = tenant_id. event_type values: dataset.created|updated|deleted|deleted_with_consumers|restored|deprecated|version_created|schema_changed|profile_completed|profile_failed|version_expired, lineage.edge_created, security.cross_tenant_denied, ai.tool_invoked.v1.",
   "fields": [
     { "name": "event_id", "type": "string", "doc": "uuidv7" },

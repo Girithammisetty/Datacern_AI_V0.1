@@ -24,7 +24,7 @@ KAFKA = os.environ.get("PPL_KAFKA", "localhost:9092")
 REDIS_URL = os.environ.get("PPL_REDIS", "redis://localhost:6379/0")
 S3_ENDPOINT = os.environ.get("PPL_S3", "http://localhost:9000")
 OPA_URL = os.environ.get("PPL_OPA", "http://localhost:8281")
-ARTIFACTS_BUCKET = "windrose-pipelines"
+ARTIFACTS_BUCKET = "datacern-pipelines"
 
 TABLES = ["pipeline_runs", "pipeline_template_versions", "pipeline_templates",
           "tenant_quotas", "run_queue", "labeled_examples", "outbox",
@@ -60,8 +60,8 @@ def ensure_bucket() -> bool:
         from botocore.client import Config as BotoConfig
 
         client = boto3.client(
-            "s3", endpoint_url=S3_ENDPOINT, aws_access_key_id="windrose",
-            aws_secret_access_key="windrose_dev", region_name="us-east-1",
+            "s3", endpoint_url=S3_ENDPOINT, aws_access_key_id="datacern",
+            aws_secret_access_key="datacern_dev", region_name="us-east-1",
             config=BotoConfig(signature_version="s3v4",
                               s3={"addressing_style": "path"}))
         existing = {b["Name"] for b in client.list_buckets().get("Buckets", [])}

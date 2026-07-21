@@ -32,7 +32,7 @@ class InMemoryEventBus:
 
 
 class KafkaEventBus:
-    """Real Kafka (Redpanda) event bus over the shared ``windrose_common``
+    """Real Kafka (Redpanda) event bus over the shared ``datacern_common``
     idempotent producer. Publishes the MASTER §2.4 envelope keyed by
     ``tenant_id`` so a tenant's events stay ordered on one partition
     (MASTER-FR-030/031). The outbox dispatcher drives it from committed rows,
@@ -41,8 +41,8 @@ class KafkaEventBus:
     publish."""
 
     def __init__(self, bootstrap_servers: str = "localhost:9092"):
-        from windrose_common.kafka import KafkaConfig, KafkaProducerClient
-        from windrose_common.kafka import KafkaEventBus as _Bus
+        from datacern_common.kafka import KafkaConfig, KafkaProducerClient
+        from datacern_common.kafka import KafkaEventBus as _Bus
 
         self._client = KafkaProducerClient(KafkaConfig(bootstrap_servers=bootstrap_servers))
         self._bus = _Bus(self._client)

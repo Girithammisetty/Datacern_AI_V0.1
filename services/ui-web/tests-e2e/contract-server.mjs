@@ -164,13 +164,13 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, { thread_id: threadId, run_id: "run-1", topics: [`chat:${threadId}`] });
   }
   // agent-runtime's OpenAI-shaped copilot surface (src/app/api/copilot/message):
-  // returns the run + the realtime-hub topic (x-windrose-stream-topic header) the
+  // returns the run + the realtime-hub topic (x-datacern-stream-topic header) the
   // browser subscribes to; tokens then stream on that agent_run:<id> topic above.
   const agentChatM = p.match(/^\/api\/v1\/agents\/([^/]+)\/chat\/completions$/);
   if (req.method === "POST" && agentChatM) {
     await readBody(req);
     const runId = "run-1";
-    res.setHeader("x-windrose-stream-topic", `agent_run:${runId}`);
+    res.setHeader("x-datacern-stream-topic", `agent_run:${runId}`);
     return send(res, 200, { data: { run_id: runId, session_id: "sess-1" } });
   }
 

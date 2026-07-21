@@ -3,7 +3,7 @@ package reports
 import (
 	"testing"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 func TestCronExpr_Daily(t *testing.T) {

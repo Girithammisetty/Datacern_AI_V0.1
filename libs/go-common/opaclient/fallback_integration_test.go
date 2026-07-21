@@ -8,7 +8,7 @@
 // production deploy runs.
 //
 // Requires the local dev stack up (deploy/local/up.sh or deploy/e2e/boot_services.sh)
-// and a real seeded persona (deploy/local/run/personas.json — admin@demo.windrose).
+// and a real seeded persona (deploy/local/run/personas.json — admin@demo.datacern).
 package opaclient
 
 import (
@@ -16,7 +16,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 func rbacURL() string {
@@ -51,8 +51,8 @@ func realFallbackConfig(t *testing.T) FallbackConfig {
 		RBACURL:       rbacURL(),
 		SigningKeyPEM: string(pem),
 		SigningKID:    "e2e-harness-key-1",
-		Issuer:        "https://identity.windrose.ai",
-		Audience:      "windrose",
+		Issuer:        "https://identity.datacern.ai",
+		Audience:      "datacern",
 	}
 }
 

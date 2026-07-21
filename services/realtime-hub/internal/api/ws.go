@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"github.com/windrose-ai/realtime-hub/internal/fanout"
+	"github.com/datacern-ai/realtime-hub/internal/fanout"
 )
 
 var upgrader = websocket.Upgrader{

@@ -1,5 +1,5 @@
 # The single Secrets Manager secret that External Secrets Operator syncs into
-# the K8s Secret `windrose-secrets` (see deploy/CONFIG.md). Its JSON is built by
+# the K8s Secret `datacern-secrets` (see deploy/CONFIG.md). Its JSON is built by
 # merging:
 #   * var.secrets          — application-owned creds supplied later (JWT, SMTP,
 #                            per-DB app passwords, optional LLM keys, ...)
@@ -33,17 +33,17 @@ locals {
     OBJECTSTORE_BUCKET_PIPELINES = aws_s3_bucket.this["pipelines"].bucket
   }
 
-  windrose_secret_payload = merge(var.secrets, local.computed_secrets)
+  datacern_secret_payload = merge(var.secrets, local.computed_secrets)
 }
 
-resource "aws_secretsmanager_secret" "windrose" {
-  name        = "${var.name_prefix}/windrose-secrets"
-  description = "Windrose platform secrets synced into the K8s windrose-secrets Secret by External Secrets Operator."
+resource "aws_secretsmanager_secret" "datacern" {
+  name        = "${var.name_prefix}/datacern-secrets"
+  description = "Datacern platform secrets synced into the K8s datacern-secrets Secret by External Secrets Operator."
 
   recovery_window_in_days = 7
 }
 
-resource "aws_secretsmanager_secret_version" "windrose" {
-  secret_id     = aws_secretsmanager_secret.windrose.id
-  secret_string = jsonencode(local.windrose_secret_payload)
+resource "aws_secretsmanager_secret_version" "datacern" {
+  secret_id     = aws_secretsmanager_secret.datacern.id
+  secret_string = jsonencode(local.datacern_secret_payload)
 }

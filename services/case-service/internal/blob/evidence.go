@@ -22,7 +22,7 @@ type Config struct {
 	AccessKey string
 	SecretKey string
 	UseSSL    bool
-	Bucket    string // e.g. windrose-case-evidence
+	Bucket    string // e.g. datacern-case-evidence
 }
 
 // MinioEvidence is a MinIO/S3-backed evidence store bound to one bucket.

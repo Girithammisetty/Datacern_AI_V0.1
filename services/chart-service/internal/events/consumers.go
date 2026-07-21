@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/go-common/event"
 )
 
 // InvalStore is the subset of the store the invalidation consumer needs. The

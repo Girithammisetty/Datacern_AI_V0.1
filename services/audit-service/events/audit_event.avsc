@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "AuditMetaEnvelope",
-  "namespace": "ai.windrose.audit.events.v1",
+  "namespace": "ai.datacern.audit.events.v1",
   "doc": "Meta-audit events audit-service emits to audit.events.v1 (BRD 18 §6). audit-service does NOT re-emit the events it consumes — only these meta events, so auditors are themselves audited. Payload is the master envelope (MASTER-FR-031) with these event_type values: audit.searched, audit.export_sealed, audit.integrity_violation, audit.pii_rejected, audit.dlq_redriven.",
   "fields": [
     {"name": "event_id", "type": {"type": "string", "logicalType": "uuid"}},

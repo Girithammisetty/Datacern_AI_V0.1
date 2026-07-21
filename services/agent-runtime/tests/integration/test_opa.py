@@ -16,7 +16,7 @@ pytestmark = pytest.mark.integration
 
 async def test_real_opa_deny_by_default(require_opa):
     authz = OpaAuthz(OPA_URL, redis_url="redis://localhost:6379/0",
-                     package="windrose/authz_input")
+                     package="datacern/authz_input")
     try:
         allowed = await authz.allow(
             subject={"type": "user", "id": "u-nobody"}, action="proposal.apply",

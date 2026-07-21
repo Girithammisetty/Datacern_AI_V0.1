@@ -11,13 +11,13 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/tool-plane/internal/authz"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/tool-plane/internal/authz"
 )
 
 const (
-	testIssuer   = "https://identity.windrose.test"
-	testAudience = "windrose"
+	testIssuer   = "https://identity.datacern.test"
+	testAudience = "datacern"
 )
 
 // authzHarness is a registry server with a static-key verifier and a pluggable

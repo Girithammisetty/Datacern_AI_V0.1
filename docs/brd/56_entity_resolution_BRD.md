@@ -1,7 +1,7 @@
 # BRD 56 — Entity Resolution (Data-Unification for Decisions)
 
 **Deliverable type:** Core capability (new entity-resolution component + dataset/semantic integration)
-**Publisher:** Windrose · **Initial version:** 1.0.0 · **Status:** authored (DESIGNED; sequenced LAST; build-vs-buy open)
+**Publisher:** Datacern · **Initial version:** 1.0.0 · **Status:** authored (DESIGNED; sequenced LAST; build-vs-buy open)
 **Closes:** the data-unification / entity-resolution gap. See `docs/design/di-completeness-roadmap.md`.
 
 ---
@@ -14,7 +14,7 @@ identifiers, before decisions run on them. The category places entity resolution
 at stage 1 (data unification) and calls it "particularly valuable" in banking/
 AML, where the same entity appears across systems under different identifiers.
 
-**Why.** Windrose decisions today run on governed datasets as ingested — a
+**Why.** Datacern decisions today run on governed datasets as ingested — a
 dispute is scored on its own row, a claim on its own record. But the highest-
 value regulated decisions (AML alert triage, fraud, KYC, credit) depend on
 seeing that "Viktor Petrov" in the wire feed, "V. A. Petrov" in the KYC book,
@@ -27,7 +27,7 @@ financial-services deals.
 **Honest framing (build vs buy).** This is the LARGEST lift of the DI-
 completeness gaps and the one where a commercial ER/graph component is a
 legitimate alternative to building. The BRD specifies the CAPABILITY and its
-integration contract so Windrose can either build a first-party resolver or wrap
+integration contract so Datacern can either build a first-party resolver or wrap
 a component behind the same governed surface — the platform's value is the
 governed decisioning ON TOP of resolved entities, not the resolver internals.
 

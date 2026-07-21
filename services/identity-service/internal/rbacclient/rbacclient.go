@@ -30,7 +30,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 // probeAction is a canonical tenant-scoped action from rbac's own seeded

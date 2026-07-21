@@ -14,7 +14,7 @@ function pipeline() {
         status: 200,
         body: {
           data: {
-            catalog_version: "windrose-catalog/1.0.0",
+            catalog_version: "datacern-catalog/1.0.0",
             groups: {
               io: [
                 {

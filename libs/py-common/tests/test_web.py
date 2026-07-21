@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from windrose_common.web import (
+from datacern_common.web import (
     CursorError,
     clamp_limit,
     decode_cursor,

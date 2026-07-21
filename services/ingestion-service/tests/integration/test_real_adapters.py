@@ -39,7 +39,7 @@ async def _agen(chunks):
 
 async def test_s3_object_store_streams_to_minio(tmp_path):
     _require(9000, "MinIO")
-    store = S3ObjectStore("windrose-uploads")
+    store = S3ObjectStore("datacern-uploads")
     prefix = f"ing-it/{uuid.uuid4().hex[:8]}"
     key = f"{prefix}/part-1"
     data = b"col_a,col_b\n" + b"x,y\n" * 100_000  # ~400 KiB
@@ -58,7 +58,7 @@ async def test_s3_object_store_streams_to_minio(tmp_path):
 async def test_iceberg_writer_appends_and_reads_back():
     _require(8181, "Iceberg REST")
     _require(9000, "MinIO")
-    from windrose_common.iceberg import IcebergRestCatalog
+    from datacern_common.iceberg import IcebergRestCatalog
 
     table = f"bronze.ingit{uuid.uuid4().hex[:8]}.ds_orders"
     writer = IcebergTableWriter()

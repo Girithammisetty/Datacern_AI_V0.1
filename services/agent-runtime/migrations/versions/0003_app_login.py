@@ -3,7 +3,7 @@ remediation, cross-tenant RLS-bypass).
 
 0001 already FORCEd row-level security on every tenant table and created
 ``agent_runtime_app`` as a NOLOGIN group with DML grants. But the shipped runtime
-DSN connected as ``windrose``, the dev cluster's SUPERUSER (BYPASSRLS), which
+DSN connected as ``datacern``, the dev cluster's SUPERUSER (BYPASSRLS), which
 silently bypasses FORCE RLS — so tenant isolation was effectively OFF.
 
 Fix: turn ``agent_runtime_app`` into a LOGIN role (NOSUPERUSER NOBYPASSRLS) and

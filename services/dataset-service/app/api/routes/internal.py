@@ -117,10 +117,10 @@ async def tool_facade(request: Request, spiffe: str = Depends(require_internal))
 
 def _internal_tenant(request: Request) -> str:
     """Tenant for GET internal detail routes: the mesh-forwarded
-    ``x-windrose-tenant-id`` header (semantic-service sends it — SEM-FR-002)."""
-    tenant_id = request.headers.get("x-windrose-tenant-id")
+    ``x-datacern-tenant-id`` header (semantic-service sends it — SEM-FR-002)."""
+    tenant_id = request.headers.get("x-datacern-tenant-id")
     if not tenant_id:
-        raise ValidationFailed("x-windrose-tenant-id header is required")
+        raise ValidationFailed("x-datacern-tenant-id header is required")
     return tenant_id
 
 

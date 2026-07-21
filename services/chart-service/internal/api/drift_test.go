@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/windrose-ai/chart-service/internal/authz"
+	"github.com/datacern-ai/chart-service/internal/authz"
 )
 
 // allActionConstants maps every authz.Action* constant NAME to its string

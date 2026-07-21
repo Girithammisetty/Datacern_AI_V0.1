@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create/update the `windrose-secrets` Secret for a self-hosted (k3s/Hetzner)
+# Create/update the `datacern-secrets` Secret for a self-hosted (k3s/Hetzner)
 # dev/staging cluster, pointed at the in-cluster data tier (this directory).
 #
 # Emits the PER-SERVICE DSN keys the Helm chart's per-service env now references
@@ -12,7 +12,7 @@
 # (alembic, sync) = postgresql+psycopg://.
 #
 # Idempotent: re-running updates in place. NOT for production — there, sync
-# windrose-secrets from your cloud secret manager (External Secrets) with real,
+# datacern-secrets from your cloud secret manager (External Secrets) with real,
 # rotated per-service DSNs (see deploy/CONFIG.md).
 #
 # JWT note: identity-service's dev signer self-generates its RSA keypair at boot
@@ -20,33 +20,33 @@
 # JWT_SIGNING_KEY_PEM / JWT_JWKS are intentionally NOT set here.
 #
 # Usage:
-#   ./create-secrets.sh                      # namespace windrose, in-cluster defaults
-#   NS=windrose ./create-secrets.sh          # override namespace
+#   ./create-secrets.sh                      # namespace datacern, in-cluster defaults
+#   NS=datacern ./create-secrets.sh          # override namespace
 #   PG_ADMIN_PASSWORD=... OBJ_SECRET=... ./create-secrets.sh   # override any value
 set -euo pipefail
 
-NS="${NS:-windrose}"
+NS="${NS:-datacern}"
 
 # ---- shared values (override via env) ------------------------------------------
 PG_HOST="${PG_HOST:-postgres}"
 PG_PORT="${PG_PORT:-5432}"
-PG_ADMIN_USER="${PG_ADMIN_USER:-windrose}"            # superuser: runs migrations, self-creates app roles
-PG_ADMIN_PASSWORD="${PG_ADMIN_PASSWORD:-windrose_dev}"
+PG_ADMIN_USER="${PG_ADMIN_USER:-datacern}"            # superuser: runs migrations, self-creates app roles
+PG_ADMIN_PASSWORD="${PG_ADMIN_PASSWORD:-datacern_dev}"
 
 REDIS_HOST="${REDIS_HOST:-redis}"                     # in-cluster, unauthenticated
 KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-redpanda:9092}"
 
 OBJ_ENDPOINT="${OBJ_ENDPOINT:-http://minio:9000}"
-OBJ_ACCESS="${OBJ_ACCESS:-windrose}"
-OBJ_SECRET="${OBJ_SECRET:-windrose_dev}"
+OBJ_ACCESS="${OBJ_ACCESS:-datacern}"
+OBJ_SECRET="${OBJ_SECRET:-datacern_dev}"
 OBJ_REGION="${OBJ_REGION:-us-east-1}"
 
 KEYCLOAK_URL="${KEYCLOAK_URL:-http://keycloak:8080}"  # in-cluster Keycloak Service
 KEYCLOAK_USER="${KEYCLOAK_USER:-admin}"
 KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-admin}"
 
-CLICKHOUSE_USER="${CLICKHOUSE_USER:-windrose}"
-CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-windrose_dev}"
+CLICKHOUSE_USER="${CLICKHOUSE_USER:-datacern}"
+CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-datacern_dev}"
 
 # Optional providers — empty runs Ollama-only (see deploy/CONFIG.md).
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
@@ -109,13 +109,13 @@ while IFS='|' read -r KEY DB LANG ROLE PW; do
 done <<EOF
 $ROWS
 EOF
-# memory + agent-runtime open a windrose ASYNC admin pool (asyncpg, distinct scheme
+# memory + agent-runtime open a datacern ASYNC admin pool (asyncpg, distinct scheme
 # from the sync psycopg migrate DSN) for runtime CREATE SCHEMA.
 DSN_ARGS+=( "--from-literal=AGENT_RUNTIME_ADMIN_URL=postgresql+asyncpg://${ADMIN}/agent_runtime" )
 DSN_ARGS+=( "--from-literal=MEMORY_ADMIN_URL=postgresql+asyncpg://${ADMIN}/memory" )
 
 # ---- build + apply (idempotent, values never printed) --------------------------
-kubectl create secret generic windrose-secrets -n "$NS" \
+kubectl create secret generic datacern-secrets -n "$NS" \
   --from-literal=REDIS_URL="redis://${REDIS_HOST}:6379/0" \
   --from-literal=REDIS_ADDR="${REDIS_HOST}:6379" \
   --from-literal=KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
@@ -144,5 +144,5 @@ kubectl create secret generic windrose-secrets -n "$NS" \
   "${DSN_ARGS[@]}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-echo "windrose-secrets applied to namespace '$NS' ($(kubectl get secret windrose-secrets -n "$NS" -o jsonpath='{.data}' | tr ',' '\n' | grep -c ':') keys). Values not printed."
+echo "datacern-secrets applied to namespace '$NS' ($(kubectl get secret datacern-secrets -n "$NS" -o jsonpath='{.data}' | tr ',' '\n' | grep -c ':') keys). Values not printed."
 echo "Per-service DSNs use the dev app-role creds the migrations create; auth uses JWKS_URL (identity's live endpoint)."

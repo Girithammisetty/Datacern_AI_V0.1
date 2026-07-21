@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "SemanticEventEnvelope",
-  "namespace": "ai.windrose.semantic.v1",
+  "namespace": "ai.datacern.semantic.v1",
   "doc": "Envelope for semantic.events.v1 (MASTER-FR-031). Partition key = tenant_id. Event types: model.created/updated/deleted, model.version_submitted, model.version_published, model.version_rejected, model.health_changed, measure.deprecated, verified_query.submitted/approved/rejected/archived, bootstrap.completed, ai.tool_invoked.v1, security.cross_tenant_denied.",
   "fields": [
     {"name": "event_id", "type": {"type": "string", "logicalType": "uuid"}},

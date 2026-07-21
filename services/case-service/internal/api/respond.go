@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/windrose-ai/case-service/internal/domain"
-	"github.com/windrose-ai/case-service/internal/store"
+	"github.com/datacern-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/store"
 )
 
 // ErrorBody is the master-BRD error envelope (MASTER-FR-024).

@@ -1,14 +1,14 @@
 # utility-inspections capability pack — Core-neutral edition: asset-
 # inspection finding triage and repair/defer decisioning for electric & gas
 # utilities (wildfire-exposed distribution utilities, transmission
-# operators, inspection-services firms). Installable TODAY against Windrose
+# operators, inspection-services firms). Installable TODAY against Datacern
 # Core's public APIs via packctl; the manifest envelope follows BRD 23
 # (PKG-FR-001/003). Components the current Core cannot materialize are
 # declared under `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: utility-inspections
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted inspection-finding triage and repair/defer decisioning for
   electric and gas utilities: drone-AI/LiDAR/infrared/foot-patrol finding

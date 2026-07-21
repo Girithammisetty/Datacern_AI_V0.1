@@ -4,7 +4,7 @@ non-superuser LOGIN role (tenant-isolation remediation, cross-tenant RLS-bypass)
 0001 only ENABLEd RLS (public control tables + the per-tenant ``mem_t_*``
 schema tables) and created ``memory_app`` as a NOLOGIN group. ENABLE (and even
 FORCE) is silently bypassed for a superuser or the table owner — and the shipped
-runtime DSN connected as ``windrose``, the dev cluster's SUPERUSER (BYPASSRLS).
+runtime DSN connected as ``datacern``, the dev cluster's SUPERUSER (BYPASSRLS).
 So tenant isolation was effectively OFF.
 
 Fix (both parts required):
@@ -13,7 +13,7 @@ Fix (both parts required):
      ``mem_provision_tenant``) every future per-tenant schema.
   2. Turn ``memory_app`` into a LOGIN role (NOSUPERUSER NOBYPASSRLS, DML only)
      and point the runtime DSN at it. Migrations + the privileged provisioning
-     admin pool keep running as ``windrose`` via MEM_MIGRATE_URL /
+     admin pool keep running as ``datacern`` via MEM_MIGRATE_URL /
      MEM_ADMIN_DATABASE_URL.
 
 Forward-only (MASTER-FR-060).

@@ -14,7 +14,7 @@ TEMPORAL_SDK = "temporalio>=1.7"
 # The proposal-execution grant issuer identity. tool-plane's ProposalVerifier is
 # configured with PROPOSAL_JWT_ISSUER = this exact string and rejects any other
 # `iss` (services/tool-plane/internal/authz/proposal.go).
-GRANT_ISSUER = "windrose-agent-runtime"
+GRANT_ISSUER = "datacern-agent-runtime"
 
 # Grant lifetime — short-lived per the tool-plane contract ("≤ a few minutes").
 GRANT_TTL_SECONDS = 120

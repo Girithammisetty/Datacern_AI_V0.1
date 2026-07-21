@@ -1,6 +1,6 @@
 # BRD 29 — `post-acute-care` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 2 pack #5. Reference pattern: BRD 24.
 
 ---
@@ -134,7 +134,7 @@ entity_templates:
 
 ## 6. Dependencies
 
-Windrose Core (all BRDs 01–23). External: HHA/SNF/hospice EHRs; CMS iQIES submission; referral networks (Bamboo, H2H); grouper libraries for PDGM/PDPM (CMS-published or 3M).
+Datacern Core (all BRDs 01–23). External: HHA/SNF/hospice EHRs; CMS iQIES submission; referral networks (Bamboo, H2H); grouper libraries for PDGM/PDPM (CMS-published or 3M).
 
 ## 7. NFRs (deltas)
 

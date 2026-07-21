@@ -53,12 +53,12 @@ from install_packs_multitenant import G, N, R, die, ok, say, warn  # noqa: E402
 
 PG = {"host": os.environ.get("PGHOST", "localhost"),
       "port": os.environ.get("PGPORT", "5432"),
-      "user": os.environ.get("PGUSER", "windrose"),
-      "password": os.environ.get("PGPASSWORD", "windrose_dev")}
+      "user": os.environ.get("PGUSER", "datacern"),
+      "password": os.environ.get("PGPASSWORD", "datacern_dev")}
 
 # Shared/platform databases that carry no per-tenant rows (or must never be
 # touched by tenant cleanup).
-EXCLUDED_DBS = {"postgres", "windrose", "temporal", "temporal_visibility",
+EXCLUDED_DBS = {"postgres", "datacern", "temporal", "temporal_visibility",
                 "mlflow", "iceberg_catalog"}
 
 OPENSEARCH = os.environ.get("OPENSEARCH_URL", "http://localhost:9200")

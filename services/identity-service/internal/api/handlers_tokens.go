@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 // POST /token/obo (IDN-FR-041). The subject_token in the body carries the
@@ -60,7 +60,7 @@ func (s *Server) handleEmbedOIDC(w http.ResponseWriter, r *http.Request) {
 // handleOIDCLogin implements POST /token/oidc (BYO-P4): the web tier posts the
 // ID token it obtained from the tenant's OIDC IdP (after the code+PKCE
 // exchange), identity-service verifies it against the IdP's JWKS, resolves the
-// Windrose user, and returns a platform session JWT. Unauthenticated by design
+// Datacern user, and returns a platform session JWT. Unauthenticated by design
 // — the ID token IS the credential (like /token/embed is gated by the embed
 // secret, not a bearer).
 func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {

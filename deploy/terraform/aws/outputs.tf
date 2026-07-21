@@ -51,14 +51,14 @@ output "bucket_names" {
   value       = { for k, b in aws_s3_bucket.this : k => b.bucket }
 }
 
-output "windrose_secret_arn" {
+output "datacern_secret_arn" {
   description = "Secrets Manager ARN External Secrets Operator reads (secrets.remoteRef in values-aws.yaml)."
-  value       = aws_secretsmanager_secret.windrose.arn
+  value       = aws_secretsmanager_secret.datacern.arn
 }
 
-output "windrose_secret_name" {
+output "datacern_secret_name" {
   description = "Secrets Manager secret name/path."
-  value       = aws_secretsmanager_secret.windrose.name
+  value       = aws_secretsmanager_secret.datacern.name
 }
 
 output "external_secrets_role_arn" {

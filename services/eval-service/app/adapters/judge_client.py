@@ -3,8 +3,8 @@
 ALL judge model calls go THROUGH ai-gateway (budget/guardrails/metering, judge
 request class, temperature 0), never direct to Ollama. The gateway is
 OpenAI-compatible at ``POST /v1/chat/completions`` and needs a dual credential:
-``Authorization: Bearer <virtual key>`` + ``X-Windrose-JWT: <platform jwt>``.
-``model`` is a ladder alias ("windrose-auto") the gateway routes to the seeded
+``Authorization: Bearer <virtual key>`` + ``X-Datacern-JWT: <platform jwt>``.
+``model`` is a ladder alias ("datacern-auto") the gateway routes to the seeded
 ``fast-small -> qwen2.5:0.5b`` deployment.
 
 eval-service mints its own short-lived platform JWT per judge call (signed with
@@ -37,13 +37,13 @@ class AiGatewayJudgeClient:
         base_url: str,
         *,
         chat_path: str = "/v1/chat/completions",
-        model: str = "windrose-auto",
+        model: str = "datacern-auto",
         virtual_key: str | None,
         request_class: str = "judge",
         jwt_signing_key_pem: str | None = None,
         jwt_signing_kid: str | None = None,
-        jwt_issuer: str = "https://identity.windrose.local",
-        jwt_audience: str = "windrose",
+        jwt_issuer: str = "https://identity.datacern.local",
+        jwt_audience: str = "datacern",
         timeout_s: float = 120.0,
     ) -> None:
         self._base = base_url.rstrip("/")
@@ -94,9 +94,9 @@ class AiGatewayJudgeClient:
             "max_tokens": max_tokens,
             "stream": False,
         }
-        headers = {"x-windrose-request-class": self._request_class}
+        headers = {"x-datacern-request-class": self._request_class}
         if self._key_pem:
-            headers["X-Windrose-JWT"] = self._mint_jwt(tenant_id)
+            headers["X-Datacern-JWT"] = self._mint_jwt(tenant_id)
         if self._vkey:
             headers["Authorization"] = f"Bearer {self._vkey}"
         url = self._base + self._path
@@ -114,7 +114,7 @@ class AiGatewayJudgeClient:
             input_tokens=int(usage.get("prompt_tokens", 0)),
             output_tokens=int(usage.get("completion_tokens", 0)),
             model=str(data.get("model", self._model)),
-            cost_usd=float(resp.headers.get("x-windrose-cost-usd", 0.0) or 0.0),
+            cost_usd=float(resp.headers.get("x-datacern-cost-usd", 0.0) or 0.0),
             latency_ms=latency_ms,
-            trace_ref=resp.headers.get("x-windrose-request-id"),
+            trace_ref=resp.headers.get("x-datacern-request-id"),
         )

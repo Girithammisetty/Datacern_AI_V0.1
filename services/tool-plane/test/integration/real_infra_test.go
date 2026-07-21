@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	segkafka "github.com/segmentio/kafka-go"
 
-	"github.com/windrose-ai/tool-plane/internal/enforce"
-	"github.com/windrose-ai/tool-plane/internal/events"
+	"github.com/datacern-ai/tool-plane/internal/enforce"
+	"github.com/datacern-ai/tool-plane/internal/events"
 )
 
 // waitAudit polls the outbox for an ai.tool_invoked.v1 event with the wanted

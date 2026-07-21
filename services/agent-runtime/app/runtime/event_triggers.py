@@ -1,6 +1,6 @@
 """Event-driven decisioning — the real-time intelligence path (inc 1).
 
-Windrose's agents are triggered by a human (chat/copilot) or a schedule
+Datacern's agents are triggered by a human (chat/copilot) or a schedule
 (retrain watches, batch runs). That caps decision latency at the schedule
 interval. This dispatcher closes the gap: a domain event (e.g. ``case.created``)
 fires a GOVERNED autonomous agent run immediately, so a decision is drafted within
@@ -13,7 +13,7 @@ execute), the Rule-of-Two untrusted-input gate, the low-confidence escalation, a
 the tenant's auto-execute policy. Net effect: safe, high-confidence events are
 decided in real time; risky ones are queued for a human — both fully audited.
 
-Transport: this is the ``handler`` for ``windrose_common.kafka.KafkaConsumer``,
+Transport: this is the ``handler`` for ``datacern_common.kafka.KafkaConsumer``,
 which already supplies consumer-group semantics, Redis dedup (at-least-once
 safety), retry/backoff and a real DLQ — so this module owns only the governed
 decision to fire, never the plumbing.

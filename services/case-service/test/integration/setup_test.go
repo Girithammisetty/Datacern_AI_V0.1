@@ -32,15 +32,15 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/redisx"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/case-service/internal/api"
-	"github.com/windrose-ai/case-service/internal/authz"
-	"github.com/windrose-ai/case-service/internal/events"
-	"github.com/windrose-ai/case-service/internal/search"
-	"github.com/windrose-ai/case-service/internal/sla"
-	"github.com/windrose-ai/case-service/internal/store"
+	"github.com/datacern-ai/case-service/internal/api"
+	"github.com/datacern-ai/case-service/internal/authz"
+	"github.com/datacern-ai/case-service/internal/events"
+	"github.com/datacern-ai/case-service/internal/search"
+	"github.com/datacern-ai/case-service/internal/sla"
+	"github.com/datacern-ai/case-service/internal/store"
 )
 
 type harness struct {
@@ -153,7 +153,7 @@ func TestMain(m *testing.M) {
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
 	server := &api.Server{
 		Store: pg, Search: searchClient, Projector: projector, Authz: authz.AllowAll{},
-		Verifier:   api.NewVerifierStatic(&key.PublicKey, "windrose-test", "windrose"),
+		Verifier:   api.NewVerifierStatic(&key.PublicKey, "datacern-test", "datacern"),
 		RowFetcher: api.NewHTTPRowFetcher(""), // unset → GET ?with_row surfaces row_error (BR-5)
 		Snapshots:  api.NewFSSnapshotStore(mustTempDir()),
 		Redis:      redisx.New("localhost:6379"), // real bulk concurrency gate (CASE-FR-032)
@@ -216,7 +216,7 @@ func (h *harness) token(t *testing.T, tenant, workspace uuid.UUID, typ, sub stri
 	t.Helper()
 	claims := jwt.MapClaims{
 		"sub": sub, "tenant_id": tenant.String(), "typ": typ, "workspace_id": workspace.String(),
-		"iss": "windrose-test", "aud": "windrose", "exp": time.Now().Add(5 * time.Minute).Unix(),
+		"iss": "datacern-test", "aud": "datacern", "exp": time.Now().Add(5 * time.Minute).Unix(),
 	}
 	for k, v := range extra {
 		claims[k] = v

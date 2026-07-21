@@ -19,22 +19,22 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/windrose-ai/audit-service/internal/api"
-	"github.com/windrose-ai/audit-service/internal/authz"
-	"github.com/windrose-ai/audit-service/internal/chain"
-	"github.com/windrose-ai/audit-service/internal/chstore"
-	"github.com/windrose-ai/audit-service/internal/compliance"
-	"github.com/windrose-ai/audit-service/internal/domain"
-	"github.com/windrose-ai/audit-service/internal/export"
-	"github.com/windrose-ai/audit-service/internal/ingest"
-	"github.com/windrose-ai/audit-service/internal/meta"
-	"github.com/windrose-ai/audit-service/internal/pgstore"
-	"github.com/windrose-ai/audit-service/internal/register"
-	"github.com/windrose-ai/audit-service/internal/siemexport"
-	"github.com/windrose-ai/audit-service/internal/worm"
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/otelx"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/audit-service/internal/api"
+	"github.com/datacern-ai/audit-service/internal/authz"
+	"github.com/datacern-ai/audit-service/internal/chain"
+	"github.com/datacern-ai/audit-service/internal/chstore"
+	"github.com/datacern-ai/audit-service/internal/compliance"
+	"github.com/datacern-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/export"
+	"github.com/datacern-ai/audit-service/internal/ingest"
+	"github.com/datacern-ai/audit-service/internal/meta"
+	"github.com/datacern-ai/audit-service/internal/pgstore"
+	"github.com/datacern-ai/audit-service/internal/register"
+	"github.com/datacern-ai/audit-service/internal/siemexport"
+	"github.com/datacern-ai/audit-service/internal/worm"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/otelx"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 func env(key, def string) string {
@@ -50,13 +50,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Distributed tracing (no-op unless WINDROSE_OTEL_ENABLED / an OTLP endpoint
+	// Distributed tracing (no-op unless datacern_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "audit-service")
 	defer func() { _ = otelShutdown(context.Background()) }()
 
 	// --- Postgres metadata: bootstrap DB + non-owner runtime role, migrate ---
-	adminDSN := env("ADMIN_DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/windrose?sslmode=disable")
+	adminDSN := env("ADMIN_DATABASE_URL", "postgres://datacern:datacern_dev@localhost:5432/datacern?sslmode=disable")
 	dbName := env("AUDIT_DB_NAME", "audit")
 	runtimeRole := env("DB_RUNTIME_ROLE", "audit_rw")
 	runtimePass := env("DB_RUNTIME_PASSWORD", "audit_rw_dev")
@@ -100,8 +100,8 @@ func main() {
 	ch, err := chstore.Open(ctx, chstore.Config{
 		Addr:     env("CLICKHOUSE_ADDR", "localhost:9010"),
 		Database: env("CLICKHOUSE_DB", "audit"),
-		Username: env("CLICKHOUSE_USER", "windrose"),
-		Password: env("CLICKHOUSE_PASSWORD", "windrose_dev"),
+		Username: env("CLICKHOUSE_USER", "datacern"),
+		Password: env("CLICKHOUSE_PASSWORD", "datacern_dev"),
 	})
 	if err != nil {
 		slog.Error("clickhouse connect failed", "err", err)
@@ -133,10 +133,10 @@ func main() {
 	// --- WORM object storage (MinIO) ---
 	wormClient, err := worm.New(worm.Config{
 		Endpoint:  env("MINIO_ENDPOINT", "localhost:9000"),
-		AccessKey: env("MINIO_ACCESS_KEY", "windrose"),
-		SecretKey: env("MINIO_SECRET_KEY", "windrose_dev"),
+		AccessKey: env("MINIO_ACCESS_KEY", "datacern"),
+		SecretKey: env("MINIO_SECRET_KEY", "datacern_dev"),
 		UseSSL:    os.Getenv("MINIO_USE_SSL") == "true",
-		Bucket:    env("AUDIT_BUCKET", "windrose-audit"),
+		Bucket:    env("AUDIT_BUCKET", "datacern-audit"),
 	})
 	if err != nil {
 		slog.Error("minio client failed", "err", err)

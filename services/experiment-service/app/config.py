@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     )
 
     # AuthN (MASTER-FR-010/011). In dev/tests a static PEM is used; prod uses JWKS.
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwt_public_key_pem: str | None = None
     jwks_url: str | None = None
     jwks_ttl_seconds: int = 300
@@ -30,16 +30,16 @@ class Settings(BaseSettings):
     # additionally carry an HMAC body signature (EXP-FR-010).
     spiffe_header: str = "x-client-spiffe-id"
     internal_allowed_spiffe: list[str] = [
-        "spiffe://windrose/ns/ml/sa/mlflow",
-        "spiffe://windrose/ns/ml/sa/pipeline-orchestrator",
-        "spiffe://windrose/ns/ml/sa/inference-service",
-        "spiffe://windrose/ns/platform/sa/operator",
+        "spiffe://datacern/ns/ml/sa/mlflow",
+        "spiffe://datacern/ns/ml/sa/pipeline-orchestrator",
+        "spiffe://datacern/ns/ml/sa/inference-service",
+        "spiffe://datacern/ns/platform/sa/operator",
         # tool-plane's MCP gateway federates approved experiment.model.promote
         # proposals to /internal/v1/mcp/invoke (BRD 52).
-        "spiffe://windrose/ns/tools/sa/mcp-gateway",
+        "spiffe://datacern/ns/tools/sa/mcp-gateway",
     ]
 
-    # Adapter selection. True (the DEFAULT) wires the shared windrose_common
+    # Adapter selection. True (the DEFAULT) wires the shared datacern_common
     # adapters + real MLflow against local infra (Postgres RLS, Redpanda+outbox,
     # Redis dedup, OPA, MinIO) — app.main runs fully real out of the box. Unit
     # tests explicitly set this False to wire the in-memory doubles.
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     mlflow_rate_limit_rps: int = 5  # BR-14 per-tenant sweep cap
 
     # Webhook ingest (EXP-FR-010): shared HMAC secret + replay window + body cap.
-    webhook_hmac_secret: str = "windrose-mlflow-webhook-dev-secret"
+    webhook_hmac_secret: str = "datacern-mlflow-webhook-dev-secret"
     webhook_signature_header: str = "x-mlflow-signature"
     webhook_delivery_header: str = "x-mlflow-delivery-id"
     webhook_replay_window_seconds: int = 300
@@ -63,8 +63,8 @@ class Settings(BaseSettings):
 
     # Object storage for signed artifact URLs (EXP-FR-014). MinIO S3.
     s3_endpoint_url: str = "http://localhost:9000"
-    s3_access_key: str = "windrose"
-    s3_secret_key: str = "windrose_dev"
+    s3_access_key: str = "datacern"
+    s3_secret_key: str = "datacern_dev"
     s3_region: str = "us-east-1"
     signed_url_ttl_seconds: int = 900
 

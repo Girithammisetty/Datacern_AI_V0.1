@@ -1,7 +1,7 @@
 [project]
 name = "pack-service"
 version = "0.1.0"
-description = "Windrose pack-service: capability-pack registry + governed install lifecycle (BRD 23)"
+description = "Datacern pack-service: capability-pack registry + governed install lifecycle (BRD 23)"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -16,11 +16,11 @@ dependencies = [
     "psycopg[binary]>=3.1",
     "pyyaml>=6.0",
     "requests>=2.31",
-    "windrose-common",
+    "datacern-common",
 ]
 
 [tool.uv.sources]
-windrose-common = { path = "../../libs/py-common", editable = true }
+datacern-common = { path = "../../libs/py-common", editable = true }
 
 [dependency-groups]
 dev = [

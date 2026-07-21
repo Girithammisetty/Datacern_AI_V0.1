@@ -3,7 +3,7 @@ info:
   title: dataset-service
   version: 0.1.0
   description: >
-    Windrose dataset catalog: datasets, versions (Iceberg snapshot refs),
+    Datacern dataset catalog: datasets, versions (Iceberg snapshot refs),
     profiles (object-store pointer + summary), lineage graph, similarity
     search. Master BRD contracts: cursor pagination, error envelope,
     Idempotency-Key, X-Trace-Id.

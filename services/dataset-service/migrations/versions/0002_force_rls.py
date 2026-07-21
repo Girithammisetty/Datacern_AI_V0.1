@@ -3,7 +3,7 @@ non-owner runtime login role (tenant-isolation remediation, task_971cc66f).
 
 0001 only ENABLEd RLS and created ``dataset_app`` as a NOLOGIN group. ENABLE
 (and even FORCE) is silently bypassed for a superuser or the table owner — and
-the shipped runtime DSN connected as ``windrose``, the dev cluster's SUPERUSER
+the shipped runtime DSN connected as ``datacern``, the dev cluster's SUPERUSER
 (BYPASSRLS). So tenant_isolation_* was effectively OFF: a buggy or compromised
 query could read another tenant's datasets.
 

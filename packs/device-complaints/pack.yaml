@@ -3,14 +3,14 @@
 # vigilance parallel) for device manufacturers, combination-product makers,
 # and contract manufacturers. The medical-device sibling of the
 # pharmacovigilance pack (BRD 33): complaint handling + MDR reportability
-# instead of ICSR processing. Installable TODAY against Windrose Core's
+# instead of ICSR processing. Installable TODAY against Datacern Core's
 # public APIs via packctl; the manifest envelope follows BRD 23
 # (PKG-FR-001/003). Components the current Core cannot materialize are
 # declared under `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: device-complaints
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted medical-device complaint handling and MDR reportability for
   manufacturers: complaint intake triage with regulatory-clock awareness

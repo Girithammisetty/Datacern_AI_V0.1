@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/rbac-service/internal/domain"
-	"github.com/windrose-ai/rbac-service/internal/events"
+	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/events"
 )
 
 const roleCols = `id, tenant_id, name, system, version, created_at, updated_at`

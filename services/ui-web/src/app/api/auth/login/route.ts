@@ -46,13 +46,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "email required" }, { status: 400 });
   }
 
-  // `make up` injects WINDROSE_PERSONAS: a JSON map of persona email ->
+  // `make up` injects DATACERN_PERSONAS: a JSON map of persona email ->
   // {sub, tenantId, workspaceId, scopes} bound to the REAL provisioned tenant +
   // workspace and the projection grants seeded for that persona. When present it
   // is AUTHORITATIVE: an unknown email is rejected (403) rather than silently
   // minted into a ghost tenant. The t-acme/ws-claims dev defaults apply only
   // when no personas map is configured at all (self-contained ui dev).
-  const resolution = resolveLogin(email, process.env.WINDROSE_PERSONAS);
+  const resolution = resolveLogin(email, process.env.DATACERN_PERSONAS);
   if (resolution.kind === "unknown-user") {
     return NextResponse.json({ error: "unknown user" }, { status: 403 });
   }

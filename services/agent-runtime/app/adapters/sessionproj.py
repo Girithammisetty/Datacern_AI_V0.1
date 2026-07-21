@@ -23,7 +23,7 @@ def session_key(tenant_id: str, session_id: str) -> str:
 
 class RedisSessionProjection:
     def __init__(self, redis_url: str) -> None:
-        from windrose_common.redisx import build_redis
+        from datacern_common.redisx import build_redis
 
         self._redis = build_redis(redis_url)
 

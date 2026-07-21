@@ -52,9 +52,9 @@ pytestmark = [
 ]
 
 MINIO_ENDPOINT = os.getenv("S3_ENDPOINT_URL", "http://localhost:9000")
-MINIO_KEY = os.getenv("S3_ACCESS_KEY", "windrose")
-MINIO_SECRET = os.getenv("S3_SECRET_KEY", "windrose_dev")
-MINIO_BUCKET = os.getenv("S3_TEST_BUCKET", "windrose-uploads")
+MINIO_KEY = os.getenv("S3_ACCESS_KEY", "datacern")
+MINIO_SECRET = os.getenv("S3_SECRET_KEY", "datacern_dev")
+MINIO_BUCKET = os.getenv("S3_TEST_BUCKET", "datacern-uploads")
 MINIO_SECRETS = {"access_key_id": MINIO_KEY, "secret_access_key": MINIO_SECRET}
 
 

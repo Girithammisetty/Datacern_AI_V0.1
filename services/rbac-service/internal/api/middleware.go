@@ -9,10 +9,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/rbac-service/internal/authz"
-	"github.com/windrose-ai/rbac-service/internal/domain"
-	"github.com/windrose-ai/rbac-service/internal/events"
-	"github.com/windrose-ai/rbac-service/internal/store"
+	"github.com/datacern-ai/rbac-service/internal/authz"
+	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/events"
+	"github.com/datacern-ai/rbac-service/internal/store"
 )
 
 type ctxKey int

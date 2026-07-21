@@ -10,7 +10,7 @@ export const DEFAULT_TTL = 600; // 10 min
  * configured one. Returns false when no secret is configured (fail closed).
  * PRODUCTION: this becomes a per-tenant secret lookup in identity-service. */
 export function secretOk(provided: string | null): boolean {
-  const expected = process.env.WINDROSE_EMBED_SECRET;
+  const expected = process.env.DATACERN_EMBED_SECRET;
   if (!expected || !provided) return false;
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);

@@ -14,8 +14,8 @@ from app.store.models import OutboxEvent
 
 TENANT_A = "11111111-1111-7111-8111-111111111111"
 TENANT_B = "22222222-2222-7222-8222-222222222222"
-ISSUER = "https://identity.windrose.local"
-AUDIENCE = "windrose"
+ISSUER = "https://identity.datacern.local"
+AUDIENCE = "datacern"
 
 
 def make_token(

@@ -1,7 +1,7 @@
 [project]
-name = "windrose-e2e"
+name = "datacern-e2e"
 version = "0.1.0"
-description = "Windrose repo-level end-to-end claims triage-and-governance journey driver"
+description = "Datacern repo-level end-to-end claims triage-and-governance journey driver"
 requires-python = ">=3.11"
 dependencies = [
     "pyjwt>=2.9",

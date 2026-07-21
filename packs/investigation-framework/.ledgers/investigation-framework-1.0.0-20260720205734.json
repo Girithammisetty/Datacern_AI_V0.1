@@ -1,0 +1,122 @@
+{
+  "pack": "investigation-framework",
+  "version": "1.0.0",
+  "workspace_id": "019f8221-68df-7ef4-8a32-99b3ec0fe5a5",
+  "tenant_id": "019f8221-6499-734f-9a03-087a5be057f5",
+  "started_at": "2026-07-21T00:57:33Z",
+  "finished_at": "2026-07-21T00:57:34Z",
+  "actions": [
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_dismissed"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_handed_off"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_needs_deeper"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_evidence_incomplete"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_confirmed"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_referred_external"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'Investigator'"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Investigator' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'Investigation Supervisor'"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Investigation Supervisor' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'Evidence Custodian'"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Evidence Custodian' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'Investigation Quality Reviewer'"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Investigation Quality Reviewer' bound to permission group"
+    },
+    {
+      "kind": "memories",
+      "identity": "methodology",
+      "action": "noop",
+      "urn": null,
+      "detail": "0 grounding records written, 8 already present"
+    }
+  ],
+  "deferred": [
+    {
+      "kind": "agent_recipes",
+      "reason": "INV-FR-010..040 abstract 3-specialist agents (pattern_detector, network_graph_investigator, risk_scorer, evidence_gatherer) require agent-runtime graph-module registration + the consumer-pack specialization-point mechanism \u2014 both pack-service-tier (BRD 23 BR-12). Today the methodology memories ground the existing case-triage agent with the same investigation discipline."
+    }
+  ],
+  "result": "installed"
+}

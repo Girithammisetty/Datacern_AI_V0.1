@@ -69,11 +69,11 @@ start_case() {
     JWKS_URL="$WR_JWKS_URL" JWT_ISSUER="$WR_ISS" JWT_AUDIENCE="$WR_AUD" \
     SNAPSHOT_ROOT="${E2E_DIR}/run/case-snapshots" \
     QUERY_SERVICE_URL="$QUERY_URL" \
-    MINIO_ENDPOINT="${S3_ENDPOINT#http://}" MINIO_ACCESS_KEY=windrose MINIO_SECRET_KEY=windrose_dev \
-    MINIO_USE_SSL=false CASE_EVIDENCE_BUCKET=windrose-case-evidence \
+    MINIO_ENDPOINT="${S3_ENDPOINT#http://}" MINIO_ACCESS_KEY=datacern MINIO_SECRET_KEY=datacern_dev \
+    MINIO_USE_SSL=false CASE_EVIDENCE_BUCKET=datacern-case-evidence \
     RBAC_URL="$RBAC_URL" REGISTER_SIGNING_KEY_PEM="$reg_key" \
     REGISTER_SIGNING_KID="e2e-harness-key-1" REGISTER_TENANT_ID="$TENANT_ID" \
-    CASE_FACADE_ALLOWED_SPIFFE="spiffe://windrose/ns/tools/sa/mcp-gateway" \
+    CASE_FACADE_ALLOWED_SPIFFE="spiffe://datacern/ns/tools/sa/mcp-gateway" \
     "$BIN_DIR/case-e2e"
   wait_ready case "$CASE_URL" || die "case-service not ready"
 }
@@ -121,7 +121,7 @@ start_tool_plane() {
     JWKS_URL="$WR_JWKS_URL" JWT_ISSUER="$WR_ISS" JWT_AUDIENCE="$WR_AUD" \
     OPA_URL="$OPA_URL" \
     PROPOSAL_JWKS_URL="${AGENT_RUNTIME_URL}/api/v1/.well-known/jwks.json" \
-    PROPOSAL_ISSUER="windrose-agent-runtime" \
+    PROPOSAL_ISSUER="datacern-agent-runtime" \
     RBAC_URL="$RBAC_URL" REGISTER_SIGNING_KEY_PEM="$reg_key" \
     REGISTER_SIGNING_KID="e2e-harness-key-1" REGISTER_TENANT_ID="$TENANT_ID" \
     "$BIN_DIR/mcp-gateway-e2e"
@@ -141,10 +141,10 @@ py_boot() { # name svc app_port  extra-env pairs passed via preset environment
 
 start_ingestion() {
   # Runtime logs in as the non-superuser ingestion_app role so FORCE RLS is
-  # enforced; migrations run privileged via INGESTION_MIGRATE_URL (windrose).
+  # enforced; migrations run privileged via INGESTION_MIGRATE_URL (datacern).
   export DATABASE_URL="postgresql+asyncpg://ingestion_app:ingestion_app@localhost:5432/ingestion"
   export INGESTION_MIGRATE_URL="${PG_SYNC_BASE}/ingestion"
-  export ADAPTER_MODE=real WINDROSE_ENV=dev
+  export ADAPTER_MODE=real DATACERN_ENV=dev
   export S3_ENDPOINT_URL="$S3_ENDPOINT" ICEBERG_CATALOG_URI="$ICEBERG_URI"
   export VAULT_ADDR="$VAULT_ADDR_" VAULT_TOKEN="$VAULT_TOKEN_"
   export KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BROKERS" OPA_URL="$OPA_URL" REDIS_URL="$REDIS_URL"
@@ -162,9 +162,9 @@ start_dataset() {
   export DST_DATABASE_URL="postgresql+asyncpg://dataset_app:dataset_app@localhost:5432/dataset"
   export DST_MIGRATE_URL="${PG_SYNC_BASE}/dataset"
   export DST_USE_REAL_ADAPTERS=true
-  export DST_S3_ENDPOINT_URL="$S3_ENDPOINT" DST_S3_ACCESS_KEY=windrose DST_S3_SECRET_KEY=windrose_dev
-  export DST_S3_REGION=us-east-1 DST_PROFILES_BUCKET=windrose-profiles
-  export DST_ICEBERG_CATALOG_URI="$ICEBERG_URI" DST_ICEBERG_WAREHOUSE="s3://windrose-warehouse/"
+  export DST_S3_ENDPOINT_URL="$S3_ENDPOINT" DST_S3_ACCESS_KEY=datacern DST_S3_SECRET_KEY=datacern_dev
+  export DST_S3_REGION=us-east-1 DST_PROFILES_BUCKET=datacern-profiles
+  export DST_ICEBERG_CATALOG_URI="$ICEBERG_URI" DST_ICEBERG_WAREHOUSE="s3://datacern-warehouse/"
   export DST_KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BROKERS" DST_REDIS_URL="$REDIS_URL" DST_OPA_URL="$OPA_URL"
   export DST_JWKS_URL="$WR_JWKS_URL" DST_JWT_ISSUER="$WR_ISS" DST_JWT_AUDIENCE="$WR_AUD"
   export DST_RBAC_URL="$RBAC_URL" DST_REGISTER_SIGNING_KEY_PEM="$(cat "$E2E_DIR/keys/idp_private.pem")"
@@ -177,7 +177,7 @@ start_dataset() {
 start_ai_gateway() {
   export AIG_USE_REAL_ADAPTERS=true
   # Runtime logs in as the non-superuser ai_gateway_app role so FORCE RLS is
-  # enforced; migrations run privileged via AIG_MIGRATE_URL (windrose).
+  # enforced; migrations run privileged via AIG_MIGRATE_URL (datacern).
   export AIG_DATABASE_URL="postgresql+asyncpg://ai_gateway_app:ai_gateway_app@localhost:5432/ai_gateway"
   export AIG_MIGRATE_URL="${PG_SYNC_BASE}/ai_gateway"
   export AIG_REDIS_URL="$REDIS_URL" AIG_OLLAMA_BASE_URL="$OLLAMA_V1"
@@ -196,7 +196,7 @@ start_ai_gateway() {
 start_memory() {
   # Runtime logs in as the non-superuser memory_app role so FORCE RLS is
   # enforced; the admin pool (CREATE SCHEMA provisioning) and migrations stay
-  # privileged as windrose via MEM_ADMIN_DATABASE_URL / MEM_MIGRATE_URL.
+  # privileged as datacern via MEM_ADMIN_DATABASE_URL / MEM_MIGRATE_URL.
   export MEM_DATABASE_URL="postgresql+asyncpg://memory_app:memory_app@localhost:5432/memory"
   export MEM_ADMIN_DATABASE_URL="${PG_ASYNC_BASE}/memory"
   export MEM_MIGRATE_URL="${PG_SYNC_BASE}/memory"
@@ -215,7 +215,7 @@ start_memory() {
 start_agent_runtime() { # arg: virtual key
   local vkey="$1"
   # Runtime logs in as the non-superuser agent_runtime_app role so FORCE RLS is
-  # enforced; the admin pool and migrations stay privileged as windrose via
+  # enforced; the admin pool and migrations stay privileged as datacern via
   # AR_ADMIN_DATABASE_URL / AR_MIGRATE_URL.
   export AR_DATABASE_URL="postgresql+asyncpg://agent_runtime_app:agent_runtime_app@localhost:5432/agent_runtime"
   export AR_ADMIN_DATABASE_URL="${PG_ASYNC_BASE}/agent_runtime"
@@ -224,9 +224,9 @@ start_agent_runtime() { # arg: virtual key
   export AR_TEMPORAL_TARGET="localhost:7233" AR_TEMPORAL_NAMESPACE="default" AR_TEMPORAL_TASK_QUEUE="agents-pool"
   export AR_USE_TEMPORAL=true
   export AR_KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BROKERS" AR_REDIS_URL="$REDIS_URL"
-  export AR_OPA_URL="$OPA_URL" AR_OPA_PACKAGE="windrose/authz_input"
+  export AR_OPA_URL="$OPA_URL" AR_OPA_PACKAGE="datacern/authz_input"
   export AR_AI_GATEWAY_URL="$AI_GATEWAY_URL" AR_AI_GATEWAY_CHAT_PATH="/v1/chat/completions"
-  export AR_AI_GATEWAY_MODEL="windrose-auto" AR_AI_GATEWAY_VIRTUAL_KEY="$vkey" AR_AI_GATEWAY_REQUEST_CLASS="chat"
+  export AR_AI_GATEWAY_MODEL="datacern-auto" AR_AI_GATEWAY_VIRTUAL_KEY="$vkey" AR_AI_GATEWAY_REQUEST_CLASS="chat"
   export AR_TOOL_PLANE_URL="$MCP_GATEWAY_URL" AR_TOOL_PLANE_MCP_PATH="/mcp"
   export AR_MEMORY_SERVICE_URL="$MEMORY_URL" AR_CASE_SERVICE_URL="$CASE_URL" AR_REALTIME_HUB_URL="$REALTIME_URL"
   export AR_JWKS_URL="$WR_JWKS_URL" AR_JWT_ISSUER="$WR_ISS" AR_JWT_AUDIENCE="$WR_AUD"
@@ -245,7 +245,7 @@ start_agent_runtime() { # arg: virtual key
 
 # ---- RETRAIN TAIL services (pipeline-orchestrator, experiment-service,
 #      inference-service). All default to REAL adapters + FORCE RLS + a non-owner
-#      app role; migrations run as the privileged windrose role via *_MIGRATE_URL,
+#      app role; migrations run as the privileged datacern role via *_MIGRATE_URL,
 #      the service then logs in as its own app role. They train/register/score
 #      against REAL MLflow (:5500) + MinIO + Kafka. ----
 
@@ -264,13 +264,13 @@ PY
 
 start_pipeline() {
   export PPL_DATABASE_URL="postgresql+asyncpg://pipeline_app:pipeline_app@localhost:5432/pipeline"
-  export PPL_MIGRATE_URL="postgresql+psycopg://windrose:windrose_dev@localhost:5432/pipeline"
+  export PPL_MIGRATE_URL="postgresql+psycopg://datacern:datacern_dev@localhost:5432/pipeline"
   export PPL_USE_REAL_ADAPTERS=true PPL_ENV=dev
   export PPL_MLFLOW_TRACKING_URI="$MLFLOW_URL"
   export PPL_MLFLOW_EXPERIMENT="$(retrain_experiment_name)"
   export PPL_KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BROKERS" PPL_REDIS_URL="$REDIS_URL" PPL_OPA_URL="$OPA_URL"
-  export PPL_S3_ENDPOINT_URL="$S3_ENDPOINT" PPL_S3_ACCESS_KEY=windrose PPL_S3_SECRET_KEY=windrose_dev
-  export PPL_S3_REGION=us-east-1 PPL_ARTIFACTS_BUCKET=windrose-pipelines
+  export PPL_S3_ENDPOINT_URL="$S3_ENDPOINT" PPL_S3_ACCESS_KEY=datacern PPL_S3_SECRET_KEY=datacern_dev
+  export PPL_S3_REGION=us-east-1 PPL_ARTIFACTS_BUCKET=datacern-pipelines
   export PPL_DEFAULT_MIN_SECONDS_BETWEEN_RUNS=0
   export PPL_JWKS_URL="$WR_JWKS_URL" PPL_JWT_ISSUER="$WR_ISS" PPL_JWT_AUDIENCE="$WR_AUD"
   echo "export PPL_MLFLOW_EXPERIMENT='$PPL_MLFLOW_EXPERIMENT'" >> "$PID_DIR/../context.env"
@@ -282,11 +282,11 @@ start_pipeline() {
 
 start_experiment() {
   export EXP_DATABASE_URL="postgresql+asyncpg://experiment_app:experiment_app@localhost:5432/experiment"
-  export EXP_MIGRATE_URL="postgresql+psycopg://windrose:windrose_dev@localhost:5432/experiment"
+  export EXP_MIGRATE_URL="postgresql+psycopg://datacern:datacern_dev@localhost:5432/experiment"
   export EXP_USE_REAL_ADAPTERS=true EXP_ENV=dev
   export EXP_MLFLOW_TRACKING_URI="$MLFLOW_URL"
   export EXP_KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BROKERS" EXP_REDIS_URL="$REDIS_URL" EXP_OPA_URL="$OPA_URL"
-  export EXP_S3_ENDPOINT_URL="$S3_ENDPOINT" EXP_S3_ACCESS_KEY=windrose EXP_S3_SECRET_KEY=windrose_dev
+  export EXP_S3_ENDPOINT_URL="$S3_ENDPOINT" EXP_S3_ACCESS_KEY=datacern EXP_S3_SECRET_KEY=datacern_dev
   export EXP_S3_REGION=us-east-1
   export EXP_JWKS_URL="$WR_JWKS_URL" EXP_JWT_ISSUER="$WR_ISS" EXP_JWT_AUDIENCE="$WR_AUD"
   # Was missing entirely (found live via task #64's ml-journeys.spec.ts:
@@ -305,11 +305,11 @@ start_experiment() {
 
 start_inference() {
   export INF_DATABASE_URL="postgresql+asyncpg://inference_app:inference_app@localhost:5432/inference"
-  export INF_MIGRATE_URL="postgresql+psycopg://windrose:windrose_dev@localhost:5432/inference"
+  export INF_MIGRATE_URL="postgresql+psycopg://datacern:datacern_dev@localhost:5432/inference"
   export INF_USE_REAL_ADAPTERS=true INF_ENV=dev
   export INF_MLFLOW_TRACKING_URI="$MLFLOW_URL"
-  export INF_S3_ENDPOINT_URL="$S3_ENDPOINT" INF_S3_ACCESS_KEY=windrose INF_S3_SECRET_KEY=windrose_dev
-  export INF_S3_REGION=us-east-1 INF_DATASETS_BUCKET=windrose-datasets
+  export INF_S3_ENDPOINT_URL="$S3_ENDPOINT" INF_S3_ACCESS_KEY=datacern INF_S3_SECRET_KEY=datacern_dev
+  export INF_S3_REGION=us-east-1 INF_DATASETS_BUCKET=datacern-datasets
   export INF_KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BROKERS" INF_REDIS_URL="$REDIS_URL" INF_OPA_URL="$OPA_URL"
   export INF_JWKS_URL="$WR_JWKS_URL" INF_JWT_ISSUER="$WR_ISS" INF_JWT_AUDIENCE="$WR_AUD"
   # inference-service's model-registry adapter sets the tracking URI only on its own
@@ -318,7 +318,7 @@ start_inference() {
   # standard MLflow env vars at the real server so models:/ resolves. (Owning-service
   # bug: MlflowModelRegistry should set_tracking_uri/set_registry_uri globally.)
   export MLFLOW_TRACKING_URI="$MLFLOW_URL" MLFLOW_REGISTRY_URI="$MLFLOW_URL"
-  export MLFLOW_S3_ENDPOINT_URL="$S3_ENDPOINT" AWS_ACCESS_KEY_ID=windrose AWS_SECRET_ACCESS_KEY=windrose_dev
+  export MLFLOW_S3_ENDPOINT_URL="$S3_ENDPOINT" AWS_ACCESS_KEY_ID=datacern AWS_SECRET_ACCESS_KEY=datacern_dev
   # Same class of gap as start_experiment above (task #64 finding) — was
   # missing entirely. inference.* actions currently happen to already be in
   # perm:catalog:actions from an earlier registration, but a truly clean boot
@@ -357,9 +357,9 @@ start_query() {
     RBAC_URL="$RBAC_URL" REGISTER_SIGNING_KEY_PEM="$reg_key" \
     REGISTER_SIGNING_KID="e2e-harness-key-1" REGISTER_TENANT_ID="$TENANT_ID" \
     S3_ENDPOINT="localhost:9000" AWS_REGION="us-east-1" \
-    AWS_ACCESS_KEY_ID="windrose" AWS_SECRET_ACCESS_KEY="windrose_dev" \
+    AWS_ACCESS_KEY_ID="datacern" AWS_SECRET_ACCESS_KEY="datacern_dev" \
     DUCKDB_AUTOMATERIALIZE_SCHEMAS="main" \
-    TRINO_ENDPOINT="http://localhost:8080" TRINO_USER="windrose" TRINO_CATALOG="iceberg" \
+    TRINO_ENDPOINT="http://localhost:8080" TRINO_USER="datacern" TRINO_CATALOG="iceberg" \
     "$BIN_DIR/query-e2e"
   wait_ready query "$QUERY_URL" || { warn "query-service not ready — SKIPPED"; SKIPPED+=("query"); return 1; }
 }
@@ -495,11 +495,11 @@ start_audit() {
     DATABASE_URL="postgres://audit_rw:audit_rw_dev@localhost:5432/audit?sslmode=disable" \
     AUDIT_DB_NAME="audit" \
     CLICKHOUSE_ADDR="localhost:9010" CLICKHOUSE_DB="audit" \
-    CLICKHOUSE_USER="windrose" CLICKHOUSE_PASSWORD="windrose_dev" \
+    CLICKHOUSE_USER="datacern" CLICKHOUSE_PASSWORD="datacern_dev" \
     LISTEN_ADDR=":${PORT_AUDIT}" \
     REDIS_ADDR="$REDIS_ADDR" OPA_URL="$OPA_URL" \
     KAFKA_BROKERS="$KAFKA_BROKERS" SCHEMA_REGISTRY_URL="$SCHEMA_REGISTRY_URL" \
-    MINIO_ENDPOINT="localhost:9000" MINIO_ACCESS_KEY="windrose" MINIO_SECRET_KEY="windrose_dev" \
+    MINIO_ENDPOINT="localhost:9000" MINIO_ACCESS_KEY="datacern" MINIO_SECRET_KEY="datacern_dev" \
     RBAC_URL="$RBAC_URL" REGISTER_SIGNING_KEY_PEM="$reg_key" REGISTER_SIGNING_KID="e2e-harness-key-1" \
     REGISTER_TENANT_ID="$TENANT_ID" \
     JWKS_URL="$WR_JWKS_URL" JWT_ISSUER="$WR_ISS" JWT_AUDIENCE="$WR_AUD" \

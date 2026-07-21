@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
-	"github.com/windrose-ai/notification-service/internal/store"
+	"github.com/datacern-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/store"
 )
 
 // ErrorBody is the master error envelope (MASTER-FR-024).

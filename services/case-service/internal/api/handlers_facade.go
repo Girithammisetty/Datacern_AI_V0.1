@@ -9,10 +9,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/case-service/internal/authz"
-	"github.com/windrose-ai/case-service/internal/domain"
-	"github.com/windrose-ai/case-service/internal/events"
-	"github.com/windrose-ai/case-service/internal/store"
+	"github.com/datacern-ai/case-service/internal/authz"
+	"github.com/datacern-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/events"
+	"github.com/datacern-ai/case-service/internal/store"
 )
 
 // facadeReq is tool-plane's backend-facade contract (BRD 13, TPL-FR-012): the

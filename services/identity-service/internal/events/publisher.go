@@ -14,7 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 // Publisher ships one event batch. Must be idempotent (MASTER-FR-032:

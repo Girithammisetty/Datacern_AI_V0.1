@@ -8,7 +8,7 @@ request → authN (key + JWT) → attribution validation → admission (streams/
         → cache write → budget settle → metering event → response
 
 A rejection at any stage short-circuits later stages and stamps
-`windrose.rejected_stage` on the span (BR-1 ordering holds: guardrail block
+`datacern.rejected_stage` on the span (BR-1 ordering holds: guardrail block
 happens before any budget reservation or provider call)."""
 
 from __future__ import annotations
@@ -108,9 +108,9 @@ class GatewayService:
 
     async def chat(self, ctx: RequestCtx, body: dict) -> PipelineResult:
         span = self.tracer.start_span("chat")
-        span.set_attribute("windrose.tenant_id", ctx.tenant_id)
-        span.set_attribute("windrose.request_class", ctx.request_class)
-        span.set_attribute("windrose.price_version", self.prices.version)
+        span.set_attribute("datacern.tenant_id", ctx.tenant_id)
+        span.set_attribute("datacern.request_class", ctx.request_class)
+        span.set_attribute("datacern.price_version", self.prices.version)
         started = self.clock.now()
         stream = bool(body.get("stream"))
         stream_acquired = False
@@ -121,7 +121,7 @@ class GatewayService:
                 try:
                     await self.spend_guard.check(ctx.tenant_id)
                 except AppError:
-                    span.set_attribute("windrose.rejected_stage", "spend_freeze")
+                    span.set_attribute("datacern.rejected_stage", "spend_freeze")
                     raise
             messages = self._validate_chat_body(ctx, body, span)
             prompt_tokens_est = sum(
@@ -136,7 +136,7 @@ class GatewayService:
                     await self.admission.acquire_stream(ctx.tenant_id)
                     stream_acquired = True
             except AppError:
-                span.set_attribute("windrose.rejected_stage", "admission")
+                span.set_attribute("datacern.rejected_stage", "admission")
                 raise
 
             # ---- guardrails-in ---------------------------------------------
@@ -146,7 +146,7 @@ class GatewayService:
                     ctx.tenant_id, messages, policy, ctx.request_id
                 )
             except AppError as exc:
-                span.set_attribute("windrose.rejected_stage", "guardrails_in")
+                span.set_attribute("datacern.rejected_stage", "guardrails_in")
                 await self._emit_guardrail_events(ctx, [
                     self.guardrails._event(
                         exc.details.get("kind", "unknown") if exc.details else "unknown",
@@ -157,7 +157,7 @@ class GatewayService:
             if guard.events:
                 await self._emit_guardrail_events(ctx, guard.events)
             if guard.flags:
-                span.set_attribute("windrose.guardrail_flags", list(guard.flags))
+                span.set_attribute("datacern.guardrail_flags", list(guard.flags))
             messages = guard.messages
 
             # ---- ladder + degrade state (read-only) -------------------------
@@ -181,7 +181,7 @@ class GatewayService:
                             degrading = True
                             break
                 except LedgerUnavailable as exc:  # BR-14: never fail-open
-                    span.set_attribute("windrose.rejected_stage", "budget_preflight")
+                    span.set_attribute("datacern.rejected_stage", "budget_preflight")
                     raise DependencyUnavailable(
                         "budget ledger unavailable; failing closed (BR-14)"
                     ) from exc
@@ -190,24 +190,24 @@ class GatewayService:
             try:
                 rung_idx, escalated = self.ladders.select_rung(
                     ladder,
-                    requested_model=body.get("model", "windrose-auto"),
+                    requested_model=body.get("model", "datacern-auto"),
                     min_rung=ctx.min_rung,
                     escalate_from=escalate_from,
                     key_max_rung=ctx.key.max_rung,
                     degraded=degrading,
                 )
             except AppError:
-                span.set_attribute("windrose.rejected_stage", "ladder")
+                span.set_attribute("datacern.rejected_stage", "ladder")
                 raise
             rung = ladder.rung(rung_idx)
             temperature = self._temperature(ctx, body, rung)
             max_tokens = min(int(body.get("max_tokens") or rung.max_tokens), rung.max_tokens)
-            span.set_attribute("windrose.rung", rung_idx)
-            span.set_attribute("windrose.escalated", escalated)
+            span.set_attribute("datacern.rung", rung_idx)
+            span.set_attribute("datacern.escalated", escalated)
             if escalated:
-                span.set_attribute("windrose.escalation_reason", "explicit_request")
+                span.set_attribute("datacern.escalation_reason", "explicit_request")
             if degrading:
-                span.set_attribute("windrose.degraded", "budget")
+                span.set_attribute("datacern.degraded", "budget")
 
             # ---- semantic cache lookup ---------------------------------------
             ttl = self.cache.ttl_for(tenant_ttl)
@@ -230,8 +230,8 @@ class GatewayService:
                     ctx.tenant_id, messages, p_hash, c_hash
                 )
                 if cache_tier.startswith("hit"):
-                    span.set_attribute("windrose.cache", cache_tier)
-                    span.set_attribute("windrose.budget_state",
+                    span.set_attribute("datacern.cache", cache_tier)
+                    span.set_attribute("datacern.budget_state",
                                        "degrading" if degrading else "ok")
                     self.metrics.inc("aig_cache_hits_total", tenant=ctx.tenant_id)
                     result = self._rewrap_cached(ctx, cached_response)
@@ -253,7 +253,7 @@ class GatewayService:
                         cache=cache_tier, degraded=degrading, escalated=escalated,
                         guardrail_flags=guard.flags, stream=replay,
                     )
-            span.set_attribute("windrose.cache", cache_tier if cacheable else "skip")
+            span.set_attribute("datacern.cache", cache_tier if cacheable else "skip")
 
             # ---- budget pre-flight -------------------------------------------
             quote = self.prices.quote(rung.model_alias)
@@ -261,10 +261,10 @@ class GatewayService:
             try:
                 preflight = await self.budgets.preflight(windows, estimate)
             except AppError:
-                span.set_attribute("windrose.rejected_stage", "budget_preflight")
-                span.set_attribute("windrose.budget_state", "exhausted")
+                span.set_attribute("datacern.rejected_stage", "budget_preflight")
+                span.set_attribute("datacern.budget_state", "exhausted")
                 raise
-            span.set_attribute("windrose.budget_state", preflight.governing_state)
+            span.set_attribute("datacern.budget_state", preflight.governing_state)
 
             # ---- provider call (+ failover, schema validation, escalation) ---
             try:
@@ -285,7 +285,7 @@ class GatewayService:
         except AppError as exc:
             if stream_acquired and not isinstance(exc, asyncio.CancelledError):
                 await self.admission.release_stream(ctx.tenant_id)
-            span.set_attribute("windrose.error_code", exc.code)
+            span.set_attribute("datacern.error_code", exc.code)
             await self._log_request(
                 ctx, started, rung=-1, model_alias="", deployment_id=None,
                 input_tokens=0, output_tokens=0, cost_usd=0.0, cached=False,
@@ -339,8 +339,8 @@ class GatewayService:
                 await self.budgets.reserve_more(preflight, extra)
                 span.add_event("schema_invalid_escalate",
                                {"from_rung": current_idx, "to_rung": next_idx})
-                span.set_attribute("windrose.escalated", True)
-                span.set_attribute("windrose.escalation_reason", "schema_invalid")
+                span.set_attribute("datacern.escalated", True)
+                span.set_attribute("datacern.escalation_reason", "schema_invalid")
                 current_idx, current_rung, current_quote = next_idx, next_rung, next_quote
                 escalated = True
                 schema_escalated = True  # AIG-FR-052: escalate one rung at most
@@ -352,7 +352,7 @@ class GatewayService:
             )
             from app.domain.errors import OutputSchemaInvalid
 
-            span.set_attribute("windrose.rejected_stage", "guardrails_out")
+            span.set_attribute("datacern.rejected_stage", "guardrails_out")
             raise OutputSchemaInvalid(f"provider output failed schema validation: "
                                       f"{schema_error}")
 
@@ -371,7 +371,7 @@ class GatewayService:
             ctx, span, started, preflight, current_quote, result, current_idx,
             current_rung.model_alias, deployment, guard, degrading, status="ok",
         )
-        span.set_attribute("windrose.rung", current_idx)
+        span.set_attribute("datacern.rung", current_idx)
         return PipelineResult(
             request_id=ctx.request_id, response=response, rung=current_idx,
             model_alias=current_rung.model_alias, deployment_id=deployment.id,
@@ -493,16 +493,16 @@ class GatewayService:
 
     async def embeddings(self, ctx: RequestCtx, body: dict) -> PipelineResult:
         span = self.tracer.start_span("embeddings")
-        span.set_attribute("windrose.tenant_id", ctx.tenant_id)
-        span.set_attribute("windrose.request_class", ctx.request_class)
-        span.set_attribute("windrose.price_version", self.prices.version)
+        span.set_attribute("datacern.tenant_id", ctx.tenant_id)
+        span.set_attribute("datacern.request_class", ctx.request_class)
+        span.set_attribute("datacern.price_version", self.prices.version)
         started = self.clock.now()
         try:
             if self.spend_guard is not None:
                 try:
                     await self.spend_guard.check(ctx.tenant_id)
                 except AppError:
-                    span.set_attribute("windrose.rejected_stage", "spend_freeze")
+                    span.set_attribute("datacern.rejected_stage", "spend_freeze")
                     raise
             inputs = body.get("input")
             if isinstance(inputs, str):
@@ -518,13 +518,13 @@ class GatewayService:
             try:
                 await self.admission.check_rpm_tpm(ctx.tenant_id, tokens)
             except AppError:
-                span.set_attribute("windrose.rejected_stage", "admission")
+                span.set_attribute("datacern.rejected_stage", "admission")
                 raise
 
             ladder = await self.ladders.resolve(ctx.tenant_id, "embed")
             rung = ladder.rung(0)
-            span.set_attribute("windrose.rung", 0)
-            span.set_attribute("windrose.cache", "skip")
+            span.set_attribute("datacern.rung", 0)
+            span.set_attribute("datacern.cache", "skip")
             tz_name, _ = await self._tenant_prefs(ctx.tenant_id)
             windows = await self.budgets.governing_windows(
                 ctx.tenant_id, ctx.attribution, ctx.principal_sub, ctx.key.id,
@@ -536,10 +536,10 @@ class GatewayService:
                 preflight = await self.budgets.preflight(windows,
                                                          quote.cost_cents(tokens, 0))
             except AppError:
-                span.set_attribute("windrose.rejected_stage", "budget_preflight")
-                span.set_attribute("windrose.budget_state", "exhausted")
+                span.set_attribute("datacern.rejected_stage", "budget_preflight")
+                span.set_attribute("datacern.budget_state", "exhausted")
                 raise
-            span.set_attribute("windrose.budget_state", preflight.governing_state)
+            span.set_attribute("datacern.budget_state", preflight.governing_state)
 
             deployments = await self._active_deployments()
             candidates, plan = self._plan(span, deployments, rung, ctx.cell_cloud,
@@ -569,7 +569,7 @@ class GatewayService:
                     )
             except AppError:
                 await self.budgets.release(preflight)
-                span.set_attribute("windrose.rejected_stage", "provider")
+                span.set_attribute("datacern.rejected_stage", "provider")
                 raise
 
             result = ProviderResult(content="", input_tokens=input_tokens,
@@ -593,7 +593,7 @@ class GatewayService:
                 cache="skip", degraded=False, escalated=False,
             )
         except AppError as exc:
-            span.set_attribute("windrose.error_code", exc.code)
+            span.set_attribute("datacern.error_code", exc.code)
             raise
 
     # ---------------------------------------------------------------- internals
@@ -601,7 +601,7 @@ class GatewayService:
     def _validate_chat_body(self, ctx: RequestCtx, body: dict, span: Span) -> list[dict]:
         messages = body.get("messages")
         if not isinstance(messages, list) or not messages:
-            span.set_attribute("windrose.rejected_stage", "attribution")
+            span.set_attribute("datacern.rejected_stage", "attribution")
             raise ValidationFailed("messages must be a non-empty array")
         self._check_key_class(ctx, span)
         return messages
@@ -611,7 +611,7 @@ class GatewayService:
             raise KeyInvalid("virtual key does not belong to the caller's tenant")
         if ctx.request_class not in ctx.key.allowed_request_classes:
             if span:
-                span.set_attribute("windrose.rejected_stage", "attribution")
+                span.set_attribute("datacern.rejected_stage", "attribution")
             raise PermissionDenied(
                 f"virtual key does not allow request class {ctx.request_class!r}"
             )
@@ -626,14 +626,14 @@ class GatewayService:
         if not ctx.escalate:
             return None
         if not ctx.prior_request_id:
-            span.set_attribute("windrose.rejected_stage", "ladder")
+            span.set_attribute("datacern.rejected_stage", "ladder")
             raise ValidationFailed(
-                "x-windrose-escalate requires x-windrose-prior-request-id"
+                "x-datacern-escalate requires x-datacern-prior-request-id"
             )
         async with self.uow_factory(ctx.tenant_id) as uow:
             prior = await uow.request_log.get(ctx.prior_request_id)
         if prior is None:
-            span.set_attribute("windrose.rejected_stage", "ladder")
+            span.set_attribute("datacern.rejected_stage", "ladder")
             raise ValidationFailed("prior request_id not found for escalation")
         return prior.rung
 
@@ -658,14 +658,14 @@ class GatewayService:
                                                 cell_cloud)
             if candidates.deployments:
                 if idx != rung_idx:
-                    span.set_attribute("windrose.routing.rung_fallback", "up")
+                    span.set_attribute("datacern.routing.rung_fallback", "up")
                 if candidates.cross_cloud:
-                    span.set_attribute("windrose.routing.cross_cloud", True)
-                span.set_attribute("windrose.routing.candidates",
+                    span.set_attribute("datacern.routing.cross_cloud", True)
+                span.set_attribute("datacern.routing.candidates",
                                    list(candidates.evaluation_order))
                 return candidates, AttemptPlan(candidates.deployments)
             if idx >= ladder.top_rung:
-                span.set_attribute("windrose.rejected_stage", "provider")
+                span.set_attribute("datacern.rejected_stage", "provider")
                 raise UpstreamUnavailable(
                     f"no active deployment serves any rung of the "
                     f"{ladder.request_class} ladder"
@@ -710,8 +710,8 @@ class GatewayService:
                     result = await self.provider.complete(dep, preq)
                 self.breaker.record(dep.id, True)
                 attempts.append({"deployment": dep.id, "outcome": "ok"})
-                span.set_attribute("windrose.routing.attempts", attempts)
-                span.set_attribute("windrose.deployment", dep.id)
+                span.set_attribute("datacern.routing.attempts", attempts)
+                span.set_attribute("datacern.deployment", dep.id)
                 span.set_attribute("gen_ai.request.model", preq.model)
                 span.set_attribute("gen_ai.response.model", result.model)
                 return result, dep
@@ -720,8 +720,8 @@ class GatewayService:
                 attempts.append({"deployment": dep.id, "outcome": "error",
                                  "error": str(exc)})
                 last_exc = exc
-        span.set_attribute("windrose.routing.attempts", attempts)
-        span.set_attribute("windrose.rejected_stage", "provider")
+        span.set_attribute("datacern.routing.attempts", attempts)
+        span.set_attribute("datacern.rejected_stage", "provider")
         raise UpstreamUnavailable(f"all provider attempts failed: {last_exc}")
 
     def _chat_response(self, ctx: RequestCtx, model_alias: str, content: str,
@@ -811,10 +811,10 @@ class GatewayService:
                 deployment.provider, deployment.deployment_name, model_alias)
         actual_cents = actual_quote.cost_cents(result.input_tokens, result.output_tokens)
         state = await self.budgets.settle(preflight, actual_cents)
-        span.set_attribute("windrose.budget_state", state)
+        span.set_attribute("datacern.budget_state", state)
         span.set_attribute("gen_ai.usage.input_tokens", result.input_tokens)
         span.set_attribute("gen_ai.usage.output_tokens", result.output_tokens)
-        span.set_attribute("windrose.price_source", actual_quote.source)
+        span.set_attribute("datacern.price_source", actual_quote.source)
         if self.anomaly is not None:
             await self.anomaly.observe(ctx.tenant_id, actual_cents)
         await self._record_and_meter(

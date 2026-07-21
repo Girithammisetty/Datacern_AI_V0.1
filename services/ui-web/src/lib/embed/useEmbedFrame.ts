@@ -6,12 +6,12 @@ import { useEffect } from "react";
  *  - applies the host-requested theme (`?theme=light|dark`) to <html>;
  *  - strips the one-time `?t=` token from the visible URL once the middleware
  *    has moved it into the httpOnly `wr_embed` cookie;
- *  - posts `windrose:ready` and continuous `windrose:resize` (content height)
+ *  - posts `datacern:ready` and continuous `datacern:resize` (content height)
  *    messages to the host window so the embed SDK can auto-size the iframe.
  *
  * postMessage targets `"*"` for the outbound height/ready signals (they carry
  * no sensitive data — just a type + a number); the SDK validates that inbound
- * messages come from the Windrose iframe origin. Inbound host→embed messages
+ * messages come from the Datacern iframe origin. Inbound host→embed messages
  * (theme changes) are accepted only from the document referrer's origin.
  */
 export function useEmbedFrame(): void {
@@ -34,12 +34,12 @@ export function useEmbedFrame(): void {
     // 3) ready + resize signalling to the host
     const post = (type: string, extra: Record<string, unknown> = {}) => {
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ source: "windrose-embed", type, ...extra }, "*");
+        window.parent.postMessage({ source: "datacern-embed", type, ...extra }, "*");
       }
     };
-    post("windrose:ready");
+    post("datacern:ready");
     const emitHeight = () =>
-      post("windrose:resize", { height: document.documentElement.scrollHeight });
+      post("datacern:resize", { height: document.documentElement.scrollHeight });
     emitHeight();
     const ro = new ResizeObserver(emitHeight);
     ro.observe(document.documentElement);
@@ -54,8 +54,8 @@ export function useEmbedFrame(): void {
     const onMessage = (e: MessageEvent) => {
       if (hostOrigin && e.origin !== hostOrigin) return;
       const data = e.data as { source?: string; type?: string; theme?: string } | null;
-      if (data?.source !== "windrose-host") return;
-      if (data.type === "windrose:set-theme") {
+      if (data?.source !== "datacern-host") return;
+      if (data.type === "datacern:set-theme") {
         document.documentElement.classList.toggle("dark", data.theme === "dark");
         emitHeight();
       }

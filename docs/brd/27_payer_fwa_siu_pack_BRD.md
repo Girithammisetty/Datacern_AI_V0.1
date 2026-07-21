@@ -1,6 +1,6 @@
 # BRD 27 — `payer-fwa-siu` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 2 pack #3 (after `insurance-claims-payer` and `care-management-medicare` have 2+ production references each).
 **Inherits:** `00_MASTER_BRD.md`, `23_pack_service_BRD.md`. Reference pattern: BRD 24.
 
@@ -128,7 +128,7 @@ entity_templates:
 
 ## 6. Dependencies
 
-Windrose Core (all BRDs 01–23) + external subscription feeds (NHCAA, LEIE, NPDB — customer's licenses). MetricStream / SAI360 GRC integration optional. DOJ e-referral portal delivery adapter.
+Datacern Core (all BRDs 01–23) + external subscription feeds (NHCAA, LEIE, NPDB — customer's licenses). MetricStream / SAI360 GRC integration optional. DOJ e-referral portal delivery adapter.
 
 ## 7. NFRs (deltas)
 

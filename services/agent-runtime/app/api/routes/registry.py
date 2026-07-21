@@ -183,7 +183,7 @@ async def publish_version(request: Request, agent_key: str, version: int,
     card["signature"] = {"alg": "RS256", "kid": c.signing_key.kid, "value": sig}
     v.a2a_card = card
     v.card_signature = sig
-    v.principal_ref = v.principal_ref or f"spiffe://windrose/ns/ai/agent/{agent_key}"
+    v.principal_ref = v.principal_ref or f"spiffe://datacern/ns/ai/agent/{agent_key}"
     v.status = "published"
     await c.store.update_agent_version(v)
     return {"data": {"agent_key": agent_key, "version": version, "status": "published"}}
@@ -339,7 +339,7 @@ async def _provision_custom_agent(
         eval_gate={"suite_id": "persona-copilot-suite"},
         eval_gate_result_id="persona-copilot-shared-gate",
         a2a_card=card, card_signature=sig,
-        principal_ref=f"spiffe://windrose/ns/ai/agent/{agent_key}", status="published"))
+        principal_ref=f"spiffe://datacern/ns/ai/agent/{agent_key}", status="published"))
 
     await c.store.put_tenant_config(TenantAgentConfig(
         tenant_id=tenant, agent_key=agent_key, enabled=True,

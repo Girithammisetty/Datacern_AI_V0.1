@@ -5,14 +5,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/go-common/metricsx"
-	"github.com/windrose-ai/notification-service/internal/authz"
-	"github.com/windrose-ai/notification-service/internal/channels/email"
-	"github.com/windrose-ai/notification-service/internal/channels/webhook"
-	"github.com/windrose-ai/notification-service/internal/registry"
-	"github.com/windrose-ai/notification-service/internal/reports"
-	"github.com/windrose-ai/notification-service/internal/store"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/metricsx"
+	"github.com/datacern-ai/notification-service/internal/authz"
+	"github.com/datacern-ai/notification-service/internal/channels/email"
+	"github.com/datacern-ai/notification-service/internal/channels/webhook"
+	"github.com/datacern-ai/notification-service/internal/registry"
+	"github.com/datacern-ai/notification-service/internal/reports"
+	"github.com/datacern-ai/notification-service/internal/store"
 )
 
 // Server wires the HTTP layer (dependency container).
@@ -63,7 +63,7 @@ func (s *Server) Router() http.Handler {
 	r.Handle("/metrics", metrics.Handler())
 
 	// Provider status callbacks are authenticated by the provider's own signed
-	// payload (allowlisted per provider, BR-13), not by a Windrose JWT.
+	// payload (allowlisted per provider, BR-13), not by a Datacern JWT.
 	r.Post("/api/v1/providers/{provider}/status", s.handleProviderStatus)
 
 	r.Route("/api/v1", func(r chi.Router) {

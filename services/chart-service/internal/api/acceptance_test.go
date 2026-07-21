@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/chart-service/internal/authz"
-	"github.com/windrose-ai/go-common/authjwt"
+	"github.com/datacern-ai/chart-service/internal/authz"
+	"github.com/datacern-ai/go-common/authjwt"
 )
 
 // TestAC07_ChartTypesEndpoint: GET /chart-types returns 30 types.

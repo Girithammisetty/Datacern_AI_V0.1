@@ -20,7 +20,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from windrose_common.logging import configure_json_logging
+from datacern_common.logging import configure_json_logging
 
 from app.agents.catalog import seed_catalog
 from app.api.errors import TraceMiddleware, install_error_handlers
@@ -125,8 +125,8 @@ async def _lifespan(app: FastAPI):
     if c.settings.use_real_adapters and c.settings.event_triggers_enabled:
         try:
             import redis.asyncio as aioredis
-            from windrose_common.kafka import KafkaConfig, KafkaConsumer, KafkaProducerClient
-            from windrose_common.redisx import RedisDedupStore
+            from datacern_common.kafka import KafkaConfig, KafkaConsumer, KafkaProducerClient
+            from datacern_common.redisx import RedisDedupStore
 
             from app.runtime.event_triggers import EventTriggerDispatcher
 
@@ -169,8 +169,8 @@ def create_app(container: Container | None = None) -> FastAPI:
     app = FastAPI(title="agent-runtime", version="0.1.0", docs_url="/docs",
                   lifespan=_lifespan)
     app.state.container = container
-    from windrose_common.metricsx import RedMiddleware, instrument_app
-    from windrose_common.otelx import configure_tracing
+    from datacern_common.metricsx import RedMiddleware, instrument_app
+    from datacern_common.otelx import configure_tracing
     configure_tracing("agent-runtime")
     app.add_middleware(TraceMiddleware)
     app.add_middleware(RedMiddleware, service="agent-runtime")

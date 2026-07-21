@@ -146,7 +146,7 @@ function EmbedConfigCard({
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <p className="text-xs text-muted-foreground">
-          Origins allowed to iframe this tenant&apos;s Windrose surfaces (dashboards, cases, copilot).
+          Origins allowed to iframe this tenant&apos;s Datacern surfaces (dashboards, cases, copilot).
           Also bound into every embed session as its CSP frame-ancestors — a host not listed here
           cannot frame the surface even with a valid secret.
         </p>
@@ -258,7 +258,7 @@ function IdentityProviderCard() {
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="idp-client">Client ID (optional)</Label>
-            <Input id="idp-client" placeholder="windrose-web"
+            <Input id="idp-client" placeholder="datacern-web"
               value={clientId ?? ""} onChange={(e) => setClientId(e.target.value)} />
           </div>
           <div className="space-y-1.5">

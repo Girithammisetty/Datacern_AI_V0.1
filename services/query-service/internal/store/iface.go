@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/query-service/internal/domain"
-	"github.com/windrose-ai/query-service/internal/events"
+	"github.com/datacern-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/events"
 )
 
 // ErrNotFound maps to 404 NOT_FOUND; cross-tenant access surfaces as this

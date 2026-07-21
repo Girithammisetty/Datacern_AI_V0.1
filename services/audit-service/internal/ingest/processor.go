@@ -12,10 +12,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/audit-service/internal/chain"
-	"github.com/windrose-ai/audit-service/internal/domain"
-	"github.com/windrose-ai/audit-service/internal/meta"
-	"github.com/windrose-ai/audit-service/internal/siemexport"
+	"github.com/datacern-ai/audit-service/internal/chain"
+	"github.com/datacern-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/meta"
+	"github.com/datacern-ai/audit-service/internal/siemexport"
 )
 
 // RecordInserter appends a record to the append-only store (real: *chstore.Store).

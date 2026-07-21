@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Create the `ghcr-pull` image-pull secret so a self-hosted (k3s/Hetzner) cluster
-# can pull Windrose's PRIVATE GitHub Container Registry packages. The hyperscaler
+# can pull Datacern's PRIVATE GitHub Container Registry packages. The hyperscaler
 # targets pull keylessly via cloud workload identity; Hetzner has none, so pods
 # authenticate to ghcr.io with this docker-registry secret (wired into
 # values-hetzner.yaml as global.imagePullSecrets: [{name: ghcr-pull}]).
@@ -16,10 +16,10 @@
 #   ./create-ghcr-pull-secret.sh
 set -euo pipefail
 
-NS="${NS:-windrose}"
+NS="${NS:-datacern}"
 : "${GHCR_USERNAME:?set GHCR_USERNAME to your GitHub username}"
 : "${GHCR_TOKEN:?set GHCR_TOKEN to a PAT with read:packages (export it; do not inline it)}"
-GHCR_EMAIL="${GHCR_EMAIL:-noreply@windrose.ai}"
+GHCR_EMAIL="${GHCR_EMAIL:-noreply@datacern.ai}"
 
 command -v kubectl >/dev/null || { echo "kubectl not found" >&2; exit 1; }
 kubectl get namespace "$NS" >/dev/null 2>&1 || kubectl create namespace "$NS"

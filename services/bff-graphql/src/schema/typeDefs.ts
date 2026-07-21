@@ -1,5 +1,5 @@
 /**
- * Windrose BFF GraphQL SDL.
+ * Datacern BFF GraphQL SDL.
  *
  * UI-shaped aggregation over the domain services' REST APIs. Every type notes
  * the downstream service that backs it (BR-12: the schema is self-documenting).

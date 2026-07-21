@@ -1,14 +1,14 @@
 # chargeback-representment capability pack — Core-neutral edition: merchant/
 # PSP-side chargeback response and representment (the merchant mirror of the
 # issuer card-disputes pack, BRD 32): decide which incoming chargebacks to
-# fight and with what evidence. Installable TODAY against Windrose Core's
+# fight and with what evidence. Installable TODAY against Datacern Core's
 # public APIs via packctl; the manifest envelope follows BRD 23
 # (PKG-FR-001/003). Components the current Core cannot materialize are
 # declared under `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: chargeback-representment
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted chargeback representment for merchants, PSPs/acquirers offering
   managed disputes, and marketplaces: incoming-chargeback triage with

@@ -22,7 +22,7 @@ make build          # go build ./...
 make run            # DATABASE_URL, OPENSEARCH_URL, KAFKA_BROKERS, OPA_URL, REDIS_ADDR, JWKS_URL from env
 ```
 
-Key env: `DATABASE_URL` (default `postgres://windrose:windrose_dev@localhost:5432/case`),
+Key env: `DATABASE_URL` (default `postgres://datacern:datacern_dev@localhost:5432/case`),
 `OPENSEARCH_URL` (`http://localhost:9200`), `KAFKA_BROKERS` (`localhost:9092`;
 `false` = in-memory dev publisher), `OPA_URL` (`http://localhost:8281`),
 `REDIS_ADDR` (`localhost:6379`), `QUERY_SERVICE_URL` (live row fetch),

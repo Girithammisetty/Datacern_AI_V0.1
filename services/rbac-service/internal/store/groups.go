@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/rbac-service/internal/domain"
-	"github.com/windrose-ai/rbac-service/internal/events"
+	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/events"
 )
 
 const groupCols = `id, tenant_id, name, description, group_type, system, auto_generated, created_at, updated_at`

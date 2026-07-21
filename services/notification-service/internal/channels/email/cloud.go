@@ -42,7 +42,7 @@ func (p *SendGridProvider) Send(ctx context.Context, m Message) (string, error) 
 	if p.APIKey == "" {
 		return "", &SendError{Class: ClassPermanent, Err: errors.New("sendgrid: API key not configured (credential-gated)")}
 	}
-	from := firstNonEmpty(m.From, p.From, "notifications@windrose.local")
+	from := firstNonEmpty(m.From, p.From, "notifications@datacern.local")
 	body := map[string]any{
 		"personalizations": []map[string]any{{"to": []map[string]string{{"email": m.To}}, "subject": m.Subject}},
 		"from":             map[string]string{"email": from},
@@ -106,7 +106,7 @@ func (p *SESProvider) Send(ctx context.Context, m Message) (string, error) {
 	if p.AccessKey == "" || p.SecretKey == "" {
 		return "", &SendError{Class: ClassPermanent, Err: errors.New("ses: credentials not configured (credential-gated)")}
 	}
-	from := firstNonEmpty(m.From, p.From, "notifications@windrose.local")
+	from := firstNonEmpty(m.From, p.From, "notifications@datacern.local")
 	payload := map[string]any{
 		"FromEmailAddress": from,
 		"Destination":      map[string]any{"ToAddresses": []string{m.To}},
@@ -200,7 +200,7 @@ func (p *ACSProvider) Send(ctx context.Context, m Message) (string, error) {
 	if p.AccessKey == "" || p.Endpoint == "" {
 		return "", &SendError{Class: ClassPermanent, Err: errors.New("acs: credentials not configured (credential-gated)")}
 	}
-	from := firstNonEmpty(m.From, p.From, "notifications@windrose.local")
+	from := firstNonEmpty(m.From, p.From, "notifications@datacern.local")
 	payload := map[string]any{
 		"senderAddress": from,
 		"content":       map[string]string{"subject": m.Subject, "plainText": nonEmpty(m.Text, " "), "html": nonEmpty(m.HTML, " ")},

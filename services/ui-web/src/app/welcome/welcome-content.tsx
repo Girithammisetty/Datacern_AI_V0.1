@@ -35,7 +35,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { WindroseLogo } from "@/components/brand/WindroseLogo";
+import { DatacernLogo } from "@/components/brand/DatacernLogo";
 import { Button } from "@/components/ui/button";
 
 /* ------------------------------------------------------------------ */
@@ -106,7 +106,7 @@ const CAPS = [
     eyebrow: "Data unification",
     title: "Entity resolution",
     body:
-      "The same person or party shows up across systems under different identifiers. Windrose unifies those fragmented records into one resolved entity — so decisions run on the full picture, not a single row.",
+      "The same person or party shows up across systems under different identifiers. Datacern unifies those fragmented records into one resolved entity — so decisions run on the full picture, not a single row.",
     points: ["Deterministic + probabilistic matching", "Ambiguous merges reviewed by a human", "Decide on total exposure, not one record"],
   },
   {
@@ -158,7 +158,7 @@ const STEPS = [
 
 /* Solutions organized by industry — each use case is a real installable
  * capability pack. Industry is the primary way a buyer navigates: pick your
- * world (payer, bank, carrier, ops) and see the exact queues Windrose runs, the
+ * world (payer, bank, carrier, ops) and see the exact queues Datacern runs, the
  * outcomes that move, and the packs that ship it. */
 const INDUSTRIES = [
   {
@@ -223,7 +223,7 @@ const INDUSTRIES = [
     tag: "The judgment-heavy back-office queues, standardized and sped up.",
     headline: "Standardize the judgment calls buried in operations — and clear the backlog.",
     blurb:
-      "Invoice audit, screening, appeals and notices are all the same shape: read the evidence, apply the policy, decide. Windrose runs each as a governed queue your team can trust.",
+      "Invoice audit, screening, appeals and notices are all the same shape: read the evidence, apply the policy, decide. Datacern runs each as a governed queue your team can trust.",
     outcomes: ["Shorter backlogs", "Policy applied consistently", "Every call defensible"],
     useCases: [
       ["AP Invoice Audit", "Catch duplicate, non-compliant and over-billed invoices before they pay."],
@@ -234,7 +234,7 @@ const INDUSTRIES = [
   },
 ] as const;
 
-/* The wider industry map — Windrose runs ANY judgment-heavy, data-driven decision
+/* The wider industry map — Datacern runs ANY judgment-heavy, data-driven decision
  * queue, not just the four flagship packs above. Each entry names the industry and
  * a representative decision it automates. Icon + name + example. */
 const MORE_INDUSTRIES: [React.ComponentType<{ className?: string }>, string, string][] = [
@@ -268,7 +268,7 @@ const TRUST = [
 ] as const;
 
 /* Category comparison — how decision intelligence differs from BI and raw AI.
- * cols map to [dimension, traditional BI, AI/ML models, Windrose DI]. */
+ * cols map to [dimension, traditional BI, AI/ML models, Datacern DI]. */
 const COMPARE_COLS = ["Traditional BI", "AI / ML models", "Decision Intelligence"] as const;
 const COMPARE: [string, string, string, string][] = [
   ["What it delivers", "Dashboards & reports", "Predictions & scores", "A governed decision + its reasoning"],
@@ -285,11 +285,11 @@ const FAQ = [
   ["What is decision intelligence?",
     "It's the discipline — and this platform — of turning your data, your policy and AI into governed, auditable decisions at scale. Not a dashboard that reports the past or a model that predicts it: a system that makes the call, attaches the evidence, and keeps a person accountable for every one."],
   ["What exactly is “agentic AI”?",
-    "A chatbot answers a question; a model returns a score. An agentic AI takes on multi-step work: it reads the evidence, checks it against your rules, uses tools to gather what it needs, and drafts a decision or action — then hands it to a person to approve. Windrose runs a team of these specialist agents (triage, analytics, governance and more), each scoped to what it's allowed to see and do. They propose; they never act on their own."],
+    "A chatbot answers a question; a model returns a score. An agentic AI takes on multi-step work: it reads the evidence, checks it against your rules, uses tools to gather what it needs, and drafts a decision or action — then hands it to a person to approve. Datacern runs a team of these specialist agents (triage, analytics, governance and more), each scoped to what it's allowed to see and do. They propose; they never act on their own."],
   ["How is this different from BI or analytics?",
-    "BI tells you what happened and leaves the decision to you. Windrose is built around the decision itself: it reads the case, drafts the call with cited evidence, records who decided and why, and learns from every correction — end to end, under governance. Dashboards are one capability inside it, not the point."],
+    "BI tells you what happened and leaves the decision to you. Datacern is built around the decision itself: it reads the case, drafts the call with cited evidence, records who decided and why, and learns from every correction — end to end, under governance. Dashboards are one capability inside it, not the point."],
   ["How is it different from just using an LLM or an ML model?",
-    "An LLM or model gives you an output; you still have to ground it, govern it, route the work, capture the audit trail and close the loop. Windrose is that surrounding system — grounding on your governed data, four-eyes approval, immutable audit, and a correction-to-retrain loop — with the models plugged in where they help."],
+    "An LLM or model gives you an output; you still have to ground it, govern it, route the work, capture the audit trail and close the loop. Datacern is that surrounding system — grounding on your governed data, four-eyes approval, immutable audit, and a correction-to-retrain loop — with the models plugged in where they help."],
   ["Does the AI ever act on its own?",
     "No. Agents draft recommendations and the copilot proposes changes, but a person approves, adjusts or rejects every outcome. Sensitive changes require a second reviewer (four-eyes) before they go live."],
   ["Do the agents replace my team?",
@@ -494,8 +494,8 @@ export default function WelcomeContent() {
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
-            <WindroseLogo className="size-8" />
-            <span className="text-lg font-bold tracking-tight">Windrose AI</span>
+            <DatacernLogo className="size-8" />
+            <span className="text-lg font-bold tracking-tight">Datacern AI</span>
           </div>
           <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
             <a href="#industries" className="transition-colors hover:text-foreground">Industries</a>
@@ -524,7 +524,7 @@ export default function WelcomeContent() {
               <span className="wr-grad bg-clip-text text-transparent">in command.</span>
             </h1>
             <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
-              Windrose AI puts a team of specialist agents to work on your industry&apos;s
+              Datacern AI puts a team of specialist agents to work on your industry&apos;s
               highest-stakes decisions — health claims, financial-crime alerts, insurance losses,
               back-office adjudication. Agents draft, a copilot assists, your people decide, and
               every correction trains the next model.
@@ -585,7 +585,7 @@ export default function WelcomeContent() {
           </h2>
           <p className="mt-3 max-w-2xl text-muted-foreground">
             If a team reads evidence, applies a policy and makes a call — at volume and under scrutiny —
-            Windrose runs it. Four domains ship deep today; the same governed platform adapts to any
+            Datacern runs it. Four domains ship deep today; the same governed platform adapts to any
             data-driven decision queue.
           </p>
         </Reveal>
@@ -629,7 +629,7 @@ export default function WelcomeContent() {
           })}
         </div>
 
-        {/* the wider industry map — Windrose runs any data-driven decision */}
+        {/* the wider industry map — Datacern runs any data-driven decision */}
         <div className="mt-14">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h3 className="text-xl font-bold tracking-tight">…and any other decision that runs on data</h3>
@@ -651,7 +651,7 @@ export default function WelcomeContent() {
             ))}
           </div>
           <p className="mt-7 max-w-2xl text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">Don&apos;t see yours?</span> Windrose isn&apos;t
+            <span className="font-medium text-foreground">Don&apos;t see yours?</span> Datacern isn&apos;t
             built around an industry — it&apos;s built around the decision. New verticals install as
             capability packs onto the same core, so any judgment-heavy queue is a fit.
           </p>
@@ -786,8 +786,8 @@ export default function WelcomeContent() {
                           }`}
                         >
                           <span className="flex items-center gap-2">
-                            {di && <WindroseLogo className="size-4" />}
-                            {di ? "Windrose" : c}
+                            {di && <DatacernLogo className="size-4" />}
+                            {di ? "Datacern" : c}
                           </span>
                           {di && (
                             <span className="mt-0.5 block text-xs font-medium normal-case tracking-normal text-primary/80">
@@ -826,7 +826,7 @@ export default function WelcomeContent() {
           </Reveal>
 
           <p className="mt-5 max-w-2xl text-sm text-muted-foreground">
-            Keep your dashboards and your models — Windrose adds a governed decision layer on top, so the
+            Keep your dashboards and your models — Datacern adds a governed decision layer on top, so the
             insight actually becomes an auditable action.
           </p>
         </div>
@@ -999,7 +999,7 @@ export default function WelcomeContent() {
         <div aria-hidden className="wr-mesh pointer-events-none absolute inset-0 -z-10 opacity-80" />
         <div aria-hidden className="wr-aurora pointer-events-none absolute left-1/2 top-0 -z-10 h-72 w-[48rem] -translate-x-1/2 rounded-full opacity-50" />
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-6 py-24 text-center">
-          <WindroseLogo className="size-12 drop-shadow-[0_0_28px_hsl(var(--primary)/0.6)]" />
+          <DatacernLogo className="size-12 drop-shadow-[0_0_28px_hsl(var(--primary)/0.6)]" />
           <h2 className="text-balance text-3xl font-bold tracking-tight md:text-4xl">
             Many directions. One confident, auditable bearing.
           </h2>
@@ -1015,7 +1015,7 @@ export default function WelcomeContent() {
 
       <footer className="border-t border-border/60">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-6 py-6 text-xs text-muted-foreground sm:flex-row">
-          <span>Windrose AI — Decision Intelligence platform</span>
+          <span>Datacern AI — Decision Intelligence platform</span>
           <span>AI proposes. People decide. The platform remembers.</span>
         </div>
       </footer>
@@ -1140,7 +1140,7 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
           <>
             <h3 className="text-lg font-bold tracking-tight">Request a demo</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              See Windrose AI on your kind of decisions. Tell us a little about you.
+              See Datacern AI on your kind of decisions. Tell us a little about you.
             </p>
             <form onSubmit={onSubmit} className="mt-5 space-y-3.5">
               {/* honeypot — hidden from real users; bots fill it */}

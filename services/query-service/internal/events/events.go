@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/domain"
 )
 
 // Topic is query-service's event topic (MASTER-FR-030).

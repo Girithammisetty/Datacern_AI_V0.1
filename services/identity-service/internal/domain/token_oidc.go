@@ -38,7 +38,7 @@ func unverifiedIssuer(raw string) string {
 }
 
 // OIDCLogin implements the real interactive-login half of BYO-P4: it verifies an
-// external OIDC ID token against the IdP's own keys, resolves it to the Windrose
+// external OIDC ID token against the IdP's own keys, resolves it to the Datacern
 // user by email within the token's tenant, and mints the platform session JWT.
 //
 // Two-layer IdP resolution: first the token's `iss` is matched against a tenant's
@@ -76,9 +76,9 @@ func (s *TokenService) OIDCLogin(ctx context.Context, req OIDCLoginRequest, trac
 
 	user, err := s.Store.GetUserByEmail(ctx, tenantID, ident.Email)
 	if err != nil {
-		// No pre-provisioned Windrose user for this verified identity. JIT
+		// No pre-provisioned Datacern user for this verified identity. JIT
 		// provisioning is a documented follow-up; for now deny cleanly.
-		return nil, EPermissionDenied("no windrose user is provisioned for this identity")
+		return nil, EPermissionDenied("no datacern user is provisioned for this identity")
 	}
 	if user.Status == UserDeactivated || user.DeletedAt != nil {
 		return nil, EPermissionDenied("user is deactivated")

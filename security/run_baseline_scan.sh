@@ -1,5 +1,5 @@
 #!/bin/sh
-# Windrose security baseline: SAST (semgrep, gosec, bandit), dependency/CVE
+# Datacern security baseline: SAST (semgrep, gosec, bandit), dependency/CVE
 # (trivy), and secrets (gitleaks) over the whole platform. Reports land in
 # security/reports/<date>/ as JSON plus a plain-text summary. Mirrors what
 # .github/workflows/security-scan.yml runs in CI.

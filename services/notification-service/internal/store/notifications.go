@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/domain"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 const notifCols = `id, tenant_id, user_id, event_id, event_type, severity_class, title, body, resource_urn, deep_link, matched_rules, read_at, created_at`

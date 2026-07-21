@@ -2,7 +2,7 @@
 (dataset.deleted -> flag cards), and identity.events.v1 (tenant.provisioned).
 
 Handlers are idempotent and replay-safe (MASTER-FR-032). The Kafka runner
-(Redis dedup, 5-retry backoff, real DLQ) comes from windrose_common.
+(Redis dedup, 5-retry backoff, real DLQ) comes from datacern_common.
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ class KafkaPipelineConsumer:
 
     def __init__(self, handler: PipelineEventHandler, dedup, producer, *,
                  bootstrap_servers: str = "localhost:9092", topic: str = PIPELINE_TOPIC):
-        from windrose_common.kafka import KafkaConfig, KafkaConsumer
+        from datacern_common.kafka import KafkaConfig, KafkaConsumer
 
         self._consumer = KafkaConsumer(
             topic, self.GROUP_ID, handler.handle, dedup, producer,
@@ -130,7 +130,7 @@ class KafkaDatasetConsumer:
 
     def __init__(self, handler: DatasetEventHandler, dedup, producer, *,
                  bootstrap_servers: str = "localhost:9092", topic: str = DATASET_TOPIC):
-        from windrose_common.kafka import KafkaConfig, KafkaConsumer
+        from datacern_common.kafka import KafkaConfig, KafkaConsumer
 
         self._consumer = KafkaConsumer(
             topic, self.GROUP_ID, handler.handle, dedup, producer,

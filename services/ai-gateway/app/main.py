@@ -17,7 +17,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from windrose_common.logging import configure_json_logging
+from datacern_common.logging import configure_json_logging
 
 from app.api.errors import TraceMiddleware, install_error_handlers
 from app.api.middleware import AuthMiddleware
@@ -36,7 +36,7 @@ CONSUMED_TOPICS = {
 
 
 class _PassthroughDedup:
-    """windrose_common.KafkaConsumer expects already_processed/mark_processed;
+    """datacern_common.KafkaConsumer expects already_processed/mark_processed;
     the container handlers own dedup themselves, so the runner passes through
     (no double suppression) and keeps commit/DLQ semantics."""
 
@@ -50,7 +50,7 @@ class _PassthroughDedup:
 async def _start_workers(container: Container):
     """Start the outbox relay + identity/usage Kafka consumers as background
     tasks (real adapters only)."""
-    from windrose_common.kafka import KafkaConfig, KafkaConsumer, KafkaProducerClient
+    from datacern_common.kafka import KafkaConfig, KafkaConsumer, KafkaProducerClient
 
     settings = container.settings
     tasks: list[asyncio.Task] = []
@@ -102,8 +102,8 @@ def build_runtime_container(settings: Settings | None = None) -> Container:
         return build_container(settings)
 
     from sqlalchemy.ext.asyncio import async_sessionmaker
-    from windrose_common.otelx import configure_tracing
-    from windrose_common.redisx import build_redis
+    from datacern_common.otelx import configure_tracing
+    from datacern_common.redisx import build_redis
 
     from app.store.sql import make_engine
 

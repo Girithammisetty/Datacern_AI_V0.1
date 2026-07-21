@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { resolveLogin } from "./personas";
 
 const PERSONAS = JSON.stringify({
-  "manager@demo.windrose": {
+  "manager@demo.datacern": {
     sub: "user-manager",
     tenantId: "t-real",
     workspaceId: "ws-real",
@@ -12,7 +12,7 @@ const PERSONAS = JSON.stringify({
 
 describe("dev-login persona resolution (fail-closed)", () => {
   it("resolves a known persona email (case-insensitive)", () => {
-    const r = resolveLogin("Manager@Demo.Windrose", PERSONAS);
+    const r = resolveLogin("Manager@Demo.Datacern", PERSONAS);
     expect(r.kind).toBe("persona");
     if (r.kind === "persona") {
       expect(r.persona.tenantId).toBe("t-real");
@@ -21,7 +21,7 @@ describe("dev-login persona resolution (fail-closed)", () => {
   });
 
   it("REJECTS an unknown email when a personas map is configured (no ghost-tenant fallback)", () => {
-    expect(resolveLogin("bogus@demo.windrose", PERSONAS)).toEqual({ kind: "unknown-user" });
+    expect(resolveLogin("bogus@demo.datacern", PERSONAS)).toEqual({ kind: "unknown-user" });
   });
 
   it("falls back to dev defaults ONLY when the personas map is entirely absent", () => {

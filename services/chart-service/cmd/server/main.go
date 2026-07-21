@@ -19,15 +19,15 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/windrose-ai/chart-service/internal/api"
-	"github.com/windrose-ai/chart-service/internal/config"
-	"github.com/windrose-ai/chart-service/internal/events"
-	"github.com/windrose-ai/chart-service/internal/export"
-	"github.com/windrose-ai/chart-service/internal/register"
-	"github.com/windrose-ai/chart-service/internal/store"
-	"github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/otelx"
-	"github.com/windrose-ai/go-common/outbox"
+	"github.com/datacern-ai/chart-service/internal/api"
+	"github.com/datacern-ai/chart-service/internal/config"
+	"github.com/datacern-ai/chart-service/internal/events"
+	"github.com/datacern-ai/chart-service/internal/export"
+	"github.com/datacern-ai/chart-service/internal/register"
+	"github.com/datacern-ai/chart-service/internal/store"
+	"github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/otelx"
+	"github.com/datacern-ai/go-common/outbox"
 )
 
 func main() {
@@ -36,7 +36,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Distributed tracing (no-op unless WINDROSE_OTEL_ENABLED / an OTLP endpoint
+	// Distributed tracing (no-op unless DATACERN_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "chart-service")
 	defer func() { _ = otelShutdown(context.Background()) }()

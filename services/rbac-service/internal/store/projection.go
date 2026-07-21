@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/rbac-service/internal/domain"
-	"github.com/windrose-ai/rbac-service/internal/projection"
+	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/projection"
 )
 
 // LoadSnapshot reads the SQL ground truth for one user inside a single

@@ -7,7 +7,7 @@ package preferences
 import (
 	"time"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // Decision is the resolved per-channel delivery plan for one recipient.

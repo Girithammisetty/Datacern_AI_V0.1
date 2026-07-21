@@ -16,12 +16,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/chart-service/internal/authz"
-	"github.com/windrose-ai/chart-service/internal/domain"
-	"github.com/windrose-ai/chart-service/internal/export"
-	"github.com/windrose-ai/chart-service/internal/resolve"
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/chart-service/internal/authz"
+	"github.com/datacern-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/chart-service/internal/export"
+	"github.com/datacern-ai/chart-service/internal/resolve"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/event"
 )
 
 // --- in-memory doubles (unit tier only; never wired from cmd/server) ---
@@ -318,7 +318,7 @@ func newHarness(t *testing.T) *harness {
 		Columns: []string{"region", "sum_revenue"}, Rows: [][]any{{"EMEA", 1250000.5}}, RowCount: 1}}
 	srv := &Server{
 		Store: st, Cache: c, Authz: authz.AllowAll{}, Resolver: res,
-		Verifier:   authjwt.NewStatic(&key.PublicKey, "windrose-test", "windrose"),
+		Verifier:   authjwt.NewStatic(&key.PublicKey, "datacern-test", "datacern"),
 		Exports:    export.NewFSStore(t.TempDir(), "http://test", []byte("secret")),
 		PreviewSem: make(chan struct{}, 5),
 	}
@@ -331,7 +331,7 @@ func (h *harness) token(t *testing.T, tenant uuid.UUID) string {
 	t.Helper()
 	claims := jwt.MapClaims{
 		"sub": "user-1", "tenant_id": tenant.String(), "typ": "user",
-		"iss": "windrose-test", "aud": "windrose", "exp": time.Now().Add(5 * time.Minute).Unix(),
+		"iss": "datacern-test", "aud": "datacern", "exp": time.Now().Add(5 * time.Minute).Unix(),
 	}
 	s, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(h.key)
 	if err != nil {

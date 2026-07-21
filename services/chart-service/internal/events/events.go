@@ -7,7 +7,7 @@ package events
 import (
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/go-common/event"
 )
 
 // Topic chart-service publishes to (MASTER-FR-030).

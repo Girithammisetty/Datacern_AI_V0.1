@@ -227,7 +227,7 @@ def build_container(
                                             clock, settings)
     usage_handler = UsageEventHandler(uow_factory, dedup, clock)
     # In-process dispatch on the in-memory bus (unit/dev). The real KafkaEventBus
-    # has no subscribe(); its consumers are driven by the windrose_common
+    # has no subscribe(); its consumers are driven by the datacern_common
     # consumer-group runner (deployment wiring), so guard the call.
     if hasattr(bus, "subscribe"):
         bus.subscribe("identity.events.v1", identity_handler.handle)

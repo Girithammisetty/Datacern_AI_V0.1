@@ -1,6 +1,6 @@
 # BRD 38 — `mortgage-loss-mitigation` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending (Core-neutral via packctl); pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Loss-mitigation decisioning AI for US mortgage servicing: RESPA Reg X (12 CFR 1024.39–.41) application evaluation with regulatory-clock awareness (30-day complete-application evaluation, 5-business-day acknowledgment), dual-tracking hold enforcement, investor-waterfall-ordered workout evaluation (GSE/FHA/VA/portfolio), denial-appeal handling with independent review, and doc-chase governance. Sells to mortgage servicers and subservicers, banks, and credit unions.
 
-**Why this vertical.** Reg X loss mitigation carries hard regulatory clocks (5-business-day acknowledgment, 30-day complete-application evaluation, 14-day appeal window with 30-day appeal decisions) plus the dual-tracking prohibitions whose breach means CFPB enforcement and wrongful-foreclosure litigation; delinquency cycles push volume in waves servicers can't staff for. Every determination is documented, appealable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Windrose Core, and the clock-driven adjudication pattern is already proven by BRD 32 (card-disputes).
+**Why this vertical.** Reg X loss mitigation carries hard regulatory clocks (5-business-day acknowledgment, 30-day complete-application evaluation, 14-day appeal window with 30-day appeal decisions) plus the dual-tracking prohibitions whose breach means CFPB enforcement and wrongful-foreclosure litigation; delinquency cycles push volume in waves servicers can't staff for. Every determination is documented, appealable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Datacern Core, and the clock-driven adjudication pattern is already proven by BRD 32 (card-disputes).
 
 **Business value.** Deadline-breach elimination (Reg X clock watch), zero dual-tracking violations (hold detection before referral), specialist throughput (triage pre-routing + doc-chase automation), denial quality (specific-reasons discipline defeats appeal churn and exam findings), redefault reduction (repeat-request analytics), and exam-ready decision files (every denial carries its findings + provenance).
 
@@ -99,7 +99,7 @@ Authored materialization: 3 datasets (applications 26 / loans 30 / borrowers 12 
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): servicing system of record, GSE/FHA/VA portal credentials, document-intake and income-verification vendors.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): servicing system of record, GSE/FHA/VA portal credentials, document-intake and income-verification vendors.
 
 ## 7. NFRs (deltas)
 

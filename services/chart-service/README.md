@@ -33,7 +33,7 @@ wiring and asserts every adapter is a real type.
   on every tenant table and creates a shipped runtime role **`chart_app`**
   (`LOGIN NOSUPERUSER NOBYPASSRLS`).
 - The shipped default `DATABASE_URL` connects as `chart_app` — **not** the
-  migration owner (`windrose`/`postgres`). A superuser/BYPASSRLS role would
+  migration owner (`datacern`/`postgres`). A superuser/BYPASSRLS role would
   silently ignore RLS; the runtime pool never uses one.
 - `MIGRATE_DATABASE_URL` (owner) runs migrations; `DATABASE_URL` (non-owner)
   backs the request pool.
@@ -50,7 +50,7 @@ make test-unit
 # speaking the semantic-/query-service contracts). Auto-skips if Docker is down.
 make test-integration
 # boot (real infra from deploy/docker-compose.dev.yml)
-MIGRATE_DATABASE_URL=postgres://windrose:windrose_dev@localhost:5432/chart?sslmode=disable \
+MIGRATE_DATABASE_URL=postgres://datacern:datacern_dev@localhost:5432/chart?sslmode=disable \
 DATABASE_URL=postgres://chart_app:chart_app@localhost:5432/chart?sslmode=disable \
 REDIS_ADDR=localhost:6379 OPA_URL=http://localhost:8281 \
 SEMANTIC_SERVICE_URL=http://localhost:8086 QUERY_SERVICE_URL=http://localhost:8085 \

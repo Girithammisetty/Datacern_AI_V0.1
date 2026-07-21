@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/redisx"
-	"github.com/windrose-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/go-common/redisx"
+	"github.com/datacern-ai/tool-plane/internal/domain"
 )
 
 // killChannel is the Redis pub/sub channel announcing kill-state changes.

@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "MemoryWritten",
-  "namespace": "windrose.memory.events.v1",
+  "namespace": "datacern.memory.events.v1",
   "doc": "Payload of memory.written (MEM §6). Emitted on insert or merge.",
   "fields": [
     {"name": "memory_id", "type": "string"},

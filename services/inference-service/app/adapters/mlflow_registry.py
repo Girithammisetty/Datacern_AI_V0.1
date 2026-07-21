@@ -33,8 +33,8 @@ class MlflowModelRegistry:
         tracking_uri: str = "http://localhost:5500",
         *,
         s3_endpoint_url: str = "http://localhost:9000",
-        s3_access_key: str = "windrose",
-        s3_secret_key: str = "windrose_dev",
+        s3_access_key: str = "datacern",
+        s3_secret_key: str = "datacern_dev",
     ) -> None:
         self.tracking_uri = tracking_uri
         # MLflow downloads model artifacts from MinIO via boto3 — configure the S3

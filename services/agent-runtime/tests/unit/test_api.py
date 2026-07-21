@@ -44,8 +44,8 @@ async def test_triage_chat_creates_proposal_then_inbox_and_decide(client_and_con
     assert r.status_code == 200, r.text
     body = r.json()["data"]
     assert body["proposal_status"] == "pending"
-    assert r.headers["x-windrose-ai-generated"] == "true"
-    assert r.headers["x-windrose-stream-topic"].startswith("agent_run:")
+    assert r.headers["x-datacern-ai-generated"] == "true"
+    assert r.headers["x-datacern-stream-topic"].startswith("agent_run:")
     pid = body["proposal_id"]
 
     # inbox

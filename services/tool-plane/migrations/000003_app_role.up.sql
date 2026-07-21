@@ -3,7 +3,7 @@
 --
 -- 000002 ENABLEd + FORCEd row-level security on the tenant/platform tables, but
 -- FORCE (and even ENABLE) is silently ignored for a superuser or the table
--- owner. The shipped default DSN connected as `windrose` — the dev cluster
+-- owner. The shipped default DSN connected as `datacern` — the dev cluster
 -- SUPERUSER with BYPASSRLS — so tenant_isolation was effectively OFF.
 --
 -- Fix: both the registry and gateway runtime pools now log in as `toolplane_app`

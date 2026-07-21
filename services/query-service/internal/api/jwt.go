@@ -19,7 +19,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/domain"
 )
 
 // Claims are the platform JWT claims (MASTER-FR-011).

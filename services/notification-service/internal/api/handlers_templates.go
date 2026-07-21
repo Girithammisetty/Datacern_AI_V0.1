@@ -7,9 +7,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/domain"
-	"github.com/windrose-ai/notification-service/internal/templates"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/templates"
 )
 
 type templateBody struct {
@@ -164,7 +164,7 @@ func previewData(env gcevent.Envelope) map[string]any {
 		data[pascalCase(k)] = v
 	}
 	if _, ok := data["DeepLink"]; !ok {
-		data["DeepLink"] = "https://app.windrose.local/preview"
+		data["DeepLink"] = "https://app.datacern.local/preview"
 	}
 	return data
 }

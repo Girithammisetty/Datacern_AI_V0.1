@@ -23,7 +23,7 @@ const me = {
 function pack() {
   return {
     name: "card-disputes", version: "1.0.0", description: "Card dispute adjudication.",
-    publisherName: "Windrose Inc.", categories: ["banking", "cards"], regulatory: ["reg_e"],
+    publisherName: "Datacern Inc.", categories: ["banking", "cards"], regulatory: ["reg_e"],
     components: [{ kind: "dispositions", count: 5 }, { kind: "roles", count: 5 }],
     deferredKinds: ["guardrails", "case_schemas"],
   };

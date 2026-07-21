@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     )
 
     # AuthN (MASTER-FR-010/011). Dev/tests use a static PEM; prod uses JWKS.
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwt_public_key_pem: str | None = None
     jwks_url: str | None = None
     jwks_ttl_seconds: int = 300
@@ -26,42 +26,42 @@ class Settings(BaseSettings):
     # Internal service-to-service auth (SPIFFE via the mesh; MASTER-FR-014).
     spiffe_header: str = "x-client-spiffe-id"
     internal_allowed_spiffe: list[str] = [
-        "spiffe://windrose/ns/ml/sa/pipeline-orchestrator",
-        "spiffe://windrose/ns/ml/sa/inference-service",
-        "spiffe://windrose/ns/data/sa/dataset-service",
-        "spiffe://windrose/ns/tools/sa/mcp-gateway",
-        "spiffe://windrose/ns/ml/sa/base-component",
+        "spiffe://datacern/ns/ml/sa/pipeline-orchestrator",
+        "spiffe://datacern/ns/ml/sa/inference-service",
+        "spiffe://datacern/ns/data/sa/dataset-service",
+        "spiffe://datacern/ns/tools/sa/mcp-gateway",
+        "spiffe://datacern/ns/ml/sa/base-component",
     ]
 
     # Adapter selection. True (the DEFAULT — the shipped image wires this) → the shared
-    # windrose_common real adapters (SQL RLS UoW, RedisDedupStore, OpaAuthzClient,
+    # datacern_common real adapters (SQL RLS UoW, RedisDedupStore, OpaAuthzClient,
     # S3 manifest store) + the real local training executor + real MLflow gateway.
     # False → the in-memory unit/dev doubles, reachable ONLY from tests (conftest sets
     # it False). The in-memory doubles are never reachable from the default runtime.
     use_real_adapters: bool = True
 
     # Local (unit tier) object store for compiled manifests + feature datasets.
-    object_store_dir: str = "/tmp/windrose/pipeline-orchestrator/objects"
+    object_store_dir: str = "/tmp/datacern/pipeline-orchestrator/objects"
 
     # Real-adapter endpoints (deploy/docker-compose.dev.yml defaults).
     s3_endpoint_url: str = "http://localhost:9000"
-    s3_access_key: str = "windrose"
-    s3_secret_key: str = "windrose_dev"
+    s3_access_key: str = "datacern"
+    s3_secret_key: str = "datacern_dev"
     s3_region: str = "us-east-1"
-    artifacts_bucket: str = "windrose-pipelines"
+    artifacts_bucket: str = "datacern-pipelines"
     kafka_bootstrap_servers: str = "localhost:9092"
     redis_url: str = "redis://localhost:6379/0"
     opa_url: str = "http://localhost:8281"
 
     # Real MLflow tracking/registry (the training runs log here; :5500 per compose).
     mlflow_tracking_uri: str = "http://localhost:5500"
-    mlflow_experiment: str = "windrose-pipeline-orchestrator"
+    mlflow_experiment: str = "datacern-pipeline-orchestrator"
 
     # dataset-service internal rows API (a read-from-warehouse node reads an uploaded
     # dataset's rows at run time). The SPIFFE below is in dataset-service's internal
-    # allowlist; the tenant is sent per-request via x-windrose-tenant-id.
+    # allowlist; the tenant is sent per-request via x-datacern-tenant-id.
     dataset_service_url: str = "http://localhost:8304"
-    dataset_reader_spiffe: str = "spiffe://windrose/ns/data/sa/pipeline-orchestrator"
+    dataset_reader_spiffe: str = "spiffe://datacern/ns/data/sa/pipeline-orchestrator"
 
     # Execution backend: "local" (real training on the Mac, the default) or
     # "argo" (infra-gated — needs a k8s cluster + Argo Workflows server).
@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     case_topic: str = "case.events.v1"
     identity_topic: str = "identity.events.v1"
 
-    component_catalog_version: str = "windrose-catalog/1.0.0"
+    component_catalog_version: str = "datacern-catalog/1.0.0"
 
     # Deploy-time action-catalog registration (RBC-FR-022).
     rbac_url: str | None = None

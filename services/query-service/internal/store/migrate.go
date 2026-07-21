@@ -8,7 +8,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres" // driver
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
-	"github.com/windrose-ai/query-service/migrations"
+	"github.com/datacern-ai/query-service/migrations"
 )
 
 // Migrate applies the embedded forward-only migrations (MASTER-FR-060).

@@ -81,7 +81,7 @@ export function formatBytes(n?: number | null): string {
   return `${v >= 100 ? Math.round(v) : v.toFixed(1)} ${units[u]}`;
 }
 
-/** Parse the resource-type segment out of a Windrose URN: wr:<tenant>:<type>:<path>. */
+/** Parse the resource-type segment out of a platform URN: wr:<tenant>:<type>:<path>. */
 export function urnParts(urn?: string | null): { tenant?: string; type?: string; path?: string } {
   if (!urn) return {};
   const [, tenant, type, ...rest] = urn.split(":");

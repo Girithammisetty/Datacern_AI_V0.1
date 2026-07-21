@@ -1,14 +1,14 @@
 # mortgage-loss-mitigation capability pack — Core-neutral edition: RESPA
 # Reg X (12 CFR 1024.39-.41) loss-mitigation decisioning for US mortgage
 # servicers and subservicers, banks, and credit unions. Installable TODAY
-# against Windrose Core's public APIs via packctl; the manifest envelope
+# against Datacern Core's public APIs via packctl; the manifest envelope
 # follows BRD 23 (PKG-FR-001/003). Components the current Core cannot
 # materialize are declared under `deferred` — recorded in the install
 # ledger, never faked.
 pack_manifest: 1
 name: mortgage-loss-mitigation
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted mortgage-servicing loss-mitigation workflow for US servicers:
   application intake triage with Reg X regulatory-clock awareness (30-day

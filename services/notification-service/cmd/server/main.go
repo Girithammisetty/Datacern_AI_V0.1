@@ -31,27 +31,27 @@ import (
 	temporalclient "go.temporal.io/sdk/client"
 	temporalworker "go.temporal.io/sdk/worker"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	gcevent "github.com/windrose-ai/go-common/event"
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	gcoutbox "github.com/windrose-ai/go-common/outbox"
-	"github.com/windrose-ai/go-common/otelx"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/authjwt"
+	gcevent "github.com/datacern-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
+	"github.com/datacern-ai/go-common/otelx"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/notification-service/internal/api"
-	"github.com/windrose-ai/notification-service/internal/authz"
-	"github.com/windrose-ai/notification-service/internal/channels/email"
-	"github.com/windrose-ai/notification-service/internal/channels/inapp"
-	"github.com/windrose-ai/notification-service/internal/channels/webhook"
-	"github.com/windrose-ai/notification-service/internal/events"
-	"github.com/windrose-ai/notification-service/internal/pipeline"
-	"github.com/windrose-ai/notification-service/internal/ratelimit"
-	"github.com/windrose-ai/notification-service/internal/register"
-	"github.com/windrose-ai/notification-service/internal/registry"
-	"github.com/windrose-ai/notification-service/internal/reports"
-	"github.com/windrose-ai/notification-service/internal/store"
-	"github.com/windrose-ai/notification-service/internal/templates"
-	"github.com/windrose-ai/notification-service/internal/worker"
+	"github.com/datacern-ai/notification-service/internal/api"
+	"github.com/datacern-ai/notification-service/internal/authz"
+	"github.com/datacern-ai/notification-service/internal/channels/email"
+	"github.com/datacern-ai/notification-service/internal/channels/inapp"
+	"github.com/datacern-ai/notification-service/internal/channels/webhook"
+	"github.com/datacern-ai/notification-service/internal/events"
+	"github.com/datacern-ai/notification-service/internal/pipeline"
+	"github.com/datacern-ai/notification-service/internal/ratelimit"
+	"github.com/datacern-ai/notification-service/internal/register"
+	"github.com/datacern-ai/notification-service/internal/registry"
+	"github.com/datacern-ai/notification-service/internal/reports"
+	"github.com/datacern-ai/notification-service/internal/store"
+	"github.com/datacern-ai/notification-service/internal/templates"
+	"github.com/datacern-ai/notification-service/internal/worker"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -69,14 +69,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Distributed tracing (no-op unless WINDROSE_OTEL_ENABLED / an OTLP endpoint
+	// Distributed tracing (no-op unless datacern_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "notification-service")
 	defer func() { _ = otelShutdown(context.Background()) }()
 
 	// Migrations run under the schema-owner DSN (creates the non-owner runtime
 	// role + RLS). The runtime pool connects as that non-owner role so RLS binds.
-	migrateURL := env("MIGRATE_DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/notification?sslmode=disable")
+	migrateURL := env("MIGRATE_DATABASE_URL", "postgres://datacern:datacern_dev@localhost:5432/notification?sslmode=disable")
 	if env("RUN_MIGRATIONS", "true") == "true" {
 		if err := store.Migrate(migrateURL); err != nil {
 			slog.Error("migrations failed", "err", err)
@@ -257,13 +257,13 @@ func buildEmailSender() *email.Sender {
 	smtpAddr := env("SMTP_ADDR", "localhost:1025") // mailpit default
 	providers = append(providers, email.NewSMTP(smtpAddr, os.Getenv("SMTP_USER"), os.Getenv("SMTP_PASS"), os.Getenv("SMTP_TLS") == "true"))
 	if k := os.Getenv("SENDGRID_API_KEY"); k != "" {
-		providers = append(providers, email.NewSendGrid(k, env("EMAIL_FROM", "notifications@windrose.local")))
+		providers = append(providers, email.NewSendGrid(k, env("EMAIL_FROM", "notifications@datacern.local")))
 	}
 	if os.Getenv("AWS_ACCESS_KEY_ID") != "" {
-		providers = append(providers, email.NewSES(env("AWS_REGION", "us-east-1"), os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), env("EMAIL_FROM", "notifications@windrose.local")))
+		providers = append(providers, email.NewSES(env("AWS_REGION", "us-east-1"), os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), env("EMAIL_FROM", "notifications@datacern.local")))
 	}
 	if os.Getenv("ACS_ENDPOINT") != "" {
-		providers = append(providers, email.NewACS(os.Getenv("ACS_ENDPOINT"), os.Getenv("ACS_ACCESS_KEY"), env("EMAIL_FROM", "notifications@windrose.local")))
+		providers = append(providers, email.NewACS(os.Getenv("ACS_ENDPOINT"), os.Getenv("ACS_ACCESS_KEY"), env("EMAIL_FROM", "notifications@datacern.local")))
 	}
 	return email.NewSender(providers...)
 }
@@ -273,13 +273,13 @@ func emailProviders(s *email.Sender) map[string]email.Provider {
 	m := map[string]email.Provider{}
 	// SMTP has no callback; register cloud providers if creds present.
 	if k := os.Getenv("SENDGRID_API_KEY"); k != "" {
-		m["sendgrid"] = email.NewSendGrid(k, env("EMAIL_FROM", "notifications@windrose.local"))
+		m["sendgrid"] = email.NewSendGrid(k, env("EMAIL_FROM", "notifications@datacern.local"))
 	}
 	if os.Getenv("AWS_ACCESS_KEY_ID") != "" {
-		m["ses"] = email.NewSES(env("AWS_REGION", "us-east-1"), os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), env("EMAIL_FROM", "notifications@windrose.local"))
+		m["ses"] = email.NewSES(env("AWS_REGION", "us-east-1"), os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), env("EMAIL_FROM", "notifications@datacern.local"))
 	}
 	if os.Getenv("ACS_ENDPOINT") != "" {
-		m["acs"] = email.NewACS(os.Getenv("ACS_ENDPOINT"), os.Getenv("ACS_ACCESS_KEY"), env("EMAIL_FROM", "notifications@windrose.local"))
+		m["acs"] = email.NewACS(os.Getenv("ACS_ENDPOINT"), os.Getenv("ACS_ACCESS_KEY"), env("EMAIL_FROM", "notifications@datacern.local"))
 	}
 	return m
 }

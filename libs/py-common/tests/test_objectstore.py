@@ -8,7 +8,7 @@ import hashlib
 import httpx
 import pytest
 
-from windrose_common.objectstore import (
+from datacern_common.objectstore import (
     S3BlobObjectStore,
     S3Config,
     S3StreamingObjectStore,
@@ -23,12 +23,12 @@ async def _agen(chunks):
 
 
 async def test_streaming_multipart_put_get_roundtrip(minio, unique):
-    cfg = S3Config.for_minio("windrose-uploads")
+    cfg = S3Config.for_minio("datacern-uploads")
     store = S3StreamingObjectStore(cfg, part_size=5 * 1024 * 1024)  # 5 MiB parts
     key = f"pycommon-test/{unique}/blob.bin"
 
     # 6 MiB across two multipart parts (5 MiB + 1 MiB)
-    payload = b"windrose-" * (700_000)  # ~6.3 MiB
+    payload = b"datacern-" * (700_000)  # ~6.3 MiB
     expected_sha = hashlib.sha256(payload).hexdigest()
     # feed in 512 KiB chunks to exercise the async-iterator buffering
     chunks = [payload[i : i + 512 * 1024] for i in range(0, len(payload), 512 * 1024)]
@@ -56,7 +56,7 @@ async def test_streaming_multipart_put_get_roundtrip(minio, unique):
 
 
 async def test_blob_put_get_and_presigned_url(minio, unique):
-    cfg = S3Config.for_minio("windrose-profiles")
+    cfg = S3Config.for_minio("datacern-profiles")
     store = S3BlobObjectStore(cfg)
     key = f"pycommon-test/{unique}/profile.json"
     body = b'{"rows": 42, "columns": 3}'

@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/chart-service/internal/domain"
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/go-common/httpx"
+	"github.com/datacern-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/httpx"
 )
 
 type ctxKey int

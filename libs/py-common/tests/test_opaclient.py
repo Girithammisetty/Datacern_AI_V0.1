@@ -1,13 +1,13 @@
 """Real OPA + Redis integration: the client reads a permissions projection slice
 from Redis and POSTs it as `input` to the real OPA data API, which evaluates the
-rbac `windrose.authz_input` policy bundle loaded into the dev OPA container."""
+rbac `datacern.authz_input` policy bundle loaded into the dev OPA container."""
 
 from __future__ import annotations
 
 import pytest
 
-from windrose_common.opaclient import OpaClient, projection_key
-from windrose_common.redisx import RedisProjection, build_redis
+from datacern_common.opaclient import OpaClient, projection_key
+from datacern_common.redisx import RedisProjection, build_redis
 
 pytestmark = pytest.mark.integration
 

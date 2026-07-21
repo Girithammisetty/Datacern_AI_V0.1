@@ -3,7 +3,7 @@ info:
   title: identity-service
   version: 1.0.0
   description: >
-    Windrose platform root of trust: tenant lifecycle + provisioning, users +
+    Datacern platform root of trust: tenant lifecycle + provisioning, users +
     invitations, service accounts / API keys, agent principals + OBO tokens,
     JWKS. Inherits every master-BRD contract: error envelope
     {error:{code,message,details,trace_id}}, cursor pagination

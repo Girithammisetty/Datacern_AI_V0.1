@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/domain"
 )
 
 // Params is a parsed list/search request (CASE-FR-042).

@@ -30,7 +30,7 @@ resource "azurerm_eventhub" "topics" {
 # Namespace-level SASL credential for the bootstrap producer/consumer.
 # Kafka SASL: username = "$ConnectionString", password = this connection string.
 resource "azurerm_eventhub_namespace_authorization_rule" "bootstrap" {
-  name                = "windrose-bootstrap"
+  name                = "datacern-bootstrap"
   namespace_name      = azurerm_eventhub_namespace.this.name
   resource_group_name = azurerm_resource_group.this.name
 

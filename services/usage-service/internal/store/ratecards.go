@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
-	"github.com/windrose-ai/usage-service/internal/events"
+	"github.com/datacern-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/events"
 )
 
 // CreateRateCard inserts a draft rate card + items (USG-FR-042/044). Platform

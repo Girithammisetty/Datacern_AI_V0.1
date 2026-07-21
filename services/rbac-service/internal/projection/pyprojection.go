@@ -1,6 +1,6 @@
 // Python single-key projection (authz:proj:*) — the pre-assembled per-
 // (tenant, subject, action, workspace) OPA input slice consumed by
-// libs/py-common windrose_common.opaclient.OpaClient (MASTER-FR-012).
+// libs/py-common datacern_common.opaclient.OpaClient (MASTER-FR-012).
 //
 // The Go services read the granular perm:* keys and assemble the projection
 // per request (libs/go-common opaclient/projection.go); several Python
@@ -9,7 +9,7 @@
 //	authz:proj:{tenant}:{subject}:{action}:{workspace}
 //
 // whose JSON value is exactly the input.projection shape the
-// windrose.authz_input Rego policy evaluates. This file derives those facts
+// datacern.authz_input Rego policy evaluates. This file derives those facts
 // TRUTHFULLY from the same Flat snapshot that feeds perm:* — the admin flag
 // only for real admins, action_scoped from the registered catalog,
 // workspace.assigned/actions from the user's actual workspace grants — so a
@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-// PyProjectionKey mirrors libs/py-common windrose_common/opaclient.py
+// PyProjectionKey mirrors libs/py-common datacern_common/opaclient.py
 // projection_key(): authz:proj:{tenant}:{subject}:{action}:{workspace}.
 func PyProjectionKey(tenant, user, action, workspace string) string {
 	return fmt.Sprintf("authz:proj:%s:%s:%s:%s", tenant, user, action, workspace)
@@ -63,7 +63,7 @@ type PyResource struct {
 }
 
 // PyFacts is the JSON value of one authz:proj key — the exact
-// input.projection shape windrose.authz_input evaluates, plus the versioned
+// input.projection shape datacern.authz_input evaluates, plus the versioned
 // header (v/computed_at) so casSet gives the same last-writer-wins the perm:*
 // keys have. Unknown fields are ignored by the Rego policy.
 type PyFacts struct {

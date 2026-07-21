@@ -68,7 +68,7 @@ async def test_real_model_real_batch_inference_produces_real_predictions(real_co
     out = read_output_parquet(storage_uri)
     assert "prediction" in out.columns
     assert len(out) == 5
-    assert "_windrose_job_id" in out.columns
+    assert "_datacern_job_id" in out.columns
     assert set(out["prediction"].unique()) <= {0, 1}  # real classifier output
 
     # lineage edges model->job, input->job, job->output all present (AC-4)

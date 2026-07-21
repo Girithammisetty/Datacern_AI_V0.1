@@ -1,5 +1,5 @@
 """AuthN/AuthZ (MASTER-FR-010..016). RS256 JWT (alg=none impossible by
-construction), SPIFFE internal allowlist, OPA authz via windrose_common."""
+construction), SPIFFE internal allowlist, OPA authz via datacern_common."""
 
 from __future__ import annotations
 
@@ -118,14 +118,14 @@ class LocalScopeAuthz:
 
 
 class OpaAuthzClient:
-    """Real OPA authorization via shared windrose_common: reads the per-request
+    """Real OPA authorization via shared datacern_common: reads the per-request
     permissions projection from Redis and POSTs it to the OPA data API
-    (windrose.authz_input). Runtime authz client (MASTER-FR-012)."""
+    (datacern.authz_input). Runtime authz client (MASTER-FR-012)."""
 
     def __init__(self, opa_url: str = "http://localhost:8281", *,
                  redis_url: str = "redis://localhost:6379/0"):
-        from windrose_common.opaclient import OpaClient
-        from windrose_common.redisx import RedisProjection, build_redis
+        from datacern_common.opaclient import OpaClient
+        from datacern_common.redisx import RedisProjection, build_redis
 
         self._redis = build_redis(redis_url)
         self._client = OpaClient(opa_url, projection=RedisProjection(self._redis))

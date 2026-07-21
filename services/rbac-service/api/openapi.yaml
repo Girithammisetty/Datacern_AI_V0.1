@@ -3,7 +3,7 @@ info:
   title: rbac-service
   version: 1.0.0
   description: >
-    Windrose authorization data plane: workspaces, groups, memberships, roles,
+    Datacern authorization data plane: workspaces, groups, memberships, roles,
     the action catalog, content grants, the permissions_flat projection admin
     APIs and the authz decision fallback/explain endpoints. All endpoints
     (except health/metrics) require an RS256 bearer JWT; the tenant context is

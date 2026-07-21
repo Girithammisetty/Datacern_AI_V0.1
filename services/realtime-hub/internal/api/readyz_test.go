@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // TestAC13_ReadyzDegradedWhenRedisDown: with Redis unreachable, /readyz reports

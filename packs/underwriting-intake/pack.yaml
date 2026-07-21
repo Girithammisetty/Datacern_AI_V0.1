@@ -1,14 +1,14 @@
 # underwriting-intake capability pack — Core-neutral edition: commercial
 # insurance underwriting submission intake & triage for P&C carriers,
 # MGAs/MGUs, wholesale brokers, and E&S markets. Installable TODAY against
-# Windrose Core's public APIs via packctl; the manifest envelope follows
+# Datacern Core's public APIs via packctl; the manifest envelope follows
 # BRD 23 (PKG-FR-001/003). Components the current Core cannot materialize
 # are declared under `deferred` — recorded in the install ledger, never
 # faked.
 pack_manifest: 1
 name: underwriting-intake
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted commercial underwriting submission intake and triage:
   clearance-first duplicate blocking (first-in broker holds the market),

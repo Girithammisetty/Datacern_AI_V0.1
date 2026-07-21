@@ -1,9 +1,9 @@
 /**
  * Env-gated OpenTelemetry tracing for the BFF — the Node counterpart of
- * `libs/go-common/otelx` and `libs/py-common/windrose_common/otelx.py`, with the
+ * `libs/go-common/otelx` and `libs/py-common/datacern_common/otelx.py`, with the
  * SAME contract so one env pair configures the whole platform:
  *
- *   WINDROSE_OTEL_ENABLED=true  OR  OTEL_EXPORTER_OTLP_ENDPOINT=host:port
+ *   DATACERN_OTEL_ENABLED=true  OR  OTEL_EXPORTER_OTLP_ENDPOINT=host:port
  *
  * Unset => a genuine no-op: no provider, no exporter, no spans, and
  * `withServerSpan` degrades to a direct call. Like the Go/Python helpers it
@@ -18,7 +18,7 @@
  * hook, no preload, and nothing patched in the hot path.
  *
  * Protocol is OTLP/gRPC (collector :4317), matching deploy/CONFIG.md: every
- * Windrose service exports gRPC, not HTTP.
+ * Datacern service exports gRPC, not HTTP.
  */
 import {
   SpanKind,
@@ -36,10 +36,10 @@ import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 
 const TRACER_NAME = "bff-graphql";
 
-/** Mirrors otelx.Enabled(): on when WINDROSE_OTEL_ENABLED is truthy or an OTLP
+/** Mirrors otelx.Enabled(): on when DATACERN_OTEL_ENABLED is truthy or an OTLP
  * endpoint is explicitly configured, so the default (no collector) is a no-op. */
 export function tracingEnabled(): boolean {
-  const v = (process.env.WINDROSE_OTEL_ENABLED ?? "").toLowerCase();
+  const v = (process.env.DATACERN_OTEL_ENABLED ?? "").toLowerCase();
   if (v === "1" || v === "true" || v === "yes") return true;
   return (process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "") !== "";
 }

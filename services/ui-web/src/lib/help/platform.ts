@@ -18,7 +18,7 @@ export const PLATFORM_ARTICLES: HelpArticle[] = [
     order: 1,
     related: ["worklist", "copilot", "notifications"],
     body: `
-Welcome to Windrose. This is a **governed decision-intelligence** workspace: you
+Welcome to Datacern. This is a **governed decision-intelligence** workspace: you
 work cases, an AI copilot drafts recommendations, and a second person approves
 anything that changes a record. Nothing the AI suggests is applied automatically.
 
@@ -211,7 +211,7 @@ your team's real decisions over time.
     order: 5,
     related: ["case-cockpit", "copilot", "decision-tables"],
     body: `
-Windrose is **governed**: any change that writes back to a record — a disposition,
+Datacern is **governed**: any change that writes back to a record — a disposition,
 a model promotion, an entity merge — is a **proposal** that a **second person**
 approves. This is "four-eyes," and it's enforced by the platform, not by policy.
 
@@ -470,7 +470,7 @@ so decisions are made on a complete picture, not a fragment.
     order: 2,
     related: ["getting-started", "approvals", "worklist"],
     body: `
-Windrose keeps you current without refreshing. Two things drive that: the
+Datacern keeps you current without refreshing. Two things drive that: the
 **notification inbox** and **live status updates**.
 
 ## The bell

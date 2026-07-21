@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     # AuthN (MASTER-FR-010/011). Prod verifies via identity-service JWKS (default
     # below); set MEM_JWT_PUBLIC_KEY_PEM to a static PEM for dev/tests or an
     # air-gapped probe (it takes precedence over JWKS when present).
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwt_public_key_pem: str | None = None
     jwks_url: str | None = "http://localhost:8082/.well-known/jwks.json"
     jwks_ttl_seconds: int = 300
@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     # Internal (service-to-service) mTLS SPIFFE allowlist (MASTER-FR-014).
     spiffe_header: str = "x-client-spiffe-id"
     internal_allowed_spiffe: list[str] = [
-        "spiffe://windrose/ns/ai/sa/agent-runtime",
-        "spiffe://windrose/ns/ai/sa/eval-service",
+        "spiffe://datacern/ns/ai/sa/agent-runtime",
+        "spiffe://datacern/ns/ai/sa/eval-service",
     ]
 
     # Adapter selection (CONVENTIONS.md END STATE). The RUNTIME DEFAULT is True:

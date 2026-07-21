@@ -27,11 +27,11 @@ func testRSAKeyPEM(t *testing.T) string {
 
 func TestTokenMinter_MintOBO_ProducesVerifiableClaims(t *testing.T) {
 	pemKey := testRSAKeyPEM(t)
-	m := NewTokenMinter(pemKey, "kid-1", "https://identity.windrose.ai", "windrose")
+	m := NewTokenMinter(pemKey, "kid-1", "https://identity.datacern.ai", "datacern")
 	tenant := uuid.New()
 	workspace := uuid.New()
 
-	tok, err := m.MintOBO(tenant, workspace, "manager@demo.windrose")
+	tok, err := m.MintOBO(tenant, workspace, "manager@demo.datacern")
 	if err != nil {
 		t.Fatalf("MintOBO: %v", err)
 	}
@@ -49,8 +49,8 @@ func TestTokenMinter_MintOBO_ProducesVerifiableClaims(t *testing.T) {
 	if claims["typ"] != "agent_obo" {
 		t.Errorf("typ = %v, want agent_obo", claims["typ"])
 	}
-	if claims["obo_sub"] != "manager@demo.windrose" {
-		t.Errorf("obo_sub = %v, want manager@demo.windrose", claims["obo_sub"])
+	if claims["obo_sub"] != "manager@demo.datacern" {
+		t.Errorf("obo_sub = %v, want manager@demo.datacern", claims["obo_sub"])
 	}
 	if claims["tenant_id"] != tenant.String() {
 		t.Errorf("tenant_id = %v, want %s", claims["tenant_id"], tenant.String())

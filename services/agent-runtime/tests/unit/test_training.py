@@ -112,7 +112,7 @@ async def test_modal_trainer_maps_remote_result_to_artifact():
         remote = _Remote()
 
     res = await ModalGpuTrainer(lookup=lambda *_: _Fn()).train(_spec())
-    assert res.adapter_uri == "modal://windrose-slm-adapters/Qwen_Qwen2.5-7B/abc123"
+    assert res.adapter_uri == "modal://datacern-slm-adapters/Qwen_Qwen2.5-7B/abc123"
     assert res.checksum == "deadbeef"
     assert res.mlflow_run_ref == "fc-123"
     # The corpus is passed INLINE — Modal needs no path into MinIO/MLflow.

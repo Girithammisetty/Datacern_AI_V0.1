@@ -235,7 +235,7 @@ class IngestionEventHandler:
 
 class KafkaIngestionConsumer:
     """Real aiokafka consumer group (``dataset-service.ingestion``) on
-    ingestion.events.v1 via the shared ``windrose_common`` consumer runner:
+    ingestion.events.v1 via the shared ``datacern_common`` consumer runner:
     Redis dedup, 5-retry exponential backoff and a real DLQ
     ``ingestion.events.v1.dataset-service.dlq`` (MASTER-FR-032/033). The
     transport-agnostic ``IngestionEventHandler.handle`` is the handler. Runtime
@@ -252,7 +252,7 @@ class KafkaIngestionConsumer:
         bootstrap_servers: str = "localhost:9092",
         topic: str = INGESTION_TOPIC,
     ):
-        from windrose_common.kafka import KafkaConfig, KafkaConsumer
+        from datacern_common.kafka import KafkaConfig, KafkaConsumer
 
         self._handler = handler
         self._consumer = KafkaConsumer(

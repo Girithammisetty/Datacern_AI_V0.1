@@ -29,12 +29,12 @@ hdr(){  printf '\n%s%s%s\n' "$B" "$*" "$N"; }
 
 OS_URL="${OPENSEARCH_URL:-http://localhost:9200}"
 REDIS="${REDIS_ADDR:-localhost:6379}"
-IDENTITY_DSN="host=localhost port=5432 dbname=identity user=windrose password=windrose_dev"
+IDENTITY_DSN="host=localhost port=5432 dbname=identity user=datacern password=datacern_dev"
 
 # ---- 1. durability: every stateful store has its named volume -----------------
 hdr "1. Data durability (named volumes present)"
 for v in pgdata redpandadata miniodata icebergdata opensearchdata clickhousedata redisdata; do
-  vol="windrose-dev_${v}"
+  vol="datacern-dev_${v}"
   if docker volume inspect "$vol" >/dev/null 2>&1; then ok "$v"
   else bad "$v MISSING — not durable. Recreate infra to apply: make down ARGS=--infra && make up"; fi
 done

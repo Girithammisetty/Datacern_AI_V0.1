@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/channels/email"
-	"github.com/windrose-ai/notification-service/internal/domain"
-	"github.com/windrose-ai/notification-service/internal/pipeline"
-	"github.com/windrose-ai/notification-service/internal/registry"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/channels/email"
+	"github.com/datacern-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/pipeline"
+	"github.com/datacern-ai/notification-service/internal/registry"
 )
 
 // ---- fakes (unit-test doubles only; never reachable from cmd/server) --------

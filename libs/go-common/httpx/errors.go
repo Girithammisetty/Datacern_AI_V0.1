@@ -1,5 +1,5 @@
 // Package httpx holds the shared HTTP contract helpers required of every
-// Windrose service by the master BRD: the error envelope (MASTER-FR-024) and
+// Datacern service by the master BRD: the error envelope (MASTER-FR-024) and
 // cursor pagination (MASTER-FR-022). The logic here is lifted verbatim (same
 // field names, same codes, same shapes) from the copies identity-service and
 // rbac-service vendored in wave 1, so behavior is unchanged after extraction.

@@ -1,5 +1,5 @@
 # main.tf — a single k3s control plane + an autoscaling-free agent pool on
-# Hetzner Cloud, wired for the Windrose stack.
+# Hetzner Cloud, wired for the Datacern stack.
 #
 # Design (dev/staging, CPU-only, cheapest):
 #   * k3s over a PRIVATE network (flannel on ens10); public NIC only for SSH,
@@ -165,7 +165,7 @@ resource "hcloud_server" "control_plane" {
 }
 
 ########################################
-# Agent pool (holds the Windrose workloads)
+# Agent pool (holds the Datacern workloads)
 ########################################
 
 resource "hcloud_server" "agent" {

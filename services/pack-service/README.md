@@ -1,6 +1,6 @@
 # pack-service
 
-Windrose's **governed, in-cluster capability-pack install service** (BRD 23). A
+Datacern's **governed, in-cluster capability-pack install service** (BRD 23). A
 *capability pack* is a versioned bundle that stands up a whole vertical use case
 — datasets, semantic models, dashboards, dispositions, roles, decision tables,
 agents + guardrails, cases, eval sets, ontology, write-back adapters, and more —

@@ -14,8 +14,8 @@ from app.config import Settings
 from app.container import build_container
 from app.main import create_app
 
-ISSUER = "https://identity.windrose.local"
-AUDIENCE = "windrose"
+ISSUER = "https://identity.datacern.local"
+AUDIENCE = "datacern"
 TENANT_A = "11111111-1111-4111-8111-111111111111"
 TENANT_B = "22222222-2222-4222-8222-222222222222"
 

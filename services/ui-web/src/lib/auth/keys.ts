@@ -51,7 +51,7 @@ export interface DevClaims {
   scopes: string[];
   workspaceId: string;
   /** Embed tokens set this + a `surface` allowlist + a short TTL. The token is
-   * otherwise a normal user JWT (aud=windrose) so every downstream service
+   * otherwise a normal user JWT (aud=datacern) so every downstream service
    * still accepts it; the embed route enforces `surface`. */
   embed?: boolean;
   surface?: string[];
@@ -80,12 +80,12 @@ export async function mintUserToken(claims: DevClaims): Promise<string> {
     .setProtectedHeader({ alg: "RS256", kid })
     .setSubject(claims.sub)
     .setIssuedAt()
-    .setIssuer(process.env.JWT_ISSUER ?? "windrose-dev")
+    .setIssuer(process.env.JWT_ISSUER ?? "datacern-dev")
     .setExpirationTime(
       claims.ttlSeconds ? Math.floor(Date.now() / 1000) + claims.ttlSeconds : "8h",
     );
   // When wired to the real stack (make up), JWT_AUDIENCE is set so every
-  // downstream service's aud check (aud=windrose) accepts the minted token.
+  // downstream service's aud check (aud=datacern) accepts the minted token.
   // Left unset for the self-contained UI e2e (no aud enforcement there).
   if (process.env.JWT_AUDIENCE) jwt.setAudience(process.env.JWT_AUDIENCE);
   return jwt.sign(privateKey);

@@ -1,4 +1,4 @@
-module github.com/windrose-ai/identity-service
+module github.com/datacern-ai/identity-service
 
 go 1.26.5
 
@@ -130,7 +130,7 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
-	github.com/windrose-ai/go-common v0.0.0
+	github.com/datacern-ai/go-common v0.0.0
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0 // indirect
@@ -150,4 +150,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/windrose-ai/go-common => ../../libs/go-common
+replace github.com/datacern-ai/go-common => ../../libs/go-common

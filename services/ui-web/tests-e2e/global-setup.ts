@@ -51,7 +51,7 @@ export default async function globalSetup() {
       NODE_ENV: "test", // introspection on, ad-hoc operations allowed (not prod)
       VERIFY_JWT: "true",
       JWKS_URL: "http://localhost:3100/api/auth/jwks",
-      JWT_ISSUER: "windrose-dev",
+      JWT_ISSUER: "datacern-dev",
       PORT: "4100",
       IDENTITY_URL: "http://localhost:4600",
       // The Viewer's roles/capabilities come from rbac GET /me/capabilities; without

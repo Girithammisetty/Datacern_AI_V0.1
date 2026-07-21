@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/windrose-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/domain"
 )
 
 // Rewritten is the product of the safe-substitution rewrite (QRY-FR-003).

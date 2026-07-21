@@ -15,9 +15,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/audit-service/internal/domain"
-	"github.com/windrose-ai/audit-service/internal/ingest"
-	gcevent "github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/ingest"
+	gcevent "github.com/datacern-ai/go-common/event"
 )
 
 // TestAC08_AIDecisionLogReproducible: the EU AI Act decision-log pack is built to

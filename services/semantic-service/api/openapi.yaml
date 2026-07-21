@@ -3,7 +3,7 @@ info:
   title: semantic-service
   version: 0.1.0
   description: >
-    Windrose governed semantic layer: per-workspace semantic models
+    Datacern governed semantic layer: per-workspace semantic models
     (entities/dimensions/measures/join paths), verified NL<->SQL queries with an
     approval workflow, and the metric compile API (metrics + dimensions +
     filters + time grain -> safe parameterized SQL). Spec:

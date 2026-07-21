@@ -1,7 +1,7 @@
 # BRD 19 — notification-service (Go)
 
 **Date:** 2026-07-09 · **Status:** Approved for build · **Phase:** 4
-**Inherits:** `00_MASTER_BRD.md`. Architecture: `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6 (notification-service row), §9.2 (topic catalog).
+**Inherits:** `00_MASTER_BRD.md`. Architecture: `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6 (notification-service row), §9.2 (topic catalog).
 
 ---
 
@@ -46,7 +46,7 @@ Personas: **Analyst/User** (recipient), **Workspace Admin** (routing/templates),
 ### Channels
 - **NOTIF-FR-020 (M)** **In-app:** persist `notifications` rows; publish to realtime-hub topic `notifications:<user_id>` for live badge/toast. Inbox API: list (unread filter, cursor), mark read/unread (single + `POST /notifications/mark-all-read`), unread count. Retention 90 days.
 - **NOTIF-FR-021 (M)** **Email:** provider abstraction interface `Send(msg) (provider_msg_id, err)` with drivers **SES, SendGrid, ACS** — selected per cell config, per-tenant override; failover to secondary on provider 5xx (circuit per provider). HTML + plaintext parts from templates; `List-Unsubscribe` header mapping to preference mute; provider webhooks (SES SNS, SendGrid events, ACS Event Grid) ingested to track `delivered|bounced|complained`. Hard bounce/complaint → suppression list (auto-mute email channel for that address, admin-visible, clearable).
-- **NOTIF-FR-022 (M)** **Webhooks:** tenant-registered endpoints `{url (https only, no private-IP/link-local targets — SSRF guard resolved at send time), event_types[], secret_version, active}`. Registration handshake: `POST` challenge `{type:"endpoint.verify", challenge}` must echo challenge within 30s. Delivery: JSON body = master event envelope; headers `X-Windrose-Signature: v1=<hex hmac-sha256(secret, timestamp ‖ '.' ‖ body)>`, `X-Windrose-Timestamp`, `X-Windrose-Event-Id` (idempotency), `X-Windrose-Event-Type`. Secret rotation keeps two active secret versions for 24h (both signatures sent: `v1=…,v1=…`).
+- **NOTIF-FR-022 (M)** **Webhooks:** tenant-registered endpoints `{url (https only, no private-IP/link-local targets — SSRF guard resolved at send time), event_types[], secret_version, active}`. Registration handshake: `POST` challenge `{type:"endpoint.verify", challenge}` must echo challenge within 30s. Delivery: JSON body = master event envelope; headers `X-Datacern-Signature: v1=<hex hmac-sha256(secret, timestamp ‖ '.' ‖ body)>`, `X-Datacern-Timestamp`, `X-Datacern-Event-Id` (idempotency), `X-Datacern-Event-Type`. Secret rotation keeps two active secret versions for 24h (both signatures sent: `v1=…,v1=…`).
 - **NOTIF-FR-023 (M)** Webhook retry/backoff: non-2xx or >10s timeout → retries at 1m, 5m, 30m, 2h, 6h, 24h (jittered); after final failure mark delivery `failed`. **Circuit breaker** per endpoint: open after 10 consecutive failures → suspend deliveries, retry probe every 15m, auto-close on success; endpoint auto-disabled + tenant-admin notified after 72h open. Missed events during open circuit are queued (7-day buffer) and delivered in order on close.
 - **NOTIF-FR-024 (S)** Webhook delivery log queryable by tenant admin: per delivery `{event_id, endpoint, attempts, last_status, next_retry_at}` + manual `POST /webhooks/:id/deliveries/:did/redeliver`.
 
@@ -127,11 +127,11 @@ POST /api/v1/rules
 
 Webhook delivery example (body = master event envelope verbatim):
 ```
-POST https://consumer.example.com/hooks/windrose
-X-Windrose-Event-Id: 01978a3c-7f2e-7c11-b3a4-0242ac120002
-X-Windrose-Event-Type: case.created
-X-Windrose-Timestamp: 1783075200
-X-Windrose-Signature: v1=6c1f2a…,v1=9ab0e3…        (two entries during secret rotation overlap)
+POST https://consumer.example.com/hooks/datacern
+X-Datacern-Event-Id: 01978a3c-7f2e-7c11-b3a4-0242ac120002
+X-Datacern-Event-Type: case.created
+X-Datacern-Timestamp: 1783075200
+X-Datacern-Signature: v1=6c1f2a…,v1=9ab0e3…        (two entries during secret rotation overlap)
 
 {"event_id":"01978a3c-…","event_type":"case.created","tenant_id":"t-42",
  "actor":{"type":"user","id":"u-77"},"via_agent":null,
@@ -154,7 +154,7 @@ Digest email structure (rendered by `digest.<class>` template): header (window, 
 
 Template example (`case.assigned` / email / en, showing the whitelisted variable schema):
 ```
-subject_tpl: "[Windrose] Case #{{.CaseNumber}} assigned to you — due {{.DueDate | date}}"
+subject_tpl: "[Datacern] Case #{{.CaseNumber}} assigned to you — due {{.DueDate | date}}"
 body_text_tpl: |
   {{.AssignerName}} assigned case #{{.CaseNumber}} ({{.Severity}}) to you.
   Due: {{.DueDate | datetime}}
@@ -235,7 +235,7 @@ Webhook channel: any mapped event type a tenant endpoint subscribes to. Adding a
 - **AC-1** Given `case.assigned` for user U, when consumed, then within 5s U has an unread in-app notification with a deep link to the case URN and realtime-hub received a publish on `notifications:<U>`.
 - **AC-2** Given U's preference "case.comment.added → digest hourly", when 12 comment events arrive in one hour, then U receives 0 immediate emails and exactly one digest email listing 12 grouped items at window end.
 - **AC-3** Given Kafka redelivers the same `event_id`, when processed twice, then exactly one delivery row and one email exist (unique-key proof).
-- **AC-4** Given a registered webhook, when an event is delivered, then the consumer can verify `X-Windrose-Signature` with HMAC-SHA256 over `timestamp.body`, and a request older than 300s fails verification.
+- **AC-4** Given a registered webhook, when an event is delivered, then the consumer can verify `X-Datacern-Signature` with HMAC-SHA256 over `timestamp.body`, and a request older than 300s fails verification.
 - **AC-5** Given a webhook endpoint returning 500, when 10 consecutive deliveries fail, then the circuit opens, deliveries queue, a probe fires within 15m of recovery, and queued events then deliver in order with original `event_id`s.
 - **AC-6** Given secret rotation, when deliveries occur during the 24h overlap, then both old and new secrets validate the signature header.
 - **AC-7** Given a tenant template override for `case.assigned` email, when published and a new assignment occurs, then the tenant's version renders; when rolled back, the prior version renders — with no service restart.

@@ -42,7 +42,7 @@ resource "azurerm_key_vault" "this" {
 }
 
 # Application + endpoint secrets. Names are hyphenated (Key Vault forbids "_");
-# External Secrets maps them back to UPPER_SNAKE keys in `windrose-secrets`.
+# External Secrets maps them back to UPPER_SNAKE keys in `datacern-secrets`.
 resource "azurerm_key_vault_secret" "app" {
   for_each = local.all_secrets
 

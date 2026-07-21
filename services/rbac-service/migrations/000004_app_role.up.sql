@@ -4,7 +4,7 @@
 --
 -- 000002 only ENABLEd RLS (no FORCE). ENABLE/FORCE is silently ignored for a
 -- superuser or the table owner, and the shipped default DSN connected as
--- `windrose` — the dev cluster SUPERUSER with BYPASSRLS — so tenant_isolation
+-- `datacern` — the dev cluster SUPERUSER with BYPASSRLS — so tenant_isolation
 -- was effectively OFF: a buggy/compromised query could read another tenant's
 -- workspaces/groups/members/roles/grants.
 --

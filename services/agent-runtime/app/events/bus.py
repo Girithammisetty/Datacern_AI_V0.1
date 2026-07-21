@@ -1,4 +1,4 @@
-"""Event bus: real Kafka (Redpanda) via windrose_common + an in-memory double."""
+"""Event bus: real Kafka (Redpanda) via datacern_common + an in-memory double."""
 
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ class KafkaEventBus:
     """Real Kafka event bus (idempotent producer, keyed by tenant_id)."""
 
     def __init__(self, bootstrap_servers: str = "localhost:9092") -> None:
-        from windrose_common.kafka import (
+        from datacern_common.kafka import (
             KafkaConfig,
             KafkaProducerClient,
         )
-        from windrose_common.kafka import (
+        from datacern_common.kafka import (
             KafkaEventBus as _Bus,
         )
 

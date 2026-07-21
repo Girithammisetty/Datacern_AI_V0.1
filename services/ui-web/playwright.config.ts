@@ -50,7 +50,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       AUTH_MODE: "dev",
-      JWT_ISSUER: "windrose-dev",
+      JWT_ISSUER: "datacern-dev",
       BFF_URL: "http://localhost:4100/graphql",
       REALTIME_HUB_URL: "http://localhost:4600",
       NEXT_PUBLIC_REALTIME_HUB_URL: "http://localhost:4600",

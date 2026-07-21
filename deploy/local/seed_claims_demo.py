@@ -521,7 +521,7 @@ def seed_network_query_demo(dataset_name):
 
 
 def main():
-    print(f"{B}Windrose claims demo seed — populating the claims vertical for hands-on testing{N}")
+    print(f"{B}Datacern claims demo seed — populating the claims vertical for hands-on testing{N}")
     # Guarantee the platform layer (tenant, personas, RBAC) is in place; a no-op
     # if seed_platform.py already ran (idempotent throughout).
     sp.ensure_platform_seeded()
@@ -556,10 +556,10 @@ def main():
     case_ids = create_open_cases(dataset_urn)
     run_triage_for_pending_proposals(case_ids, n=2)
 
-    if os.environ.get("WINDROSE_SEED_RETRAIN", "1") == "1":
+    if os.environ.get("DATACERN_SEED_RETRAIN", "1") == "1":
         best_effort_retrain(dataset_urn)
     else:
-        say("skipping retrain (WINDROSE_SEED_RETRAIN=0)")
+        say("skipping retrain (DATACERN_SEED_RETRAIN=0)")
 
     # final deterministic reindex so every case (incl. any resolved during the
     # retrain corrections) is searchable in the UI.

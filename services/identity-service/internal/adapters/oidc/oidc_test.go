@@ -60,9 +60,9 @@ func (f *fakeIdP) sign(t *testing.T, claims jwt.MapClaims) string {
 
 func TestVerifyIDToken_Valid(t *testing.T) {
 	f := newFakeIdP(t)
-	p := New(Config{Issuer: f.iss, ClientID: "windrose-web"})
+	p := New(Config{Issuer: f.iss, ClientID: "datacern-web"})
 	raw := f.sign(t, jwt.MapClaims{
-		"iss": f.iss, "aud": "windrose-web", "sub": "kc-sub-123",
+		"iss": f.iss, "aud": "datacern-web", "sub": "kc-sub-123",
 		"email": "ann@x.com", "name": "Ann A", "exp": time.Now().Add(time.Hour).Unix(),
 	})
 	id, err := p.VerifyIDToken(context.Background(), raw)
@@ -76,12 +76,12 @@ func TestVerifyIDToken_Valid(t *testing.T) {
 
 func TestVerifyIDToken_Rejects(t *testing.T) {
 	f := newFakeIdP(t)
-	p := New(Config{Issuer: f.iss, ClientID: "windrose-web"})
+	p := New(Config{Issuer: f.iss, ClientID: "datacern-web"})
 	cases := map[string]jwt.MapClaims{
 		"wrong_aud":  {"iss": f.iss, "aud": "someone-else", "sub": "s", "exp": time.Now().Add(time.Hour).Unix()},
-		"wrong_iss":  {"iss": "https://evil.example", "aud": "windrose-web", "sub": "s", "exp": time.Now().Add(time.Hour).Unix()},
-		"expired":    {"iss": f.iss, "aud": "windrose-web", "sub": "s", "exp": time.Now().Add(-time.Hour).Unix()},
-		"no_subject": {"iss": f.iss, "aud": "windrose-web", "exp": time.Now().Add(time.Hour).Unix()},
+		"wrong_iss":  {"iss": "https://evil.example", "aud": "datacern-web", "sub": "s", "exp": time.Now().Add(time.Hour).Unix()},
+		"expired":    {"iss": f.iss, "aud": "datacern-web", "sub": "s", "exp": time.Now().Add(-time.Hour).Unix()},
+		"no_subject": {"iss": f.iss, "aud": "datacern-web", "exp": time.Now().Add(time.Hour).Unix()},
 	}
 	for name, claims := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -97,11 +97,11 @@ func TestVerifyIDToken_RejectsUnknownKid(t *testing.T) {
 	// A token signed by a DIFFERENT key must not verify against the IdP's JWKS.
 	other, _ := rsa.GenerateKey(rand.Reader, 2048)
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"iss": f.iss, "aud": "windrose-web", "sub": "s", "exp": time.Now().Add(time.Hour).Unix(),
+		"iss": f.iss, "aud": "datacern-web", "sub": "s", "exp": time.Now().Add(time.Hour).Unix(),
 	})
 	tok.Header["kid"] = f.kid // claims the real kid but signs with the wrong key
 	raw, _ := tok.SignedString(other)
-	p := New(Config{Issuer: f.iss, ClientID: "windrose-web"})
+	p := New(Config{Issuer: f.iss, ClientID: "datacern-web"})
 	if _, err := p.VerifyIDToken(context.Background(), raw); err == nil {
 		t.Fatal("expected signature-verification failure")
 	}

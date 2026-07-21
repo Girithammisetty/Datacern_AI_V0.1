@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/windrose-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/domain"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

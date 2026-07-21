@@ -7,12 +7,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/windrose-ai/query-service/internal/datasets"
+	"github.com/datacern-ai/query-service/internal/datasets"
 )
 
 // The physical URIs a resolver hands back for materialization (QRY-FR-005).
 var claimsURIs = []string{
-	"s3://windrose-warehouse/bronze.t/ds_x/data/00000-0-abc.parquet",
+	"s3://datacern-warehouse/bronze.t/ds_x/data/00000-0-abc.parquet",
 }
 
 // Macro path: a {{dataset('name')}} reference whose resolved Meta carries

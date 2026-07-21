@@ -1,4 +1,4 @@
-module github.com/windrose-ai/audit-service
+module github.com/datacern-ai/audit-service
 
 go 1.26.5
 
@@ -12,7 +12,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.99
 	github.com/parquet-go/parquet-go v0.30.1
 	github.com/segmentio/kafka-go v0.4.51
-	github.com/windrose-ai/go-common v0.0.0
+	github.com/datacern-ai/go-common v0.0.0
 )
 
 require (
@@ -62,4 +62,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/windrose-ai/go-common => ../../libs/go-common
+replace github.com/datacern-ai/go-common => ../../libs/go-common

@@ -45,7 +45,7 @@ func (p *SMTPProvider) Name() string { return "smtp" }
 // (Message-ID). Connection/greeting failures classify Transient; a rejected
 // recipient (5xx) classifies Permanent; a timeout after DATA is Ambiguous.
 func (p *SMTPProvider) Send(ctx context.Context, m Message) (string, error) {
-	msgID := fmt.Sprintf("<%s@windrose>", uuid.NewString())
+	msgID := fmt.Sprintf("<%s@datacern>", uuid.NewString())
 	raw := buildMIME(m, msgID)
 
 	d := net.Dialer{Timeout: 10 * time.Second}
@@ -80,7 +80,7 @@ func (p *SMTPProvider) Send(ctx context.Context, m Message) (string, error) {
 	}
 	from := m.From
 	if from == "" {
-		from = "notifications@windrose.local"
+		from = "notifications@datacern.local"
 	}
 	if err := c.Mail(from); err != nil {
 		return "", classifySMTP(err, "MAIL FROM")
@@ -125,15 +125,15 @@ func classifySMTP(err error, stage string) error {
 func buildMIME(m Message, msgID string) string {
 	from := m.From
 	if from == "" {
-		from = "notifications@windrose.local"
+		from = "notifications@datacern.local"
 	}
 	var b strings.Builder
-	boundary := "windrose-" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	boundary := "datacern-" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	fmt.Fprintf(&b, "From: %s\r\n", from)
 	fmt.Fprintf(&b, "To: %s\r\n", m.To)
 	fmt.Fprintf(&b, "Subject: %s\r\n", m.Subject)
 	fmt.Fprintf(&b, "Message-ID: %s\r\n", msgID)
-	fmt.Fprintf(&b, "List-Unsubscribe: <mailto:unsubscribe@windrose.local>\r\n") // NOTIF-FR-021
+	fmt.Fprintf(&b, "List-Unsubscribe: <mailto:unsubscribe@datacern.local>\r\n") // NOTIF-FR-021
 	b.WriteString("MIME-Version: 1.0\r\n")
 	fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=%q\r\n\r\n", boundary)
 	if m.Text != "" {

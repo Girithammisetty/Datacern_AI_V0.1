@@ -100,7 +100,7 @@ realtime-hub/
 | RTH-FR-042 leader lease for replay writes | M | `fanout/lease.go`, `fanout/hub.go` | `TestLeaderLease_SingleWriter` |
 | RTH-FR-044 admin API | S | `api/handlers.go` | scope-gated `GET/DELETE /admin/connections` |
 | RTH-FR-050 metrics + connect/disconnect logs | M | `internal/metrics`, structured slog | `/metrics` endpoint |
-| RTH-FR-035 TypeScript UI SDK | S | **deferred** | frontend package (`@windrose/realtime`) — out of this repo |
+| RTH-FR-035 TypeScript UI SDK | S | **deferred** | frontend package (`@datacern/realtime`) — out of this repo |
 | RTH-FR-043 HPA + cell capacity targets | S | **deferred** | Helm/infra concern (dashboards, HPA) |
 
 ## Acceptance-criteria coverage

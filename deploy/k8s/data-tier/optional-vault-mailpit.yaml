@@ -7,8 +7,8 @@
 # Apply on top of the base data tier:
 #   kubectl apply -f deploy/k8s/data-tier/optional-vault-mailpit.yaml
 #
-# Then point windrose-secrets at them (re-run create-secrets.sh with):
-#   VAULT_ADDR=http://vault:8200 VAULT_TOKEN=windrose_dev_root \
+# Then point datacern-secrets at them (re-run create-secrets.sh with):
+#   VAULT_ADDR=http://vault:8200 VAULT_TOKEN=datacern_dev_root \
 #   SMTP_HOST=mailpit SMTP_PORT=1025 ./create-secrets.sh
 #
 # Dev-only: Vault runs in-memory dev mode (data lost on restart, root token
@@ -19,7 +19,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: vault
-  namespace: windrose
+  namespace: datacern
 spec:
   selector: { app: vault }
   ports:
@@ -29,7 +29,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vault
-  namespace: windrose
+  namespace: datacern
 spec:
   replicas: 1
   selector:
@@ -43,7 +43,7 @@ spec:
           image: hashicorp/vault:1.18
           args: ["server", "-dev"]
           env:
-            - { name: VAULT_DEV_ROOT_TOKEN_ID, value: windrose_dev_root }
+            - { name: VAULT_DEV_ROOT_TOKEN_ID, value: datacern_dev_root }
             - { name: VAULT_DEV_LISTEN_ADDRESS, value: "0.0.0.0:8200" }
           ports:
             - containerPort: 8200
@@ -61,7 +61,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mailpit
-  namespace: windrose
+  namespace: datacern
 spec:
   selector: { app: mailpit }
   ports:
@@ -72,7 +72,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mailpit
-  namespace: windrose
+  namespace: datacern
 spec:
   replicas: 1
   selector:

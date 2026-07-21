@@ -1,7 +1,7 @@
 [project]
 name = "memory-service"
 version = "0.1.0"
-description = "Windrose memory-service: scoped agent memory + RAG corpora, governed store"
+description = "Datacern memory-service: scoped agent memory + RAG corpora, governed store"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -16,11 +16,11 @@ dependencies = [
     "redis>=5.0",
     "aiokafka>=0.11",
     "psycopg[binary]>=3.1",
-    "windrose-common",
+    "datacern-common",
 ]
 
 [tool.uv.sources]
-windrose-common = { path = "../../libs/py-common", editable = true }
+datacern-common = { path = "../../libs/py-common", editable = true }
 
 [dependency-groups]
 dev = [

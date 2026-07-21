@@ -6,7 +6,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "windrose"
+      Project     = "datacern"
       Environment = var.environment
       ManagedBy   = "terraform"
       Component   = "platform-infra"

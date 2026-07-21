@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	segkafka "github.com/segmentio/kafka-go"
 
-	"github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/go-common/event"
 )
 
 // fakeDLQ is an in-memory DLQPublisher double. When fail is true every Publish

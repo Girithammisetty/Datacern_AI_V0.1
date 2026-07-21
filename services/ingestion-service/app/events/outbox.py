@@ -77,13 +77,13 @@ class InMemoryEventPublisher:
 
 
 class KafkaEventPublisher:
-    """Real Kafka (Redpanda) publisher via the shared ``windrose_common``
+    """Real Kafka (Redpanda) publisher via the shared ``datacern_common``
     idempotent aiokafka producer. Keyed by tenant_id so a tenant's events keep a
     single-partition order (MASTER-FR-031). Runtime event publisher; the outbox
     relay drives it from committed rows."""
 
     def __init__(self, bootstrap_servers: str = "localhost:9092") -> None:
-        from windrose_common.kafka import KafkaConfig, KafkaProducerClient
+        from datacern_common.kafka import KafkaConfig, KafkaProducerClient
 
         self.bootstrap_servers = bootstrap_servers
         self._client = KafkaProducerClient(KafkaConfig(bootstrap_servers=bootstrap_servers))

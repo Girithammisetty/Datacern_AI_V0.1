@@ -1,14 +1,14 @@
 # ap-invoice-audit capability pack — Core-neutral edition: accounts-payable
 # invoice exception and fraud audit for enterprise finance / AP shared
 # services, P2P BPOs, and audit-recovery firms. Installable TODAY against
-# Windrose Core's public APIs via packctl; the manifest envelope follows
+# Datacern Core's public APIs via packctl; the manifest envelope follows
 # BRD 23 (PKG-FR-001/003). Components the current Core cannot materialize
 # are declared under `deferred` — recorded in the install ledger, never
 # faked.
 pack_manifest: 1
 name: ap-invoice-audit
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted accounts-payable invoice exception and fraud audit: exception
   triage with payment-run deadline awareness (three-way-match gaps,

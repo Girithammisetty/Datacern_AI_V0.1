@@ -30,13 +30,13 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 
-	"github.com/windrose-ai/rbac-service/internal/api"
-	"github.com/windrose-ai/rbac-service/internal/authz"
-	"github.com/windrose-ai/rbac-service/internal/domain"
-	"github.com/windrose-ai/rbac-service/internal/events"
-	"github.com/windrose-ai/rbac-service/internal/projection"
-	"github.com/windrose-ai/rbac-service/internal/store"
-	"github.com/windrose-ai/rbac-service/seed"
+	"github.com/datacern-ai/rbac-service/internal/api"
+	"github.com/datacern-ai/rbac-service/internal/authz"
+	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/events"
+	"github.com/datacern-ai/rbac-service/internal/projection"
+	"github.com/datacern-ai/rbac-service/internal/store"
+	"github.com/datacern-ai/rbac-service/seed"
 )
 
 type harness struct {
@@ -194,7 +194,7 @@ func setup(ctx context.Context, pg *tcpostgres.PostgresContainer, rd *tcredis.Re
 		return err
 	}
 	hh.key = key
-	verifier := api.NewVerifierStatic(&key.PublicKey, "windrose-test", "windrose")
+	verifier := api.NewVerifierStatic(&key.PublicKey, "datacern-test", "datacern")
 
 	srv := &api.Server{
 		Store: st, Checker: hh.checker, Writer: writer, Reader: hh.reader,
@@ -236,8 +236,8 @@ func (h *harness) mint(t *testing.T, spec tokenSpec) string {
 		"sub":       spec.Sub,
 		"tenant_id": spec.Tenant.String(),
 		"typ":       spec.Typ,
-		"iss":       "windrose-test",
-		"aud":       "windrose",
+		"iss":       "datacern-test",
+		"aud":       "datacern",
 		"exp":       time.Now().Add(5 * time.Minute).Unix(),
 		"iat":       time.Now().Unix(),
 	}

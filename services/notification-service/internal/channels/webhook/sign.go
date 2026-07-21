@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
-// SignatureHeader builds the X-Windrose-Signature value for a body at a given
+// SignatureHeader builds the X-Datacern-Signature value for a body at a given
 // unix timestamp, one `v1=<hex>` entry per active secret (two during the 24h
 // rotation overlap, AC-6). The signed string is `timestamp . body`.
 func SignatureHeader(secrets []domain.WebhookSecret, timestamp int64, body []byte) string {
@@ -55,10 +55,10 @@ func Verify(header, secret string, timestamp, now, toleranceSec int64, body []by
 
 // Header names (NOTIF-FR-022).
 const (
-	HeaderSignature = "X-Windrose-Signature"
-	HeaderTimestamp = "X-Windrose-Timestamp"
-	HeaderEventID   = "X-Windrose-Event-Id"
-	HeaderEventType = "X-Windrose-Event-Type"
+	HeaderSignature = "X-Datacern-Signature"
+	HeaderTimestamp = "X-Datacern-Timestamp"
+	HeaderEventID   = "X-Datacern-Event-Id"
+	HeaderEventType = "X-Datacern-Event-Type"
 )
 
 // ChallengeBody is the registration handshake body (NOTIF-FR-022).

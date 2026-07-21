@@ -10,12 +10,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 // actionDef mirrors rbac-service domain.ActionDef's JSON shape (RBC-FR-022).
 // Identity's guarded actions are all TENANT-scoped (WorkspaceScoped=false): the
-// OPA admin short-circuit (windrose.authz_input) requires ctx_ok, which for a
+// OPA admin short-circuit (datacern.authz_input) requires ctx_ok, which for a
 // non-workspace action means no workspace_id is threaded — exactly how
 // identity's requireScope middleware calls the authorizer.
 type actionDef struct {

@@ -12,11 +12,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/query-service/internal/domain"
-	"github.com/windrose-ai/query-service/internal/events"
-	"github.com/windrose-ai/query-service/internal/exec"
-	"github.com/windrose-ai/query-service/internal/sqlsafe"
-	"github.com/windrose-ai/query-service/internal/store"
+	"github.com/datacern-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/events"
+	"github.com/datacern-ai/query-service/internal/exec"
+	"github.com/datacern-ai/query-service/internal/sqlsafe"
+	"github.com/datacern-ai/query-service/internal/store"
 )
 
 type savedQueryReq struct {

@@ -7,7 +7,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
-	"github.com/windrose-ai/identity-service/migrations"
+	"github.com/datacern-ai/identity-service/migrations"
 )
 
 // Migrate applies all embedded forward-only migrations (MASTER-FR-060).

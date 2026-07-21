@@ -34,10 +34,10 @@ type Config struct {
 func noopShutdown(context.Context) error { return nil }
 
 // Enabled reports whether tracing should be installed. It is on when
-// WINDROSE_OTEL_ENABLED is truthy or an OTEL endpoint is explicitly configured,
+// DATACERN_OTEL_ENABLED is truthy or an OTEL endpoint is explicitly configured,
 // so the default (dev, no collector) is a clean no-op.
 func Enabled() bool {
-	if v := strings.ToLower(os.Getenv("WINDROSE_OTEL_ENABLED")); v == "1" || v == "true" || v == "yes" {
+	if v := strings.ToLower(os.Getenv("DATACERN_OTEL_ENABLED")); v == "1" || v == "true" || v == "yes" {
 		return true
 	}
 	return os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != ""

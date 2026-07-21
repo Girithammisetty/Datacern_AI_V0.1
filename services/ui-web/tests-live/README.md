@@ -41,7 +41,7 @@ pnpm e2e:live:report             # open the last HTML report
 
 ## How auth works here (real, not mocked)
 
-`up.sh` boots the UI with `AUTH_MODE=dev` and `WINDROSE_PERSONAS` bound to the real
+`up.sh` boots the UI with `AUTH_MODE=dev` and `DATACERN_PERSONAS` bound to the real
 provisioned tenant. Each spec logs in through the **real** `/api/auth/login`, which
 mints a **real RS256 JWT** for a seeded persona; the BFF verifies it against the UI's
 JWKS and every downstream service enforces real RBAC/OPA. So a passing test exercises
@@ -49,7 +49,7 @@ the true production auth posture — including fail-closed redirects and per-per
 capability differences.
 
 `loginAs(page, PERSONAS().admin | .adjuster | .manager | .datascientist)` — the four
-real seeded personas (`*@demo.windrose`), resolved from `.live-context.json` (written
+real seeded personas (`*@demo.datacern`), resolved from `.live-context.json` (written
 by global-setup). `admin` is the most-privileged; `adjuster` is a differentiated
 non-admin used to prove RBAC gating.
 

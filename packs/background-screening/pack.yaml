@@ -1,14 +1,14 @@
 # background-screening capability pack — Core-neutral edition: FCRA
 # employment background-screening adjudication and adverse action for
 # consumer reporting agencies (CRAs), large employers' talent-compliance
-# teams, and gig platforms. Installable TODAY against Windrose Core's public
+# teams, and gig platforms. Installable TODAY against Datacern Core's public
 # APIs via packctl; the manifest envelope follows BRD 23 (PKG-FR-001/003).
 # Components the current Core cannot materialize are declared under
 # `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: background-screening
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted employment background-screening adjudication for CRAs,
   employer talent-compliance teams, and gig platforms: screening-hit triage

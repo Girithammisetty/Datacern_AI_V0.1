@@ -3,7 +3,7 @@
 --
 -- 000002 ENABLEd + FORCEd row-level security on every tenant table, but FORCE
 -- (and even ENABLE) is silently ignored for a superuser or the table owner.
--- The shipped default DSN connected as `windrose` — a SUPERUSER with BYPASSRLS
+-- The shipped default DSN connected as `datacern` — a SUPERUSER with BYPASSRLS
 -- (POSTGRES_USER of the dev cluster) — so tenant_isolation was effectively OFF:
 -- a buggy/compromised query could read another tenant's cases.
 --

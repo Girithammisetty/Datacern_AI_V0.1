@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from windrose_common.projection import load_projection, urn_hash
+from datacern_common.projection import load_projection, urn_hash
 
 
 class FakeRedis:

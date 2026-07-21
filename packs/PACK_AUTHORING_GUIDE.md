@@ -1,6 +1,6 @@
-# Windrose vertical-pack authoring guide (for pack authors and agents)
+# Datacern vertical-pack authoring guide (for pack authors and agents)
 
-You are authoring ONE capability pack (a directory under `Windrose-ai/packs/<pack-name>/`)
+You are authoring ONE capability pack (a directory under `Datacern-ai/packs/<pack-name>/`)
 plus ONE BRD (`docs/brd/<NN>_<slug>_pack_BRD.md` at the Nemesis repo root). Packs are
 declarative content installed through Core public APIs by packctl — ZERO Core changes.
 
@@ -40,7 +40,7 @@ packs/<name>/
 ## Manifest (pack.yaml)
 
 - `pack_manifest: 1`, name matches `^[a-z][a-z0-9-]{2,63}$`, version `1.0.0`,
-  `publisher: { id: pub-windrose, name: "Windrose Inc." }`, description, categories,
+  `publisher: { id: pub-datacern, name: "Datacern Inc." }`, description, categories,
   regulatory.
 - `components:` EXACTLY the kinds in card-disputes (datasets, semantic_models,
   verified_queries, saved_queries, dashboards ×3, dispositions, cases, roles,
@@ -151,7 +151,7 @@ unmodified Core, deferred ledgered), §9 Out of scope / future.
 
 ## Self-verification before you finish (MANDATORY)
 
-1. `cd /Users/girithammisetty/Projects/Nemesis/Windrose-ai/packs && ../deploy/e2e/.venv/bin/python -m packctl.cli validate <pack-name>` → must print "manifest ok".
+1. `cd /Users/girithammisetty/Projects/Nemesis/Datacern-ai/packs && ../deploy/e2e/.venv/bin/python -m packctl.cli validate <pack-name>` → must print "manifest ok".
 2. Run a python csv check: FKs resolve, 6 open rows match queue row_pks, open⇒pending,
    closed⇒bucket closed, every charted dimension/filter value has ≥1 row, chargeback-
    style filtered measures non-zero where charted.

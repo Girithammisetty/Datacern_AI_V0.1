@@ -3,7 +3,7 @@
 All byte movement is streaming: `put` consumes an async byte iterator and
 `open_stream` yields bounded chunks — the service never buffers a whole file.
 LocalFSObjectStore backs the unit tier; S3ObjectStore is the real runtime store
-(MinIO/S3 multipart via windrose_common).
+(MinIO/S3 multipart via datacern_common).
 """
 
 from __future__ import annotations
@@ -111,7 +111,7 @@ class LocalFSObjectStore:
 
 class S3ObjectStore:
     """Real S3 object store (MinIO in dev, any S3 API in prod) via the shared
-    ``windrose_common`` streaming adapter: multipart upload with at most one part
+    ``datacern_common`` streaming adapter: multipart upload with at most one part
     buffered in memory (ING-FR-041). ``etag`` is the sha256 of the content, so the
     checksum semantics match ``LocalFSObjectStore``. Runtime object store."""
 
@@ -120,12 +120,12 @@ class S3ObjectStore:
         bucket: str,
         *,
         endpoint_url: str = "http://localhost:9000",
-        access_key: str = "windrose",
-        secret_key: str = "windrose_dev",
+        access_key: str = "datacern",
+        secret_key: str = "datacern_dev",
         region: str = "us-east-1",
         part_size: int = 8 * 1024 * 1024,
     ) -> None:
-        from windrose_common.objectstore import S3Config, S3StreamingObjectStore
+        from datacern_common.objectstore import S3Config, S3StreamingObjectStore
 
         cfg = S3Config(
             endpoint_url=endpoint_url,

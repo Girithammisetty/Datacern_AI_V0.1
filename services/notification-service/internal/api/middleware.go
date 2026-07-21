@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/notification-service/internal/authz"
-	"github.com/windrose-ai/notification-service/internal/domain"
-	"github.com/windrose-ai/notification-service/internal/events"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/notification-service/internal/authz"
+	"github.com/datacern-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/events"
 )
 
 type ctxKey int

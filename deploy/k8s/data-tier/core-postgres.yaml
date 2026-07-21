@@ -5,7 +5,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: windrose
+  namespace: datacern
 spec:
   selector: { app: postgres }
   ports:
@@ -17,7 +17,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
-  namespace: windrose
+  namespace: datacern
 spec:
   serviceName: postgres
   replicas: 1
@@ -32,16 +32,16 @@ spec:
           image: pgvector/pgvector:pg16
           args: ["postgres", "-c", "wal_level=logical", "-c", "max_connections=500"]
           env:
-            - { name: POSTGRES_USER, value: windrose }
-            - { name: POSTGRES_PASSWORD, value: windrose_dev }
-            - { name: POSTGRES_DB, value: windrose }
+            - { name: POSTGRES_USER, value: datacern }
+            - { name: POSTGRES_PASSWORD, value: datacern_dev }
+            - { name: POSTGRES_DB, value: datacern }
             - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
           ports:
             - containerPort: 5432
           volumeMounts:
             - { name: pgdata, mountPath: /var/lib/postgresql/data }
           readinessProbe:
-            exec: { command: ["pg_isready", "-U", "windrose"] }
+            exec: { command: ["pg_isready", "-U", "datacern"] }
             initialDelaySeconds: 5
             periodSeconds: 5
           resources:
@@ -64,7 +64,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: mlflow-createdb
-  namespace: windrose
+  namespace: datacern
 spec:
   backoffLimit: 20
   template:
@@ -74,12 +74,12 @@ spec:
         - name: createdb
           image: postgres:16-alpine
           env:
-            - { name: PGPASSWORD, value: windrose_dev }
+            - { name: PGPASSWORD, value: datacern_dev }
           command:
             - sh
             - -c
             - >
-              until pg_isready -h postgres -U windrose; do sleep 2; done;
-              psql -h postgres -U windrose -tc
+              until pg_isready -h postgres -U datacern; do sleep 2; done;
+              psql -h postgres -U datacern -tc
               "SELECT 1 FROM pg_database WHERE datname='mlflow'" | grep -q 1 ||
-              createdb -h postgres -U windrose mlflow
+              createdb -h postgres -U datacern mlflow

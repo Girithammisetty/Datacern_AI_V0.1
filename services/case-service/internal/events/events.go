@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/domain"
 )
 
 // Topic is case-service's event topic (MASTER-FR-030).

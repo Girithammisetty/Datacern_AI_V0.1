@@ -9,9 +9,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/usage-service/internal/domain"
-	"github.com/windrose-ai/usage-service/internal/metrics"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/metrics"
 )
 
 // fakeRaw is a unit-test double (allowed only in *_test.go).

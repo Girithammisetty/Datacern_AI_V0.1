@@ -123,11 +123,11 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.state.token_verifier = container.token_verifier
     app.state.authz = container.authz
 
-    # Observability (MASTER-FR-050): tracing (no-op unless WINDROSE_OTEL_ENABLED)
+    # Observability (MASTER-FR-050): tracing (no-op unless DATACERN_OTEL_ENABLED)
     # + RED metrics middleware. RED is added last so it is OUTERMOST and times
     # the whole request incl. auth.
-    from windrose_common.metricsx import RedMiddleware, instrument_app
-    from windrose_common.otelx import configure_tracing
+    from datacern_common.metricsx import RedMiddleware, instrument_app
+    from datacern_common.otelx import configure_tracing
 
     configure_tracing("memory-service")
     # Trace runs outermost, then Auth.

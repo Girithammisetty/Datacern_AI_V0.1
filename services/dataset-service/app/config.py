@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://dataset:dataset@localhost:5432/dataset"
 
     # AuthN (MASTER-FR-010/011). In dev/tests a static PEM is used; prod uses JWKS.
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwt_public_key_pem: str | None = None
     jwks_url: str | None = None
     jwks_ttl_seconds: int = 300
@@ -22,18 +22,18 @@ class Settings(BaseSettings):
     # sidecar after mTLS termination (MASTER-FR-014).
     spiffe_header: str = "x-client-spiffe-id"
     internal_allowed_spiffe: list[str] = [
-        "spiffe://windrose/ns/data/sa/profiler",
-        "spiffe://windrose/ns/data/sa/ingestion-service",
-        "spiffe://windrose/ns/data/sa/pipeline-orchestrator",
-        "spiffe://windrose/ns/data/sa/inference-service",
-        "spiffe://windrose/ns/data/sa/semantic-service",
+        "spiffe://datacern/ns/data/sa/profiler",
+        "spiffe://datacern/ns/data/sa/ingestion-service",
+        "spiffe://datacern/ns/data/sa/pipeline-orchestrator",
+        "spiffe://datacern/ns/data/sa/inference-service",
+        "spiffe://datacern/ns/data/sa/semantic-service",
         # BRD 56 inc2: the tool-plane MCP gateway federates approved
         # dataset.entity.merge proposals to the /internal/v1/mcp/invoke facade.
-        "spiffe://windrose/ns/tools/sa/mcp-gateway",
+        "spiffe://datacern/ns/tools/sa/mcp-gateway",
     ]
 
     # Adapter selection (CONVENTIONS.md END STATE). The RUNTIME DEFAULT is True:
-    # `app.main:app` wires the shared windrose_common adapters against local
+    # `app.main:app` wires the shared datacern_common adapters against local
     # infra (MinIO, Iceberg REST, Redpanda, OPA, Redis) over a Postgres-backed
     # store. The unit tier explicitly sets this False (tests/conftest) so the
     # local doubles (LocalCatalog, LocalFSObjectStore, in-memory bus/dedup) are
@@ -50,18 +50,18 @@ class Settings(BaseSettings):
     object_store_provider: str | None = None
 
     # Local adapters (unit tier)
-    object_store_dir: str = "/tmp/windrose/dataset-service/objects"
-    catalog_dir: str = "/tmp/windrose/dataset-service/catalog"
+    object_store_dir: str = "/tmp/datacern/dataset-service/objects"
+    catalog_dir: str = "/tmp/datacern/dataset-service/catalog"
     signed_url_ttl_hours: int = 24
 
     # Real-adapter endpoints (deploy/docker-compose.dev.yml defaults)
     s3_endpoint_url: str = "http://localhost:9000"
-    s3_access_key: str = "windrose"
-    s3_secret_key: str = "windrose_dev"
+    s3_access_key: str = "datacern"
+    s3_secret_key: str = "datacern_dev"
     s3_region: str = "us-east-1"
-    profiles_bucket: str = "windrose-profiles"
+    profiles_bucket: str = "datacern-profiles"
     iceberg_catalog_uri: str = "http://localhost:8181"
-    iceberg_warehouse: str = "s3://windrose-warehouse/"
+    iceberg_warehouse: str = "s3://datacern-warehouse/"
     kafka_bootstrap_servers: str = "localhost:9092"
     redis_url: str = "redis://localhost:6379/0"
     opa_url: str = "http://localhost:8281"
@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     lineage_node_cap: int = 1000
 
     # Profiling (DST-FR-020..025)
-    profiler_version: str = "windrose-profiler/0.1.0-inproc"
+    profiler_version: str = "datacern-profiler/0.1.0-inproc"
     profile_timeout_minutes: int = 30
     profile_retrigger_per_hour: int = 3
     profile_sample_max_rows: int = 10_000_000

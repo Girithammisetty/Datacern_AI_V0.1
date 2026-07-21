@@ -28,7 +28,7 @@ from app.mcp.facade import McpFacade
 from app.store.memory import MemoryState, memory_uow_factory
 from app.utils import Clock
 
-PROFILER_SPIFFE = "spiffe://windrose/ns/data/sa/profiler"
+PROFILER_SPIFFE = "spiffe://datacern/ns/data/sa/profiler"
 
 
 class HttpCallbackReporter:
@@ -143,7 +143,7 @@ def build_container(
     from app.adapters.registry import catalog_provider_name
 
     if catalog_provider_name(settings) == "iceberg_rest":
-        from windrose_common.iceberg import IcebergConfig, IcebergTableWriter
+        from datacern_common.iceberg import IcebergConfig, IcebergTableWriter
 
         iceberg_writer = IcebergTableWriter(IcebergConfig(
             uri=settings.iceberg_catalog_uri,

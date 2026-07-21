@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/tool-plane/internal/authz"
-	"github.com/windrose-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/tool-plane/internal/authz"
+	"github.com/datacern-ai/tool-plane/internal/domain"
 )
 
 // traceMiddleware propagates/creates X-Trace-Id (MASTER-FR-028).

@@ -10,8 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/notification-service/internal/channels/webhook"
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/channels/webhook"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 type webhookBody struct {

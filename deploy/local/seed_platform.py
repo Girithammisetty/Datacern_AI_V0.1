@@ -69,17 +69,17 @@ PERSONA_SCOPES = [
 # per-resource grant, which silently broke every case.apply_disposition
 # execution end-to-end until this was fixed (found live 2026-07-17). If this
 # tenant is rebuilt from scratch, re-run the one-time invite step (see
-# docs/design or project memory "windrose persona identity fix") before
+# docs/design or project memory "datacern persona identity fix") before
 # reusing these ids literally — they are THIS tenant's real user ids.
 PERSONAS = {
-    "adjuster@demo.windrose": {"sub": "019f6de5-3498-70f2-93d3-51311340a1ea", "role": "adjuster"},
-    "manager@demo.windrose": {"sub": "019f6de5-34b4-7eb1-b169-1c66b95be578", "role": "manager"},
-    "datascientist@demo.windrose": {"sub": "019f6de5-34c7-760a-b3ff-97f324237f0d", "role": "datascientist"},
-    "admin@demo.windrose": {"sub": "019f6de5-34da-7301-a45b-a525052cd74d", "role": "admin"},
+    "adjuster@demo.datacern": {"sub": "019f6de5-3498-70f2-93d3-51311340a1ea", "role": "adjuster"},
+    "manager@demo.datacern": {"sub": "019f6de5-34b4-7eb1-b169-1c66b95be578", "role": "manager"},
+    "datascientist@demo.datacern": {"sub": "019f6de5-34c7-760a-b3ff-97f324237f0d", "role": "datascientist"},
+    "admin@demo.datacern": {"sub": "019f6de5-34da-7301-a45b-a525052cd74d", "role": "admin"},
     # First-class cross-tenant PLATFORM admin (distinct from the tenant "admin"
     # above). Also a tenant Admin of the demo tenant so they see both the tenant
     # admin cards AND the platform section.
-    "platform-admin@windrose": {"sub": "019f6de5-3600-7abc-9def-0123456789ab", "role": "platform_admin"},
+    "platform-admin@datacern": {"sub": "019f6de5-3600-7abc-9def-0123456789ab", "role": "platform_admin"},
 }
 
 
@@ -219,7 +219,7 @@ def verify_python_projection(sub="user-datascientist", action="semantic.model.re
 # rbac's own Postgres (grant ground truth). rbac's projection worker materializes
 # perm:* from these rows; the app connects here with the same creds the service uses.
 RBAC_DSN = os.environ.get("RBAC_DATABASE_URL", "postgres://{u}:{pw}@{h}:{p}/rbac".format(
-    u=os.environ.get("PGUSER", "windrose"), pw=os.environ.get("PGPASSWORD", "windrose_dev"),
+    u=os.environ.get("PGUSER", "datacern"), pw=os.environ.get("PGPASSWORD", "datacern_dev"),
     h=os.environ.get("PGHOST", "localhost"), p=os.environ.get("PGPORT", "5432")))
 
 
@@ -324,7 +324,7 @@ def activate_personas():
     so they are assignable — otherwise the case assign/reassign picker (active
     users only) has nothing to offer. Idempotent."""
     say("activating persona accounts (invited -> active) so they are assignable")
-    admin_tok = c.user_token("admin@demo.windrose", TENANT, ["platform.admin"],
+    admin_tok = c.user_token("admin@demo.datacern", TENANT, ["platform.admin"],
                              workspace_id=WORKSPACE)
     n = 0
     for email, p in PERSONAS.items():
@@ -405,7 +405,7 @@ def seed_persona_grants():
 
 
 def write_personas_env(out_path):
-    """Emit the WINDROSE_PERSONAS map ui-web's dev-login reads, binding each
+    """Emit the DATACERN_PERSONAS map ui-web's dev-login reads, binding each
     persona email to the REAL tenant + workspace + scopes seeded above."""
     m = {}
     for email, p in PERSONAS.items():
@@ -476,7 +476,7 @@ def ensure_platform_seeded():
 
 
 def main():
-    print(f"{B}Windrose platform seed — tenant + four RBAC-gated personas{N}")
+    print(f"{B}Datacern platform seed — tenant + four RBAC-gated personas{N}")
     ensure_platform_seeded()
     print(f"\n{G}platform seed complete{N}")
     print(f"  tenant     : {TENANT}")

@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "AiEventEnvelope",
-  "namespace": "com.windrose.ai.events",
+  "namespace": "com.datacern.ai.events",
   "doc": "Envelope for ai.events.v1 (MASTER-FR-031). Partition key = tenant_id. event_type ∈ {budget.threshold, budget.exhausted, budget.anomaly, guardrail.triggered, provider.state_changed, key.created, key.revoked, ladder.updated, guardrail_policy.updated, security.cross_tenant_denied, usage.reconciliation_drift}.",
   "fields": [
     {"name": "event_id", "type": "string"},

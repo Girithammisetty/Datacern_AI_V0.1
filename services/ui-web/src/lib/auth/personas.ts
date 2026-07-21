@@ -1,7 +1,7 @@
 /**
  * Dev-login persona resolution (pure, unit-testable).
  *
- * `make up` injects WINDROSE_PERSONAS: a JSON map of persona email ->
+ * `make up` injects DATACERN_PERSONAS: a JSON map of persona email ->
  * {sub, tenantId, workspaceId, scopes} bound to the REAL provisioned tenant +
  * workspace and the projection grants seeded for that persona.
  *
@@ -43,7 +43,7 @@ function parsePersonas(json: string | undefined): Record<string, Persona> {
   return {};
 }
 
-/** Resolve a login email against WINDROSE_PERSONAS (see module docs). */
+/** Resolve a login email against DATACERN_PERSONAS (see module docs). */
 export function resolveLogin(email: string, personasJson: string | undefined): LoginResolution {
   const personas = parsePersonas(personasJson);
   const persona = personas[email.toLowerCase()];

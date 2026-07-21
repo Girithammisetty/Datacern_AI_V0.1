@@ -1,13 +1,13 @@
 # trucking-claims capability pack — Core-neutral edition: cargo OS&D claims,
 # telematics safety-event review, and carrier vetting/fraud adjudication for
 # motor carriers, freight brokers, and 3PLs. Installable TODAY against
-# Windrose Core's public APIs via packctl; the manifest envelope follows
+# Datacern Core's public APIs via packctl; the manifest envelope follows
 # BRD 23 (PKG-FR-001/003). Components the current Core cannot materialize are
 # declared under `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: trucking-claims
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted trucking and logistics claims & safety adjudication for motor
   carriers, freight brokers, and 3PLs: cargo OS&D claim triage with

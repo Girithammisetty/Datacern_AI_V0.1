@@ -1,7 +1,7 @@
 /**
  * Shared OIDC config + discovery for the real login flow (BYO-P4). The web tier
  * runs the Authorization-Code + PKCE dance; identity-service (POST /token/oidc)
- * verifies the resulting ID token and mints the Windrose session. Deployment-
+ * verifies the resulting ID token and mints the platform session. Deployment-
  * level config for increment 1 (Keycloak/Okta/Auth0/Entra are just different
  * OIDC_ISSUER values); per-tenant IdP config is a documented follow-up.
  */
@@ -9,7 +9,7 @@ export interface OidcConfig {
   issuer: string; // used for .well-known discovery
   clientId: string;
   redirectUri: string;
-  /** identity-service base URL that mints the Windrose session from the ID token. */
+  /** identity-service base URL that mints the platform session from the ID token. */
   identityUrl: string;
 }
 
@@ -24,7 +24,7 @@ export function oidcConfig(): OidcConfig | null {
   if (!oidcEnabled()) return null;
   return {
     issuer: process.env.OIDC_ISSUER!,
-    clientId: process.env.OIDC_CLIENT_ID ?? "windrose-web",
+    clientId: process.env.OIDC_CLIENT_ID ?? "datacern-web",
     redirectUri: process.env.OIDC_REDIRECT_URI ?? "http://localhost:3000/api/auth/callback",
     identityUrl: process.env.IDENTITY_URL ?? "http://localhost:8301",
   };

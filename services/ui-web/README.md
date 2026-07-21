@@ -1,6 +1,6 @@
 # ui-web
 
-The single web application for the Windrose insurance-claims platform (BRD 22):
+The single web application for the Datacern insurance-claims platform (BRD 22):
 data management, ML, dashboards, case triage, admin, and the cross-cutting
 **agentic surfaces** (copilot, approval inbox, trace visualizer, AI cost panel,
 EU AI Act Article 50 labels).

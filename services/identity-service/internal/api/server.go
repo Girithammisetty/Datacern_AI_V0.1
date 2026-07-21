@@ -10,10 +10,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/windrose-ai/go-common/metricsx"
-	"github.com/windrose-ai/identity-service/internal/authz"
-	"github.com/windrose-ai/identity-service/internal/domain"
-	"github.com/windrose-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/go-common/metricsx"
+	"github.com/datacern-ai/identity-service/internal/authz"
+	"github.com/datacern-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/keys"
 )
 
 // chiRoutePattern resolves the matched chi route template for a bounded metrics

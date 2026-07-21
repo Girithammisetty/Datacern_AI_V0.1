@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/query-service/internal/domain"
-	"github.com/windrose-ai/query-service/internal/exec"
+	"github.com/datacern-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/exec"
 )
 
 type sqlRunReq struct {

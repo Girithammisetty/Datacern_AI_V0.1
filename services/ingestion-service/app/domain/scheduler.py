@@ -160,7 +160,7 @@ class TemporalScheduler:
     ScheduleOverlapPolicy.SKIP / BUFFER_ONE (ING-FR-060, BR-10).
     """
 
-    def __init__(self, target: str, namespace: str = "windrose") -> None:
+    def __init__(self, target: str, namespace: str = "datacern") -> None:
         self.target = target
         self.namespace = namespace
 

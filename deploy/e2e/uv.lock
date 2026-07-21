@@ -2830,7 +2830,7 @@ wheels = [
 ]
 
 [[package]]
-name = "windrose-e2e"
+name = "datacern-e2e"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

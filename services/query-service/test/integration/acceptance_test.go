@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/windrose-ai/query-service/internal/datasets"
-	"github.com/windrose-ai/query-service/internal/domain"
-	"github.com/windrose-ai/query-service/internal/events"
-	"github.com/windrose-ai/query-service/internal/exec"
+	"github.com/datacern-ai/query-service/internal/datasets"
+	"github.com/datacern-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/events"
+	"github.com/datacern-ai/query-service/internal/exec"
 )
 
 var savedQueryBody = map[string]any{

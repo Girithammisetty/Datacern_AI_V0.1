@@ -1,6 +1,6 @@
 # BRD 48 — `construction-claims` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32 pattern). Reference pattern: BRD 32 (card-disputes).
 **Status:** v1.0.0 authored, install pending; pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Construction claim and change-order adjudication AI for the paying side of the contract: entitlement-first triage (notice provisions, differing site conditions Type I/II, directed vs constructive acceleration, concurrent delay), quantum discipline (measured-mile over total-cost), defect-backcharge and surety-notice governance, and pay-if-paid/pay-when-paid payment-dispute screening. Sells to owners/developers, general contractors, construction managers, sureties, and infrastructure agencies.
 
-**Why this vertical.** Construction claims are high-dollar, deadline-bound, and evidence-driven: contractual notice windows are condition precedent and strictly enforced in many jurisdictions, response deadlines run from the contract, and every determination is later tested in mediation, arbitration, or litigation from the contemporaneous record. Volumes track the mega-project pipeline (transit, healthcare, education, bridges) and claims teams are chronically understaffed. Every determination is a documented, disputable, evidence-cited human decision — the exact governed human-in-the-loop shape of the Windrose Core, proven by BRD 24 (insurance) and BRD 32 (card-disputes).
+**Why this vertical.** Construction claims are high-dollar, deadline-bound, and evidence-driven: contractual notice windows are condition precedent and strictly enforced in many jurisdictions, response deadlines run from the contract, and every determination is later tested in mediation, arbitration, or litigation from the contemporaneous record. Volumes track the mega-project pipeline (transit, healthcare, education, bridges) and claims teams are chronically understaffed. Every determination is a documented, disputable, evidence-cited human decision — the exact governed human-in-the-loop shape of the Datacern Core, proven by BRD 24 (insurance) and BRD 32 (card-disputes).
 
 **Business value.** Deadline-breach elimination (contractual response-clock watch), reviewer throughput (entitlement pre-analysis and clause routing), quantum leakage reduction (measured-mile anchoring and 3x-norm outlier detection), wrongful-default avoidance (notice-and-cure sequencing before surety steps), and defensible determination files (every rejection cites the clause and record evidence relied upon, with AI provenance).
 
@@ -100,7 +100,7 @@ Authored materialization: 3 datasets (claims 26 / contracts 30 / parties 12 — 
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): project-controls/PMIS platform of record, ERP/cost system, document-management repository, schedule files (P6) for delay analysis.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): project-controls/PMIS platform of record, ERP/cost system, document-management repository, schedule files (P6) for delay analysis.
 
 ## 7. NFRs (deltas)
 

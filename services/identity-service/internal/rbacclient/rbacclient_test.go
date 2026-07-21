@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
-	"github.com/windrose-ai/identity-service/internal/keys"
-	"github.com/windrose-ai/identity-service/internal/store/memory"
+	"github.com/datacern-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/identity-service/internal/store/memory"
 )
 
 // fakeRBAC is an httptest rbac-service exposing only POST /api/v1/authz/check.

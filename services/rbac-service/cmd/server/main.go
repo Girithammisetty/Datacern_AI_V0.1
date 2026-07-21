@@ -25,15 +25,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/windrose-ai/rbac-service/internal/api"
-	"github.com/windrose-ai/rbac-service/internal/authz"
-	"github.com/windrose-ai/rbac-service/internal/domain"
-	"github.com/windrose-ai/rbac-service/internal/events"
-	"github.com/windrose-ai/rbac-service/internal/projection"
-	"github.com/windrose-ai/rbac-service/internal/store"
-	"github.com/windrose-ai/rbac-service/seed"
+	"github.com/datacern-ai/rbac-service/internal/api"
+	"github.com/datacern-ai/rbac-service/internal/authz"
+	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/events"
+	"github.com/datacern-ai/rbac-service/internal/projection"
+	"github.com/datacern-ai/rbac-service/internal/store"
+	"github.com/datacern-ai/rbac-service/seed"
 
-	"github.com/windrose-ai/go-common/otelx"
+	"github.com/datacern-ai/go-common/otelx"
 )
 
 func main() {
@@ -77,7 +77,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Distributed tracing (no-op unless WINDROSE_OTEL_ENABLED / an OTLP endpoint
+	// Distributed tracing (no-op unless DATACERN_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "rbac-service")
 	defer func() { _ = otelShutdown(context.Background()) }()

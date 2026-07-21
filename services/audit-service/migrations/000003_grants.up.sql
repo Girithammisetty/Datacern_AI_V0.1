@@ -1,6 +1,6 @@
 -- Least-privilege runtime role (systemic rule): the shipped default DSN connects
 -- as audit_rw — a NON-owner, NON-superuser, NOBYPASSRLS role — NOT the owner
--- (windrose). Tables are owned by the migration role; audit_rw only holds the
+-- (datacern). Tables are owned by the migration role; audit_rw only holds the
 -- DML it needs and is fully subject to RLS. The role itself is created in the Go
 -- bootstrap (CREATE ROLE, outside a migration tx); this migration grants it the
 -- minimal privileges. Guarded so migrations succeed even if the role is absent

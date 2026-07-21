@@ -8,11 +8,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/metricsx"
-	"github.com/windrose-ai/usage-service/internal/authz"
-	"github.com/windrose-ai/usage-service/internal/domain"
-	"github.com/windrose-ai/usage-service/internal/events"
-	"github.com/windrose-ai/usage-service/internal/store"
+	"github.com/datacern-ai/go-common/metricsx"
+	"github.com/datacern-ai/usage-service/internal/authz"
+	"github.com/datacern-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/events"
+	"github.com/datacern-ai/usage-service/internal/store"
 )
 
 // Store is the persistence surface the API depends on (satisfied by *store.PG;

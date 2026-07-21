@@ -8,9 +8,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/windrose-ai/go-common/httpx"
+	"github.com/datacern-ai/go-common/httpx"
 
-	"github.com/windrose-ai/realtime-hub/internal/authz"
+	"github.com/datacern-ai/realtime-hub/internal/authz"
 )
 
 // handleTopics adds/removes topics on a live connection without a reconnect

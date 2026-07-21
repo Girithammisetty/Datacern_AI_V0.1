@@ -21,8 +21,8 @@ class Settings(BaseSettings):
 
     # AuthN (MASTER-FR-010/011). Prod verifies incoming user/agent tokens via
     # identity-service JWKS; a static PEM takes precedence for dev/tests.
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwt_public_key_pem: str | None = None
     jwks_url: str | None = "http://localhost:8300/jwks.json"
     jwks_ttl_seconds: int = 300
@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str = "localhost:9092"
     redis_url: str = "redis://localhost:6379/0"
     opa_url: str = "http://localhost:8281"
-    opa_package: str = "windrose/authz_input"
+    opa_package: str = "datacern/authz_input"
 
     # Temporal (ART-FR-010). Durable workflow store.
     temporal_target: str = "localhost:7233"
@@ -76,11 +76,11 @@ class Settings(BaseSettings):
 
     # ai-gateway (ART-FR-012): ALL LLM calls go through the gateway (budget/
     # guardrails/metering), never direct to a provider. Dual credential per its
-    # contract: Authorization: Bearer <virtual key> + X-Windrose-JWT: <jwt>.
-    # `model` is a ladder alias ("windrose-auto"), NOT the concrete Ollama id.
+    # contract: Authorization: Bearer <virtual key> + X-Datacern-JWT: <jwt>.
+    # `model` is a ladder alias ("datacern-auto"), NOT the concrete Ollama id.
     ai_gateway_url: str = "http://localhost:8312"
     ai_gateway_chat_path: str = "/v1/chat/completions"
-    ai_gateway_model: str = "windrose-auto"
+    ai_gateway_model: str = "datacern-auto"
     ai_gateway_virtual_key: str | None = None  # nk-... minted per-run in prod
     ai_gateway_request_class: str = "chat"
     llm_temperature: float = 0.2
@@ -143,8 +143,8 @@ class Settings(BaseSettings):
 
     # OBO minting: agent-runtime mints/requests agent_obo tokens for tool calls.
     # In dev/tests we self-sign with the grant key; prod exchanges via identity.
-    obo_issuer: str = "https://identity.windrose.local"
-    obo_audience: str = "windrose"
+    obo_issuer: str = "https://identity.datacern.local"
+    obo_audience: str = "datacern"
 
     # Session model (ART-FR-021).
     idle_timeout_seconds: int = 15 * 60

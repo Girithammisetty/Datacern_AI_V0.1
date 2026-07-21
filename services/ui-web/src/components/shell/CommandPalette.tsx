@@ -14,7 +14,7 @@ import { graphqlRequest } from "@/lib/graphql/client";
 import * as ops from "@/lib/graphql/operations";
 
 /** The custom event the TopBar (or any surface) dispatches to open the palette. */
-export const CMDK_EVENT = "windrose:cmdk";
+export const CMDK_EVENT = "datacern:cmdk";
 
 interface Item {
   id: string;

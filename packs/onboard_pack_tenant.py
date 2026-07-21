@@ -45,7 +45,7 @@ def main() -> int:
     ap.add_argument("--display", required=True, help="tenant display name")
     ap.add_argument("--short", default=None,
                     help="login email domain label (default: derived from --tenant); "
-                         "logins become <role>@<short>.windrose")
+                         "logins become <role>@<short>.datacern")
     ap.add_argument("--no-restart-ui", action="store_true",
                     help="do not restart ui-web (logins go live on next UI boot)")
     args = ap.parse_args()
@@ -67,7 +67,7 @@ def main() -> int:
     print()
     base.say(f"{base.G}done{base.N} — tenant {args.tenant!r} "
              f"({row['tenant_id']}) with {len(row['users'])} role user(s)")
-    print(f"  login: admin@{short}.windrose (any password) at http://localhost:3000/login")
+    print(f"  login: admin@{short}.datacern (any password) at http://localhost:3000/login")
     print(f"  all logins: packs/MULTITENANT_LOGINS.md")
     return 0
 

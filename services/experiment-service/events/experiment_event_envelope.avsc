@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "ExperimentEventEnvelope",
-  "namespace": "windrose.experiment.events.v1",
+  "namespace": "datacern.experiment.events.v1",
   "doc": "Master event envelope (MASTER-FR-031) for experiment.events.v1. Partition key = tenant_id.",
   "fields": [
     {"name": "event_id", "type": "string", "doc": "uuidv7"},

@@ -1,6 +1,6 @@
 # query-service
 
-Windrose's single SQL execution broker (BRD 05): saved queries with **typed
+Datacern's single SQL execution broker (BRD 05): saved queries with **typed
 variables and safe substitution** (bound parameters only — the V1
 `process_vars!` string-splicing/first-variable-only defect is designed out),
 **AST-based read-only statement enforcement** (replaces V1's bypassable
@@ -96,7 +96,7 @@ promote but never force duckdb above thresholds (`HINT_OVERRIDDEN`).
   consume via the shared consumer group).
 - **Authorization is real OPA** (`internal/authz/opa_client.go`): the shared
   go-common `opaclient` loads the caller's `permissions_flat` projection from
-  Redis and evaluates the OPA sidecar's `windrose.authz_input` bundle. The
+  Redis and evaluates the OPA sidecar's `datacern.authz_input` bundle. The
   allow-all/static authorizers are unit-test doubles only (no runtime escape
   hatch). Proven by `TestRealOPAAuthorizationDecision` (real Redis projection
   + real OPA container, direct and through the `RequireAction` middleware).

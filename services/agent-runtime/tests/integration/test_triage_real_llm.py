@@ -34,14 +34,14 @@ def _jwt_provider(tenant_id: str) -> str:
     priv = open(JWT_PRIV_PATH).read()  # noqa: SIM115
     now = int(time.time())
     return pyjwt.encode(
-        {"iss": "https://identity.windrose.local", "aud": "windrose", "sub": "agent-runtime",
+        {"iss": "https://identity.datacern.local", "aud": "datacern", "sub": "agent-runtime",
          "tenant_id": tenant_id, "typ": "service", "scopes": ["*"],
          "iat": now, "exp": now + 3600}, priv, algorithm="RS256")
 
 
 def _real_llm() -> AiGatewayLlmClient:
     return AiGatewayLlmClient(
-        AI_GATEWAY, model="windrose-auto", virtual_key=VKEY,
+        AI_GATEWAY, model="datacern-auto", virtual_key=VKEY,
         jwt_provider=_jwt_provider, temperature=0.6, max_tokens=200)
 
 

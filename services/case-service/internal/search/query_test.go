@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/windrose-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/domain"
 )
 
 // filter[status]=open|closed expand to the V1 pseudo-filter sets (CASE-FR-042).

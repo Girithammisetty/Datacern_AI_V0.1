@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/domain"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 const deliveryCols = `id, tenant_id, notification_id, webhook_endpoint_id, event_id, recipient, channel, provider, status, provider_msg_id, attempts, last_error, next_retry_at, payload, created_at, updated_at`
@@ -217,7 +217,7 @@ func (s *PG) RequeueWebhookDelivery(ctx context.Context, tenant, id uuid.UUID) e
 
 // FindDeliveryTenantByProviderMsgID resolves the tenant owning an email
 // delivery by provider message id, across tenants (platform role) — used by
-// provider status callbacks which carry no Windrose JWT (NOTIF-FR-021, BR-13).
+// provider status callbacks which carry no Datacern JWT (NOTIF-FR-021, BR-13).
 func (s *PG) FindDeliveryTenantByProviderMsgID(ctx context.Context, providerMsgID string) (uuid.UUID, bool, error) {
 	var tenant uuid.UUID
 	var found bool

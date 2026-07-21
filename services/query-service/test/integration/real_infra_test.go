@@ -14,20 +14,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
+	gcevent "github.com/datacern-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/query-service/internal/api"
-	"github.com/windrose-ai/query-service/internal/authz"
-	"github.com/windrose-ai/query-service/internal/domain"
-	"github.com/windrose-ai/query-service/internal/events"
+	"github.com/datacern-ai/query-service/internal/api"
+	"github.com/datacern-ai/query-service/internal/authz"
+	"github.com/datacern-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/events"
 )
 
 // These tests exercise the REAL runtime adapters against the compose infra
 // (deploy/docker-compose.dev.yml): Redpanda (Kafka), Redis, and the OPA sidecar
-// loading the windrose.authz_input Rego bundle. They auto-skip with a clear
+// loading the datacern.authz_input Rego bundle. They auto-skip with a clear
 // message when the required service is unreachable (CONVENTIONS testing tiers).
 
 func kafkaBrokers() string {
@@ -150,7 +150,7 @@ func TestRealKafkaPublishAndConsume(t *testing.T) {
 // TestRealOPAAuthorizationDecision proves runtime authorization goes through the
 // REAL OPA container: the shared opaclient loads the caller's permissions_flat
 // projection from REAL Redis (rbac key scheme) and evaluates it against the OPA
-// sidecar's windrose.authz_input bundle (MASTER-FR-012). Verified both directly
+// sidecar's datacern.authz_input bundle (MASTER-FR-012). Verified both directly
 // and end-to-end through the RequireAction HTTP middleware.
 func TestRealOPAAuthorizationDecision(t *testing.T) {
 	h := requireHarness(t)
@@ -190,7 +190,7 @@ func TestRealOPAAuthorizationDecision(t *testing.T) {
 	server := &api.Server{
 		Store: h.pg, Broker: h.broker, Results: h.broker.Results,
 		Authz:        az,
-		Verifier:     api.NewVerifierStatic(&h.key.PublicKey, "windrose-test", "windrose"),
+		Verifier:     api.NewVerifierStatic(&h.key.PublicKey, "datacern-test", "datacern"),
 		ExportSecret: []byte("integration-secret"),
 	}
 	httpSrv := httptest.NewServer(server.Router())

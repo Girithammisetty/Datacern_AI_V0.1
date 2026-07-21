@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/go-common/event"
 )
 
 // Row is one unpublished outbox row: an opaque store id plus the envelope.

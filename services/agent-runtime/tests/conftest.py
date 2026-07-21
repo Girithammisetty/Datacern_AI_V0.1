@@ -36,8 +36,8 @@ def make_settings(**over) -> Settings:
         use_temporal=False,
         store_mode="memory",
         jwt_public_key_pem=TEST_PUB,
-        jwt_issuer="https://identity.windrose.local",
-        jwt_audience="windrose",
+        jwt_issuer="https://identity.datacern.local",
+        jwt_audience="datacern",
     )
     base.update(over)
     return Settings(**base)
@@ -47,7 +47,7 @@ def make_token(*, sub: str, tenant_id: str, typ: str = "user", scopes=None,
                obo_sub: str | None = None) -> str:
     now = int(time.time())
     claims = {
-        "iss": "https://identity.windrose.local", "aud": "windrose", "sub": sub,
+        "iss": "https://identity.datacern.local", "aud": "datacern", "sub": sub,
         "tenant_id": tenant_id, "typ": typ, "scopes": scopes or [],
         "iat": now, "exp": now + 3600,
     }

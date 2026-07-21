@@ -3,7 +3,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "Windrose AI",
+  title: "Datacern AI",
   description: "Decision intelligence for regulated operations.",
 };
 

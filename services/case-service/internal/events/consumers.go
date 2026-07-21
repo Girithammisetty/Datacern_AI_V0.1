@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
+	gcevent "github.com/datacern-ai/go-common/event"
 
-	"github.com/windrose-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/domain"
 )
 
 // Indexer is the search-projection port (satisfied by *search.Projector).

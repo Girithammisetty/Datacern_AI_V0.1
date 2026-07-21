@@ -8,10 +8,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/windrose-ai/tool-plane/internal/domain"
-	"github.com/windrose-ai/tool-plane/internal/embed"
-	"github.com/windrose-ai/tool-plane/internal/events"
-	"github.com/windrose-ai/tool-plane/internal/store"
+	"github.com/datacern-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/embed"
+	"github.com/datacern-ai/tool-plane/internal/events"
+	"github.com/datacern-ai/tool-plane/internal/store"
 )
 
 // registerToolReq is the tool registration payload (manifest, TPL-FR-001/003).
@@ -283,7 +283,7 @@ func exampleDescs(examples []domain.Example) []string {
 }
 
 // spiffeService extracts the service (workload) segment from a SPIFFE id like
-// spiffe://windrose/ns/prod/sa/case-service → case-service.
+// spiffe://datacern/ns/prod/sa/case-service → case-service.
 func spiffeService(spiffe string) string {
 	i := strings.LastIndex(spiffe, "/sa/")
 	if i < 0 {

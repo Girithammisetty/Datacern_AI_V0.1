@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 type Store struct {

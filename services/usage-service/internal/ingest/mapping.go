@@ -7,8 +7,8 @@ package ingest
 import (
 	"fmt"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
-	"github.com/windrose-ai/usage-service/internal/events"
+	"github.com/datacern-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/events"
 )
 
 // Mapping maps one (topic, event_type) to one meter record (USG-FR-015).

@@ -14,11 +14,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/windrose-ai/case-service/internal/api"
-	"github.com/windrose-ai/case-service/internal/authz"
-	"github.com/windrose-ai/case-service/internal/domain"
-	"github.com/windrose-ai/case-service/internal/search"
-	"github.com/windrose-ai/case-service/internal/sla"
+	"github.com/datacern-ai/case-service/internal/api"
+	"github.com/datacern-ai/case-service/internal/authz"
+	"github.com/datacern-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/search"
+	"github.com/datacern-ai/case-service/internal/sla"
 )
 
 // ---- helpers ----------------------------------------------------------------
@@ -440,7 +440,7 @@ func TestAC14_SearchUnavailable(t *testing.T) {
 	broken, err := search.New("http://localhost:9201")
 	require.NoError(t, err)
 	bs := &api.Server{Store: h.pg, Search: broken, Projector: h.server.Projector, Authz: authz.AllowAll{},
-		Verifier: api.NewVerifierStatic(&h.key.PublicKey, "windrose-test", "windrose"), Snapshots: api.NewFSSnapshotStore(mustTempDir())}
+		Verifier: api.NewVerifierStatic(&h.key.PublicKey, "datacern-test", "datacern"), Snapshots: api.NewFSSnapshotStore(mustTempDir())}
 	srv := httptest.NewServer(bs.Router())
 	defer srv.Close()
 

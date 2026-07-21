@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from windrose_common.secrets import VaultSecretsStore
+from datacern_common.secrets import VaultSecretsStore
 
 pytestmark = pytest.mark.integration
 

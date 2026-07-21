@@ -12,10 +12,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 
-	"github.com/windrose-ai/audit-service/internal/domain"
-	"github.com/windrose-ai/audit-service/internal/meta"
-	gcevent "github.com/windrose-ai/go-common/event"
-	gckafka "github.com/windrose-ai/go-common/kafka"
+	"github.com/datacern-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/meta"
+	gcevent "github.com/datacern-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
 )
 
 // Deduper is the idempotency primitive (Redis SETNX). Satisfied by *redisx.Client.

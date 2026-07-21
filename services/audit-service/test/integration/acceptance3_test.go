@@ -12,10 +12,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/audit-service/internal/chain"
-	"github.com/windrose-ai/audit-service/internal/chstore"
-	"github.com/windrose-ai/audit-service/internal/domain"
-	"github.com/windrose-ai/audit-service/internal/ingest"
+	"github.com/datacern-ai/audit-service/internal/chain"
+	"github.com/datacern-ai/audit-service/internal/chstore"
+	"github.com/datacern-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/ingest"
 )
 
 // flakyInserter wraps the real ClickHouse store and fails the FIRST insert of

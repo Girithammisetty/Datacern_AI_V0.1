@@ -21,7 +21,7 @@ import (
 	tcpg "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	pgstore "github.com/windrose-ai/identity-service/internal/store/postgres"
+	pgstore "github.com/datacern-ai/identity-service/internal/store/postgres"
 )
 
 var (

@@ -2,7 +2,7 @@
 uploaded dataset's rows by calling dataset-service's internal rows API.
 
 The real adapter (:class:`HttpDatasetReader`) is a REAL dependency — on any failure
-it raises, never fabricates rows (Windrose no-fakes rule). The in-memory adapter is
+it raises, never fabricates rows (Datacern no-fakes rule). The in-memory adapter is
 unit-tier only and never reachable from the shipped runtime wiring.
 """
 
@@ -59,7 +59,7 @@ class HttpDatasetReader:
         url = f"{self._base_url}/internal/v1/datasets/{dataset_id}/rows"
         headers = {
             "x-client-spiffe-id": self._spiffe,
-            "x-windrose-tenant-id": tenant_id,
+            "x-datacern-tenant-id": tenant_id,
         }
         try:
             client = self._http()

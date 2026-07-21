@@ -6,12 +6,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/metricsx"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/metricsx"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/case-service/internal/authz"
-	"github.com/windrose-ai/case-service/internal/search"
-	"github.com/windrose-ai/case-service/internal/store"
+	"github.com/datacern-ai/case-service/internal/authz"
+	"github.com/datacern-ai/case-service/internal/search"
+	"github.com/datacern-ai/case-service/internal/store"
 )
 
 // chiRoutePattern resolves the matched chi route template for a bounded metrics

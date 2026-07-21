@@ -19,27 +19,27 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/windrose-ai/go-common/otelx"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/otelx"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/identity-service/internal/adapters/awskms"
-	"github.com/windrose-ai/identity-service/internal/adapters/azurekeyvault"
-	"github.com/windrose-ai/identity-service/internal/adapters/denylist"
-	"github.com/windrose-ai/identity-service/internal/adapters/gcpkms"
+	"github.com/datacern-ai/identity-service/internal/adapters/awskms"
+	"github.com/datacern-ai/identity-service/internal/adapters/azurekeyvault"
+	"github.com/datacern-ai/identity-service/internal/adapters/denylist"
+	"github.com/datacern-ai/identity-service/internal/adapters/gcpkms"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/adapters/keycloak"
-	"github.com/windrose-ai/identity-service/internal/adapters/oidc"
-	"github.com/windrose-ai/identity-service/internal/adapters/localinfra"
-	"github.com/windrose-ai/identity-service/internal/adapters/vault"
-	"github.com/windrose-ai/identity-service/internal/api"
-	"github.com/windrose-ai/identity-service/internal/authz"
-	"github.com/windrose-ai/identity-service/internal/domain"
-	"github.com/windrose-ai/identity-service/internal/events"
-	"github.com/windrose-ai/identity-service/internal/keys"
-	"github.com/windrose-ai/identity-service/internal/rbacclient"
-	"github.com/windrose-ai/identity-service/internal/store/memory"
-	"github.com/windrose-ai/identity-service/internal/store/postgres"
+	"github.com/datacern-ai/identity-service/internal/adapters/keycloak"
+	"github.com/datacern-ai/identity-service/internal/adapters/oidc"
+	"github.com/datacern-ai/identity-service/internal/adapters/localinfra"
+	"github.com/datacern-ai/identity-service/internal/adapters/vault"
+	"github.com/datacern-ai/identity-service/internal/api"
+	"github.com/datacern-ai/identity-service/internal/authz"
+	"github.com/datacern-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/events"
+	"github.com/datacern-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/identity-service/internal/rbacclient"
+	"github.com/datacern-ai/identity-service/internal/store/memory"
+	"github.com/datacern-ai/identity-service/internal/store/postgres"
 )
 
 func main() {
@@ -47,7 +47,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Distributed tracing (no-op unless WINDROSE_OTEL_ENABLED / an OTLP endpoint
+	// Distributed tracing (no-op unless DATACERN_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "identity-service")
 	defer func() { _ = otelShutdown(context.Background()) }()
@@ -277,7 +277,7 @@ func main() {
 		}
 	}
 	if len(trusted) == 0 {
-		trusted["spiffe://windrose.ai/ns/platform/sa/agent-runtime"] = true
+		trusted["spiffe://datacern.ai/ns/platform/sa/agent-runtime"] = true
 	}
 
 	// Runtime authorizer: the REAL OPA-over-projection path (MASTER-FR-012),

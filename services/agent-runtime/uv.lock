@@ -34,7 +34,7 @@ dependencies = [
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "temporalio" },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "windrose-common" },
+    { name = "datacern-common" },
 ]
 
 [package.optional-dependencies]
@@ -69,7 +69,7 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30" },
     { name = "temporalio", specifier = ">=1.7" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
-    { name = "windrose-common", editable = "../../libs/py-common" },
+    { name = "datacern-common", editable = "../../libs/py-common" },
 ]
 provides-extras = ["slm-modal"]
 
@@ -2938,7 +2938,7 @@ wheels = [
 ]
 
 [[package]]
-name = "windrose-common"
+name = "datacern-common"
 version = "0.1.0"
 source = { editable = "../../libs/py-common" }
 dependencies = [

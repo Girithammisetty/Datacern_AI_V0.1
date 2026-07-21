@@ -10,11 +10,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/chart-service/internal/authz"
-	"github.com/windrose-ai/chart-service/internal/cache"
-	"github.com/windrose-ai/chart-service/internal/domain"
-	"github.com/windrose-ai/chart-service/internal/events"
-	"github.com/windrose-ai/chart-service/internal/resolve"
+	"github.com/datacern-ai/chart-service/internal/authz"
+	"github.com/datacern-ai/chart-service/internal/cache"
+	"github.com/datacern-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/chart-service/internal/events"
+	"github.com/datacern-ai/chart-service/internal/resolve"
 )
 
 func parseResolveRequest(r *http.Request) domain.ResolveRequest {

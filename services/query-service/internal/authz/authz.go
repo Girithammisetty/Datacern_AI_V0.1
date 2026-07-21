@@ -28,7 +28,7 @@ type Subject struct {
 // Authorizer answers allow/deny. The real runtime implementation is OPAClient
 // (opa_client.go), backed by the shared libs/go-common opaclient: it reads the
 // Redis permissions_flat projection and evaluates the OPA sidecar's
-// windrose.authz_input bundle. AllowAll/Static below are unit-test doubles only.
+// datacern.authz_input bundle. AllowAll/Static below are unit-test doubles only.
 type Authorizer interface {
 	Allow(ctx context.Context, in Input) bool
 }

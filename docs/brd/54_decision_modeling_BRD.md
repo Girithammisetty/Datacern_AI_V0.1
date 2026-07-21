@@ -1,7 +1,7 @@
 # BRD 54 — Decision Modeling (Governed Decision Tables)
 
 **Deliverable type:** Core capability (agent-runtime + rbac + ui-web)
-**Publisher:** Windrose · **Initial version:** 1.0.0 · **Status:** authored; increment 1 BUILT + live-verified
+**Publisher:** Datacern · **Initial version:** 1.0.0 · **Status:** authored; increment 1 BUILT + live-verified
 **Closes:** the one Gartner DI capability marked incomplete (Decision Modeling). See `docs/design/di-completeness-roadmap.md`.
 **Reuses:** BRD 53 guardrail envelope + BRD 14 proposal/four-eyes machinery (a decision table executes to the SAME governed proposal).
 
@@ -16,10 +16,10 @@ four-eyes proposal. Deterministic, explainable (the fired rule is named), no
 code, no LLM, no logic "buried in a spreadsheet or one analyst's head" (the
 category's exact framing).
 
-**Why.** Windrose's decision logic today lives in pack dispositions, agent
+**Why.** Datacern's decision logic today lives in pack dispositions, agent
 prompts, and ML models — powerful, but not the visual/config, editable decision
 model Gartner's Decision-Modeling capability requires. It is the single
-capability where a category evaluation marks Windrose incomplete, and it is the
+capability where a category evaluation marks Datacern incomplete, and it is the
 "rules" leg of the three DI modes (support / augment / **automate**) that the
 platform was thinnest on. A decision table is the DI-native version of a
 decision-management-system rule set, but governed by the same four-eyes +

@@ -1,4 +1,4 @@
-# Windrose service inventory — the SINGLE SOURCE OF TRUTH for CI (build/test/push)
+# Datacern service inventory — the SINGLE SOURCE OF TRUTH for CI (build/test/push)
 # and the Helm umbrella chart (one Deployment/Service/HPA per entry). Keep this in
 # sync when a service is added; CI and Helm both read it so nothing is hand-listed
 # twice.

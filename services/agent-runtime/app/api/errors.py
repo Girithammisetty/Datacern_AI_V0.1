@@ -6,7 +6,7 @@ import uuid
 from contextvars import ContextVar
 
 from starlette.middleware.base import BaseHTTPMiddleware
-from windrose_common.web import register_error_handlers
+from datacern_common.web import register_error_handlers
 
 from app.domain.errors import AppError
 

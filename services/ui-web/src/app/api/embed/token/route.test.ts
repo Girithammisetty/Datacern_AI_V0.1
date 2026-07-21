@@ -13,7 +13,7 @@ const validBody = {
 };
 
 beforeEach(() => {
-  process.env.WINDROSE_EMBED_SECRET = SECRET;
+  process.env.DATACERN_EMBED_SECRET = SECRET;
 });
 
 describe("embed token — secret gate", () => {
@@ -24,7 +24,7 @@ describe("embed token — secret gate", () => {
   });
 
   it("rejects everything when no secret is configured", () => {
-    delete process.env.WINDROSE_EMBED_SECRET;
+    delete process.env.DATACERN_EMBED_SECRET;
     expect(secretOk(SECRET)).toBe(false);
   });
 });

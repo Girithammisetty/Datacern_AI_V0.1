@@ -1,7 +1,7 @@
 [project]
 name = "experiment-service"
 version = "0.1.0"
-description = "Windrose experiment-service: MLflow mirror, run comparison, registered models + governed promotion"
+description = "Datacern experiment-service: MLflow mirror, run comparison, registered models + governed promotion"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -15,11 +15,11 @@ dependencies = [
     "httpx>=0.27",
     "psycopg[binary]>=3.1",
     "boto3>=1.34",
-    "windrose-common",
+    "datacern-common",
 ]
 
 [tool.uv.sources]
-windrose-common = { path = "../../libs/py-common", editable = true }
+datacern-common = { path = "../../libs/py-common", editable = true }
 
 [dependency-groups]
 dev = [

@@ -11,12 +11,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/query-service/internal/datasets"
-	"github.com/windrose-ai/query-service/internal/domain"
-	"github.com/windrose-ai/query-service/internal/engine"
-	"github.com/windrose-ai/query-service/internal/events"
-	"github.com/windrose-ai/query-service/internal/results"
-	"github.com/windrose-ai/query-service/internal/store"
+	"github.com/datacern-ai/query-service/internal/datasets"
+	"github.com/datacern-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/engine"
+	"github.com/datacern-ai/query-service/internal/events"
+	"github.com/datacern-ai/query-service/internal/results"
+	"github.com/datacern-ai/query-service/internal/store"
 )
 
 // Broker owns the execution lifecycle (BRD §4.2 state machine).

@@ -281,7 +281,7 @@ function NewWebhookForm({
     >
       <label className="flex min-w-72 flex-1 flex-col gap-1 text-xs">
         <span className="text-muted-foreground">Endpoint URL (https)</span>
-        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://hooks.example.com/windrose" aria-label="Webhook URL" className="h-8 text-xs" />
+        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://hooks.example.com/datacern" aria-label="Webhook URL" className="h-8 text-xs" />
       </label>
       <label className="flex min-w-56 flex-col gap-1 text-xs">
         <span className="text-muted-foreground">Event types (comma-separated)</span>

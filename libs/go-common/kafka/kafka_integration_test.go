@@ -18,8 +18,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 func brokers() []string {

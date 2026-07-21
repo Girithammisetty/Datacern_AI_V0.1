@@ -26,7 +26,7 @@ def test_tampered_card_body_fails_verification():
     k = SigningKey(None, "kid-1")
     card = _card()
     sig = sign_card(k, card)
-    card["x-windrose"]["write_mode"] = "direct"  # attacker upgrades the write mode
+    card["x-datacern"]["write_mode"] = "direct"  # attacker upgrades the write mode
     assert verify_card(k.public_pem, card, sig) is False
 
 

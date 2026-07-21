@@ -12,17 +12,17 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/audit-service/migrations"
+	"github.com/datacern-ai/audit-service/migrations"
 )
 
 // Bootstrap provisions the audit database and the least-privilege runtime role
 // using a superuser admin connection, then is followed by Migrate. This is what
 // lets the shipped default DSN connect as the NON-owner audit_rw role: the owner
-// (windrose) creates the DB and role here; migrations (run as the owner) create
+// (datacern) creates the DB and role here; migrations (run as the owner) create
 // the tables + RLS + grants. All steps are idempotent.
 //
-// adminDSN connects as the superuser (e.g. windrose) to an existing database
-// (e.g. windrose). dbName is the audit database to create. runtimeRole/runtimePass
+// adminDSN connects as the superuser (e.g. datacern) to an existing database
+// (e.g. datacern). dbName is the audit database to create. runtimeRole/runtimePass
 // are the non-owner login the service uses at runtime.
 func Bootstrap(ctx context.Context, adminDSN, dbName, runtimeRole, runtimePass string) error {
 	conn, err := pgx.Connect(ctx, adminDSN)

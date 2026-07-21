@@ -2,7 +2,7 @@
 
 Credentials live only behind this interface: Postgres stores `vault_ref` only.
 InMemorySecretsStore backs the unit tier. Four real runtime stores wrap the
-shared ``windrose_common`` adapters, selected via ``SECRETS_BACKEND`` (BYO
+shared ``datacern_common`` adapters, selected via ``SECRETS_BACKEND`` (BYO
 Infra Hardening Phase 2, ``docs/design/byo-infra-hardening.md``):
 VaultSecretsStore (default), AWSSecretsManagerStore, AzureKeyVaultStore,
 GCPSecretManagerStore. All four implement the identical SecretsStore Protocol
@@ -76,16 +76,16 @@ class InMemorySecretsStore:
 
 
 class VaultSecretsStore:
-    """Real Vault KV v2 secrets store via the shared ``windrose_common`` hvac
+    """Real Vault KV v2 secrets store via the shared ``datacern_common`` hvac
     adapter. Credentials live at
     ``secret/data/tenants/<tenant_id>/connections/<connection_id>``;
     ``schedule_destroy`` enqueues a 7-day-grace destroy swept by
     ``run_due_destroys`` (ING-FR-006). Runtime secrets store."""
 
     def __init__(
-        self, addr: str = "http://localhost:8200", token: str = "windrose_dev_root"
+        self, addr: str = "http://localhost:8200", token: str = "datacern_dev_root"
     ) -> None:
-        from windrose_common.secrets import VaultSecretsStore as _Vault
+        from datacern_common.secrets import VaultSecretsStore as _Vault
 
         self.addr = addr
         self.token = token
@@ -108,7 +108,7 @@ class VaultSecretsStore:
 
 
 class AWSSecretsManagerStore:
-    """Real AWS Secrets Manager secrets store via the shared ``windrose_common``
+    """Real AWS Secrets Manager secrets store via the shared ``datacern_common``
     boto3 adapter (BYO Infra Hardening Phase 2). Selected by
     ``SECRETS_BACKEND=aws``. Live-verified against a real local LocalStack
     container (see the contract test suite)."""
@@ -121,7 +121,7 @@ class AWSSecretsManagerStore:
         access_key: str | None = None,
         secret_key: str | None = None,
     ) -> None:
-        from windrose_common.secrets import AWSSecretsManagerStore as _AWS
+        from datacern_common.secrets import AWSSecretsManagerStore as _AWS
 
         self._store = _AWS(
             region_name=region_name,
@@ -144,13 +144,13 @@ class AWSSecretsManagerStore:
 
 
 class AzureKeyVaultStore:
-    """Real Azure Key Vault secrets store via the shared ``windrose_common``
+    """Real Azure Key Vault secrets store via the shared ``datacern_common``
     adapter (BYO Infra Hardening Phase 2). Selected by
     ``SECRETS_BACKEND=azure``. No local Key Vault emulator exists; unit/mock-
     tested only (see the contract test suite's honesty note)."""
 
     def __init__(self, *, vault_url: str | None = None) -> None:
-        from windrose_common.secrets import AzureKeyVaultStore as _Azure
+        from datacern_common.secrets import AzureKeyVaultStore as _Azure
 
         self._store = _Azure(vault_url=vault_url)
 
@@ -168,13 +168,13 @@ class AzureKeyVaultStore:
 
 
 class GCPSecretManagerStore:
-    """Real GCP Secret Manager secrets store via the shared ``windrose_common``
+    """Real GCP Secret Manager secrets store via the shared ``datacern_common``
     adapter (BYO Infra Hardening Phase 2). Selected by
     ``SECRETS_BACKEND=gcp``. No local Secret Manager emulator exists; unit/mock-
     tested only (see the contract test suite's honesty note)."""
 
     def __init__(self, *, project_id: str | None = None) -> None:
-        from windrose_common.secrets import GCPSecretManagerStore as _GCP
+        from datacern_common.secrets import GCPSecretManagerStore as _GCP
 
         self._store = _GCP(project_id=project_id)
 

@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/windrose-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/domain"
 )
 
 type roleRequest struct {

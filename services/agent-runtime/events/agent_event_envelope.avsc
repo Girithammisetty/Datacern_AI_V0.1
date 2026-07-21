@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "AgentEventEnvelope",
-  "namespace": "windrose.agent.events.v1",
+  "namespace": "datacern.agent.events.v1",
   "doc": "Master event envelope (MASTER-FR-031) for agent-runtime topics (ai.agent_run.v1, ai.proposal.v1, ai.code_executed.v1, agent.events.v1). Partition key = tenant_id.",
   "fields": [
     {"name": "event_id", "type": "string", "doc": "uuidv7"},

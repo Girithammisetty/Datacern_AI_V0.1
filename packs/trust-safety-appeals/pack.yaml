@@ -2,13 +2,13 @@
 # trust & safety appeals adjudication (content and account enforcement
 # appeals) for social/UGC platforms, marketplaces, gaming platforms, and
 # dating apps under DSA/OSA process obligations. Installable TODAY against
-# Windrose Core's public APIs via packctl; the manifest envelope follows
+# Datacern Core's public APIs via packctl; the manifest envelope follows
 # BRD 23 (PKG-FR-001/003). Components the current Core cannot materialize
 # are declared under `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: trust-safety-appeals
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted trust-and-safety appeals adjudication for online platforms:
   appeal intake triage with complaint-handling deadline awareness (DSA

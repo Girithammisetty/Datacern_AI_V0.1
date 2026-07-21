@@ -1,6 +1,6 @@
-# Windrose — Decision-Intelligence Completeness Roadmap
+# Datacern — Decision-Intelligence Completeness Roadmap
 
-The gap analysis and sequencing to move Windrose from "a decision-intelligence
+The gap analysis and sequencing to move Datacern from "a decision-intelligence
 platform by architecture" to "one that passes the category checklist in a
 bake-off." Anchored on Gartner's SIX mandatory DI capabilities and THREE modes.
 Honest status per gap: BUILT / DESIGNED / INFRA-GATED.
@@ -24,7 +24,7 @@ verticals, validated by the "overautomation risk" the category itself flags).
 ## The three genuine category gaps (new BRDs)
 
 ### BRD 54 — Decision Modeling (governed decision tables / rule sets)
-The one capability a Gartner evaluation marks INCOMPLETE today: Windrose's
+The one capability a Gartner evaluation marks INCOMPLETE today: Datacern's
 decision logic lives in pack dispositions + agent prompts + ML models, not in a
 visual/config, business-user-editable **decision model**. BRD 54 adds explicit,
 versioned, testable decision logic (condition→outcome rules over real dataset

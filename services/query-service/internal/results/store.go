@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/query-service/internal/engine"
+	"github.com/datacern-ai/query-service/internal/engine"
 )
 
 // ErrGone marks results that were never written or already GC'd

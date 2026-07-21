@@ -1,6 +1,6 @@
 # BRD 40 — `background-screening` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave 2 (post-BRD-32/33). Reference pattern: BRD 32 (card-disputes).
 **Status:** v1.0.0 authored, install pending; pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Employment background-screening adjudication and adverse-action AI under the FCRA: screening-hit triage with accuracy (607(b)) and obsolescence (605(a) 7-year rule) awareness, identity resolution for common-name/mixed-file hits, the pre-adverse/adverse-action two-step with clock tracking, and EEOC individualized-assessment routing (Green factors). Sells to consumer reporting agencies (CRAs), large employers' talent-compliance teams, and gig platforms running continuous monitoring.
 
-**Why this vertical.** Screening hits carry hard consumer-protection duties (maximum possible accuracy, 7-year obsolescence, the two-step adverse-action sequence with a customary ~5-business-day response window, 30-day dispute reinvestigations) and mixed-file/common-name errors are a leading FCRA class-action and CFPB enforcement source; gig continuous monitoring multiplies volumes. Every hit is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Windrose Core, and the alert-adjudication pattern is already proven by BRD 30/32.
+**Why this vertical.** Screening hits carry hard consumer-protection duties (maximum possible accuracy, 7-year obsolescence, the two-step adverse-action sequence with a customary ~5-business-day response window, 30-day dispute reinvestigations) and mixed-file/common-name errors are a leading FCRA class-action and CFPB enforcement source; gig continuous monitoring multiplies volumes. Every hit is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Datacern Core, and the alert-adjudication pattern is already proven by BRD 30/32.
 
 **Business value.** Accuracy-save lift (obsolete and mismatched records suppressed before they reach a report), adverse-action clock breach elimination, adjudicator throughput (triage pre-routing), consistent EEOC-defensible individualized assessments, and exam-ready decision files (every adverse finding carries its verification evidence + provenance).
 
@@ -98,7 +98,7 @@ Authored materialization: 3 datasets (reviews 26 / orders 30 / applicants 12 —
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): court-record aggregators, DMV rails, verification bureaus, customer ATS/HRIS credentials.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): court-record aggregators, DMV rails, verification bureaus, customer ATS/HRIS credentials.
 
 ## 7. NFRs (deltas)
 

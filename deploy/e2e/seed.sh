@@ -6,7 +6,7 @@
 seed_identity_prereqs() {
   say "seed identity: harness signing key + cells"
   local pub; pub="$(cat "${E2E_DIR}/keys/idp_public.pem")"
-  PGPASSWORD=windrose_dev psql -h localhost -U windrose -d identity -v ON_ERROR_STOP=0 -v pub="$pub" >/dev/null 2>&1 <<'SQL'
+  PGPASSWORD=datacern_dev psql -h localhost -U datacern -d identity -v ON_ERROR_STOP=0 -v pub="$pub" >/dev/null 2>&1 <<'SQL'
 INSERT INTO signing_keys (kid, alg, vault_ref, public_key_pem, not_before, created_at, updated_at)
 VALUES ('e2e-harness-key-1','RS256','', :'pub', '2020-01-01T00:00:00Z', now(), now())
 ON CONFLICT (kid) DO UPDATE SET public_key_pem = EXCLUDED.public_key_pem, retired_at = NULL;

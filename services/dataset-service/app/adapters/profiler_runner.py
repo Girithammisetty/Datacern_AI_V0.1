@@ -104,7 +104,7 @@ class InProcessProfilerRunner:
 
 class K8sProfilerRunner:
     """TODO(prod): launch a K8s Job on the `data` node pool with image
-    `windrose/profiler`, args --tenant-id --dataset-urn --version-no
+    `datacern/profiler`, args --tenant-id --dataset-urn --version-no
     --snapshot-id --sample-strategy --output-prefix, resource caps 4CPU/8GiB
     (retry at 16GiB on OOM), supervised via Temporal (DST-FR-020, §8)."""
 

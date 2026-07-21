@@ -5,12 +5,12 @@
 Most enterprise customers already own security and observability infrastructure —
 their own IdP (Okta/Auth0/Entra), their own secrets backend (AWS Secrets Manager/
 Azure Key Vault/GCP Secret Manager), their own observability stack (Datadog/
-Splunk/Grafana Cloud/New Relic), their own SIEM. Today Windrose only really works
+Splunk/Grafana Cloud/New Relic), their own SIEM. Today Datacern only really works
 against its own local stack (Keycloak, Vault, a dev OTel collector, ClickHouse-
-backed audit). A customer evaluating Windrose for their own infrastructure needs
+backed audit). A customer evaluating Datacern for their own infrastructure needs
 each of these to be a swap-in, not a rip-and-replace of their existing tooling.
 
-## Current state (full audit — see project memory `project_windrose_byo_infra_readiness`)
+## Current state (full audit — see project memory `project_datacern_byo_infra_readiness`)
 
 The pattern is consistent across every area: **the seam is usually cut (a real
 interface or config point exists), but only one implementation is written.** The
@@ -45,14 +45,14 @@ reachable from a production Helm deploy, so a customer can point every service
 at their own OTLP-compatible backend (Datadog, Honeycomb, Grafana Cloud, New
 Relic, Splunk O11y) by setting Helm values — nothing else.
 
-**Why this is cheap**: `go-common/otelx` and `py-common/windrose_common/otelx.py`
-already read `OTEL_EXPORTER_OTLP_ENDPOINT` / `WINDROSE_OTEL_ENABLED` from env
+**Why this is cheap**: `go-common/otelx` and `py-common/datacern_common/otelx.py`
+already read `OTEL_EXPORTER_OTLP_ENDPOINT` / `DATACERN_OTEL_ENABLED` from env
 with a real conditional no-op — this is done. The gap is entirely in
-`deploy/helm/windrose/values.yaml` and docs.
+`deploy/helm/datacern/values.yaml` and docs.
 
 **Increments**:
-1. Add `OTEL_EXPORTER_OTLP_ENDPOINT` and `WINDROSE_OTEL_ENABLED` to
-   `deploy/helm/windrose/values.yaml`'s `config:` block (flows to all 24
+1. Add `OTEL_EXPORTER_OTLP_ENDPOINT` and `DATACERN_OTEL_ENABLED` to
+   `deploy/helm/datacern/values.yaml`'s `config:` block (flows to all 24
    services automatically via the existing `envFrom: configMapRef`).
 2. Add per-cloud override examples in `values-{aws,gcp,azure}.yaml` (commented,
    pointing at nothing by default — opt-in).
@@ -74,7 +74,7 @@ with a real conditional no-op — this is done. The gap is entirely in
 
 **Explicitly out of scope**: a production k8s OTel Collector Deployment (the
 recommendation is customers point services directly at their own OTLP
-endpoint, or run their own collector — Windrose doesn't need to ship one).
+endpoint, or run their own collector — Datacern doesn't need to ship one).
 
 **Acceptance criteria**: `helm template` renders the new values cleanly;
 live-verify by pointing a local service at a real (or local Jaeger/Tempo)
@@ -90,7 +90,7 @@ when unset.
 
 **Goal**: let a customer store connector credentials and JWT signing material
 in their own AWS Secrets Manager / Azure Key Vault / GCP Secret Manager
-instead of Vault, without Windrose code depending on which one.
+instead of Vault, without Datacern code depending on which one.
 
 **Why this is tractable**: both seams already exist as narrow interfaces — no
 new abstraction design needed, just new implementations.
@@ -139,7 +139,7 @@ tests across all four implementations.
 
 ### Status — increments 1-4 + contract tests DONE, Terraform stretch DONE, embed-secret fold DEFERRED (2026-07-16)
 
-**Built** (`libs/py-common/windrose_common/secrets.py`, `services/ingestion-service/app/domain/secrets.py`,
+**Built** (`libs/py-common/datacern_common/secrets.py`, `services/ingestion-service/app/domain/secrets.py`,
 `services/identity-service/internal/adapters/{awskms,azurekeyvault,gcpkms}`):
 
 - `AWSSecretsManagerStore` (boto3) + `AWSKMSSigner` (AWS SDK v2 `kms`,
@@ -250,12 +250,12 @@ as new, separate work, not bundled into this phase.
 a `secrets_backend` variable (mirrors `SECRETS_BACKEND`) and
 `enable_app_secrets_backend` (default `false`) gate optional resources,
 namespaced separately from each cloud's existing single infra-creds blob
-(`secrets.tf`'s `aws_secretsmanager_secret.windrose`,
-`secretmanager.tf`'s `google_secret_manager_secret.windrose`,
+(`secrets.tf`'s `aws_secretsmanager_secret.datacern`,
+`secretmanager.tf`'s `google_secret_manager_secret.datacern`,
 `keyvault.tf`'s `azurerm_key_vault_secret.app`):
 - **AWS**: IAM policy on the existing workload IRSA role, scoped to a
   `${name_prefix}/app-secrets/*` ARN prefix (Secrets Manager) and a
-  `windrose:role=identity-signer` resource-tag condition (KMS
+  `datacern:role=identity-signer` resource-tag condition (KMS
   CreateKey/Sign/GetPublicKey/ScheduleKeyDeletion — KMS key ARNs don't exist
   before creation, so tag-gating is the standard scoping mechanism).
 - **GCP**: a new `google_kms_key_ring` (Cloud KMS key rings can't be created
@@ -282,7 +282,7 @@ that cloud, so a default `terraform apply` is unchanged.
 ## Phase 3 — SIEM / audit export (new capability, additive)
 
 **Goal**: let a customer's SIEM (Splunk, Sentinel, Chronicle, Datadog
-Security, or a generic webhook receiver) consume Windrose's audit trail
+Security, or a generic webhook receiver) consume Datacern's audit trail
 without polling the search API themselves.
 
 **Why a generic sink first, not per-vendor connectors**: audit-service
@@ -379,7 +379,7 @@ Splunk-HEC-webhook examples) and the versioning/deprecation policy are in
 
 ## Phase 4 — Identity provider / OIDC (new interface, largest lift)
 
-**Goal**: let a customer authenticate Windrose users against their own Okta/
+**Goal**: let a customer authenticate Datacern users against their own Okta/
 Auth0/Entra tenant (or any standards-compliant OIDC IdP), with a real
 interactive login flow — not just JWT verification pointed at a different
 JWKS URL (which already works today, per the audit).
@@ -393,10 +393,10 @@ designs and builds the seam ai-gateway already has for LLM providers
 
 **Increments** (roughly sequential — each unblocks the next):
 1. **Generic `IdentityProvider` interface** in identity-service, scoped to
-   what Windrose actually needs (not full user-lifecycle CRUD parity across
+   what Datacern actually needs (not full user-lifecycle CRUD parity across
    vendors): `VerifyDiscoveryDocument`, `ExchangeAuthCode` (or delegate PKCE
    entirely to the IdP + just verify the resulting ID token), and — for
-   deployments that still want Windrose-managed invites — an optional
+   deployments that still want Datacern-managed invites — an optional
    `InviteUser`/`DisableUser` subset, explicitly marked best-effort per
    vendor rather than a hard contract.
 2. **Real OIDC/PKCE login flow in ui-web** — the actual missing piece today
@@ -404,12 +404,12 @@ designs and builds the seam ai-gateway already has for LLM providers
    redirect to IdP authorize endpoint → `/api/auth/callback` exchanges code
    → verifies ID token against the IdP's own JWKS (fetched via standard
    `.well-known/openid-configuration` discovery, which nothing in the
-   codebase does today) → mints Windrose's own internal session JWT.
+   codebase does today) → mints Datacern's own internal session JWT.
 3. **Claims-normalization layer** — the load-bearing piece for authorization
    to keep working: map IdP-specific claims (Okta groups, Auth0 custom
-   claims/Actions output, Entra App Roles/group claims) into Windrose's
+   claims/Actions output, Entra App Roles/group claims) into Datacern's
    required `tenant_id`/`typ`/`scopes` shape. Ship this as a per-tenant
-   configurable mapping (e.g. "IdP group `claims-adjusters` → Windrose scope
+   configurable mapping (e.g. "IdP group `claims-adjusters` → Datacern scope
    set X"), not hardcoded per vendor — this is what makes it a platform
    capability instead of three one-off integrations.
 4. **Per-tenant IdP config** — a new table (identity-service), replacing/
@@ -417,7 +417,7 @@ designs and builds the seam ai-gateway already has for LLM providers
    client ID, discovery URL (or explicit JWKS/authorize/token endpoints for
    IdPs with nonstandard discovery), the claims-mapping config from #3. Wire
    into the tenant self-service admin UI already built (per
-   `project_windrose_rbac_model`) as a new settings screen.
+   `project_datacern_rbac_model`) as a new settings screen.
 5. **Keycloak becomes ONE configuration of Phase 4's generic OIDC path**, not
    a separately-coded special case — i.e., after this phase, "use Keycloak"
    and "use Okta" are the same code path with different per-tenant config,
@@ -429,7 +429,7 @@ designs and builds the seam ai-gateway already has for LLM providers
 
 **Explicitly out of scope for v1**: full bidirectional user-provisioning sync
 (SCIM) — start with "customer's IdP is the source of truth for who can log
-in and what claims they carry," not "Windrose pushes user lifecycle events
+in and what claims they carry," not "Datacern pushes user lifecycle events
 back to the IdP." SCIM can be a follow-on phase if a customer needs it.
 
 **Acceptance criteria**: live-verify a real interactive login against at
@@ -472,7 +472,7 @@ IdP config** (#4's core): OIDC login is no longer a single deployment-wide
   correct tenant — provable proof the per-tenant config drove it; delete config →
   login 401. UI card enable/persist verified in the browser.
 - **Still open (documented follow-ups, not built)**: claims-normalization (#3,
-  IdP group→Windrose scope mapping — today the user is resolved locally by email
+  IdP group→Datacern scope mapping — today the user is resolved locally by email
   and scopes come from the RBAC projection, so it works without it), login-page
   tenant routing UX (email-domain → IdP redirect for a pure SP-initiated flow),
   JIT provisioning, and SCIM. Keycloak-as-just-another-OIDC-config (#5) +
@@ -501,8 +501,8 @@ considered done.
 
 All 5 increments shipped:
 
-1. **Helm wiring** — `deploy/helm/windrose/values.yaml` `config:` block now
-   carries `WINDROSE_OTEL_ENABLED: "false"` (default, clean no-op) and a
+1. **Helm wiring** — `deploy/helm/datacern/values.yaml` `config:` block now
+   carries `DATACERN_OTEL_ENABLED: "false"` (default, clean no-op) and a
    commented-out `OTEL_EXPORTER_OTLP_ENDPOINT` example. Flows to every service
    via the existing `envFrom: configMapRef` in `templates/deployment.yaml` —
    no per-service change needed. Verified with `helm template` showing the
@@ -531,7 +531,7 @@ All 5 increments shipped:
    genuine new-code lift (new dependency, a client entrypoint, a batching/
    retry story) — out of scope for a "packaging only" phase. Tracked as a
    follow-on if a customer asks for browser-side traces specifically.
-6. **Python JSON logging** — new `libs/py-common/windrose_common/logging.py`
+6. **Python JSON logging** — new `libs/py-common/datacern_common/logging.py`
    (`JsonFormatter` + `configure_json_logging(service_name)`, stdlib-only, no
    new dependency), mirroring Go's `slog.NewJSONHandler(os.Stdout, nil)` /
    `MASTER-FR-050` convention. Wired into `eval-service`, `ai-gateway`, and
@@ -549,7 +549,7 @@ All 5 increments shipped:
 
 **Course correction versus this doc's original increment 3 text**: the design
 doc assumed "OTLP/gRPC for Go, OTLP/HTTP acceptable for Python." Checking the
-actual code (`libs/py-common/windrose_common/otelx.py`) shows Python's
+actual code (`libs/py-common/datacern_common/otelx.py`) shows Python's
 exporter is `opentelemetry.exporter.otlp.proto.grpc.trace_exporter.OTLPSpanExporter`
 — **gRPC**, not HTTP, same as Go. `pyproject.toml` only depends on
 `opentelemetry-exporter-otlp-proto-grpc`; there is no HTTP exporter installed

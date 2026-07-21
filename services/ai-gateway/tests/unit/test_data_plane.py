@@ -22,13 +22,13 @@ async def test_ac1_chat_success_headers_and_metering(client, container):
                           headers=dp_headers(secret))
     assert r.status_code == 200, r.text
     assert r.headers["x-trace-id"]
-    assert r.headers["x-windrose-rung"] == "0"
-    assert r.headers["x-windrose-deployment"]  # AIG-FR-009b
+    assert r.headers["x-datacern-rung"] == "0"
+    assert r.headers["x-datacern-deployment"]  # AIG-FR-009b
     body = r.json()
     assert body["object"] == "chat.completion"
     assert body["usage"]["total_tokens"] > 0
 
-    request_id = r.headers["x-windrose-request-id"]
+    request_id = r.headers["x-datacern-request-id"]
     usage_events = container.bus.on_topic("ai.token_usage.v1")
     assert len(usage_events) == 1
     payload = usage_events[0]["payload"]
@@ -45,16 +45,16 @@ async def test_span_attribute_contract(client, container):
     await client.post("/v1/chat/completions", json=CHAT_BODY,
                       headers=dp_headers(secret))
     span = container.tracer.spans_named("chat")[-1]
-    for attr in ("windrose.tenant_id", "windrose.request_class", "windrose.rung",
-                 "windrose.deployment", "windrose.cache", "windrose.budget_state",
-                 "windrose.price_version", "gen_ai.usage.input_tokens",
+    for attr in ("datacern.tenant_id", "datacern.request_class", "datacern.rung",
+                 "datacern.deployment", "datacern.cache", "datacern.budget_state",
+                 "datacern.price_version", "gen_ai.usage.input_tokens",
                  "gen_ai.usage.output_tokens", "gen_ai.request.model"):
         assert attr in span.attributes, attr
 
 
 async def test_missing_key_is_401_key_invalid(client, container):
     r = await client.post("/v1/chat/completions", json=CHAT_BODY,
-                          headers={"X-Windrose-JWT": make_token()})
+                          headers={"X-Datacern-JWT": make_token()})
     assert r.status_code == 401
     assert r.json()["error"]["code"] == "KEY_INVALID"
 
@@ -124,19 +124,19 @@ async def test_agent_attribution_mismatch_rejected(client, container):
     r = await client.post(
         "/v1/chat/completions", json=CHAT_BODY,
         headers=dp_headers(secret, token=token,
-                           **{"x-windrose-agent-id": "other-agent"}),
+                           **{"x-datacern-agent-id": "other-agent"}),
     )
     assert r.status_code == 422
     assert r.json()["error"]["code"] == "VALIDATION_FAILED"
 
 
 async def test_tenant_header_is_ignored_for_identity(client, container):
-    """AIG-FR-002: x-windrose-tenant-id must be ignored; JWT wins."""
+    """AIG-FR-002: x-datacern-tenant-id must be ignored; JWT wins."""
     await seed_default_deployments(container)
     _, secret = await mint_key(container)
     r = await client.post(
         "/v1/chat/completions", json=CHAT_BODY,
-        headers=dp_headers(secret, **{"x-windrose-tenant-id": TENANT_B}),
+        headers=dp_headers(secret, **{"x-datacern-tenant-id": TENANT_B}),
     )
     assert r.status_code == 200
     event = container.bus.on_topic("ai.token_usage.v1")[-1]
@@ -147,7 +147,7 @@ async def test_embeddings_endpoint(client, container):
     await seed_default_deployments(container)
     _, secret = await mint_key(container)
     r = await client.post("/v1/embeddings",
-                          json={"model": "windrose-auto", "input": ["a", "b"]},
+                          json={"model": "datacern-auto", "input": ["a", "b"]},
                           headers=dp_headers(secret))
     assert r.status_code == 200, r.text
     body = r.json()
@@ -171,7 +171,7 @@ async def test_legacy_completions(client, container):
     await seed_default_deployments(container)
     _, secret = await mint_key(container)
     r = await client.post("/v1/completions",
-                          json={"model": "windrose-auto", "prompt": "hello"},
+                          json={"model": "datacern-auto", "prompt": "hello"},
                           headers=dp_headers(secret))
     assert r.status_code == 200, r.text
     body = r.json()

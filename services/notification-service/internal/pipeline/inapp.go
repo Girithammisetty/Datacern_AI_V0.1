@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/domain"
-	"github.com/windrose-ai/notification-service/internal/events"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/events"
 )
 
 // deliverInApp persists an in-app notification + its delivery row and pushes a

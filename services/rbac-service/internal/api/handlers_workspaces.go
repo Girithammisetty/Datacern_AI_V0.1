@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/rbac-service/internal/store"
+	"github.com/datacern-ai/rbac-service/internal/store"
 )
 
 func parseIDParam(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {

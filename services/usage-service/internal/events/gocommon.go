@@ -4,8 +4,8 @@ import (
 	"context"
 	"os"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	gckafka "github.com/windrose-ai/go-common/kafka"
+	gcevent "github.com/datacern-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
 )
 
 // KafkaPublisher is the real outbound adapter backed by the shared

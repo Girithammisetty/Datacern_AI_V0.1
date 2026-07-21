@@ -46,12 +46,12 @@ class MlflowGateway:
                 else:
                     exp_tags = {}
                     if tags.get("tenant_id"):
-                        exp_tags["windrose_tenant"] = str(tags["tenant_id"])
+                        exp_tags["datacern_tenant"] = str(tags["tenant_id"])
                     if tags.get("workspace_id"):
-                        exp_tags["windrose_workspace"] = str(tags["workspace_id"])
+                        exp_tags["datacern_workspace"] = str(tags["workspace_id"])
                     exp_id = client.create_experiment(name, tags=exp_tags or None)
             run = client.create_run(
-                exp_id, tags={f"windrose.{k}": str(v) for k, v in tags.items()})
+                exp_id, tags={f"datacern.{k}": str(v) for k, v in tags.items()})
             return run.info.run_id
         except DependencyUnavailable:
             raise

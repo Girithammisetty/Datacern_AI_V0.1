@@ -11,10 +11,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/adapters/keycloak"
-	"github.com/windrose-ai/identity-service/internal/adapters/terraform"
-	"github.com/windrose-ai/identity-service/internal/domain"
-	pgstore "github.com/windrose-ai/identity-service/internal/store/postgres"
+	"github.com/datacern-ai/identity-service/internal/adapters/keycloak"
+	"github.com/datacern-ai/identity-service/internal/adapters/terraform"
+	"github.com/datacern-ai/identity-service/internal/domain"
+	pgstore "github.com/datacern-ai/identity-service/internal/store/postgres"
 )
 
 var nameSeq int

@@ -28,9 +28,9 @@ TTL_STRATEGY = {"secondsAfterSuccess": 0, "secondsAfterFailure": 600}
 POD_GC = {"strategy": "OnPodSuccess"}
 
 ENVFROM = [
-    {"configMapRef": {"name": "windrose-global-variables"}},
+    {"configMapRef": {"name": "datacern-global-variables"}},
     {"configMapRef": {"name": "tenant-specific-variables"}},
-    {"secretRef": {"name": "windrose-global-secrets"}},
+    {"secretRef": {"name": "datacern-global-secrets"}},
 ]
 
 
@@ -102,10 +102,10 @@ def compile_workflow_template(
             "name": f"tmpl-{alias}",
             "retryStrategy": {**RETRY_STRATEGY, "limit": min(retry_limit, 5)},
             "activeDeadlineSeconds": res["timeout_minutes"] * 60,
-            "metadata": {"labels": {"windrose.io/managed": "true",
-                                    "windrose.io/alias": alias}},
+            "metadata": {"labels": {"datacern.io/managed": "true",
+                                    "datacern.io/alias": alias}},
             "container": {
-                "image": (comp.image_digest if comp else "windrose/base-component"),
+                "image": (comp.image_digest if comp else "datacern/base-component"),
                 "args": args,
                 "env": [{"name": "COMPONENT_ALIAS", "value": alias}],
                 "envFrom": ENVFROM,
@@ -117,10 +117,10 @@ def compile_workflow_template(
     if pipeline_type != PipelineType.profiling:
         templates.append({
             "name": "tmpl-data-profiler",
-            "container": {"image": "windrose/data-profiler", "envFrom": ENVFROM,
+            "container": {"image": "datacern/data-profiler", "envFrom": ENVFROM,
                           "resources": _qos({"cpus": 1, "ram_gb": 2})},
-            "metadata": {"labels": {"windrose.io/managed": "true",
-                                    "windrose.io/injected": "data-profiler"}},
+            "metadata": {"labels": {"datacern.io/managed": "true",
+                                    "datacern.io/injected": "data-profiler"}},
         })
 
     # DAG steps referencing the per-node templates (dependencies from edges).
@@ -140,9 +140,9 @@ def compile_workflow_template(
         "metadata": {
             "name": argo_template_name,
             "namespace": f"{tenant_id}-processing",
-            "labels": {"windrose.io/managed": "true",
-                       "windrose.io/template-id": template_id,
-                       "windrose.io/version-id": version_id},
+            "labels": {"datacern.io/managed": "true",
+                       "datacern.io/template-id": template_id,
+                       "datacern.io/version-id": version_id},
         },
         "spec": {
             "entrypoint": "main",

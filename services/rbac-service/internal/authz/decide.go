@@ -8,8 +8,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/windrose-ai/rbac-service/internal/domain"
-	"github.com/windrose-ai/rbac-service/internal/projection"
+	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/projection"
 )
 
 // Subject mirrors the OPA input subject (RBC-FR-044).

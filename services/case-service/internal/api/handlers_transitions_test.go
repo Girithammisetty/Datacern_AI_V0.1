@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/case-service/internal/domain"
-	"github.com/windrose-ai/case-service/internal/events"
+	"github.com/datacern-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/events"
 )
 
 // TestResolveMutationResolvedPayload pins the case.resolved payload contract

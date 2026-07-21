@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // ProjectionLoader reads the permissions_flat projection slice for one decision

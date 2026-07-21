@@ -11,10 +11,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/query-service/internal/datasets"
-	"github.com/windrose-ai/query-service/internal/domain"
-	"github.com/windrose-ai/query-service/internal/engine"
-	"github.com/windrose-ai/query-service/internal/sqlsafe"
+	"github.com/datacern-ai/query-service/internal/datasets"
+	"github.com/datacern-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/engine"
+	"github.com/datacern-ai/query-service/internal/sqlsafe"
 )
 
 // Warning codes surfaced on plans/executions.

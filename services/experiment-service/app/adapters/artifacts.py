@@ -60,5 +60,5 @@ class LocalArtifactSigner:
         expires = int(time.time()) + ttl_seconds
         sig = hmac.new(self._secret, f"{artifact_uri}/{path}:{expires}".encode(),
                        sha256).hexdigest()[:32]
-        return (f"https://artifacts.windrose.local/{artifact_uri}/{path}"
+        return (f"https://artifacts.datacern.local/{artifact_uri}/{path}"
                 f"?expires={expires}&sig={sig}")

@@ -36,6 +36,6 @@ async def metrics():
     # Real Prometheus RED exposition (MASTER-FR-050) via the shared dependency-
     # free registry fed by RedMiddleware.
     from fastapi.responses import PlainTextResponse
-    from windrose_common.metricsx import REGISTRY
+    from datacern_common.metricsx import REGISTRY
 
     return PlainTextResponse(REGISTRY.render(), media_type="text/plain; version=0.0.4")

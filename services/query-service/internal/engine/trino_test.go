@@ -77,10 +77,10 @@ func TestTrinoDSN(t *testing.T) {
 	})
 
 	t.Run("sets user/catalog/source query params", func(t *testing.T) {
-		tr := &Trino{Endpoint: "http://localhost:8080", User: "windrose", Catalog: "iceberg", Source: "query-service"}
+		tr := &Trino{Endpoint: "http://localhost:8080", User: "datacern", Catalog: "iceberg", Source: "query-service"}
 		dsn, err := tr.dsn()
 		require.NoError(t, err)
-		assert.Contains(t, dsn, "windrose@localhost:8080")
+		assert.Contains(t, dsn, "datacern@localhost:8080")
 		assert.Contains(t, dsn, "catalog=iceberg")
 		assert.Contains(t, dsn, "source=query-service")
 	})
@@ -89,7 +89,7 @@ func TestTrinoDSN(t *testing.T) {
 		tr := &Trino{Endpoint: "http://localhost:8080"}
 		dsn, err := tr.dsn()
 		require.NoError(t, err)
-		assert.Contains(t, dsn, "windrose@localhost:8080")
+		assert.Contains(t, dsn, "datacern@localhost:8080")
 	})
 }
 

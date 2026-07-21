@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"github.com/windrose-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/domain"
 )
 
 // Routing thresholds (QRY-FR-040).

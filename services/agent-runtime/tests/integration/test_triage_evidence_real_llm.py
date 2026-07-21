@@ -38,8 +38,8 @@ pytestmark = pytest.mark.integration
 VKEY = os.environ.get("AR_AI_GATEWAY_VKEY")
 TENANT = os.environ.get("AR_AIGW_TENANT", "11111111-1111-4111-8111-111111111111")
 JWT_PRIV_PATH = os.environ.get("AR_AIGW_JWT_PRIV", "/tmp/aigw_priv.pem")
-JWT_ISS = os.environ.get("AR_AIGW_JWT_ISS", "https://identity.windrose.ai")
-JWT_AUD = os.environ.get("AR_AIGW_JWT_AUD", "windrose")
+JWT_ISS = os.environ.get("AR_AIGW_JWT_ISS", "https://identity.datacern.ai")
+JWT_AUD = os.environ.get("AR_AIGW_JWT_AUD", "datacern")
 JWT_KID = os.environ.get("AR_AIGW_JWT_KID", "e2e-harness-key-1")
 
 _DISPOSITIONS = [
@@ -77,7 +77,7 @@ async def test_triage_reasons_over_attached_document_live(require_ai_gateway):
     if not VKEY:
         pytest.skip("set AR_AI_GATEWAY_VKEY to a minted ai-gateway virtual key (nk-...)")
 
-    llm = AiGatewayLlmClient(AI_GATEWAY, model="windrose-auto", virtual_key=VKEY,
+    llm = AiGatewayLlmClient(AI_GATEWAY, model="datacern-auto", virtual_key=VKEY,
                              jwt_provider=_jwt_provider, temperature=0.2, max_tokens=250)
 
     # The row looks routine; the DOCUMENT carries the decisive facts.

@@ -21,24 +21,24 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/windrose-ai/audit-service/internal/api"
-	"github.com/windrose-ai/audit-service/internal/authz"
-	"github.com/windrose-ai/audit-service/internal/chain"
-	"github.com/windrose-ai/audit-service/internal/chstore"
-	"github.com/windrose-ai/audit-service/internal/compliance"
-	"github.com/windrose-ai/audit-service/internal/export"
-	"github.com/windrose-ai/audit-service/internal/ingest"
-	"github.com/windrose-ai/audit-service/internal/meta"
-	"github.com/windrose-ai/audit-service/internal/pgstore"
-	"github.com/windrose-ai/audit-service/internal/worm"
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/audit-service/internal/api"
+	"github.com/datacern-ai/audit-service/internal/authz"
+	"github.com/datacern-ai/audit-service/internal/chain"
+	"github.com/datacern-ai/audit-service/internal/chstore"
+	"github.com/datacern-ai/audit-service/internal/compliance"
+	"github.com/datacern-ai/audit-service/internal/export"
+	"github.com/datacern-ai/audit-service/internal/ingest"
+	"github.com/datacern-ai/audit-service/internal/meta"
+	"github.com/datacern-ai/audit-service/internal/pgstore"
+	"github.com/datacern-ai/audit-service/internal/worm"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 const (
 	issuer   = "audit-it"
-	audience = "windrose"
+	audience = "datacern"
 )
 
 func env(k, def string) string {
@@ -74,7 +74,7 @@ func newHarness(t *testing.T) *harness {
 	}
 	ctx := context.Background()
 
-	adminDSN := env("ADMIN_DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/windrose?sslmode=disable")
+	adminDSN := env("ADMIN_DATABASE_URL", "postgres://datacern:datacern_dev@localhost:5432/datacern?sslmode=disable")
 	if err := pgstore.Bootstrap(ctx, adminDSN, "audit", "audit_rw", "audit_rw_dev"); err != nil {
 		t.Skipf("postgres unavailable (bootstrap): %v", err)
 	}
@@ -93,8 +93,8 @@ func newHarness(t *testing.T) *harness {
 	ch, err := chstore.Open(ctx, chstore.Config{
 		Addr:     env("CLICKHOUSE_ADDR", "localhost:9010"),
 		Database: env("CLICKHOUSE_DB", "audit"),
-		Username: env("CLICKHOUSE_USER", "windrose"),
-		Password: env("CLICKHOUSE_PASSWORD", "windrose_dev"),
+		Username: env("CLICKHOUSE_USER", "datacern"),
+		Password: env("CLICKHOUSE_PASSWORD", "datacern_dev"),
 	})
 	if err != nil {
 		t.Skipf("clickhouse unavailable: %v", err)
@@ -111,8 +111,8 @@ func newHarness(t *testing.T) *harness {
 	bucket := fmt.Sprintf("audit-it-%d", time.Now().UnixNano())
 	wm, err := worm.New(worm.Config{
 		Endpoint: env("MINIO_ENDPOINT", "localhost:9000"),
-		AccessKey: env("MINIO_ACCESS_KEY", "windrose"),
-		SecretKey: env("MINIO_SECRET_KEY", "windrose_dev"),
+		AccessKey: env("MINIO_ACCESS_KEY", "datacern"),
+		SecretKey: env("MINIO_SECRET_KEY", "datacern_dev"),
 		Bucket:   bucket, RetentionYears: 7,
 	})
 	if err != nil {

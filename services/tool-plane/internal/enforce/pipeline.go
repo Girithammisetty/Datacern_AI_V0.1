@@ -6,10 +6,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/tool-plane/internal/authz"
-	"github.com/windrose-ai/tool-plane/internal/domain"
-	"github.com/windrose-ai/tool-plane/internal/events"
-	"github.com/windrose-ai/tool-plane/internal/mcp"
+	"github.com/datacern-ai/tool-plane/internal/authz"
+	"github.com/datacern-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/events"
+	"github.com/datacern-ai/tool-plane/internal/mcp"
 )
 
 // CatalogResolver resolves the callable tool version + its backend target.
@@ -192,7 +192,7 @@ func (p *Pipeline) run(ctx context.Context, req Request) Outcome {
 
 	// Affected URNs from schema annotations. The FULL set drives the cross-tenant
 	// guard + audit; the obo-eligible SUBSET (role-governed resources opt out via
-	// x-windrose-urn-obo:false) drives the per-resource OPA obo-grant intersection
+	// x-datacern-urn-obo:false) drives the per-resource OPA obo-grant intersection
 	// (BR-12 / TPL-FR-032).
 	affected := domain.AffectedURNs(tv.InputSchema, req.Args, req.TenantStr)
 	oboURNs := domain.AffectedOboURNs(tv.InputSchema, req.Args, req.TenantStr)

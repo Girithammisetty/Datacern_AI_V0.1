@@ -31,7 +31,7 @@ from lib.common import service_token  # noqa: E402
 CASE = os.environ.get("CASE_URL", "http://localhost:8308")
 IDENTITY_DSN = os.environ.get(
     "IDENTITY_DSN",
-    "host=localhost port=5432 dbname=identity user=windrose password=windrose_dev")
+    "host=localhost port=5432 dbname=identity user=datacern password=datacern_dev")
 
 
 def active_tenants() -> list[str]:

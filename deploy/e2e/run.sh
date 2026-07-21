@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Windrose repo-level end-to-end proof. Boots the full real stack (infra +
+# datacern repo-level end-to-end proof. Boots the full real stack (infra +
 # every money-path service, no fakes in the path) and drives the insurance
 # claims triage-and-governance journey with real evidence at each step.
 #
@@ -79,7 +79,7 @@ wait_ready() { # name base_url  (probes /readyz then /healthz then /health)
   return 1
 }
 
-psql_q() { PGPASSWORD=windrose_dev psql -h localhost -U windrose "$@"; }
+psql_q() { PGPASSWORD=datacern_dev psql -h localhost -U datacern "$@"; }
 
 ########################################  PHASE 0: preflight  ############################
 say "PHASE 0  preflight: infra + toolchain + Ollama"

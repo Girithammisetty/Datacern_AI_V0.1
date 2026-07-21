@@ -6,13 +6,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/tool-plane/internal/authz"
-	"github.com/windrose-ai/tool-plane/internal/domain"
-	"github.com/windrose-ai/tool-plane/internal/embed"
-	"github.com/windrose-ai/tool-plane/internal/enforce"
-	"github.com/windrose-ai/tool-plane/internal/register"
-	"github.com/windrose-ai/tool-plane/internal/store"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/tool-plane/internal/authz"
+	"github.com/datacern-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/embed"
+	"github.com/datacern-ai/tool-plane/internal/enforce"
+	"github.com/datacern-ai/tool-plane/internal/register"
+	"github.com/datacern-ai/tool-plane/internal/store"
 )
 
 // RegistryServer wires the tool-registry HTTP layer (catalog + admin).

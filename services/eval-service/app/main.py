@@ -13,7 +13,7 @@ import contextlib
 import logging
 
 from fastapi import FastAPI
-from windrose_common.logging import configure_json_logging
+from datacern_common.logging import configure_json_logging
 
 from app.api.errors import TraceMiddleware, install_error_handlers
 from app.api.middleware import AuthMiddleware
@@ -105,7 +105,7 @@ def create_app(container: Container | None = None) -> FastAPI:
                 tasks.append(asyncio.create_task(_relay_loop()))
             # Flywheel + SLO Kafka consumers.
             try:
-                from windrose_common.kafka import KafkaConfig, KafkaProducerClient
+                from datacern_common.kafka import KafkaConfig, KafkaProducerClient
 
                 from app.events.consumer import KafkaTopicConsumer
 
@@ -152,8 +152,8 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.state.token_verifier = container.token_verifier
     app.state.authz = container.authz
 
-    from windrose_common.metricsx import RedMiddleware, instrument_app
-    from windrose_common.otelx import configure_tracing
+    from datacern_common.metricsx import RedMiddleware, instrument_app
+    from datacern_common.otelx import configure_tracing
     configure_tracing("eval-service")
     app.add_middleware(AuthMiddleware)
     app.add_middleware(TraceMiddleware)

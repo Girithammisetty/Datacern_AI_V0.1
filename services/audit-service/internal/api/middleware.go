@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/audit-service/internal/authz"
-	"github.com/windrose-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/authz"
+	"github.com/datacern-ai/audit-service/internal/domain"
 )
 
 type ctxKey int

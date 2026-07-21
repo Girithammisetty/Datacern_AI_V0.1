@@ -21,20 +21,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/otelx"
-	"github.com/windrose-ai/go-common/redisx"
+	gcevent "github.com/datacern-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/otelx"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/case-service/internal/api"
-	"github.com/windrose-ai/case-service/internal/authz"
-	"github.com/windrose-ai/case-service/internal/blob"
-	"github.com/windrose-ai/case-service/internal/domain"
-	"github.com/windrose-ai/case-service/internal/events"
-	"github.com/windrose-ai/case-service/internal/register"
-	"github.com/windrose-ai/case-service/internal/search"
-	"github.com/windrose-ai/case-service/internal/sla"
-	"github.com/windrose-ai/case-service/internal/store"
+	"github.com/datacern-ai/case-service/internal/api"
+	"github.com/datacern-ai/case-service/internal/authz"
+	"github.com/datacern-ai/case-service/internal/blob"
+	"github.com/datacern-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/events"
+	"github.com/datacern-ai/case-service/internal/register"
+	"github.com/datacern-ai/case-service/internal/search"
+	"github.com/datacern-ai/case-service/internal/sla"
+	"github.com/datacern-ai/case-service/internal/store"
 )
 
 func env(key, def string) string {
@@ -50,7 +50,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Distributed tracing (no-op unless WINDROSE_OTEL_ENABLED / an OTLP endpoint
+	// Distributed tracing (no-op unless datacern_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "case-service")
 	defer func() { _ = otelShutdown(context.Background()) }()
@@ -65,7 +65,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	dbURL := env("DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/case?sslmode=disable")
+	dbURL := env("DATABASE_URL", "postgres://datacern:datacern_dev@localhost:5432/case?sslmode=disable")
 	// Migrations need DDL/ownership + role creation, so they run under a
 	// privileged role (MIGRATE_DATABASE_URL, default = DATABASE_URL). The runtime
 	// pool connects as DATABASE_URL, which in a hardened deploy is a NON-superuser
@@ -112,10 +112,10 @@ func main() {
 	// evidence upload/download is a real capability, not a best-effort side path.
 	evidence, err := blob.NewMinioEvidence(ctx, blob.Config{
 		Endpoint:  env("MINIO_ENDPOINT", "localhost:9000"),
-		AccessKey: env("MINIO_ACCESS_KEY", "windrose"),
-		SecretKey: env("MINIO_SECRET_KEY", "windrose_dev"),
+		AccessKey: env("MINIO_ACCESS_KEY", "datacern"),
+		SecretKey: env("MINIO_SECRET_KEY", "datacern_dev"),
 		UseSSL:    os.Getenv("MINIO_USE_SSL") == "true",
-		Bucket:    env("CASE_EVIDENCE_BUCKET", "windrose-case-evidence"),
+		Bucket:    env("CASE_EVIDENCE_BUCKET", "datacern-case-evidence"),
 	})
 	if err != nil {
 		slog.Error("case evidence store init", "err", err)

@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/windrose-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/domain"
 )
 
 type tokenKind int

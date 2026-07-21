@@ -73,7 +73,7 @@ class OpenAIEmbeddingClient:
         headers = {"content-type": "application/json"}
         if self.api_key:
             headers["authorization"] = f"Bearer {self.api_key}"
-        headers["x-windrose-tenant-id"] = tenant_id
+        headers["x-datacern-tenant-id"] = tenant_id
         try:
             async with httpx.AsyncClient(timeout=self.timeout_s) as client:
                 resp = await client.post(

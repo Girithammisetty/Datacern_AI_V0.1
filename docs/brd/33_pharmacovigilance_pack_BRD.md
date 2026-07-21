@@ -1,6 +1,6 @@
 # BRD 33 — `pharmacovigilance` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack #2. Reference pattern: BRD 24/30.
 **Status:** v1.0.0 SHIPPED Core-neutral via packctl (tenant `wr-pv`); pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,13 +10,13 @@
 
 **Purpose.** Adverse-event (ICSR) case-processing AI for pharma/biotech safety departments: intake validity + duplicate checking, seriousness/expectedness/causality-grounded reporting proposals, expedited (15-day/7-day) deadline tracking, signal-cluster flagging, and QPPV-governed submission decisions. Sells to sponsors, MAHs, CROs, and PV service providers.
 
-**Why this vertical.** PV case processing is the single most Windrose-shaped workflow in industry: regulated intake → expert triage → human medical correction → auditable regulatory submission, with brutal deadlines (FDA 15-day Alert reports, 7-day fatal/life-threatening SUSARs) and inspection exposure (FDA BIMO, EMA PV inspections). Volumes grow every year; corrections from medical reviewers are frequent and high-signal — ideal fuel for the correction→retrain loop. Companies already pay heavily for safety-database seats and case-processing BPO.
+**Why this vertical.** PV case processing is the single most Datacern-shaped workflow in industry: regulated intake → expert triage → human medical correction → auditable regulatory submission, with brutal deadlines (FDA 15-day Alert reports, 7-day fatal/life-threatening SUSARs) and inspection exposure (FDA BIMO, EMA PV inspections). Volumes grow every year; corrections from medical reviewers are frequent and high-signal — ideal fuel for the correction→retrain loop. Companies already pay heavily for safety-database seats and case-processing BPO.
 
 **Business value.** Case cycle-time reduction (validity/duplicate/seriousness pre-assessment), zero late expedited reports (deadline runway surfacing), earlier signal detection (unlisted-term cluster flags), intake data-quality lift (duplicate-rate tracking), and inspection-ready decision provenance.
 
 **In scope.** ICSR triage copilot (validity → duplicate → seriousness → expectedness → causality → reporting route), expedited-clock tracking, PV-ops KPI semantic model + dashboards, MedDRA-coded event signal surfaces, product-event network analytics, FDA/ICH/GVP grounding, event-anomaly + case-priority pipelines.
 
-**Out of scope.** Full safety-database replacement (Argus/LifeSphere/Vault Safety remain the system of record — Windrose is the governed decisioning layer); aggregate report authoring (PADER/PBRER document generation); literature-monitoring search itself; medical-device vigilance (see `device-complaints` pack, BRD 42); veterinary PV.
+**Out of scope.** Full safety-database replacement (Argus/LifeSphere/Vault Safety remain the system of record — Datacern is the governed decisioning layer); aggregate report authoring (PADER/PBRER document generation); literature-monitoring search itself; medical-device vigilance (see `device-complaints` pack, BRD 42); veterinary PV.
 
 ## 2. Actors & user stories
 
@@ -100,7 +100,7 @@ SHIPPED materialization: 3 datasets (cases 26 / events 30 MedDRA-coded / product
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): safety database of record, E2B gateways, MedDRA license.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): safety database of record, E2B gateways, MedDRA license.
 
 ## 7. NFRs (deltas)
 

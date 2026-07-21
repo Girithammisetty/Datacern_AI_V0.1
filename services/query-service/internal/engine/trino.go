@@ -29,7 +29,7 @@ type Trino struct {
 	// Endpoint is the Trino coordinator base URI, e.g. "http://localhost:8080".
 	Endpoint string
 	// User is the Trino session user (the protocol requires one; server-owned
-	// config, never derived from request data). Defaults to "windrose".
+	// config, never derived from request data). Defaults to "datacern".
 	User string
 	// Catalog is the fixed default catalog every query resolves against
 	// (e.g. "iceberg"). Server-owned, not user input.
@@ -62,7 +62,7 @@ func (t *Trino) dsn() (string, error) {
 	}
 	user := t.User
 	if user == "" {
-		user = "windrose"
+		user = "datacern"
 	}
 	u.User = url.User(user)
 	q := u.Query()

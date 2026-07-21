@@ -21,7 +21,7 @@ func signToken(t *testing.T, key *rsa.PrivateKey, kid string, mut func(jwt.MapCl
 	now := time.Now()
 	claims := jwt.MapClaims{
 		"sub": "u-1", "tenant_id": uuid.New().String(), "typ": "user",
-		"iss": "https://identity.windrose.ai", "aud": "windrose",
+		"iss": "https://identity.datacern.ai", "aud": "datacern",
 		"exp": now.Add(5 * time.Minute).Unix(), "iat": now.Unix(), "nbf": now.Unix(),
 		"scopes": []string{"dataset.dataset.read"},
 	}
@@ -55,7 +55,7 @@ func TestVerifyViaJWKS(t *testing.T) {
 	srv := jwksServer(t, kid, &key.PublicKey)
 	defer srv.Close()
 
-	v := NewJWKS(srv.URL, "https://identity.windrose.ai", "windrose")
+	v := NewJWKS(srv.URL, "https://identity.datacern.ai", "datacern")
 	tok := signToken(t, key, kid, nil)
 	claims, err := v.Verify(context.Background(), tok)
 	if err != nil {
@@ -80,7 +80,7 @@ func TestRejectAlgNone(t *testing.T) {
 
 func TestRejectWrongIssuer(t *testing.T) {
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
-	v := NewStatic(&key.PublicKey, "https://identity.windrose.ai", "windrose")
+	v := NewStatic(&key.PublicKey, "https://identity.datacern.ai", "datacern")
 	tok := signToken(t, key, "kid-1", func(c jwt.MapClaims) { c["iss"] = "https://evil" })
 	if _, err := v.Verify(context.Background(), tok); err == nil {
 		t.Fatal("wrong issuer accepted")
@@ -89,7 +89,7 @@ func TestRejectWrongIssuer(t *testing.T) {
 
 func TestMiddlewarePopulatesClaims(t *testing.T) {
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
-	v := NewStatic(&key.PublicKey, "https://identity.windrose.ai", "windrose")
+	v := NewStatic(&key.PublicKey, "https://identity.datacern.ai", "datacern")
 	var got *Claims
 	h := v.Middleware(nil)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		got, _ = FromContext(r.Context())

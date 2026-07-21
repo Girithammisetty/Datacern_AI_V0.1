@@ -2,10 +2,10 @@
 
 // Integration tests for the OPA client against the real OPA server
 // (deploy/docker-compose.dev.yml, localhost:8281) evaluating the
-// windrose.authz_input Rego bundle. NOTE: OPA loads the /policy dir at startup
+// datacern.authz_input Rego bundle. NOTE: OPA loads the /policy dir at startup
 // without --watch, so restart the container after editing the bundle:
 //
-//	docker restart windrose-dev-opa-1
+//	docker restart datacern-dev-opa-1
 package opaclient
 
 import (
@@ -30,7 +30,7 @@ func TestOPAInputMatrix(t *testing.T) {
 		Subject: Subject{ID: "u", Typ: "user"}, Action: "rbac.group.list", Tenant: "t",
 		Projection: Projection{ActionKnown: true},
 	}); err != nil {
-		t.Skipf("OPA unavailable at %s: %v (did you restart windrose-dev-opa-1?)", opaURL(), err)
+		t.Skipf("OPA unavailable at %s: %v (did you restart datacern-dev-opa-1?)", opaURL(), err)
 	}
 
 	cases := []struct {

@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "AiProposal",
-  "namespace": "windrose.agent.events.v1",
+  "namespace": "datacern.agent.events.v1",
   "doc": "ai.proposal.v1 payload (ART-FR-046). Rejection messages + edit diffs are consumed by eval-service for the learning flywheel. Emitted inside the master envelope's `payload` (JSON-encoded).",
   "fields": [
     {"name": "proposal_id", "type": "string"},

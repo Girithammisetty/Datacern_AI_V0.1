@@ -19,7 +19,7 @@ async def test_job_lifecycle_events_on_real_kafka(engine):
     """Outbox rows written by a real job transition are relayed to real Redpanda
     and read back by a real consumer (MASTER-FR-030/034, BRD §6)."""
     require_infra((9092, "Redpanda"), (5432, "Postgres"))
-    from windrose_common.kafka import KafkaConfig, KafkaConsumer, KafkaProducerClient
+    from datacern_common.kafka import KafkaConfig, KafkaConsumer, KafkaProducerClient
 
     from app.events.bus import KafkaEventBus
     from app.store.sql import OutboxDispatcher, sql_uow_factory
@@ -79,8 +79,8 @@ async def test_opa_authz_allows_with_real_projection():
     require_infra((8281, "OPA"), (6379, "Redis"))
     import json
 
-    from windrose_common.projection import CATALOG_KEY
-    from windrose_common.redisx import build_redis
+    from datacern_common.projection import CATALOG_KEY
+    from datacern_common.redisx import build_redis
 
     from app.api.auth import OpaAuthzClient, Principal
 

@@ -1,12 +1,12 @@
 # post-acute-care capability pack (BRD 29) — Core-neutral edition.
-# Installable TODAY against Windrose Core's public APIs via packctl; the
+# Installable TODAY against Datacern Core's public APIs via packctl; the
 # manifest envelope follows BRD 23 (PKG-FR-001/003). Components today's Core
 # cannot materialize are declared under `deferred` with the exact PAC-FR
 # requirement they trace to — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: post-acute-care
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   Post-acute care AI for home health, SNF, and hospice operators (BRD 29):
   PDGM/PDPM episode and assessment semantic models, network / readmission /

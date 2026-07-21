@@ -5,7 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/domain"
 )
 
 // RegisterActions upserts catalog entries (RBC-FR-022: idempotent

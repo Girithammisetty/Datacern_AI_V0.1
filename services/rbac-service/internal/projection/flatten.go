@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/domain"
 )
 
 // WorkspaceRef is one workspace a user is assigned to (RBC-FR-003).

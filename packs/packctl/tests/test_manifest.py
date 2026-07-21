@@ -33,7 +33,7 @@ VALID = """
 pack_manifest: 1
 name: test-pack
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: "A test pack."
 categories: [test]
 regulatory: []

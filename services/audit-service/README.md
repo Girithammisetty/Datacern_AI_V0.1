@@ -1,6 +1,6 @@
 # audit-service
 
-The Windrose platform's immutable system of record (BRD 18): "who did what, when,
+The Datacern platform's immutable system of record (BRD 18): "who did what, when,
 to which resource, via which agent." It consumes every `*.events.v1` domain topic
 plus the `ai.*` and `security.*` topics off **real Kafka**, writes them to an
 **append-only ClickHouse** store with payload digests and a per-tenant-per-day
@@ -25,7 +25,7 @@ make test-integration   # real ClickHouse/Kafka/Postgres/Redis/MinIO/OPA; auto-s
 Default config connects Postgres as the **non-owner** `audit_rw` role (RLS FORCE);
 the superuser `ADMIN_DATABASE_URL` is used once at boot to create the `audit` DB +
 `audit_rw` role, then dropped. ClickHouse native :9010, db `audit`. MinIO bucket
-`windrose-audit` (Object-Lock). OPA sidecar :8281.
+`datacern-audit` (Object-Lock). OPA sidecar :8281.
 
 ## Architecture
 

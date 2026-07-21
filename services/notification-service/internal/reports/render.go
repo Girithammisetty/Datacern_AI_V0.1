@@ -23,16 +23,16 @@ type RenderedReport struct {
 // lorem-ipsum, no fabricated numbers — every row here is exactly what
 // chart-service returned for this send).
 func Render(digest *DashboardDigest, generatedAt time.Time) RenderedReport {
-	subject := fmt.Sprintf("Windrose report: %s (%s)", digest.DashboardName, generatedAt.Format("Jan 2, 2006"))
+	subject := fmt.Sprintf("Datacern report: %s (%s)", digest.DashboardName, generatedAt.Format("Jan 2, 2006"))
 
 	var h strings.Builder
 	h.WriteString(`<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1a1a1a;max-width:760px">`)
 	fmt.Fprintf(&h, `<h1 style="font-size:20px;margin:0 0 4px">%s</h1>`, html.EscapeString(digest.DashboardName))
-	fmt.Fprintf(&h, `<p style="color:#666;font-size:13px;margin:0 0 20px">Generated %s by your Windrose report subscription.</p>`,
+	fmt.Fprintf(&h, `<p style="color:#666;font-size:13px;margin:0 0 20px">Generated %s by your Datacern report subscription.</p>`,
 		html.EscapeString(generatedAt.Format(time.RFC1123)))
 
 	var t strings.Builder
-	fmt.Fprintf(&t, "%s\nGenerated %s by your Windrose report subscription.\n\n", digest.DashboardName, generatedAt.Format(time.RFC1123))
+	fmt.Fprintf(&t, "%s\nGenerated %s by your Datacern report subscription.\n\n", digest.DashboardName, generatedAt.Format(time.RFC1123))
 
 	if len(digest.Charts) == 0 {
 		h.WriteString(`<p>This dashboard has no charts yet.</p>`)
@@ -81,16 +81,16 @@ func Render(digest *DashboardDigest, generatedAt time.Time) RenderedReport {
 		h.WriteString(`</tbody></table>`)
 
 		if c.Truncated || len(c.Rows) > maxRowsInEmail {
-			fmt.Fprintf(&h, `<p style="color:#888;font-size:12px;margin-top:6px">Showing %d of %d rows. Open the dashboard in Windrose for the full result.</p>`,
+			fmt.Fprintf(&h, `<p style="color:#888;font-size:12px;margin-top:6px">Showing %d of %d rows. Open the dashboard in Datacern for the full result.</p>`,
 				len(shown), c.RowCount)
 			fmt.Fprintf(&t, "(showing %d of %d rows)\n", len(shown), c.RowCount)
 		}
 		t.WriteString("\n")
 	}
 
-	h.WriteString(`<p style="color:#999;font-size:11px;margin-top:28px">You are receiving this because you are subscribed to this dashboard report in Windrose. Manage your subscription from Dashboards &gt; Reports.</p>`)
+	h.WriteString(`<p style="color:#999;font-size:11px;margin-top:28px">You are receiving this because you are subscribed to this dashboard report in Datacern. Manage your subscription from Dashboards &gt; Reports.</p>`)
 	h.WriteString(`</div>`)
-	t.WriteString("You are receiving this because you are subscribed to this dashboard report in Windrose.\n")
+	t.WriteString("You are receiving this because you are subscribed to this dashboard report in Datacern.\n")
 
 	return RenderedReport{Subject: subject, HTML: h.String(), Text: t.String()}
 }

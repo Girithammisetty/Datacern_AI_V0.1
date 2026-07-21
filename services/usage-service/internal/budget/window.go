@@ -6,7 +6,7 @@ package budget
 import (
 	"time"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/domain"
 )
 
 // Bounds describes a budget window instance: the instance key (window_start,

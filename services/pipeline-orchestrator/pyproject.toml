@@ -1,7 +1,7 @@
 [project]
 name = "pipeline-orchestrator"
 version = "0.1.0"
-description = "Windrose pipeline-orchestrator: ML pipeline templates, DAG validation, Argo compilation, run lifecycle, real local training executor"
+description = "Datacern pipeline-orchestrator: ML pipeline templates, DAG validation, Argo compilation, run lifecycle, real local training executor"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -22,11 +22,11 @@ dependencies = [
     "xgboost>=2.0",
     "mlflow>=3.11,<4",
     "pyarrow>=23.0.1",
-    "windrose-common",
+    "datacern-common",
 ]
 
 [tool.uv.sources]
-windrose-common = { path = "../../libs/py-common", editable = true }
+datacern-common = { path = "../../libs/py-common", editable = true }
 
 [dependency-groups]
 dev = [

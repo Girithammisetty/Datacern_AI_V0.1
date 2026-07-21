@@ -5,16 +5,16 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // AdminInput is one control-plane authorization question for the tool-registry
 // admin API (MASTER-FR-012/016). This is distinct from Input, which is the
 // gateway pipeline's normative per-invocation document (BRD 13 §3) evaluated by
-// the windrose.tool_plane policy: admin routes are authorized exactly like
+// the datacern.tool_plane policy: admin routes are authorized exactly like
 // chart-/case-service routes — against the rbac permissions_flat projection via
-// the windrose.authz_input bundle in the local OPA sidecar.
+// the datacern.authz_input bundle in the local OPA sidecar.
 type AdminInput struct {
 	Subject     AdminSubject
 	Action      string
@@ -39,7 +39,7 @@ type AdminAuthorizer interface {
 // AdminOPA is the real runtime admin authorizer (MASTER-FR-012). Each decision
 // loads the caller's permissions_flat projection slice from Redis (rbac's key
 // scheme) and POSTs it to the local OPA sidecar evaluating the
-// windrose.authz_input bundle. It never calls rbac synchronously and fails
+// datacern.authz_input bundle. It never calls rbac synchronously and fails
 // closed on any transport error.
 type AdminOPA struct {
 	client *opaclient.Client

@@ -1,13 +1,13 @@
 # banking-aml capability pack (BRD 30) — Core-neutral edition, and the first
 # NON-healthcare pack: the cross-industry Core-neutrality proof (BRD 30 AC-15).
-# Installable TODAY against Windrose Core's public APIs via packctl; the
+# Installable TODAY against Datacern Core's public APIs via packctl; the
 # manifest envelope follows BRD 23 (PKG-FR-001/003). Components the current
 # Core cannot materialize are declared under `deferred` with the exact BRD 30
 # requirement they trace to — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: banking-aml
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted AML / BSA financial-crime workflow for US banks (BRD 30): alert
   triage with typology-grounded dispositions, sanctions match adjudication,

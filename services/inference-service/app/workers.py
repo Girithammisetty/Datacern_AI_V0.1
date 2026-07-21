@@ -2,7 +2,7 @@
 
 * Outbox relay — publishes committed ``outbox`` rows to real Kafka (MASTER-FR-034).
 * Kafka consumers — pipeline/experiment/dataset/usage topics driving the handlers,
-  each with Redis dedup + DLQ (via the shared ``windrose_common`` KafkaConsumer).
+  each with Redis dedup + DLQ (via the shared ``datacern_common`` KafkaConsumer).
 * Scheduler tick — fires due scoring schedules (INF-FR-050).
 * Reaper — fails jobs stuck past max duration / queued timeout (INF-FR-042).
 
@@ -31,7 +31,7 @@ class WorkerSet:
 
     async def start(self) -> None:
         s = self.settings
-        from windrose_common.kafka import KafkaConfig, KafkaProducerClient
+        from datacern_common.kafka import KafkaConfig, KafkaProducerClient
 
         self._producer = KafkaProducerClient(
             KafkaConfig(bootstrap_servers=s.kafka_bootstrap_servers))
@@ -46,7 +46,7 @@ class WorkerSet:
             await self._start_consumers()
 
     async def _start_consumers(self) -> None:
-        from windrose_common.kafka import KafkaConfig, KafkaConsumer
+        from datacern_common.kafka import KafkaConfig, KafkaConsumer
 
         from app.events.consumer import (
             DatasetEventHandler,

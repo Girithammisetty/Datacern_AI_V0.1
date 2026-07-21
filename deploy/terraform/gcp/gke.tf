@@ -5,7 +5,7 @@
 # Dedicated GSA for the nodes (least privilege; not the default compute SA).
 resource "google_service_account" "gke_nodes" {
   account_id   = "${var.name_prefix}-gke-nodes"
-  display_name = "Windrose GKE node pool service account"
+  display_name = "Datacern GKE node pool service account"
 }
 
 # Minimal roles for nodes to log, emit metrics, and pull images.

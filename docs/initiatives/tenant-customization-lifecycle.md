@@ -2,7 +2,7 @@
 
 **Status:** implemented (BFF + UI) — 2026-07-21 · not browser-verified (parallel ui-web work in flight)
 **Commits:** `cd74780` (BFF), `9abeb7b` (UI)
-**Related:** BRD 23 (pack-service), memory `project_windrose_pack_service`
+**Related:** BRD 23 (pack-service), memory `project_datacern_pack_service`
 
 ---
 

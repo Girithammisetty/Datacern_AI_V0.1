@@ -17,9 +17,9 @@ import (
 
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/channels/webhook"
-	"github.com/windrose-ai/notification-service/internal/domain"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/channels/webhook"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 func emailHashLower(addr string) string {
@@ -36,7 +36,7 @@ func TestAC02_HourlyDigest12to1(t *testing.T) {
 	h.mailpitDeleteAll(t)
 	tenant := uuid.New()
 	user := "dg-" + uuid.NewString()[:8]
-	addr := user + "@windrose.local"
+	addr := user + "@datacern.local"
 	ctx := context.Background()
 	h.seedUser(t, tenant.String(), user, addr)
 
@@ -66,7 +66,7 @@ func TestAC02_HourlyDigest12to1(t *testing.T) {
 				if to.Address != addr {
 					continue
 				}
-				if m.Subject == "[Windrose] Your notification digest" {
+				if m.Subject == "[Datacern] Your notification digest" {
 					digest++
 				} else {
 					immediate++
@@ -182,7 +182,7 @@ func TestAC07_TenantTemplateOverrideRollbackNoRestart(t *testing.T) {
 	ctx := context.Background()
 	tenant := uuid.New()
 	user := "tpl-" + uuid.NewString()[:8]
-	addr := user + "@windrose.local"
+	addr := user + "@datacern.local"
 	h.seedUser(t, tenant.String(), user, addr)
 
 	publish := func(subject string) {
@@ -246,7 +246,7 @@ func TestAC10_SESHardBounceSuppresses(t *testing.T) {
 	ctx := context.Background()
 	tenant := uuid.New()
 	user := "bnc-" + uuid.NewString()[:8]
-	addr := user + "@windrose.local"
+	addr := user + "@datacern.local"
 	h.seedUser(t, tenant.String(), user, addr)
 
 	// First email event → an email delivery with a provider_msg_id (from SMTP).

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/windrose-ai/notification-service/internal/authz"
-	"github.com/windrose-ai/notification-service/internal/register"
+	"github.com/datacern-ai/notification-service/internal/authz"
+	"github.com/datacern-ai/notification-service/internal/register"
 )
 
 // canonicalVerbs replicates rbac-service's closed verb set (RBC-FR-022,

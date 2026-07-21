@@ -1,6 +1,6 @@
 """Dependency wiring. Two modes: ``memory`` (unit/dev) and ``sql`` (integration/prod).
 
-Real runtime (``PPL_USE_REAL_ADAPTERS=true``) wires the shared windrose_common
+Real runtime (``PPL_USE_REAL_ADAPTERS=true``) wires the shared datacern_common
 adapters (Kafka, Redis, OPA, MinIO) + the REAL local training executor + real MLflow
 gateway; the local executor is the default execution backend on the Mac. Unit tests
 inject in-memory doubles for the executor/MLflow via ``build_container`` kwargs.
@@ -99,7 +99,7 @@ def build_container(
         raise ValueError(f"unknown mode {mode!r}")
 
     if settings.use_real_adapters:
-        from windrose_common.redisx import RedisDedupStore, build_redis
+        from datacern_common.redisx import RedisDedupStore, build_redis
 
         dedup = RedisDedupStore(build_redis(settings.redis_url))
 
@@ -109,7 +109,7 @@ def build_container(
 
     # Manifest store + executor + MLflow gateway (REAL by default).
     if settings.use_real_adapters:
-        from windrose_common.objectstore import S3BlobObjectStore, S3Config
+        from datacern_common.objectstore import S3BlobObjectStore, S3Config
 
         s3_cfg = S3Config.for_minio(
             settings.artifacts_bucket, endpoint_url=settings.s3_endpoint_url,

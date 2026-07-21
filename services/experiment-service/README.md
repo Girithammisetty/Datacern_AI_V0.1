@@ -17,7 +17,7 @@ artifacts).
 
 ```bash
 make install
-make migrate            # EXP_MIGRATE_URL=postgresql+psycopg://windrose:windrose_dev@localhost:5432/experiment  (privileged)
+make migrate            # EXP_MIGRATE_URL=postgresql+psycopg://datacern:datacern_dev@localhost:5432/experiment  (privileged)
 make run                # uvicorn app.main:app :8086  (REAL adapters by default)
 make test-unit          # in-memory doubles, no Docker
 make test-integration   # Testcontainers Postgres + live MLflow/Kafka/OPA/Redis (auto-skips if down)

@@ -11,12 +11,12 @@ _T8 = TENANT_A[:8]
 def _mlflow_run(run_id: str, experiment_id: str, *, tenant: str = TENANT_A,
                 workspace: str | None = WORKSPACE, family: str = "classification",
                 algorithm: str = "xgboost", status: str = "FINISHED") -> dict:
-    tags = [{"key": "windrose.tenant_id", "value": tenant},
-            {"key": "windrose.family", "value": family},
-            {"key": "windrose.algorithm", "value": algorithm},
-            {"key": "windrose.template_id", "value": "tmpl-1"}]
+    tags = [{"key": "datacern.tenant_id", "value": tenant},
+            {"key": "datacern.family", "value": family},
+            {"key": "datacern.algorithm", "value": algorithm},
+            {"key": "datacern.template_id", "value": "tmpl-1"}]
     if workspace:
-        tags.append({"key": "windrose.workspace_id", "value": workspace})
+        tags.append({"key": "datacern.workspace_id", "value": workspace})
     return {
         "info": {"run_id": run_id, "experiment_id": experiment_id, "status": status,
                  "start_time": 1_700_000_000_000, "end_time": 1_700_000_100_000,
@@ -76,7 +76,7 @@ async def test_mirror_is_idempotent(container):
 
 
 async def test_mirror_skips_other_tenants_run(container):
-    """Guard the RLS wall: a run whose windrose.tenant_id is a different tenant is
+    """Guard the RLS wall: a run whose datacern.tenant_id is a different tenant is
     never mirrored under this tenant, even if the registry name prefix matches."""
     ctx = ctx_for()  # TENANT_A
     name = f"wr_{_T8}_cross"

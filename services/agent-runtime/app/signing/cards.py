@@ -23,15 +23,15 @@ def build_card(
     eval_score_ref: str | None = None,
 ) -> dict:
     return {
-        "name": f"windrose-{agent_key}",
+        "name": f"datacern-{agent_key}",
         "version": str(version),
         "protocolVersion": A2A_PROTOCOL_VERSION,
         "description": description,
         "url": endpoint,
         "capabilities": {"streaming": True, "pushNotifications": False},
         "skills": skills,
-        "securitySchemes": {"windrose-obo": {"type": "http", "scheme": "bearer"}},
-        "x-windrose": {
+        "securitySchemes": {"datacern-obo": {"type": "http", "scheme": "bearer"}},
+        "x-datacern": {
             "agent_key": agent_key,
             "write_mode": write_mode,
             "eval_score_ref": eval_score_ref,
@@ -63,7 +63,7 @@ def verify_card(
     workflow position (MS AI Red Team: reject self-asserted roles at handoffs). This
     confirms the JWS was produced by the holder of the private key AND that the card
     body is unmodified (recomputed canonical digest must match). When
-    ``expected_agent_key`` is given, the card's self-declared ``x-windrose.agent_key``
+    ``expected_agent_key`` is given, the card's self-declared ``x-datacern.agent_key``
     must match it — so a card cannot assert an identity other than the one the caller
     resolved it for. Returns False on any signature/tamper/identity mismatch (never
     raises)."""
@@ -78,7 +78,7 @@ def verify_card(
     if claims.get("card_digest") != expected_digest:
         return False
     if expected_agent_key is not None:
-        claimed = (card.get("x-windrose") or {}).get("agent_key")
+        claimed = (card.get("x-datacern") or {}).get("agent_key")
         if claimed != expected_agent_key:
             return False
     return True

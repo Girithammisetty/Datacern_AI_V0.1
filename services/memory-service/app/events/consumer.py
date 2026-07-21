@@ -2,7 +2,7 @@
 
 A single transport-agnostic ``MemoryEventConsumer.handle(envelope)`` dispatches
 by event_type; the real path drives it from one ``KafkaMemoryConsumer`` per
-subscribed topic (windrose_common.KafkaConsumer: Redis dedup, retry/backoff,
+subscribed topic (datacern_common.KafkaConsumer: Redis dedup, retry/backoff,
 DLQ). The in-memory bus dispatches it directly for the unit tier.
 """
 
@@ -100,11 +100,11 @@ class MemoryEventConsumer:
 
 
 class KafkaMemoryConsumer:
-    """Real Kafka consumer-group runner for one topic (windrose_common)."""
+    """Real Kafka consumer-group runner for one topic (datacern_common)."""
 
     def __init__(self, topic: str, consumer: MemoryEventConsumer, producer,
                  *, group_id: str | None = None, bootstrap_servers: str = "localhost:9092"):
-        from windrose_common.kafka import KafkaConfig, KafkaConsumer
+        from datacern_common.kafka import KafkaConfig, KafkaConsumer
 
         self._runner = KafkaConsumer(
             topic, group_id or f"memory-service.{topic}", consumer.handle,
@@ -123,7 +123,7 @@ class KafkaMemoryConsumer:
 
 
 class _DedupAdapter:
-    """windrose_common.KafkaConsumer expects already_processed/mark_processed;
+    """datacern_common.KafkaConsumer expects already_processed/mark_processed;
     the MemoryEventConsumer.handle already dedups, so this is a no-op pass-through
     that lets the runner own commit semantics without double-suppressing."""
 

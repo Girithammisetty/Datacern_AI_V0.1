@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 func (s *Server) handleGetPreferences(w http.ResponseWriter, r *http.Request) {

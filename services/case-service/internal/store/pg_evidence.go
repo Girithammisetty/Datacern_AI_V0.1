@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/domain"
 )
 
 const evidenceCols = `id, tenant_id, workspace_id, case_id, filename, content_type, size_bytes, storage_key, uploaded_by, created_at`

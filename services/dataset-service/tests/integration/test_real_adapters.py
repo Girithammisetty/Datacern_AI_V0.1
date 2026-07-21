@@ -31,7 +31,7 @@ async def test_s3_blob_store_put_get_presigned():
     _require(9000, "MinIO")
     from app.adapters.object_store import S3ObjectStore
 
-    store = S3ObjectStore("windrose-profiles")
+    store = S3ObjectStore("datacern-profiles")
     key = f"dst-it/{uuid.uuid4().hex[:8]}/profile.json"
     body = b'{"rows": 7}'
     await store.put(key, body, "application/json")
@@ -47,7 +47,7 @@ async def test_s3_blob_store_put_get_presigned():
 async def test_iceberg_rest_catalog_reads_snapshot():
     _require(8181, "Iceberg REST")
     _require(9000, "MinIO")
-    from windrose_common.iceberg import IcebergTableWriter, RowBatch
+    from datacern_common.iceberg import IcebergTableWriter, RowBatch
 
     from app.adapters.catalog import IcebergRestCatalog
 
@@ -72,7 +72,7 @@ async def test_iceberg_rest_catalog_reads_snapshot():
 async def test_kafka_consumer_dedup_via_redis():
     _require(9092, "Redpanda")
     _require(6379, "Redis")
-    from windrose_common.kafka import KafkaProducerClient
+    from datacern_common.kafka import KafkaProducerClient
 
     from app.events.bus import KafkaEventBus, RedisDedupStore
     from app.events.consumer import KafkaIngestionConsumer
@@ -117,7 +117,7 @@ async def test_kafka_consumer_dedup_via_redis():
 
 async def test_opa_authz_client_allows_with_projection():
     """OpaAuthzClient assembles the projection from the granular rbac perm:*
-    keys (windrose_common.projection.load_projection) and threads the JWT
+    keys (datacern_common.projection.load_projection) and threads the JWT
     workspace claim, so a workspace-scoped role grant allows and everything
     else denies. Requires the live catalog key (perm:catalog:actions) that the
     running rbac-service materializes; skips when absent."""
@@ -125,7 +125,7 @@ async def test_opa_authz_client_allows_with_projection():
     _require(6379, "Redis")
     import json
 
-    from windrose_common.redisx import build_redis
+    from datacern_common.redisx import build_redis
 
     from app.api.auth import OpaAuthzClient, Principal
 

@@ -1,6 +1,6 @@
 # inference-service
 
-Batch inference (scoring) for the Windrose platform: pick a **registered
+Batch inference (scoring) for the Datacern platform: pick a **registered
 (promoted) model version** and an **input dataset**, validate schema
 compatibility *before* submit, run **real scoring** (load the real model from
 MLflow, predict on the real data), write a governed, versioned **output dataset**
@@ -40,7 +40,7 @@ never reachable from the default runtime wiring (`use_real_adapters=True`).
 
 ```
 make install         # uv sync
-make migrate         # alembic upgrade head (INF_DATABASE_URL or default windrose db)
+make migrate         # alembic upgrade head (INF_DATABASE_URL or default datacern db)
 make run             # uvicorn app.main:app :8085  (real adapters by default)
 make test-unit       # doubles only, no infra
 make test-integration  # real infra (auto-skips when an endpoint is unreachable)

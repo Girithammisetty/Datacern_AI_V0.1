@@ -9,15 +9,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/go-common/metricsx"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/metricsx"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/realtime-hub/internal/authz"
-	"github.com/windrose-ai/realtime-hub/internal/events"
-	"github.com/windrose-ai/realtime-hub/internal/fanout"
-	"github.com/windrose-ai/realtime-hub/internal/metrics"
-	"github.com/windrose-ai/realtime-hub/internal/store"
+	"github.com/datacern-ai/realtime-hub/internal/authz"
+	"github.com/datacern-ai/realtime-hub/internal/events"
+	"github.com/datacern-ai/realtime-hub/internal/fanout"
+	"github.com/datacern-ai/realtime-hub/internal/metrics"
+	"github.com/datacern-ai/realtime-hub/internal/store"
 )
 
 // Server is the HTTP/SSE/WS surface.

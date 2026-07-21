@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // SeedCatalogActions merges entries into the global rbac action-catalog

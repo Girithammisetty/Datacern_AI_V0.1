@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/windrose-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/domain"
 )
 
 func testKey(t *testing.T) *rsa.PrivateKey {
@@ -26,15 +26,15 @@ func baseClaims() jwt.MapClaims {
 		"sub":       "u-1",
 		"tenant_id": "3d9b6dcb-3e50-4a49-9a3c-3a2d3ff2a001",
 		"typ":       "user",
-		"iss":       "windrose-test",
-		"aud":       "windrose",
+		"iss":       "datacern-test",
+		"aud":       "datacern",
 		"exp":       time.Now().Add(time.Minute).Unix(),
 	}
 }
 
 func TestVerifier_ValidToken(t *testing.T) {
 	key := testKey(t)
-	v := NewVerifierStatic(&key.PublicKey, "windrose-test", "windrose")
+	v := NewVerifierStatic(&key.PublicKey, "datacern-test", "datacern")
 	claims := baseClaims()
 	claims["scopes"] = []string{"super_admin"}
 	tok, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(key)
@@ -68,7 +68,7 @@ func TestVerifier_RejectsAlgNoneAndHMAC(t *testing.T) {
 
 func TestVerifier_RejectsExpiredWrongIssuerWrongKey(t *testing.T) {
 	key := testKey(t)
-	v := NewVerifierStatic(&key.PublicKey, "windrose-test", "windrose")
+	v := NewVerifierStatic(&key.PublicKey, "datacern-test", "datacern")
 
 	expired := baseClaims()
 	expired["exp"] = time.Now().Add(-time.Minute).Unix()

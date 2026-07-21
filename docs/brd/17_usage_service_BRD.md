@@ -1,7 +1,7 @@
 # BRD 17 — usage-service
 
 **Service:** usage-service · **Language:** Go · **Phase:** 2–5 · **Status:** Approved for build
-**Inherits:** `00_MASTER_BRD.md` (all MASTER-FR requirements apply). Architecture: `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6, §1.2 (cost attribution NFR).
+**Inherits:** `00_MASTER_BRD.md` (all MASTER-FR requirements apply). Architecture: `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6, §1.2 (cost attribution NFR).
 
 ---
 
@@ -17,7 +17,7 @@
 
 ## 2. Actors & user stories
 
-Personas: **Platform Operator** (Windrose SRE/finance-ops), **Tenant Admin**, **Workspace Owner**, **Finance Analyst** (customer-side), **ai-gateway** (system consumer), **AI Agent** (metered subject; read-only MCP facade).
+Personas: **Platform Operator** (Datacern SRE/finance-ops), **Tenant Admin**, **Workspace Owner**, **Finance Analyst** (customer-side), **ai-gateway** (system consumer), **AI Agent** (metered subject; read-only MCP facade).
 
 - **US-1** As a Tenant Admin, I want a monthly usage report broken down by workspace and meter, so I can attribute cost internally.
 - **US-2** As a Workspace Owner, I want to see LLM token consumption per user and per agent this week, so I can spot expensive workflows.

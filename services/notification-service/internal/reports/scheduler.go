@@ -6,7 +6,7 @@ import (
 
 	"go.temporal.io/sdk/client"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // Scheduler wraps a real Temporal ScheduleClient: one Temporal Schedule
@@ -58,7 +58,7 @@ func (s *Scheduler) Ensure(ctx context.Context, sub *domain.ReportSubscription) 
 			TaskQueue: TaskQueue,
 		},
 		Paused: !sub.Enabled,
-		Note:   "windrose report subscription " + sub.ID.String(),
+		Note:   "datacern report subscription " + sub.ID.String(),
 	})
 	if err != nil {
 		return "", fmt.Errorf("create temporal schedule: %w", err)

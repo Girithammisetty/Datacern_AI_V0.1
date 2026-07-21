@@ -47,7 +47,7 @@ class LadderService:
         if escalate_from is not None:
             rung = escalate_from + 1
             escalated = True
-        elif requested_model == "windrose-auto":
+        elif requested_model == "datacern-auto":
             rung = min_rung or 0
         else:
             aliases = [r["model_alias"] for r in ladder.rungs]

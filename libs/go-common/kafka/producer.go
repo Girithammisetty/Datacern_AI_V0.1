@@ -13,7 +13,7 @@ import (
 
 	"github.com/segmentio/kafka-go"
 
-	"github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/go-common/event"
 )
 
 // Producer publishes envelopes to a topic. It configures the underlying writer
@@ -67,7 +67,7 @@ func NewProducer(cfg Config) *Producer {
 const EnvelopeAvroSchema = `{
   "type": "record",
   "name": "Envelope",
-  "namespace": "ai.windrose.events",
+  "namespace": "ai.datacern.events",
   "fields": [
     {"name": "event_id", "type": {"type": "string", "logicalType": "uuid"}},
     {"name": "event_type", "type": "string"},

@@ -153,10 +153,10 @@ class LocalScopeAuthz:
 
 
 class OpaAuthzClient:
-    """Real OPA authorization via the shared ``windrose_common`` client: reads the
+    """Real OPA authorization via the shared ``datacern_common`` client: reads the
     per-request permissions projection from Redis (written by rbac-service's CDC
     projector) and POSTs it as ``input`` to the OPA data API
-    (``windrose.authz_input``), returning allow/deny (MASTER-FR-012). Runtime
+    (``datacern.authz_input``), returning allow/deny (MASTER-FR-012). Runtime
     authz client."""
 
     def __init__(
@@ -165,8 +165,8 @@ class OpaAuthzClient:
         *,
         redis_url: str = "redis://localhost:6379/0",
     ):
-        from windrose_common.opaclient import OpaClient
-        from windrose_common.redisx import RedisProjection, build_redis
+        from datacern_common.opaclient import OpaClient
+        from datacern_common.redisx import RedisProjection, build_redis
 
         self._redis = build_redis(redis_url)
         self._client = OpaClient(opa_url, projection=RedisProjection(self._redis))

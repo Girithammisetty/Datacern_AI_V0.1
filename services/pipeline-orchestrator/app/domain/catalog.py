@@ -18,7 +18,7 @@ ALGORITHM = 2
 UTILITY = 3
 COMMENT = 4
 
-CATALOG_VERSION = "windrose-catalog/1.0.0"
+CATALOG_VERSION = "datacern-catalog/1.0.0"
 
 # The full data-prep component set (PIPE-FR-051), kept from the V1 catalog.
 _DATA_PREP_NAMES = [

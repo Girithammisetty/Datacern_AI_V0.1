@@ -19,7 +19,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 LOCAL_DIR="$(pwd)"
 COMPOSE="$(cd .. && pwd)/docker-compose.dev.yml"
-PROJECT="windrose-dev"
+PROJECT="datacern-dev"
 
 R=$'\033[31m'; G=$'\033[32m'; B=$'\033[1m'; N=$'\033[0m'
 step(){ printf '\n%s==> %s%s\n' "$B" "$*" "$N"; }

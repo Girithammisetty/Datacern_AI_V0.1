@@ -1,0 +1,395 @@
+{
+  "pack": "banking-aml",
+  "version": "1.0.0",
+  "workspace_id": "019f8221-68df-7ef4-8a32-99b3ec0fe5a5",
+  "tenant_id": "019f8221-6499-734f-9a03-087a5be057f5",
+  "started_at": "2026-07-21T00:57:34Z",
+  "finished_at": "2026-07-21T00:57:37Z",
+  "actions": [
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_dismissed"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_handed_off"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_needs_deeper"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_evidence_incomplete"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_confirmed"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "lifecycle_dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "inv_referred_external"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'Investigator'"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Investigator' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'Investigation Supervisor'"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Investigation Supervisor' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'Evidence Custodian'"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Evidence Custodian' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'Investigation Quality Reviewer'"
+    },
+    {
+      "kind": "roles",
+      "identity": "investigation_roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Investigation Quality Reviewer' bound to permission group"
+    },
+    {
+      "kind": "memories",
+      "identity": "methodology",
+      "action": "noop",
+      "urn": null,
+      "detail": "0 grounding records written, 8 already present"
+    },
+    {
+      "kind": "datasets",
+      "identity": "aml_parties",
+      "action": "noop",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:dataset:dataset/019f8228-3f7e-72f1-9790-a6cf61a934f8",
+      "detail": "dataset 'aml-parties' exists"
+    },
+    {
+      "kind": "datasets",
+      "identity": "aml_transactions",
+      "action": "noop",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:dataset:dataset/019f8228-4563-7505-85b1-20513167508a",
+      "detail": "dataset 'aml-transactions' exists"
+    },
+    {
+      "kind": "datasets",
+      "identity": "aml_alerts",
+      "action": "noop",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:dataset:dataset/019f8228-46c1-73ac-8a0b-be9fc0ba7471",
+      "detail": "dataset 'aml-alerts' exists"
+    },
+    {
+      "kind": "datasets",
+      "identity": "aml_relationship_edges",
+      "action": "noop",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:dataset:dataset/019f8228-4839-70ef-bb15-6211263d6236",
+      "detail": "dataset 'aml-relationship-edges' exists"
+    },
+    {
+      "kind": "semantic_models",
+      "identity": "aml_core",
+      "action": "noop",
+      "urn": null,
+      "detail": "'aml_core' already published"
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_0",
+      "action": "noop",
+      "urn": null,
+      "detail": ""
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_1",
+      "action": "noop",
+      "urn": null,
+      "detail": ""
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_2",
+      "action": "noop",
+      "urn": null,
+      "detail": ""
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_3",
+      "action": "noop",
+      "urn": null,
+      "detail": ""
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_4",
+      "action": "noop",
+      "urn": null,
+      "detail": ""
+    },
+    {
+      "kind": "saved_queries",
+      "identity": "party_network_edges",
+      "action": "noop",
+      "urn": null,
+      "detail": ""
+    },
+    {
+      "kind": "saved_queries",
+      "identity": "high_value_open_alerts",
+      "action": "noop",
+      "urn": null,
+      "detail": ""
+    },
+    {
+      "kind": "dashboards",
+      "identity": "aml_command_center",
+      "action": "noop",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:chart:dashboard/019f8228-526c-717e-9d47-25e32824f74f",
+      "detail": "'AML Command Center' exists"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "aml_command_center",
+      "action": "verify",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:chart:dashboard/019f8228-526c-717e-9d47-25e32824f74f",
+      "detail": "5/5 charts resolve data"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "sanctions_screening",
+      "action": "noop",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:chart:dashboard/019f8228-559b-7298-a4d0-8ce237a2a848",
+      "detail": "'Sanctions & Screening' exists"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "sanctions_screening",
+      "action": "verify",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:chart:dashboard/019f8228-559b-7298-a4d0-8ce237a2a848",
+      "detail": "4/4 charts resolve data"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "transaction_monitoring",
+      "action": "noop",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:chart:dashboard/019f8228-5788-75bc-8776-24d82a923e6e",
+      "detail": "'Transaction Monitoring' exists"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "transaction_monitoring",
+      "action": "verify",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:chart:dashboard/019f8228-5788-75bc-8776-24d82a923e6e",
+      "detail": "4/4 charts resolve data"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "clear_false_positive"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "escalate_l2"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "recommend_sar"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "sanctions_true_hit"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "noop",
+      "urn": null,
+      "detail": "edd_required"
+    },
+    {
+      "kind": "cases",
+      "identity": "alert_queue",
+      "action": "create",
+      "urn": "wr:019f8221-6499-734f-9a03-087a5be057f5:dataset:dataset/019f8228-46c1-73ac-8a0b-be9fc0ba7471",
+      "detail": "0 open cases (reindexed)"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'AML Analyst L1'"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'AML Analyst L1' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'AML Investigator L2'"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'AML Investigator L2' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'MLRO'"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'MLRO' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'Sanctions Analyst'"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Sanctions Analyst' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "noop",
+      "urn": null,
+      "detail": "role 'Model Risk Validator'"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Model Risk Validator' bound to permission group"
+    },
+    {
+      "kind": "agent_configs",
+      "identity": "agent_configs",
+      "action": "noop",
+      "urn": null,
+      "detail": "case-triage prompt_params"
+    },
+    {
+      "kind": "agent_configs",
+      "identity": "agent_configs",
+      "action": "noop",
+      "urn": null,
+      "detail": "analytics prompt_params"
+    },
+    {
+      "kind": "memories",
+      "identity": "grounding",
+      "action": "noop",
+      "urn": null,
+      "detail": "0 grounding records written, 10 already present"
+    },
+    {
+      "kind": "pipelines",
+      "identity": "pipelines",
+      "action": "noop",
+      "urn": null,
+      "detail": "Transaction anomaly detector (isolation forest)"
+    },
+    {
+      "kind": "pipelines",
+      "identity": "pipelines",
+      "action": "noop",
+      "urn": null,
+      "detail": "Alert disposition scorer (xgboost)"
+    }
+  ],
+  "deferred": [
+    {
+      "kind": "agent_recipes",
+      "reason": "AML-FR-030..090 bespoke LangGraph recipes (Alert Triage Copilot, Sanctions Match Adjudicator, SAR Narrative Drafter, CTR Aggregator, CDD/EDD Copilot, Adverse Media Screener, Peer-Group Anomaly Detector) require agent-runtime graph-module registration (BRD 23 BR-12). This pack specializes the existing case-triage + analytics agents via TenantAgentConfig prompt_params + tenant-scope RAG grounding instead."
+    }
+  ],
+  "result": "installed"
+}

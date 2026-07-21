@@ -3,14 +3,14 @@
 # regulated discrete manufacturers (aerospace & defense suppliers under
 # AS9100, medical-device manufacturers under ISO 13485 / 21 CFR 820.90,
 # automotive tiers under IATF 16949, and contract manufacturers spanning all
-# three). Installable TODAY against Windrose Core's public APIs via packctl;
+# three). Installable TODAY against Datacern Core's public APIs via packctl;
 # the manifest envelope follows BRD 23 (PKG-FR-001/003). Components the
 # current Core cannot materialize are declared under `deferred` — recorded in
 # the install ledger, never faked.
 pack_manifest: 1
 name: manufacturing-mrb
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted nonconformance disposition and Material Review Board workflow
   for regulated manufacturers: NC intake triage with disposition-deadline

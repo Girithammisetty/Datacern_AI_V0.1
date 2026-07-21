@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
-	"github.com/windrose-ai/realtime-hub/internal/topics"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
+	"github.com/datacern-ai/realtime-hub/internal/topics"
 )
 
 // SessionRegistry resolves chat-session ownership (RTH-FR-003). agent-runtime

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 // AC-1: valid tenant creation with publish=true -> active, all 7 steps

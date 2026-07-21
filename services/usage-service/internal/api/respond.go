@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/domain"
 )
 
 // ErrorBody is the master-BRD error envelope (MASTER-FR-024).

@@ -13,13 +13,13 @@ export const SESSION_COOKIE = "wr_session";
 export const EMBED_COOKIE = "wr_embed";
 /** The IdP's OAuth2 refresh_token from a real OIDC login (BYO-P4), set once at
  * /api/auth/callback and used by /api/auth/refresh to silently re-mint the
- * 5-min Windrose session (MASTER-FR-010) before it expires — never sent to
+ * 5-min platform session (MASTER-FR-010) before it expires — never sent to
  * the browser as JS-readable, never forwarded downstream. Absent entirely for
  * dev-login sessions (which mint an 8h token and don't need this). */
 export const OIDC_REFRESH_COOKIE = "wr_oidc_refresh";
 /** The IdP's own id_token, kept ONLY to pass as `id_token_hint` on RP-initiated
  * logout (OIDC single logout) — never used for anything else. Without this,
- * "Sign out" only cleared the Windrose session; the IdP's own SSO session (a
+ * "Sign out" only cleared the platform session; the IdP's own SSO session (a
  * separate cookie on the IdP's origin) stayed alive, so clicking "Sign in with
  * SSO" again silently re-authenticated with no credential prompt at all — a
  * real gap for a regulated/shared-workstation product. */

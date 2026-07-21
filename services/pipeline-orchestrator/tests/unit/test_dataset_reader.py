@@ -67,7 +67,7 @@ async def test_http_reader_parses_urn_sends_headers_returns_rows(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         seen["url"] = str(request.url)
         seen["spiffe"] = request.headers.get("x-client-spiffe-id")
-        seen["tenant"] = request.headers.get("x-windrose-tenant-id")
+        seen["tenant"] = request.headers.get("x-datacern-tenant-id")
         seen["limit"] = request.url.params.get("limit")
         return httpx.Response(
             200, json={"data": {"columns": ["amount", "prior"],
@@ -75,13 +75,13 @@ async def test_http_reader_parses_urn_sends_headers_returns_rows(monkeypatch):
 
     _patch_transport(monkeypatch, handler)
     reader = HttpDatasetReader("http://localhost:8304",
-                               "spiffe://windrose/ns/data/sa/pipeline-orchestrator")
+                               "spiffe://datacern/ns/data/sa/pipeline-orchestrator")
     rows = await reader.read_rows(TENANT_A, URN, limit=500)
 
     assert rows == [{"amount": 100, "prior": 2}]
     assert seen["url"].startswith(
         "http://localhost:8304/internal/v1/datasets/ds-42/rows")
-    assert seen["spiffe"] == "spiffe://windrose/ns/data/sa/pipeline-orchestrator"
+    assert seen["spiffe"] == "spiffe://datacern/ns/data/sa/pipeline-orchestrator"
     assert seen["tenant"] == TENANT_A
     assert seen["limit"] == "500"
 

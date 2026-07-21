@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
-	"github.com/windrose-ai/identity-service/internal/store/memory"
+	"github.com/datacern-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/store/memory"
 )
 
 // captureIssuer records the last claims it was asked to sign so tests can assert
@@ -69,9 +69,9 @@ func TestEmbedOIDCExchange_MintsPerUserEmbedToken(t *testing.T) {
 		t.Fatal("no token")
 	}
 	c := iss.last
-	// The federated identity is bound to the real Windrose user, not the IdP sub.
+	// The federated identity is bound to the real Datacern user, not the IdP sub.
 	if c.Subject != userID.String() {
-		t.Fatalf("subject = %q want windrose user id %q", c.Subject, userID.String())
+		t.Fatalf("subject = %q want datacern user id %q", c.Subject, userID.String())
 	}
 	if !c.Embed || c.WorkspaceID != wsID {
 		t.Fatalf("embed=%v workspace=%q", c.Embed, c.WorkspaceID)

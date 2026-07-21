@@ -114,7 +114,7 @@ async def mcp_invoke(request: Request, body: McpInvokeRequest,
     # Defense-in-depth capability check for the EFFECTIVE HUMAN (obo_sub).
     # Evaluate it as a USER, not as agent_obo: the OPA authz_input agent_obo path
     # additionally requires the ACTION to be in the caller's delegated token
-    # scopes (windrose_authz_input.rego `user_path`+`scope_ok`) — a gate tool-plane
+    # scopes (datacern_authz_input.rego `user_path`+`scope_ok`) — a gate tool-plane
     # already enforced upstream on the agent's signed toolset, and one this
     # internal facade never receives scopes to satisfy. What we must verify here
     # is simply whether the deciding human holds the action (via their rbac

@@ -1,6 +1,6 @@
 # IRSA roles for in-cluster workloads.
-#   1. external-secrets  -> reads the windrose-secrets Secrets Manager secret
-#   2. windrose-workload -> least-priv access to the 4 S3 buckets
+#   1. external-secrets  -> reads the datacern-secrets Secrets Manager secret
+#   2. datacern-workload -> least-priv access to the 4 S3 buckets
 # Both trust the EKS OIDC provider (module.eks) scoped to a specific
 # namespace/ServiceAccount. ARNs are output for the Helm serviceAccount
 # annotation `eks.amazonaws.com/role-arn`.
@@ -44,21 +44,21 @@ resource "aws_iam_role" "external_secrets" {
 
 data "aws_iam_policy_document" "external_secrets" {
   statement {
-    sid    = "ReadWindroseSecret"
+    sid    = "ReadDatacernSecret"
     effect = "Allow"
     actions = [
       "secretsmanager:GetSecretValue",
       "secretsmanager:DescribeSecret",
     ]
     resources = [
-      aws_secretsmanager_secret.windrose.arn,
-      "${aws_secretsmanager_secret.windrose.arn}*",
+      aws_secretsmanager_secret.datacern.arn,
+      "${aws_secretsmanager_secret.datacern.arn}*",
     ]
   }
 }
 
 resource "aws_iam_role_policy" "external_secrets" {
-  name   = "read-windrose-secrets"
+  name   = "read-datacern-secrets"
   role   = aws_iam_role.external_secrets.id
   policy = data.aws_iam_policy_document.external_secrets.json
 }
@@ -117,7 +117,7 @@ data "aws_iam_policy_document" "workload_s3" {
 }
 
 resource "aws_iam_role_policy" "workload_s3" {
-  name   = "windrose-bucket-access"
+  name   = "datacern-bucket-access"
   role   = aws_iam_role.workload_s3.id
   policy = data.aws_iam_policy_document.workload_s3.json
 }

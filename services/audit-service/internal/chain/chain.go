@@ -28,9 +28,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/windrose-ai/audit-service/internal/domain"
-	"github.com/windrose-ai/audit-service/internal/pgstore"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/pgstore"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // ChainTipper returns the durable chain tip (max seq + its hash) for a day.

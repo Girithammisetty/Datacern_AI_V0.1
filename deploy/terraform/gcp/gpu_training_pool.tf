@@ -59,7 +59,7 @@ resource "google_container_node_pool" "gpu_training" {
       effect = "NO_SCHEDULE"
     }
 
-    labels = merge(local.common_labels, { "windrose.ai/workload" = "slm-training" })
+    labels = merge(local.common_labels, { "datacern.ai/workload" = "slm-training" })
   }
 
   lifecycle {

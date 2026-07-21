@@ -1,11 +1,11 @@
 # dataset-service
 
-Windrose catalog and system of record for **datasets**, their **versions**
+Datacern catalog and system of record for **datasets**, their **versions**
 (Iceberg snapshot references), their **profiles** (object storage blob +
 Postgres pointer/summary), and the tenant-wide **lineage graph**.
 
 Spec: `docs/brd/04_dataset_service_BRD.md` inheriting `docs/brd/00_MASTER_BRD.md`.
-Layout per `Windrose-ai/CONVENTIONS.md` (Python service, wave-1 self-contained).
+Layout per `Datacern-ai/CONVENTIONS.md` (Python service, wave-1 self-contained).
 
 ## Run
 
@@ -49,21 +49,21 @@ api/openapi.yaml, events/dataset_event_envelope.avsc
 ## Adapter / stub inventory
 
 Runtime wiring (`DST_USE_REAL_ADAPTERS=true`) uses the **real** shared
-`windrose_common` adapters against local, protocol-compatible infra; the unit
+`datacern_common` adapters against local, protocol-compatible infra; the unit
 tier keeps in-memory/local doubles. No `NotImplementedError` stub is reachable
 from the real path.
 
 | Port | Unit/dev double | Real runtime adapter (backing tech) |
 |---|---|---|
-| `Catalog` | `LocalCatalog` — JSON metadata + parquet snapshots on disk | `IcebergRestCatalog` → `windrose_common.iceberg` (**Iceberg REST catalog + MinIO** via pyiceberg; verify/read-snapshot/expire/drop against the catalog) |
-| `ObjectStore` | `LocalFSObjectStore` — file blobs + HMAC pseudo-signed URLs | `S3ObjectStore` → `windrose_common.objectstore` (**MinIO/S3** blob put/get + **real presigned** GET URLs, 24h) |
-| `ProfilerRunner` | `InProcessProfilerRunner` — **real pandas profiler** producing §4.4 documents (profiles stored to the real object store, pointer in PG) | `K8sProfilerRunner` (windrose/profiler Job) — **infra-gated** (needs a K8s cluster) |
+| `Catalog` | `LocalCatalog` — JSON metadata + parquet snapshots on disk | `IcebergRestCatalog` → `datacern_common.iceberg` (**Iceberg REST catalog + MinIO** via pyiceberg; verify/read-snapshot/expire/drop against the catalog) |
+| `ObjectStore` | `LocalFSObjectStore` — file blobs + HMAC pseudo-signed URLs | `S3ObjectStore` → `datacern_common.objectstore` (**MinIO/S3** blob put/get + **real presigned** GET URLs, 24h) |
+| `ProfilerRunner` | `InProcessProfilerRunner` — **real pandas profiler** producing §4.4 documents (profiles stored to the real object store, pointer in PG) | `K8sProfilerRunner` (datacern/profiler Job) — **infra-gated** (needs a K8s cluster) |
 | `SearchIndex` | `PostgresFTSSearchIndex` (tsvector + GIN) / `InMemorySearchIndex` (unit) | `OpenSearchIndex` (CDC projection) — **infra-gated** (OpenSearch not in the local stack; PG FTS is the real local search) |
-| Event bus | `InMemoryEventBus` (records + dispatches) | `KafkaEventBus` → `windrose_common.kafka` (**Redpanda/Kafka** idempotent producer, tenant-keyed; drives the outbox dispatcher) |
-| Consumer dedup | `SqlDedupStore` / `InMemoryDedupStore` | `RedisDedupStore` → `windrose_common.redisx` (**Redis** SET NX, 24h TTL) |
-| Consumer transport | direct handler subscription on the in-memory bus | `KafkaIngestionConsumer` → `windrose_common.kafka` (**Kafka** group `dataset-service.ingestion`, 5-retry backoff, real DLQ topic) |
-| AuthZ | `LocalScopeAuthz` (JWT scopes) | `OpaAuthzClient` → `windrose_common.opaclient` (**OPA** `windrose.authz_input` + **Redis** projection, MASTER-FR-012) |
-| AuthN | static PEM (unit) | `TokenVerifier` cached JWKS (already real) / `windrose_common.authjwt` |
+| Event bus | `InMemoryEventBus` (records + dispatches) | `KafkaEventBus` → `datacern_common.kafka` (**Redpanda/Kafka** idempotent producer, tenant-keyed; drives the outbox dispatcher) |
+| Consumer dedup | `SqlDedupStore` / `InMemoryDedupStore` | `RedisDedupStore` → `datacern_common.redisx` (**Redis** SET NX, 24h TTL) |
+| Consumer transport | direct handler subscription on the in-memory bus | `KafkaIngestionConsumer` → `datacern_common.kafka` (**Kafka** group `dataset-service.ingestion`, 5-retry backoff, real DLQ topic) |
+| AuthZ | `LocalScopeAuthz` (JWT scopes) | `OpaAuthzClient` → `datacern_common.opaclient` (**OPA** `datacern.authz_input` + **Redis** projection, MASTER-FR-012) |
+| AuthN | static PEM (unit) | `TokenVerifier` cached JWKS (already real) / `datacern_common.authjwt` |
 | Internal mTLS | mesh-terminated model: SPIFFE identity header allowlist + per-job HMAC callback signature | raw SPIFFE/XFCC validation is mesh-owned |
 
 The real `S3ObjectStore`, `IcebergRestCatalog`, `KafkaEventBus` +
@@ -120,7 +120,7 @@ Other deliberate deviations (documented, non-blocking):
 | MASTER: RLS + isolation | Done | migration 0001 policies; memory policy fake | `integration/test_rls_isolation.py`, `test_isolation_authz.py` |
 | MASTER: error envelope / pagination / Idempotency-Key / ETag | Done | `api/errors.py`, `api/pagination` in repos, `api/idempotency.py` | `test_datasets_api.py` |
 | MASTER: outbox | Done | `SqlOutboxRepo` + `OutboxDispatcher` | `integration/test_persistence_outbox.py::TestOutbox` |
-| MASTER: consumer dedup + DLQ | Done | `SqlDedupStore` / real `RedisDedupStore` + `KafkaIngestionConsumer` (real DLQ topic) via `windrose_common` | `integration/test_consumer_concurrency.py`, `integration/test_real_adapters.py` |
+| MASTER: consumer dedup + DLQ | Done | `SqlDedupStore` / real `RedisDedupStore` + `KafkaIngestionConsumer` (real DLQ topic) via `datacern_common` | `integration/test_consumer_concurrency.py`, `integration/test_real_adapters.py` |
 | MCP read facade | Done | `app/mcp/facade.py` | `test_mcp_and_events.py` (AC-14) |
 
 ## AC traceability

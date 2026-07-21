@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/windrose-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/domain"
 )
 
 const (
@@ -94,11 +94,11 @@ type policyEval func(t *testing.T, input map[string]any) (bool, string)
 
 func newEval(t *testing.T, autonomous bool) policyEval {
 	t.Helper()
-	src, err := os.ReadFile("windrose_authz.rego")
+	src, err := os.ReadFile("datacern_authz.rego")
 	require.NoError(t, err)
 	prepared, err := rego.New(
-		rego.Query("data.windrose.authz.result"),
-		rego.Module("windrose_authz.rego", string(src)),
+		rego.Query("data.datacern.authz.result"),
+		rego.Module("datacern_authz.rego", string(src)),
 		rego.Store(inmem.NewFromObject(permData(autonomous))),
 	).PrepareForEval(context.Background())
 	require.NoError(t, err)

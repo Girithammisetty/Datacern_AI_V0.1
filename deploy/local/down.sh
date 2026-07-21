@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Windrose `make down` — stop every native service started by `make up`.
+# Datacern `make down` — stop every native service started by `make up`.
 # Pass --infra to also stop the Docker infra stack.
 #   make down                 # stop services, leave infra up
 #   make down ARGS=--infra    # stop services + docker compose down
@@ -15,7 +15,7 @@ BLU=$'\e[36m'; GRN=$'\e[32m'; NC=$'\e[0m'
 say() { echo "${BLU}==>${NC} $*"; }
 ok()  { echo "${GRN}  ok${NC} $*"; }
 
-say "stopping Windrose services"
+say "stopping Datacern services"
 if [ -f "$PID_DIR/all.pids" ]; then
   while read -r p; do [ -n "$p" ] && kill "$p" 2>/dev/null; done < "$PID_DIR/all.pids"
 fi

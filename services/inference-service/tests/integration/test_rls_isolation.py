@@ -79,7 +79,7 @@ async def test_shipped_default_dsn_role_is_non_superuser_and_forced():
 
     dsn = Settings().database_url
     assert "inference_app" in dsn
-    assert "windrose:windrose_dev" not in dsn  # never the dev superuser
+    assert "datacern:datacern_dev" not in dsn  # never the dev superuser
 
 
 async def test_shipped_default_dsn_enforces_rls(pg):

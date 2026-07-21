@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/windrose-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/domain"
 )
 
 // handleStats is the TA/OP aggregate view (QRY-FR-081, US-10): top queries

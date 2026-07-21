@@ -9,18 +9,18 @@ import (
 
 	"github.com/google/uuid"
 
-	gcopa "github.com/windrose-ai/go-common/opaclient"
+	gcopa "github.com/datacern-ai/go-common/opaclient"
 
-	"github.com/windrose-ai/rbac-service/internal/authz"
-	"github.com/windrose-ai/rbac-service/internal/domain"
-	"github.com/windrose-ai/rbac-service/internal/projection"
+	"github.com/datacern-ai/rbac-service/internal/authz"
+	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/projection"
 )
 
 // TestOPAContainerParityWithGoDecide is the real cross-engine parity check
 // (RBC-FR-044, MASTER-FR-012): for a matrix of cases, the SAME projection slice
 // is fed to (a) rbac's Go reference `authz.Decide` and (b) the shared
 // libs/go-common opaclient calling the REAL OPA container (localhost:8281,
-// windrose.authz_input bundle). The two engines must return the same allow/deny
+// datacern.authz_input bundle). The two engines must return the same allow/deny
 // — and the same reason on deny. This proves a service authorizing via opaclient
 // gets exactly the decision rbac's SQL-fallback `Decide` would give.
 func TestOPAContainerParityWithGoDecide(t *testing.T) {
@@ -39,7 +39,7 @@ func TestOPAContainerParityWithGoDecide(t *testing.T) {
 		Subject: gcopa.Subject{ID: "u", Typ: "user"}, Action: "rbac.group.list", Tenant: "t",
 		Projection: gcopa.Projection{ActionKnown: true},
 	}); err != nil {
-		t.Skipf("OPA unavailable at %s: %v (restart windrose-dev-opa-1 after editing policy)", opaURL, err)
+		t.Skipf("OPA unavailable at %s: %v (restart datacern-dev-opa-1 after editing policy)", opaURL, err)
 	}
 
 	tenant := uuid.New()

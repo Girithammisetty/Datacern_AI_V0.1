@@ -572,7 +572,7 @@ class DatasetService(_Base):
         }
         dataset = await self.create(ctx, create_payload)
 
-        from windrose_common.iceberg import RowBatch
+        from datacern_common.iceberg import RowBatch
 
         async def _batches():
             yield RowBatch(columns=columns, rows=grid)
@@ -1121,7 +1121,7 @@ class ProfileService(_Base):
                 # Backfill real column types from the profiler's inference
                 # (DST-FR-016 follow-up): ingestion always registers `schema` as
                 # all-"string" (bronze is contractually string-typed at the
-                # Iceberg layer, per windrose_common.iceberg), so the ONLY place
+                # Iceberg layer, per datacern_common.iceberg), so the ONLY place
                 # a real logical type is ever computed is here. Without this,
                 # every column stays "string" forever and semantic-service's
                 # authoring validation (definition.py) rejects legitimate

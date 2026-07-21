@@ -1,7 +1,7 @@
 # BRD 22 — ui-web
 
 **Service:** ui-web · **Stack:** Next.js (App Router) + React 19 + TypeScript, TanStack Query v5, Zustand, Tailwind + design tokens · **Phase:** 0–5 · **Status:** Approved for build
-**Inherits:** `00_MASTER_BRD.md`. Architecture: `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §11, §8.5; `../../WINDROSE_V3_AGENTIC_ARCHITECTURE.md` §5.11 (feedback loop), §5.13 (EU AI Act Article 50). Domain mining source: `ui-core/` (V1 React SPA).
+**Inherits:** `00_MASTER_BRD.md`. Architecture: `../../DATACERN_PLATFORM_ARCHITECTURE.md` §11, §8.5; `../../DATACERN_V3_AGENTIC_ARCHITECTURE.md` §5.11 (feedback loop), §5.13 (EU AI Act Article 50). Domain mining source: `ui-core/` (V1 React SPA).
 
 ---
 
@@ -108,7 +108,7 @@ The FRs below turn each master charter rule into concrete screens and primitives
 - **UI-FR-075 (Must)** **No modals for reversible actions.** Reversible decisions use inline chips, toggles, autosave. Autosave is the default for editors (chart, pipeline, semantic form, agent recipe, budget); an explicit "Save" button appears only when the step is transactional (submit-for-approval, publish, install). CI enumerates existing modals; new modals on non-destructive routes require an ADR.
 
 **Cost + provenance inline — MASTER-FR-097**
-- **UI-FR-076 (Must)** Every AI-touched surface renders a **`<DecisionFooter>`** primitive (new in `packages/ui`) as a small footer joining: `<ProvenanceBadge>` (§UI-FR-032 data) + `<CostChip>` (from `Query.decisionCost(urn)` federating usage-service `usage.get_decision_cost` — BRD 17 §USG-FR-083) + optional `<ConfidenceChip>` (from eval-service score if present). Presence is a **release blocker**: any AI-touched artifact rendered without a `<DecisionFooter>` fails the `ai-surface-audit` Playwright suite. AI-touched = artifact has non-null `provenance` OR was viewed after being served by ai-gateway (`x-windrose-request-class` observed in the fetching call chain, recorded via BFF response header).
+- **UI-FR-076 (Must)** Every AI-touched surface renders a **`<DecisionFooter>`** primitive (new in `packages/ui`) as a small footer joining: `<ProvenanceBadge>` (§UI-FR-032 data) + `<CostChip>` (from `Query.decisionCost(urn)` federating usage-service `usage.get_decision_cost` — BRD 17 §USG-FR-083) + optional `<ConfidenceChip>` (from eval-service score if present). Presence is a **release blocker**: any AI-touched artifact rendered without a `<DecisionFooter>` fails the `ai-surface-audit` Playwright suite. AI-touched = artifact has non-null `provenance` OR was viewed after being served by ai-gateway (`x-datacern-request-class` observed in the fetching call chain, recorded via BFF response header).
 - **UI-FR-077 (Should)** `<CostChip>` shows `$X.XX` in default mode (2-decimal USD, rounded up); hover expands to a card with model version, `input_tokens/output_tokens`, `cached`, `handler`, `savings_usd_est`, `sourceCallsCount`, and the list of contributing model calls with per-call cost. Expert mode surfaces the card inline (no hover required).
 - **UI-FR-078 (Should)** Case detail and proposal detail additionally render `<RoiChip>` showing `total_value_usd / cost_usd_total` when both known; null value shows a subtle "value not set" chip inviting entry (calls `case-service` `PATCH /cases/:id/value_usd`). ROI is **never** used as a ranking key in default lists (prevents Goodhart's-law optimization pressure); may be used as an explicit sort in expert mode only.
 

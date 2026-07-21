@@ -1,6 +1,6 @@
 # BRD 28 — `pharmacy-benefit-mgmt` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 2 pack #4. Reference pattern: BRD 24.
 
 ---
@@ -129,7 +129,7 @@ entity_templates:
 
 ## 6. Dependencies
 
-Windrose Core (all BRDs 01–23). External: RxClaim/MedImpact/other PBM systems; Surescripts (Rx routing); CoverMyMeds (ePA); Micromedex/First Databank/Lexi-Comp (drug knowledge — licensed); NCPDP infrastructure; DEA CSOS integration for EPCS.
+Datacern Core (all BRDs 01–23). External: RxClaim/MedImpact/other PBM systems; Surescripts (Rx routing); CoverMyMeds (ePA); Micromedex/First Databank/Lexi-Comp (drug knowledge — licensed); NCPDP infrastructure; DEA CSOS integration for EPCS.
 
 ## 7. NFRs (deltas)
 

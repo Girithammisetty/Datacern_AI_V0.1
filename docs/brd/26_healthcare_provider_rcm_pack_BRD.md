@@ -1,6 +1,6 @@
 # BRD 26 — `healthcare-provider-rcm` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 2 pack #2 (ships after `care-management-medicare` v1 has 2 production references, ~month 24).
 **Inherits:** `00_MASTER_BRD.md`, `23_pack_service_BRD.md`. Reference implementation pattern: `24_insurance_claims_payer_pack_BRD.md`.
 
@@ -146,7 +146,7 @@ Consumed: `dataset.schema_changed` on connector-owned datasets.
 
 ## 7. Dependencies
 
-Windrose Core (all BRDs 01–23) + BRD 17 usage-service + BRD 16 eval-service + BRD 15 memory-service. External: Epic/Athena/eCW/NextGen/Cerner EHRs; Waystar/Change/Availity clearinghouses; EDI infrastructure; optional grouper library (3M or CMS).
+Datacern Core (all BRDs 01–23) + BRD 17 usage-service + BRD 16 eval-service + BRD 15 memory-service. External: Epic/Athena/eCW/NextGen/Cerner EHRs; Waystar/Change/Availity clearinghouses; EDI infrastructure; optional grouper library (3M or CMS).
 
 ## 8. NFRs (deltas from master)
 
@@ -172,7 +172,7 @@ Windrose Core (all BRDs 01–23) + BRD 17 usage-service + BRD 16 eval-service + 
 - **AC-7** Pack version attempts `mode: autonomous` on any coding/billing/appeal write tool → publish fails `RCM_AUTONOMOUS_BILLING_FORBIDDEN`.
 - **AC-8** Coding audit bundle for a claim range exports signed archive in ≤ 5 min with every code + chart-evidence citation.
 - **AC-9** Presidio + HIPAA masking verified — no unmasked MRN/DOB/name in any hosted-LLM prompt log.
-- **AC-10** **Pack installs cleanly on unmodified Core BRDs 01–23** (falsifiability test per `WINDROSE_CORE_CAPABILITIES.md` §6 Test 1).
+- **AC-10** **Pack installs cleanly on unmodified Core BRDs 01–23** (falsifiability test per `DATACERN_CORE_CAPABILITIES.md` §6 Test 1).
 
 ## 10. Out of scope / future
 

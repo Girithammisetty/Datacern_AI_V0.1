@@ -145,7 +145,7 @@ func validateField(name string, p map[string]any, val any) []FieldError {
 	return errs
 }
 
-// URNFields returns arg field names annotated with x-windrose-urn in the schema,
+// URNFields returns arg field names annotated with x-datacern-urn in the schema,
 // mapped to their URN template (BRD example, TPL-FR-032/BR-12). These are the
 // fields whose values carry resource URNs used for the cross-tenant check (BR-12)
 // and, unless opted out, the per-resource OBO-grant intersection (TPL-FR-032).
@@ -156,7 +156,7 @@ func URNFields(schema map[string]any) map[string]string {
 // OboURNFields returns the subset of URN fields that participate in the
 // per-resource OBO-grant intersection — i.e. resources whose governance is a
 // per-user ABAC assignment (a case the human is granted on). A field opts out
-// with `"x-windrose-urn-obo": false` when its resource is instead role-governed
+// with `"x-datacern-urn-obo": false` when its resource is instead role-governed
 // (e.g. a model version, gated by the action capability `experiment.model.update`
 // at the owning service's facade, not by a per-user resource grant). Such fields
 // still feed the cross-tenant guard via URNFields; they are only excluded here so
@@ -174,14 +174,14 @@ func urnFields(schema map[string]any, oboOnly bool) map[string]string {
 		if !ok {
 			continue
 		}
-		tmpl, ok := p["x-windrose-urn"].(string)
+		tmpl, ok := p["x-datacern-urn"].(string)
 		if !ok {
 			continue
 		}
 		// Default (annotation absent) is obo-eligible so existing per-resource
 		// tools (case.*) are unchanged; only an explicit false opts out.
 		if oboOnly {
-			if obo, present := p["x-windrose-urn-obo"].(bool); present && !obo {
+			if obo, present := p["x-datacern-urn-obo"].(bool); present && !obo {
 				continue
 			}
 		}
@@ -190,7 +190,7 @@ func urnFields(schema map[string]any, oboOnly bool) map[string]string {
 	return out
 }
 
-// AffectedURNs resolves ALL x-windrose-urn templates against args, producing the
+// AffectedURNs resolves ALL x-datacern-urn templates against args, producing the
 // concrete resource URNs the call touches. Used for the cross-tenant guard (BR-12)
 // and the audit record. Template form: "wr:{tenant}:case:case/{value}".
 func AffectedURNs(schema, args map[string]any, tenant string) []string {

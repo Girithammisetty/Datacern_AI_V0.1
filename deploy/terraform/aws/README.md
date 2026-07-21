@@ -1,10 +1,10 @@
-# Windrose — AWS infrastructure (Terraform)
+# Datacern — AWS infrastructure (Terraform)
 
-Provisions the managed AWS infrastructure the Windrose platform maps to (see
+Provisions the managed AWS infrastructure the Datacern platform maps to (see
 `deploy/services.yaml` `infra_dependencies` and `deploy/CONFIG.md`) and writes
 the platform's secrets into **AWS Secrets Manager** at
-`${name_prefix}/windrose-secrets` — the seam the External Secrets Operator reads
-to populate the in-cluster `windrose-secrets` Secret.
+`${name_prefix}/datacern-secrets` — the seam the External Secrets Operator reads
+to populate the in-cluster `datacern-secrets` Secret.
 
 > Scope: this module owns **only** the managed infra + the Secrets Manager
 > secret. The Helm chart, service images, and other clouds are out of scope.
@@ -19,7 +19,7 @@ to populate the in-cluster `windrose-secrets` Secret.
 | `elasticache.tf` | ElastiCache replication group (Redis/Valkey, TLS + AUTH) | `redis` |
 | `msk.tf` | MSK cluster (SASL/SCRAM over TLS) + SCRAM secret | `kafka` |
 | `s3.tf` | 4 buckets: warehouse, uploads, profiles, pipelines (versioned, encrypted, private) | `objectstore` |
-| `secrets.tf` | Secrets Manager `windrose-secrets` (endpoints + generated + supplied creds) | `secretstore` |
+| `secrets.tf` | Secrets Manager `datacern-secrets` (endpoints + generated + supplied creds) | `secretstore` |
 | `iam.tf` | IRSA roles: External-Secrets (read secret) + workload S3 (least-priv to 4 buckets) | workload identity |
 | `ecr.tf` | Optional per-service ECR repos (`create_ecr = true`) | registry |
 
@@ -68,20 +68,20 @@ terraform validate
 ## How it feeds the Helm deploy
 
 `terraform output` provides everything the CD workflow (`.github/workflows/cd-aws.yml`)
-and `deploy/helm/windrose/values-aws.yaml` need:
+and `deploy/helm/datacern/values-aws.yaml` need:
 
 | Output | Consumed by |
 |---|---|
 | `cluster_name`, `region` | `aws eks update-kubeconfig` |
-| `windrose_secret_arn` / `windrose_secret_name` | External Secrets `remoteRef` |
+| `datacern_secret_arn` / `datacern_secret_name` | External Secrets `remoteRef` |
 | `external_secrets_role_arn` | ESO ServiceAccount `eks.amazonaws.com/role-arn` annotation |
 | `workload_s3_role_arn` | S3-using services' ServiceAccount annotation |
 | `rds_endpoint`, `redis_primary_endpoint`, `kafka_bootstrap_brokers`, `bucket_names` | Helm `--set` infra endpoints (or read from the synced Secret) |
 | `ecr_repository_urls` | image registry (when `create_ecr = true`) |
 
 External Secrets Operator (installed by the CD workflow) uses
-`external_secrets_role_arn` to read `windrose_secret_arn` and materialize the
-`windrose-secrets` K8s Secret that every service consumes via `envFrom`.
+`external_secrets_role_arn` to read `datacern_secret_arn` and materialize the
+`datacern-secrets` K8s Secret that every service consumes via `envFrom`.
 
 ## What you must fill in later
 

@@ -1,4 +1,4 @@
-# Windrose AI — Platform Architecture & Workflows
+# Datacern AI — Platform Architecture & Workflows
 
 *Governed decision-intelligence backbone for regulated operations.*
 
@@ -10,7 +10,7 @@
 
 ## 1. Executive summary
 
-Windrose AI is a multi-tenant platform that puts **AI-assisted decisions under governance**: every automated recommendation is grounded in real data, gated by human approval, attributed with provenance, and captured as a training signal that makes the next decision cheaper and better. The hero use case is **insurance claims triage**, but the Core is vertical-agnostic — verticals ship as *packs* on top of a frozen Core.
+Datacern AI is a multi-tenant platform that puts **AI-assisted decisions under governance**: every automated recommendation is grounded in real data, gated by human approval, attributed with provenance, and captured as a training signal that makes the next decision cheaper and better. The hero use case is **insurance claims triage**, but the Core is vertical-agnostic — verticals ship as *packs* on top of a frozen Core.
 
 Three ideas define the platform:
 
@@ -75,7 +75,7 @@ The platform is a set of ~22 independently deployable services across three plan
 - **No client-supplied tenant ever reaches a key.** Realtime topics, DB queries, and object keys are all re-keyed from the verified JWT (`<tenant>/<resource>`).
 
 ### 4.2 Identity & tokens
-- Platform JWTs are **RS256**, `iss=identity.windrose.ai`, `aud=windrose`, minted only by identity-service (JWKS published for every verifier).
+- Platform JWTs are **RS256**, `iss=identity.datacern.ai`, `aud=datacern`, minted only by identity-service (JWKS published for every verifier).
 - Token exchanges: `/token/obo` (agent-on-behalf-of user), `/token/apikey`, `/token/embed` (shared-secret embed), `/token/agent` (SPIFFE), and **`/token/oidc`** (real interactive SSO — see §6.1).
 - **BYO IdP:** a generic OIDC `IdentityProvider` adapter (discovery + JWKS verify) makes Keycloak/Okta/Auth0/Entra one config of the same path.
 
@@ -95,7 +95,7 @@ The platform is a set of ~22 independently deployable services across three plan
 
 ## 5. The governed decision + learning loop (the differentiator)
 
-This is the flow that makes Windrose "self-improving." It spans casework, agentic, and ML planes.
+This is the flow that makes Datacern "self-improving." It spans casework, agentic, and ML planes.
 
 1. **Intake.** Data is ingested (connections / upload / streaming) → landed as a versioned **dataset** in the lakehouse. A **case** is created anchored to a real row `(dataset_urn, version, row_pk)` with a display projection + provenance.
 2. **Reason.** An **agent** (agent-runtime) runs a governed graph: it retrieves grounding (memory/RAG), calls the **ai-gateway** which routes to the *capable model rung*, and may call governed **tools** (tool-plane, OBO-authorized).
@@ -121,10 +121,10 @@ The web tier runs the OAuth **Authorization-Code + PKCE** dance; identity-servic
 1. User clicks *Sign in with SSO* → `ui-web /api/auth/oidc/start` discovers the IdP, generates a PKCE verifier + state (httpOnly cookies), 302-redirects to the IdP authorize endpoint.
 2. User authenticates at the IdP (Keycloak locally; Okta/Auth0/Entra in prod).
 3. IdP redirects to `ui-web /api/auth/callback` with a code → the callback exchanges the code (with the PKCE verifier) at the IdP token endpoint → gets an **ID token**.
-4. Callback POSTs the ID token to identity-service **`/token/oidc`**, which verifies it against the IdP's JWKS (discovery), resolves the Windrose user by email within the tenant, and mints the platform **session JWT** (`typ=user`, `iss=identity.windrose.ai`).
+4. Callback POSTs the ID token to identity-service **`/token/oidc`**, which verifies it against the IdP's JWKS (discovery), resolves the Datacern user by email within the tenant, and mints the platform **session JWT** (`typ=user`, `iss=identity.datacern.ai`).
 5. The session cookie is set; the user lands authenticated. Downstream authorization runs off the RBAC projection.
 
-**Embed federation (`/token/embed/oidc`):** the same verify path mints a *per-user, workspace-scoped embed token* from the end user's OIDC ID token (no shared secret) for an embedded Windrose surface, carrying `embed`/`surface`/`frame_ancestors` from the tenant's embed config.
+**Embed federation (`/token/embed/oidc`):** the same verify path mints a *per-user, workspace-scoped embed token* from the end user's OIDC ID token (no shared secret) for an embedded Datacern surface, carrying `embed`/`surface`/`frame_ancestors` from the tenant's embed config.
 
 > **See:** `diagrams/03-oidc-login-sequence.drawio`
 
@@ -165,7 +165,7 @@ Live E2E has repeatedly surfaced real bugs that unit tests could not (a dead SSE
 ## 8. Deployment & bring-your-own
 
 - **Local:** `deploy/docker-compose.dev.yml` brings up the full infra plane; `deploy/local/up.sh` boots all services; per-service `restart_*.sh` helpers for fast iteration.
-- **Cloud:** production Helm chart (`deploy/helm/windrose`) + Terraform for **AWS (EKS) / Azure (AKS) / GCP (GKE)**, credentials externalized.
+- **Cloud:** production Helm chart (`deploy/helm/datacern`) + Terraform for **AWS (EKS) / Azure (AKS) / GCP (GKE)**, credentials externalized.
 - **BYO hardening (phased):** P1 OTel wiring · P2 secrets adapters (Vault/AWS-KMS/Azure-KV/GCP-KMS via a `SECRETS_BACKEND` switch) · P3 SIEM/audit export · P4 generic OIDC IdP + real login. Each pluggable behind an env switch; the honest ceiling (external cloud IdP / real GPU) is documented, not faked.
 - **GPU (SLM):** optional scale-from-zero GPU node pools (tainted `nvidia.com/gpu`) + a gated training Job, all `terraform fmt` / `helm lint` clean without a GPU present.
 

@@ -1,7 +1,7 @@
 # BRD 08 — case-service (Go)
 
 **Date:** 2026-07-09 · **Status:** Approved for build · **Phase:** 4
-**Inherits:** `00_MASTER_BRD.md`. Architecture: `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6 (case-service row), §5 (Triage domain), §8.4/§8.5 (case-triage copilot, proposals).
+**Inherits:** `00_MASTER_BRD.md`. Architecture: `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6 (case-service row), §5 (Triage domain), §8.4/§8.5 (case-triage copilot, proposals).
 
 ---
 

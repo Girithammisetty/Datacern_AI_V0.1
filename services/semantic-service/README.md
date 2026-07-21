@@ -1,6 +1,6 @@
 # semantic-service
 
-Windrose's governed **semantic layer**: per-workspace semantic models
+Datacern's governed **semantic layer**: per-workspace semantic models
 (entities bound to dataset URNs, dimensions, measures, join paths), **verified
 NL↔SQL queries** with an approval workflow, and the core product — the
 **compile API**: `(metrics + dimensions + filters + time grain) → safe,
@@ -11,7 +11,7 @@ metric can never mean two different things in a chart and a chat answer
 (SEM-FR-081, enforced by a byte-identity contract test).
 
 Spec: `docs/brd/06_semantic_service_BRD.md` inheriting `docs/brd/00_MASTER_BRD.md`.
-Layout per `Windrose-ai/CONVENTIONS.md` (Python service, wave-1 self-contained).
+Layout per `Datacern-ai/CONVENTIONS.md` (Python service, wave-1 self-contained).
 
 
 ## Run
@@ -145,8 +145,8 @@ doubles in the right column exist **only** for the unit tier (`mode="memory"`,
 | `DatasetClient` | `HttpDatasetClient` (real httpx → dataset-service, SPIFFE header) | `StaticDatasetClient` (in-memory registry) |
 | `QueryServiceClient` | `HttpQueryServiceClient` (real httpx → query-service dry-run) | `FakeQueryServiceClient` (deterministic verdicts) |
 | `EmbeddingClient` | `OpenAIEmbeddingClient` (real `/v1/embeddings` → ai-gateway/Ollama `nomic-embed-text`, 768-d) | `LocalHashEmbedding` (deterministic hashing) |
-| Event bus | `KafkaEventBus` (real Redpanda via `windrose_common.kafka`, tenant-keyed) | `InMemoryEventBus` |
-| Consumer dedup | `RedisDedupStore` (real Redis SET NX, 24h TTL via `windrose_common.redisx`) | `InMemoryDedupStore` / `SqlDedupStore` |
+| Event bus | `KafkaEventBus` (real Redpanda via `datacern_common.kafka`, tenant-keyed) | `InMemoryEventBus` |
+| Consumer dedup | `RedisDedupStore` (real Redis SET NX, 24h TTL via `datacern_common.redisx`) | `InMemoryDedupStore` / `SqlDedupStore` |
 | Consumer transport | `KafkaSemanticConsumer` (real consumer groups, 5-retry backoff, DLQ) driving the transport-agnostic handler | direct in-memory bus subscription |
 | Event relay | `OutboxDispatcher` → `KafkaEventBus` (committed rows → real Redpanda, MASTER-FR-034) | in-process dispatch |
 | AuthZ | `OpaAuthzClient` (real OPA data API + Redis projection, MASTER-FR-012) | `LocalScopeAuthz` (JWT scopes) |

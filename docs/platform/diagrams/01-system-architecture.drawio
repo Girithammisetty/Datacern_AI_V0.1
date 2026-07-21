@@ -5,7 +5,7 @@
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
-        <mxCell id="title" value="Windrose AI — System Architecture" style="text;html=1;fontSize=20;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1"><mxGeometry x="40" y="16" width="600" height="30" as="geometry"/></mxCell>
+        <mxCell id="title" value="Datacern AI — System Architecture" style="text;html=1;fontSize=20;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1"><mxGeometry x="40" y="16" width="600" height="30" as="geometry"/></mxCell>
 
         <!-- Band 1: Experience -->
         <mxCell id="b1" value="EXPERIENCE PLANE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf2fd;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=1;fontColor=#33475b;align=left;spacingLeft=12;spacingTop=6;" vertex="1" parent="1"><mxGeometry x="40" y="60" width="1420" height="90" as="geometry"/></mxCell>

@@ -166,11 +166,11 @@ class LocalTrainingExecutor:
         run_kwargs = {"run_id": spec.mlflow_run_id} if spec.mlflow_run_id else {}
         with mlflow.start_run(**run_kwargs) as run:
             mlflow.set_tags({
-                "windrose.tenant_id": spec.tenant_id,
-                "windrose.run_id": spec.run_id,
-                "windrose.algorithm": spec.algorithm,
-                "windrose.family": family,
-                **{f"windrose.{k}": str(v) for k, v in spec.tags.items()},
+                "datacern.tenant_id": spec.tenant_id,
+                "datacern.run_id": spec.run_id,
+                "datacern.algorithm": spec.algorithm,
+                "datacern.family": family,
+                **{f"datacern.{k}": str(v) for k, v in spec.tags.items()},
             })
             mlflow.log_params({k: v for k, v in (spec.params or {}).items()})
             mlflow.log_param("algorithm", spec.algorithm)

@@ -1,12 +1,12 @@
-# Windrose in-cluster data tier (self-hosted / k3s / Hetzner)
+# Datacern in-cluster data tier (self-hosted / k3s / Hetzner)
 
-The stateful dependencies the Windrose services need, translated 1:1 from
+The stateful dependencies the Datacern services need, translated 1:1 from
 `deploy/docker-compose.dev.yml` (same images, ports, env). Deploy this **before**
 the app chart; the app's `values-hetzner.yaml` points every endpoint at these
 ClusterIP DNS names.
 
 **Scope:** dev/staging, CPU-only. Credentials are the compose defaults
-(`windrose` / `windrose_dev`) inline in the manifests — fine here, **not for
+(`datacern` / `datacern_dev`) inline in the manifests — fine here, **not for
 production** (move to a Secret + rotate).
 
 ## Components (28 resources)
@@ -37,7 +37,7 @@ extension + the one login role no migration self-creates, `semantic`) and the
 > ```bash
 > kubectl apply -f deploy/k8s/data-tier/optional-vault-mailpit.yaml
 > # then wire them into the secret:
-> VAULT_ADDR=http://vault:8200 VAULT_TOKEN=windrose_dev_root \
+> VAULT_ADDR=http://vault:8200 VAULT_TOKEN=datacern_dev_root \
 >   SMTP_HOST=mailpit SMTP_PORT=1025 ./create-secrets.sh
 > ```
 > otel-collector and temporal-ui from the compose file are still omitted — add
@@ -49,21 +49,21 @@ extension + the one login role no migration self-creates, `semantic`) and the
 # 1) One manual pre-step: the OPA policy bundle. It lives in the rbac service and
 #    is loaded from files, so it's created imperatively (avoids drift vs. inlining
 #    the Rego). Required — authz fails without it.
-kubectl create namespace windrose --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n windrose create configmap opa-policy \
-  --from-file=services/rbac-service/policy/windrose_authz.rego \
-  --from-file=services/rbac-service/policy/windrose_authz_input.rego
+kubectl create namespace datacern --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n datacern create configmap opa-policy \
+  --from-file=services/rbac-service/policy/datacern_authz.rego \
+  --from-file=services/rbac-service/policy/datacern_authz_input.rego
 
 # 2) The data tier.
 kubectl apply -k deploy/k8s/data-tier
 
 # 3) Watch it come up.
-kubectl -n windrose get pods -w
+kubectl -n datacern get pods -w
 
 # 4) Pull a small model for CPU Ollama.
-kubectl -n windrose exec deploy/ollama -- ollama pull llama3.2:3b
+kubectl -n datacern exec deploy/ollama -- ollama pull llama3.2:3b
 
-# 5) Create windrose-secrets (compose dev defaults, pointed at this data tier).
+# 5) Create datacern-secrets (compose dev defaults, pointed at this data tier).
 #    Idempotent; override any value via env (PG_PASSWORD=... OBJ_SECRET=... etc.).
 ./create-secrets.sh
 ```
@@ -71,13 +71,13 @@ kubectl -n windrose exec deploy/ollama -- ollama pull llama3.2:3b
 Then install the app chart with `values-hetzner.yaml` (see
 `deploy/terraform/hetzner/README.md`).
 
-### About `windrose-secrets` (`create-secrets.sh`)
+### About `datacern-secrets` (`create-secrets.sh`)
 Builds the Secret from `deploy/CONFIG.md`'s key contract with the in-cluster
 data-tier values. **Auth is dynamic:** `JWKS_URL` in `values-hetzner.yaml` points
 verifiers at identity-service's live JWKS (its dev signer self-generates the
 keypair each boot), so `JWT_SIGNING_KEY_PEM` / `JWT_JWKS` are deliberately *not*
 in the dev secret — those belong to the production KMS/ESO path only. For
-production, don't run this script: sync `windrose-secrets` from your cloud secret
+production, don't run this script: sync `datacern-secrets` from your cloud secret
 manager via External Secrets with real, rotated values.
 
 ## Notes

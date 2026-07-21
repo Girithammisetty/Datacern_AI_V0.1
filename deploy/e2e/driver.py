@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Windrose claims triage-and-governance journey driver.
+"""datacern claims triage-and-governance journey driver.
 
 Drives the whole real stack over HTTP/events and asserts real evidence at each
 step. No fakes in the path: real platform JWTs (harness IdP, RS256, real JWKS)
@@ -57,7 +57,7 @@ APPROVER = str(uuid.uuid5(uuid.NAMESPACE_DNS, "triage-approver-" + TENANT))
 SESSION = str(uuid.uuid4())
 
 _RBAC_DSN = os.environ.get(
-    "RBAC_DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/rbac")
+    "RBAC_DATABASE_URL", "postgres://datacern:datacern_dev@localhost:5432/rbac")
 
 
 def align_workspace_to_rbac():
@@ -100,7 +100,7 @@ def seed_projection_admin():
 
 def seed_py_authz(action):
     """FALLBACK/BOOTSTRAP ONLY: seed the Python-services OPA projection
-    (windrose_common single-key scheme: authz:proj:{tenant}:{user}:{action}:{ws})
+    (datacern_common single-key scheme: authz:proj:{tenant}:{user}:{action}:{ws})
     with admin facts for the harness operator subjects. The REAL path is rbac's
     projection worker, which dual-writes authz:proj:* from actual grants — this
     helper exists for the harness operators (who have no grants in a bare e2e
@@ -279,12 +279,12 @@ def step_a_ingest():
     try:
         s3 = s3client()
         objs = []
-        for bkt in ["windrose-warehouse", "windrose-uploads"]:
+        for bkt in ["datacern-warehouse", "datacern-uploads"]:
             try:
                 objs += [(bkt, o["Key"], o["Size"]) for o in s3.list_objects_v2(Bucket=bkt).get("Contents", [])]
             except Exception:
                 pass
-        wh = [o for o in objs if o[0] == "windrose-warehouse"]
+        wh = [o for o in objs if o[0] == "datacern-warehouse"]
         if wh:
             ok("real bytes in MinIO warehouse bucket", f"{len(wh)} objects, e.g. {wh[0][1]} ({wh[0][2]}B)")
             EVID["minio_warehouse_objects"] = len(wh)
@@ -357,7 +357,7 @@ def step_b_dataset(dataset_urn):
     # assert profile artifact bytes in MinIO profiles bucket
     try:
         s3 = s3client()
-        pobjs = s3.list_objects_v2(Bucket="windrose-profiles").get("Contents", [])
+        pobjs = s3.list_objects_v2(Bucket="datacern-profiles").get("Contents", [])
         if pobjs:
             ok("real profile artifact in MinIO profiles bucket",
                f"{len(pobjs)} objects, e.g. {pobjs[0]['Key']} ({pobjs[0]['Size']}B)")
@@ -369,7 +369,7 @@ def step_b_dataset(dataset_urn):
     # assert PG pointer row
     try:
         import psycopg
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/dataset") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/dataset") as cn:
             n = cn.execute("SELECT count(*) FROM profiles").fetchone()[0]
         if n and n > 0:
             ok("real profile pointer row in Postgres (dataset.profiles)",
@@ -465,7 +465,7 @@ def step_d_triage(case_id):
     # real token usage: ai-gateway metered the real Ollama call into request_log
     try:
         import psycopg
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/ai_gateway") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/ai_gateway") as cn:
             row = cn.execute("SELECT input_tokens, output_tokens FROM request_log "
                              "WHERE input_tokens > 0 ORDER BY created_at DESC LIMIT 1").fetchone()
         if row and (row[0] or row[1]):
@@ -506,7 +506,7 @@ def register_apply_tool():
                                              # case_id affects a case resource URN: the gateway
                                              # resolves it for the OPA obo-grant + cross-tenant checks.
                                              "case_id": {"type": "string",
-                                                         "x-windrose-urn": "wr:{tenant}:case:case/{value}"},
+                                                         "x-datacern-urn": "wr:{tenant}:case:case/{value}"},
                                              "disposition_id": {"type": "string"},
                                              "severity": {"type": "string"},
                                              "resolution_note": {"type": "string"},
@@ -521,7 +521,7 @@ def register_apply_tool():
     # tool_plane DB persists across e2e runs). Then publish this version.
     try:
         import psycopg
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane") as cn:
             pubs = [r[0] for r in cn.execute(
                 "SELECT version FROM tool_versions WHERE tool_id=%s AND status='published' AND version<>%s",
                 (tid, ver)).fetchall()]
@@ -547,7 +547,7 @@ def register_apply_tool():
     try:
         import psycopg
         facade_url = f"{c.CASE}/internal/v1/mcp/invoke"
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane",
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane",
                              autocommit=True) as cn:
             # tool_plane RLS FORCEs row security even for the owner; the platform
             # catalog rows require an app.role='platform' session (matches how the
@@ -556,7 +556,7 @@ def register_apply_tool():
             cn.execute(
                 """INSERT INTO mcp_backends (name, tenant_id, internal_url, spiffe_id, kind, status)
                    VALUES ('case-service','00000000-0000-0000-0000-000000000000',%s,
-                           'spiffe://windrose/ns/tools/sa/mcp-gateway','internal','active')
+                           'spiffe://datacern/ns/tools/sa/mcp-gateway','internal','active')
                    ON CONFLICT (name) DO UPDATE SET internal_url=EXCLUDED.internal_url,
                        spiffe_id=EXCLUDED.spiffe_id, status='active'""",
                 (facade_url,))
@@ -576,7 +576,7 @@ def step_e_grant_and_apply(case_id, proposal_id):
     from cryptography.hazmat.primitives.asymmetric import rsa
     import jwt as pyjwt
     rogue = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    forged = pyjwt.encode({"iss": "windrose-agent-runtime", "sub": MANAGER,
+    forged = pyjwt.encode({"iss": "datacern-agent-runtime", "sub": MANAGER,
                            "exp": int(time.time()) + 120, "iat": int(time.time()),
                            "proposal_id": "p-forged", "tenant_id": TENANT, "tool_id": tid,
                            "tier": "write-proposal", "args_digest": "deadbeef"},
@@ -642,7 +642,7 @@ def step_e_grant_and_apply(case_id, proposal_id):
     # assert disposition on the case in Postgres
     try:
         import psycopg
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/case_svc") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/case_svc") as cn:
             row = cn.execute(
                 "SELECT status, severity, disposition_id FROM cases WHERE id=%s", (case_id,)).fetchone()
         if row and row[2]:
@@ -696,7 +696,7 @@ def step_f_learning(case_id):
     import psycopg
     tsch = "mem_t_" + TENANT.replace("-", "").lower()
     try:
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/memory",
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/memory",
                              autocommit=True) as cn:
             cn.execute("SELECT mem_provision_tenant(%s)", (TENANT,))
     except Exception as e:
@@ -718,7 +718,7 @@ def step_f_learning(case_id):
     chunk = None
     for _ in range(15):
         try:
-            with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/memory") as cn:
+            with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/memory") as cn:
                 chunk = cn.execute(
                     f"SELECT corpus_key, embedding_model_ver, (embedding IS NOT NULL), "
                     f"vector_dims(embedding), left(content, 80) "
@@ -742,7 +742,7 @@ def step_f_learning(case_id):
     note_chunk = None
     for _ in range(30):
         try:
-            with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/memory") as cn:
+            with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/memory") as cn:
                 note_chunk = cn.execute(
                     f"SELECT left(content, 160), (embedding IS NOT NULL) "
                     f"FROM {tsch}.rag_chunks "
@@ -768,7 +768,7 @@ def step_g_governance(case_id):
     # audit: case activity log carries actor=user via_agent=triage-copilot
     try:
         import psycopg
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/case_svc") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/case_svc") as cn:
             rows = cn.execute(
                 "SELECT event_type, actor_type, actor_id, via_agent FROM case_events "
                 "WHERE case_id=%s AND via_agent IS NOT NULL ORDER BY occurred_at DESC LIMIT 5",
@@ -994,7 +994,7 @@ CORRECTION_ROWS = list(range(1, 25))  # 24 corrections + CLM-1001 -> 25 labeled 
 
 def materialize_features(dataset_urn):
     """Materialize the per-row feature snapshot the pipeline-orchestrator feature
-    source reads from MinIO (windrose-pipelines) when a case.disposition_applied
+    source reads from MinIO (datacern-pipelines) when a case.disposition_applied
     event carries no feature payload. MUST run BEFORE the first disposition event
     for this dataset (the front-half CLM-1001 apply in step E) — the feature source
     negative-caches a miss per dataset_urn, so the CSV has to exist first. Includes
@@ -1003,8 +1003,8 @@ def materialize_features(dataset_urn):
     import csv
     import io as _io
     s3 = s3client()
-    _ensure_bucket(s3, "windrose-pipelines")
-    _ensure_bucket(s3, "windrose-datasets")
+    _ensure_bucket(s3, "datacern-pipelines")
+    _ensure_bucket(s3, "datacern-datasets")
     buf = _io.StringIO()
     w = csv.writer(buf)
     w.writerow(["row_pk", *FEATURE_COLS])
@@ -1014,9 +1014,9 @@ def materialize_features(dataset_urn):
         fr = _feature_row(i)
         w.writerow([f"CLM-{i}", *[fr[cn] for cn in FEATURE_COLS]])
     key = _features_key(dataset_urn)
-    s3.put_object(Bucket="windrose-pipelines", Key=key, Body=buf.getvalue().encode(),
+    s3.put_object(Bucket="datacern-pipelines", Key=key, Body=buf.getvalue().encode(),
                   ContentType="text/csv")
-    ok("feature snapshot materialized in MinIO (windrose-pipelines) before the first "
+    ok("feature snapshot materialized in MinIO (datacern-pipelines) before the first "
        "disposition — CLM-1001 + CLM-1..24", f"key={key} cols={FEATURE_COLS}")
 
 
@@ -1074,7 +1074,7 @@ def step_h_corrections(dataset_urn):
     n = 0
     for _ in range(40):
         try:
-            with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/pipeline") as cn:
+            with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/pipeline") as cn:
                 n = cn.execute("SELECT count(*) FROM labeled_examples WHERE dataset_urn=%s",
                                (dataset_urn,)).fetchone()[0]
         except Exception as e:
@@ -1083,7 +1083,7 @@ def step_h_corrections(dataset_urn):
             break
         time.sleep(2)
     if n >= 20:
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/pipeline") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/pipeline") as cn:
             labels = cn.execute("SELECT label, count(*) FROM labeled_examples "
                                 "WHERE dataset_urn=%s GROUP BY label", (dataset_urn,)).fetchall()
         ok("pipeline-orchestrator consumer assembled the corrections into a REAL labeled "
@@ -1255,7 +1255,7 @@ def step_j_promote(experiment_id, mlflow_run_id):
     for _ in range(20):
         r = requests.post(f"{c.EXPERIMENT}/internal/reconcile",
                           headers={"x-client-spiffe-id":
-                                   "spiffe://windrose/ns/platform/sa/operator", **J()},
+                                   "spiffe://datacern/ns/platform/sa/operator", **J()},
                           json={"tenant_id": TENANT}, timeout=30)
         if r.status_code == 200:
             rec = r.json().get("data", {})
@@ -1336,7 +1336,7 @@ def step_j_promote(experiment_id, mlflow_run_id):
         bad("v2 production promotion failed"); return None
     # 3) assert single-production invariant in Postgres: v2=production, v1=archived
     import psycopg
-    with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/experiment") as cn:
+    with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/experiment") as cn:
         rows = cn.execute("SELECT version, stage FROM model_versions WHERE model_id=%s "
                           "ORDER BY version", (model_id,)).fetchall()
     # stage codes: 0 none, 1 staging, 2 production, 3 archived (experiment-service STAGE)
@@ -1420,12 +1420,12 @@ def step_k_inference(dataset_urn):
     key = f"inputs/new-claims-{int(time.time())}.parquet"
     b = _io.BytesIO(); pq.write_table(pa.Table.from_pandas(df, preserve_index=False), b)
     s3 = s3client()
-    _ensure_bucket(s3, "windrose-datasets")
-    s3.put_object(Bucket="windrose-datasets", Key=key, Body=b.getvalue(),
+    _ensure_bucket(s3, "datacern-datasets")
+    s3.put_object(Bucket="datacern-datasets", Key=key, Body=b.getvalue(),
                   ContentType="application/octet-stream")
-    storage_uri = f"s3://windrose-datasets/{key}"
+    storage_uri = f"s3://datacern-datasets/{key}"
     input_urn = f"wr:{TENANT}:dataset:dataset/new-claims-{int(time.time())}"
-    with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/inference",
+    with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/inference",
                          autocommit=True) as cn:
         cn.execute(
             "INSERT INTO input_datasets (id, tenant_id, urn, dataset_id, version_no, schema, "
@@ -1467,7 +1467,7 @@ def step_k_inference(dataset_urn):
     # read the REAL predictions parquet back from MinIO
     out_key = f"scores/{TENANT}/{job_id}/part-0.parquet"
     try:
-        obj = s3.get_object(Bucket="windrose-datasets", Key=out_key)
+        obj = s3.get_object(Bucket="datacern-datasets", Key=out_key)
         table = pq.read_table(_io.BytesIO(obj["Body"].read()))
         pdf = table.to_pandas()
         if "prediction" in pdf.columns and len(pdf) == len(rows):
@@ -1506,7 +1506,7 @@ def step_l_loop_closed():
 
 
 def main():
-    print(f"{B}Windrose e2e — insurance claims triage-and-governance journey{N}")
+    print(f"{B}datacern e2e — insurance claims triage-and-governance journey{N}")
     align_workspace_to_rbac()  # BEFORE step0 seeds anything workspace-scoped
     print(f"tenant={TENANT}\nworkspace={WORKSPACE}\ntriage-manager={MANAGER}\n")
     step0_seed()

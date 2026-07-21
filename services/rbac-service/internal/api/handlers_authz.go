@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/rbac-service/internal/authz"
-	"github.com/windrose-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/authz"
+	"github.com/datacern-ai/rbac-service/internal/domain"
 )
 
 func parseUUIDField(s string) (uuid.UUID, error) { return uuid.Parse(s) }

@@ -17,16 +17,16 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/go-common/otelx"
-	"github.com/windrose-ai/go-common/redisx"
-	"github.com/windrose-ai/tool-plane/internal/api"
-	"github.com/windrose-ai/tool-plane/internal/authz"
-	"github.com/windrose-ai/tool-plane/internal/embed"
-	"github.com/windrose-ai/tool-plane/internal/enforce"
-	"github.com/windrose-ai/tool-plane/internal/events"
-	"github.com/windrose-ai/tool-plane/internal/register"
-	"github.com/windrose-ai/tool-plane/internal/store"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/otelx"
+	"github.com/datacern-ai/go-common/redisx"
+	"github.com/datacern-ai/tool-plane/internal/api"
+	"github.com/datacern-ai/tool-plane/internal/authz"
+	"github.com/datacern-ai/tool-plane/internal/embed"
+	"github.com/datacern-ai/tool-plane/internal/enforce"
+	"github.com/datacern-ai/tool-plane/internal/events"
+	"github.com/datacern-ai/tool-plane/internal/register"
+	"github.com/datacern-ai/tool-plane/internal/store"
 )
 
 func env(k, d string) string {
@@ -41,7 +41,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Distributed tracing (no-op unless WINDROSE_OTEL_ENABLED / an OTLP endpoint
+	// Distributed tracing (no-op unless datacern_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "tool-registry")
 	defer func() { _ = otelShutdown(context.Background()) }()
@@ -56,7 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	dbURL := env("DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/tool_plane?sslmode=disable")
+	dbURL := env("DATABASE_URL", "postgres://datacern:datacern_dev@localhost:5432/tool_plane?sslmode=disable")
 	// Migrations need DDL/ownership + role creation, so they run under a
 	// privileged role (MIGRATE_DATABASE_URL, default = DATABASE_URL). The runtime
 	// pool connects as DATABASE_URL, which in a hardened deploy is a NON-superuser

@@ -10,7 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 // Issuer implements domain.TokenIssuer + domain.TokenVerifier over the
@@ -27,7 +27,7 @@ type Issuer struct {
 }
 
 func NewIssuer(km *KeyManager, clock func() time.Time) *Issuer {
-	return &Issuer{KM: km, Iss: "https://identity.windrose.ai", Aud: "windrose", TTL: domain.TokenTTL, Clock: clock}
+	return &Issuer{KM: km, Iss: "https://identity.datacern.ai", Aud: "datacern", TTL: domain.TokenTTL, Clock: clock}
 }
 
 type wireClaims struct {

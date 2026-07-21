@@ -17,8 +17,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/go-common/kafka"
 )
 
 func brokers() []string {

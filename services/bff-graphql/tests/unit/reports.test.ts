@@ -32,7 +32,7 @@ function notification() {
             name: req.body.name, recipients: req.body.recipients, cadence: req.body.cadence,
             send_hour: req.body.send_hour ?? 8, send_weekday: req.body.send_weekday ?? null,
             timezone: req.body.timezone ?? "UTC", format: req.body.format ?? "html",
-            enabled: req.body.enabled ?? true, created_by: "manager@demo.windrose",
+            enabled: req.body.enabled ?? true, created_by: "manager@demo.datacern",
             created_at: "2026-07-12T00:00:00Z", updated_at: "2026-07-12T00:00:00Z",
           },
         },
@@ -44,8 +44,8 @@ function notification() {
         body: {
           data: [
             { id: "rep-1", workspace_id: "ws-9", dashboard_id: "dash-1", name: "Weekly claims",
-              recipients: ["manager@demo.windrose"], cadence: "weekly", send_hour: 8, send_weekday: 1,
-              timezone: "UTC", format: "html", enabled: true, created_by: "manager@demo.windrose",
+              recipients: ["manager@demo.datacern"], cadence: "weekly", send_hour: 8, send_weekday: 1,
+              timezone: "UTC", format: "html", enabled: true, created_by: "manager@demo.datacern",
               created_at: "2026-07-12T00:00:00Z", updated_at: "2026-07-12T00:00:00Z" },
           ],
           page: { next_cursor: null, has_more: false },
@@ -56,10 +56,10 @@ function notification() {
       return {
         status: 200,
         body: { data: { id: "rep-1", workspace_id: "ws-9", dashboard_id: "dash-1",
-          name: req.body.name ?? "Weekly claims", recipients: req.body.recipients ?? ["manager@demo.windrose"],
+          name: req.body.name ?? "Weekly claims", recipients: req.body.recipients ?? ["manager@demo.datacern"],
           cadence: req.body.cadence ?? "weekly", send_hour: req.body.send_hour ?? 8,
           send_weekday: req.body.send_weekday ?? 1, timezone: "UTC", format: "html",
-          enabled: req.body.enabled ?? true, created_by: "manager@demo.windrose",
+          enabled: req.body.enabled ?? true, created_by: "manager@demo.datacern",
           created_at: "2026-07-12T00:00:00Z", updated_at: "2026-07-12T00:00:00Z" } },
       };
     }
@@ -98,7 +98,7 @@ describe("report subscription resolvers (notification-service passthrough, JWT f
           }
         }`,
         variables: {
-          input: { dashboardId: "dash-1", name: "Weekly claims", recipients: ["manager@demo.windrose"], cadence: "weekly", sendWeekday: 1 },
+          input: { dashboardId: "dash-1", name: "Weekly claims", recipients: ["manager@demo.datacern"], cadence: "weekly", sendWeekday: 1 },
           k: "idem-r1",
         },
       },
@@ -109,7 +109,7 @@ describe("report subscription resolvers (notification-service passthrough, JWT f
     const sub = (body?.data as any).createReportSubscription;
     expect(sub).toMatchObject({
       id: "rep-new", dashboardId: "dash-1", workspaceId: "ws-9", // from the dashboard, not "ws-OTHER"
-      name: "Weekly claims", recipients: ["manager@demo.windrose"], cadence: "weekly", enabled: true,
+      name: "Weekly claims", recipients: ["manager@demo.datacern"], cadence: "weekly", enabled: true,
       urn: "wr:t-42:notification:report_subscription/rep-new",
     });
     const post = notifDbl.requests.find((r) => r.method === "POST" && r.path === "/api/v1/reports");

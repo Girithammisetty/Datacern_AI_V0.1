@@ -1,4 +1,4 @@
-# Windrose CI — test/lint every service, enforce the no-stub rule, and build/push
+# Datacern CI — test/lint every service, enforce the no-stub rule, and build/push
 # one image per service. The build/test matrix is DERIVED at runtime from
 # deploy/services.yaml (the single source of truth) — nothing is hand-listed here.
 name: ci

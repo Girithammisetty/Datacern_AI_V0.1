@@ -1,6 +1,6 @@
 """Authorization port (MASTER-FR-012/016).
 
-Runtime calls the real OPA sidecar (OPAPolicyEngine via windrose_common). The
+Runtime calls the real OPA sidecar (OPAPolicyEngine via datacern_common). The
 unit tier uses StaticPolicyEngine — an in-memory policy double supporting deny
 rules so the authz matrix test can exercise PERMISSION_DENIED paths.
 """
@@ -31,9 +31,9 @@ class StaticPolicyEngine:
 
 
 class OPAPolicyEngine:
-    """Real OPA authorization via the shared ``windrose_common`` client: reads the
+    """Real OPA authorization via the shared ``datacern_common`` client: reads the
     per-request permissions projection from Redis and POSTs it as ``input`` to the
-    OPA data API (``windrose.authz_input``), returning the allow/deny decision
+    OPA data API (``datacern.authz_input``), returning the allow/deny decision
     (MASTER-FR-012). Runtime policy engine."""
 
     def __init__(
@@ -42,15 +42,15 @@ class OPAPolicyEngine:
         *,
         redis_url: str = "redis://localhost:6379/0",
     ) -> None:
-        from windrose_common.opaclient import OpaClient
-        from windrose_common.redisx import build_redis
+        from datacern_common.opaclient import OpaClient
+        from datacern_common.redisx import build_redis
 
         self.opa_url = opa_url
         self._redis = build_redis(redis_url)
         self._client = OpaClient(opa_url)
 
     async def allow(self, principal: Principal, action: str, resource_urn: str) -> bool:
-        from windrose_common.projection import load_projection
+        from datacern_common.projection import load_projection
 
         subject = {
             "id": principal.effective_user,

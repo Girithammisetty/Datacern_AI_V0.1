@@ -24,10 +24,10 @@ terraform {
   # Example:
   #   terraform {
   #     backend "s3" {
-  #       bucket         = "windrose-tfstate"
+  #       bucket         = "datacern-tfstate"
   #       key            = "aws/terraform.tfstate"
   #       region         = "us-east-1"
-  #       dynamodb_table = "windrose-tflock"
+  #       dynamodb_table = "datacern-tflock"
   #       encrypt        = true
   #     }
   #   }

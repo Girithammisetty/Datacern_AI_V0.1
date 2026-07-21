@@ -249,7 +249,7 @@ class _PassthroughDedup:
 
 class KafkaSemanticConsumer:
     """Real aiokafka consumer group (``semantic-service.<topic>``) via the shared
-    ``windrose_common`` consumer runner: 5-retry exponential backoff and a real
+    ``datacern_common`` consumer runner: 5-retry exponential backoff and a real
     per-group DLQ ``<topic>.semantic-service.<topic>.dlq`` (MASTER-FR-033).
     Dedup (MASTER-FR-032) is owned by ``SemanticEventConsumer.handle`` (Redis),
     so the runner uses a passthrough dedup. One consumer per subscribed topic;
@@ -264,7 +264,7 @@ class KafkaSemanticConsumer:
         *,
         bootstrap_servers: str = "localhost:9092",
     ):
-        from windrose_common.kafka import KafkaConfig, KafkaConsumer
+        from datacern_common.kafka import KafkaConfig, KafkaConsumer
 
         self.topic = topic
         self._handler = handler

@@ -3,7 +3,7 @@
  * code. We validate state, exchange the code (with the PKCE verifier) at the
  * IdP's token endpoint, then hand the resulting ID token to identity-service
  * POST /token/oidc, which verifies it against the IdP's JWKS, resolves the
- * Windrose user, and mints the platform session JWT. We set that as the
+ * Datacern user, and mints the platform session JWT. We set that as the
  * wr_session cookie and land the user in the app — a real end-to-end SSO login.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Hand the verified-upstream ID token to identity-service, which verifies it
-  // against the IdP JWKS and mints the Windrose session JWT.
+  // against the IdP JWKS and mints the Datacern session JWT.
   let sessionToken: string;
   try {
     const res = await fetch(`${cfg.identityUrl}/api/v1/token/oidc`, {
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     maxAge: 60 * 60 * 8,
   });
   // The IdP refresh_token (if issued) lets /api/auth/refresh silently re-mint
-  // the short-lived (5-min, MASTER-FR-010) Windrose session without a full
+  // the short-lived (5-min, MASTER-FR-010) Datacern session without a full
   // SSO round-trip. Scoped to /api/auth so it's never sent on ordinary
   // page/API requests, only the refresh call itself.
   if (refreshToken) {

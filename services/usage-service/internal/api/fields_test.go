@@ -16,9 +16,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
-	"github.com/windrose-ai/usage-service/internal/events"
-	"github.com/windrose-ai/usage-service/internal/store"
+	"github.com/datacern-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/events"
+	"github.com/datacern-ai/usage-service/internal/store"
 )
 
 func TestRollupRowEmitsCostUSDAndLegacyUSD(t *testing.T) {

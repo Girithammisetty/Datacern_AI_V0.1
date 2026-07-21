@@ -18,7 +18,7 @@ paths:
       summary: JWKS — public keys for proposal-execution grants + A2A card signatures
       description: >
         tool-plane fetches this (PROPOSAL_JWKS_URL) to verify grants issued by this
-        service (iss=windrose-agent-runtime). RSA public keys only.
+        service (iss=datacern-agent-runtime). RSA public keys only.
       responses: { "200": { description: JWKS document } }
   /api/v1/agents/{agent_key}/chat/completions:
     post:
@@ -41,7 +41,7 @@ paths:
                     case_id: { type: string }
       responses:
         "200":
-          description: run started (stream via realtime-hub topic in x-windrose-stream-topic)
+          description: run started (stream via realtime-hub topic in x-datacern-stream-topic)
         "402": { description: BUDGET_EXHAUSTED }
         "409": { description: SESSION_EXPIRED }
         "423": { description: AGENT_KILLED }

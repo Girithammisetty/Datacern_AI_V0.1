@@ -40,9 +40,9 @@ def _post(url, token, body, idem=None):
 
 # A STABLE tenant name so re-provisioning reuses one tenant instead of minting a
 # fresh `acme-claims-<timestamp>` every boot. The timestamped scheme drifted the
-# TENANT_ID under a running UI/BFF (which bake WINDROSE_PERSONAS at startup),
+# TENANT_ID under a running UI/BFF (which bake datacern_PERSONAS at startup),
 # orphaning the rbac perm:* projection and leaving every persona with 0 caps.
-STABLE_TENANT_NAME = os.environ.get("WINDROSE_E2E_TENANT_NAME", "acme-claims-e2e")
+STABLE_TENANT_NAME = os.environ.get("DATACERN_E2E_TENANT_NAME", "acme-claims-e2e")
 
 # Statuses from which a tenant is still usable for seeding (rbac group membership
 # and the perm:* projection are independent of the k8s provisioning workflow, so
@@ -172,7 +172,7 @@ def seed_aigw(tenant_id: str) -> str:
     now = _dt.datetime.now(_dt.timezone.utc)
     vkey = f"nk-{secrets.token_urlsafe(32)}"
     key_hash = hashlib.sha256(vkey.encode()).hexdigest()
-    dsn = "postgresql://windrose:windrose_dev@localhost:5432/ai_gateway"
+    dsn = "postgresql://datacern:datacern_dev@localhost:5432/ai_gateway"
     # provider_deployments are PLATFORM-shared infrastructure (which Ollama/Bedrock
     # endpoint serves each model-alias rung), read by the gateway under
     # settings.platform_tenant_id (pipeline._active_deployments). They MUST be
@@ -252,16 +252,16 @@ def register_inference_tool(tenant_id: str) -> str:
                                    "model_version": {"type": "integer"},
                                    "model_version_urn": {
                                        "type": "string",
-                                       "x-windrose-urn":
+                                       "x-datacern-urn":
                                            "wr:{tenant}:experiment:model_version/{value}",
                                        # Role-governed resource (see promote):
                                        # cross-tenant guarded, but not part of the
                                        # per-user obo-grant intersection.
-                                       "x-windrose-urn-obo": False},
+                                       "x-datacern-urn-obo": False},
                                    "input_dataset_urn": {
                                        "type": "string",
-                                       "x-windrose-urn": "wr:{tenant}:dataset:dataset/{value}",
-                                       "x-windrose-urn-obo": False},
+                                       "x-datacern-urn": "wr:{tenant}:dataset:dataset/{value}",
+                                       "x-datacern-urn-obo": False},
                                    "output_dataset_name": {"type": "string"},
                                    "workspace_id": {"type": "string"}},
                                "required": ["model_version_urn", "input_dataset_urn"]},
@@ -276,7 +276,7 @@ def register_inference_tool(tenant_id: str) -> str:
     # registry allows a single published version; the tool_plane DB persists
     # across `make up` runs).
     try:
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane") as cn:
             pubs = [row[0] for row in cn.execute(
                 "SELECT version FROM tool_versions WHERE tool_id=%s AND status='published' "
                 "AND version<>%s", (tid, ver)).fetchall()]
@@ -305,13 +305,13 @@ def register_inference_tool(tenant_id: str) -> str:
     # scoped row, tenant 0…0, resolved by owner_service=inference-service) so
     # the gateway federates the approved write to the real facade.
     facade_url = f"{inference_url}/internal/v1/mcp/invoke"
-    with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane",
+    with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane",
                          autocommit=True) as cn:
         cn.execute("SELECT set_config('app.role','platform', false)")
         cn.execute(
             """INSERT INTO mcp_backends (name, tenant_id, internal_url, spiffe_id, kind, status)
                VALUES ('inference-service','00000000-0000-0000-0000-000000000000',%s,
-                       'spiffe://windrose/ns/tools/sa/mcp-gateway','internal','active')
+                       'spiffe://datacern/ns/tools/sa/mcp-gateway','internal','active')
                ON CONFLICT (name) DO UPDATE SET internal_url=EXCLUDED.internal_url,
                    spiffe_id=EXCLUDED.spiffe_id, status='active'""",
             (facade_url,))
@@ -383,7 +383,7 @@ def register_ingestion_tool(tenant_id: str) -> str:
                                                 "required": ["source", "target"]}},
                                    "connection_id": {
                                        "type": "string",
-                                       "x-windrose-urn":
+                                       "x-datacern-urn":
                                            "wr:{tenant}:ingestion:connection/{value}"},
                                    "workspace_id": {"type": "string"}},
                                "required": ["ingestion_mode", "connector_type",
@@ -399,7 +399,7 @@ def register_ingestion_tool(tenant_id: str) -> str:
     # registry allows a single published version; the tool_plane DB persists
     # across `make up` runs).
     try:
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane") as cn:
             pubs = [row[0] for row in cn.execute(
                 "SELECT version FROM tool_versions WHERE tool_id=%s AND status='published' "
                 "AND version<>%s", (tid, ver)).fetchall()]
@@ -428,13 +428,13 @@ def register_ingestion_tool(tenant_id: str) -> str:
     # scoped row, tenant 0…0, resolved by owner_service=ingestion-service) so
     # the gateway federates the approved write to the real facade.
     facade_url = f"{ingestion_url}/internal/v1/mcp/invoke"
-    with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane",
+    with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane",
                          autocommit=True) as cn:
         cn.execute("SELECT set_config('app.role','platform', false)")
         cn.execute(
             """INSERT INTO mcp_backends (name, tenant_id, internal_url, spiffe_id, kind, status)
                VALUES ('ingestion-service','00000000-0000-0000-0000-000000000000',%s,
-                       'spiffe://windrose/ns/tools/sa/mcp-gateway','internal','active')
+                       'spiffe://datacern/ns/tools/sa/mcp-gateway','internal','active')
                ON CONFLICT (name) DO UPDATE SET internal_url=EXCLUDED.internal_url,
                    spiffe_id=EXCLUDED.spiffe_id, status='active'""",
             (facade_url,))
@@ -522,7 +522,7 @@ def register_chart_dashboard_tool(tenant_id: str) -> str:
     # registry allows a single published version; the tool_plane DB persists
     # across `make up` runs).
     try:
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane") as cn:
             pubs = [row[0] for row in cn.execute(
                 "SELECT version FROM tool_versions WHERE tool_id=%s AND status='published' "
                 "AND version<>%s", (tid, ver)).fetchall()]
@@ -551,13 +551,13 @@ def register_chart_dashboard_tool(tenant_id: str) -> str:
     # scoped row, tenant 0…0, resolved by owner_service=chart-service) so the
     # gateway federates the approved write to the real facade.
     facade_url = f"{chart_url}/internal/v1/mcp/invoke"
-    with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane",
+    with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane",
                          autocommit=True) as cn:
         cn.execute("SELECT set_config('app.role','platform', false)")
         cn.execute(
             """INSERT INTO mcp_backends (name, tenant_id, internal_url, spiffe_id, kind, status)
                VALUES ('chart-service','00000000-0000-0000-0000-000000000000',%s,
-                       'spiffe://windrose/ns/tools/sa/mcp-gateway','internal','active')
+                       'spiffe://datacern/ns/tools/sa/mcp-gateway','internal','active')
                ON CONFLICT (name) DO UPDATE SET internal_url=EXCLUDED.internal_url,
                    spiffe_id=EXCLUDED.spiffe_id, status='active'""",
             (facade_url,))
@@ -615,7 +615,7 @@ def register_entity_merge_tool(tenant_id: str) -> str:
         print(f"register dataset.entity.merge version: {r.status_code} {r.text[:150]}", file=sys.stderr)
 
     try:
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane") as cn:
             pubs = [row[0] for row in cn.execute(
                 "SELECT version FROM tool_versions WHERE tool_id=%s AND status='published' "
                 "AND version<>%s", (tid, ver)).fetchall()]
@@ -641,13 +641,13 @@ def register_entity_merge_tool(tenant_id: str) -> str:
     # is keyed by `name` (=owner_service); dataset-service already hosts the same
     # /internal/v1/mcp/invoke facade, so this row serves the merge tool.
     facade_url = f"{dataset_url}/internal/v1/mcp/invoke"
-    with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane",
+    with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane",
                          autocommit=True) as cn:
         cn.execute("SELECT set_config('app.role','platform', false)")
         cn.execute(
             """INSERT INTO mcp_backends (name, tenant_id, internal_url, spiffe_id, kind, status)
                VALUES ('dataset-service','00000000-0000-0000-0000-000000000000',%s,
-                       'spiffe://windrose/ns/tools/sa/mcp-gateway','internal','active')
+                       'spiffe://datacern/ns/tools/sa/mcp-gateway','internal','active')
                ON CONFLICT (name) DO UPDATE SET internal_url=EXCLUDED.internal_url,
                    spiffe_id=EXCLUDED.spiffe_id, status='active'""",
             (facade_url,))
@@ -657,7 +657,7 @@ def register_entity_merge_tool(tenant_id: str) -> str:
 
 def seed_evalkey(tenant_id: str) -> str:
     """Mint a tenant-scoped virtual key that ALLOWS the ``judge`` request class so
-    eval-service's LLM-judge calls (x-windrose-request-class: judge) pass
+    eval-service's LLM-judge calls (x-datacern-request-class: judge) pass
     ai-gateway's per-key class check (a chat/embed-only key is rejected 403). The
     deployment the judge routes to (fast-small -> qwen2.5:0.5b) is the one `aigw`
     already seeded for this tenant. Seeded directly in ai-gateway's Postgres, same
@@ -672,7 +672,7 @@ def seed_evalkey(tenant_id: str) -> str:
     now = _dt.datetime.now(_dt.timezone.utc)
     vkey = f"nk-{secrets.token_urlsafe(32)}"
     key_hash = hashlib.sha256(vkey.encode()).hexdigest()
-    dsn = "postgresql://windrose:windrose_dev@localhost:5432/ai_gateway"
+    dsn = "postgresql://datacern:datacern_dev@localhost:5432/ai_gateway"
     with psycopg.connect(dsn, autocommit=True) as conn:
         # The judge ladder's rungs are the 'balanced'/'frontier' model aliases
         # (DEFAULT_LADDERS["judge"]), NOT 'fast-small' which aigw seeded for chat.
@@ -732,7 +732,7 @@ def _register_tool(tenant_id: str, *, tool_id: str, version: str, display: str,
         print(f"register {tool_id} version: {r.status_code} {r.text[:150]}", file=sys.stderr)
 
     try:
-        with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane") as cn:
+        with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane") as cn:
             pubs = [row[0] for row in cn.execute(
                 "SELECT version FROM tool_versions WHERE tool_id=%s AND status='published' "
                 "AND version<>%s", (tool_id, version)).fetchall()]
@@ -753,13 +753,13 @@ def _register_tool(tenant_id: str, *, tool_id: str, version: str, display: str,
                          "Content-Type": "application/json"},
                 json={"enabled": True}, timeout=15)
 
-    with psycopg.connect("postgresql://windrose:windrose_dev@localhost:5432/tool_plane",
+    with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane",
                          autocommit=True) as cn:
         cn.execute("SELECT set_config('app.role','platform', false)")
         cn.execute(
             """INSERT INTO mcp_backends (name, tenant_id, internal_url, spiffe_id, kind, status)
                VALUES (%s,'00000000-0000-0000-0000-000000000000',%s,
-                       'spiffe://windrose/ns/tools/sa/mcp-gateway','internal','active')
+                       'spiffe://datacern/ns/tools/sa/mcp-gateway','internal','active')
                ON CONFLICT (name) DO UPDATE SET internal_url=EXCLUDED.internal_url,
                    spiffe_id=EXCLUDED.spiffe_id, status='active'""",
             (owner_service, backend_url))
@@ -817,7 +817,7 @@ def register_ml_lifecycle_tools(tenant_id: str) -> list[str]:
                           "version": {"type": "integer"},
                           "model_version_urn": {
                               "type": "string",
-                              "x-windrose-urn":
+                              "x-datacern-urn":
                                   "wr:{tenant}:experiment:model_version/{value}",
                               # A model version is ROLE-governed (the deciding
                               # human's experiment.model.update capability, checked
@@ -827,7 +827,7 @@ def register_ml_lifecycle_tools(tenant_id: str) -> list[str]:
                               # a perm:{tenant}:{user}:res:* grant that is never
                               # minted for model versions -> deny-forever) while
                               # keeping the cross-tenant URN guard.
-                              "x-windrose-urn-obo": False},
+                              "x-datacern-urn-obo": False},
                           "target_stage": {"type": "string"},
                           "rationale": {"type": "string"},
                           "workspace_id": {"type": "string"}},

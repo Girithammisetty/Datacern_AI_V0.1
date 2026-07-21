@@ -24,7 +24,7 @@ class InMemoryBudgetGate:
 
 class RedisBudgetGate:
     def __init__(self, redis_url: str = "redis://localhost:6379/0"):
-        from windrose_common.redisx import build_redis
+        from datacern_common.redisx import build_redis
 
         self._redis = build_redis(redis_url)
 

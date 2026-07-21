@@ -15,7 +15,7 @@ describe("routeUrnFor (AC-3 copilot context)", () => {
 });
 
 describe("urnParts", () => {
-  it("splits a windrose urn", () => {
+  it("splits a platform urn", () => {
     expect(urnParts("wr:t-acme:dataset:dataset/ds-9")).toMatchObject({
       tenant: "t-acme",
       type: "dataset",

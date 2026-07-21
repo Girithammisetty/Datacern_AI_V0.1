@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "Envelope",
-  "namespace": "ai.windrose.events.notification",
+  "namespace": "ai.datacern.events.notification",
   "doc": "notification.events.v1 — ops-grade emitted events (notification.created, notification.delivery.updated, notification.webhook.circuit_opened|closed, notification.endpoint.disabled, notification.audience.truncated). Consumed by audit-service + dashboards only (BRD 19 §6). Master envelope per MASTER-FR-031; payload carried as a JSON string.",
   "fields": [
     {"name": "event_id", "type": {"type": "string", "logicalType": "uuid"}},

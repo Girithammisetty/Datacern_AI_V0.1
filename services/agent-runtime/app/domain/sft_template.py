@@ -64,7 +64,7 @@ def to_sft_example(t: Transcript) -> dict | None:
     if not target or len(target) < _MIN_TARGET or len(user) < _MIN_USER:
         return None
     system = (
-        f"You are the Windrose '{t.agent_key}' agent. Given the case input and "
+        f"You are the Datacern '{t.agent_key}' agent. Given the case input and "
         "the retrieved grounding evidence, produce the governed action. Respond "
         "with only the action."
     )

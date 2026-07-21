@@ -1,7 +1,7 @@
 # BRD 20 — realtime-hub (Go)
 
 **Date:** 2026-07-09 · **Status:** Approved for build · **Phase:** 1
-**Inherits:** `00_MASTER_BRD.md`. Architecture: `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6 (realtime-hub row), §9.2 (topics), §8.3 (chat streams).
+**Inherits:** `00_MASTER_BRD.md`. Architecture: `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6 (realtime-hub row), §9.2 (topics), §8.3 (chat streams).
 
 ---
 
@@ -69,7 +69,7 @@ Personas: **UI client** (browser per user session), **Producer service** (pipeli
   | `proposal:*` | drop-oldest + `gap` | 1,000 / 10 min | rare | p95 500ms |
   | `chat:*` | disconnect `4409` | 10 min (token batches) | ≤ 20 batches/s | p99 50ms (gRPC path) |
 
-- **RTH-FR-035 (S)** UI SDK: the platform ships a TypeScript client (`@windrose/realtime`) implementing the reconnect contract (RTH-FR-033), per-topic `Last-Event-ID` tracking, gap→state-sync callbacks, and ticket minting — every UI feature consumes the hub only through this SDK so the contract lives in one place.
+- **RTH-FR-035 (S)** UI SDK: the platform ships a TypeScript client (`@datacern/realtime`) implementing the reconnect contract (RTH-FR-033), per-topic `Last-Event-ID` tracking, gap→state-sync callbacks, and ticket minting — every UI feature consumes the hub only through this SDK so the contract lives in one place.
 
 ### Limits & scaling
 - **RTH-FR-040 (M)** Connection limits (config per cell): **10 concurrent connections per user**, **2,000 per tenant**, 50K per pod. Over-limit connect → `429 CONNECTION_LIMIT` with `Retry-After`; per-user limit evicts the oldest connection of that user instead when header `X-Replace-Oldest: true`. Subscribe rate ≤ 10 topic-ops/s/connection.

@@ -26,13 +26,13 @@ func TestDuckDBMaterializeMinIO(t *testing.T) {
 		t.Skip("set QUERY_MINIO_E2E=1 to run the live MinIO materialization proof")
 	}
 	uri := env("QUERY_MINIO_URI",
-		"s3://windrose-warehouse/bronze.019f5035-3029-725d-a26a-96ff36fd8be5/ds_019f5035-ea52-71dc-89e7-a3a1bd200361/data/00000-0-3caea68c-3f02-4394-8ba7-f97fa492add7.parquet")
+		"s3://datacern-warehouse/bronze.019f5035-3029-725d-a26a-96ff36fd8be5/ds_019f5035-ea52-71dc-89e7-a3a1bd200361/data/00000-0-3caea68c-3f02-4394-8ba7-f97fa492add7.parquet")
 
 	d := &DuckDB{
 		S3Endpoint:  env("S3_ENDPOINT", "localhost:9000"),
 		S3Region:    env("AWS_REGION", "us-east-1"),
-		S3AccessKey: env("AWS_ACCESS_KEY_ID", "windrose"),
-		S3SecretKey: env("AWS_SECRET_ACCESS_KEY", "windrose_dev"),
+		S3AccessKey: env("AWS_ACCESS_KEY_ID", "datacern"),
+		S3SecretKey: env("AWS_SECRET_ACCESS_KEY", "datacern_dev"),
 	}
 
 	sink := &collectSink{}

@@ -39,7 +39,7 @@ class ParsedUrn:
 
 
 def parse(urn: str) -> ParsedUrn:
-    """Parse a Windrose URN. Model-version URNs may carry an ``@<version>`` tail."""
+    """Parse a Datacern URN. Model-version URNs may carry an ``@<version>`` tail."""
     parts = urn.split(":")
     if len(parts) != 4 or parts[0] != "wr":
         raise ValueError(f"malformed urn {urn!r}")

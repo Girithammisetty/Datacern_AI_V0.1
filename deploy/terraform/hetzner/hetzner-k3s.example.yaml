@@ -11,7 +11,7 @@
 # cheapest" profile.
 
 hetzner_token: <use HCLOUD_TOKEN env instead of hardcoding>
-cluster_name: windrose
+cluster_name: datacern
 kubeconfig_path: "./kubeconfig"
 k3s_version: v1.31.4+k3s1        # pin explicitly; bump deliberately
 
@@ -42,7 +42,7 @@ masters_pool:
   location: nbg1
 
 worker_node_pools:
-  - name: windrose-workers
+  - name: datacern-workers
     instance_type: cpx41        # 8 vCPU / 16 GB — holds the whole stack
     instance_count: 3           # ~48 GB total working set
     location: nbg1

@@ -75,11 +75,11 @@ dev/probe run.
 | PII scan / anonymize | `RegexPiiScanner` + `RegexAnonymizer` (Presidio-equivalent, real) | same (deterministic) |
 | Vector store / OLTP | `SqlMemoryStore` — Postgres 16 + pgvector, schema-per-tenant + RLS | `store/memory.py` in-memory |
 | Session scope | `RedisSessionStore` — real Redis hash, TTL-managed | `InMemorySessionStore` |
-| Event bus | `KafkaEventBus` — Redpanda idempotent producer (windrose_common) | `InMemoryEventBus` |
-| Consumers | `KafkaMemoryConsumer` — real consumer groups, DLQ, retry (windrose_common) | in-process bus dispatch |
+| Event bus | `KafkaEventBus` — Redpanda idempotent producer (datacern_common) | `InMemoryEventBus` |
+| Consumers | `KafkaMemoryConsumer` — real consumer groups, DLQ, retry (datacern_common) | in-process bus dispatch |
 | Consumer dedup | `RedisDedupStore` (24h TTL) / durable `SqlDedupStore` | `InMemoryDedupStore` |
 | AuthN | `TokenVerifier` — RS256 JWKS (`alg=none` rejected by construction) | static PEM |
-| AuthZ | `OpaAuthzClient` — real OPA sidecar + Redis projection (windrose_common) | `LocalScopeAuthz` |
+| AuthZ | `OpaAuthzClient` — real OPA sidecar + Redis projection (datacern_common) | `LocalScopeAuthz` |
 | Workspace membership | `RedisMembershipChecker` — rbac Redis projection (BR-10) | `InMemoryMembership` |
 | Embedding-outage queue | `RedisPendingQueue` — `mem:pend` (BR-2, ≤1h) | `InMemoryPendingQueue` |
 | Outbox relay | `store/sql.py::OutboxDispatcher` — poll + publish (MASTER-FR-034) | — |

@@ -9,7 +9,7 @@
 --      created here with NOSUPERUSER NOBYPASSRLS. Superusers and BYPASSRLS
 --      roles silently ignore RLS; a superuser default DSN would fake out the
 --      isolation guarantee. The runtime pool therefore never connects as the
---      migration owner (`windrose`/`postgres`).
+--      migration owner (`datacern`/`postgres`).
 --
 -- The policy is `tenant_id = current_setting('app.tenant_id')::uuid`; the
 -- service sets app.tenant_id per transaction from the verified JWT, never from

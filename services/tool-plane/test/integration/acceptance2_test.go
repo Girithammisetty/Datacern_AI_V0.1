@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/tool-plane/internal/api"
-	"github.com/windrose-ai/tool-plane/internal/domain"
-	"github.com/windrose-ai/tool-plane/internal/enforce"
-	"github.com/windrose-ai/tool-plane/internal/events"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/tool-plane/internal/api"
+	"github.com/datacern-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/enforce"
+	"github.com/datacern-ai/tool-plane/internal/events"
 )
 
 // autonomousToken mints an agent_autonomous token (no OBO user) so the OBO-grant

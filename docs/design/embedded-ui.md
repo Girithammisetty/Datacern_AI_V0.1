@@ -2,9 +2,9 @@
 
 ## Problem
 
-A tenant wants a Windrose surface (a dashboard, a case queue, the copilot)
+A tenant wants a Datacern surface (a dashboard, a case queue, the copilot)
 **inside their own app** — iframe or white-label — without their users doing a
-second interactive login, and without exposing Windrose chrome.
+second interactive login, and without exposing Datacern chrome.
 
 ## Why it's tractable
 
@@ -28,10 +28,10 @@ the embedding envelope, not the auth core.
 Standard embedded-analytics pattern (Looker/Metabase-style):
 
 1. **Embed-token exchange (embedding server).** The tenant's *backend* calls a
-   Windrose embed endpoint with a shared **embed secret** + the user context
+   Datacern embed endpoint with a shared **embed secret** + the user context
    `{tenantId, workspaceId, sub, scopes/role, surface, ttl}` and gets back a
    short-lived, scoped JWT + an embed URL. The secret never reaches the browser.
-   - The minted token is a **normal user JWT** (`aud=windrose` so every
+   - The minted token is a **normal user JWT** (`aud=datacern` so every
      downstream service still accepts it) carrying extra claims `embed:true` +
      `surface:[...]` and a **short TTL** (~10 min) and **narrow scopes +
      workspace**. Least privilege; the embed route enforces `surface`.
@@ -46,7 +46,7 @@ Standard embedded-analytics pattern (Looker/Metabase-style):
 4. **`frame-ancestors` CSP**: middleware sets
    `Content-Security-Policy: frame-ancestors <tenant's allowed origins>` for
    `/embed/*` (no `*`), and does NOT redirect `/embed/*` to login.
-5. **Embed SDK** (`windrose-embed.js`): `Windrose.embed(el, {token, surface,
+5. **Embed SDK** (`datacern-embed.js`): `Datacern.embed(el, {token, surface,
    theme})` injects the iframe + wires `postMessage` for auto-resize / nav /
    auth-refresh (host origin validated).
 
@@ -59,7 +59,7 @@ privilege path, no `frame-ancestors: *`.
 
 ## Status — Increment 1 (this slice) — BUILT + e2e-VERIFIED (2026-07-15)
 
-`mintUserToken` extended with `embed`/`surface`/`ttl` (aud stays windrose);
+`mintUserToken` extended with `embed`/`surface`/`ttl` (aud stays datacern);
 ui-web embedding-server route `POST /api/embed/token` (shared-secret gated,
 constant-time; pure `resolveEmbedRequest` for surface allowlist + TTL
 clamp[60s..1h]); `wr_embed` `SameSite=None;Secure;Partitioned` cookie set by
@@ -69,7 +69,7 @@ middleware from `?t=` + `getSessionToken` fallback; headless
 + full UI suite **386 green**. **LIVE e2e**: minted an embed token (wrong
 secret → 401), served a customer host page on a DIFFERENT origin
 (`localhost:8899`) that iframes the Payer KPI dashboard — all 4 charts render
-real data with **no Windrose chrome and no interactive login**; the embed route
+real data with **no Datacern chrome and no interactive login**; the embed route
 returns `Content-Security-Policy: frame-ancestors http://localhost:8899 'self'`.
 
 ## Increment 2 — BUILT + e2e-VERIFIED (2026-07-15)
@@ -78,7 +78,7 @@ Cases + copilot headless surfaces (`/embed/cases`, `/embed/copilot`), a shared
 `useEmbedFrame` hook (theme param + postMessage `ready`/`resize`, host-origin-
 validated inbound theme changes), middleware **surface allowlist** enforcement
 (token `surface` claim vs path → 403 cross-surface), and the embed SDK
-`public/windrose-embed.js` (`Windrose.embed(el,{embedUrl,theme})` → inject
+`public/datacern-embed.js` (`Datacern.embed(el,{embedUrl,theme})` → inject
 iframe + wire resize/theme, validate frame origin). **386 UI tests green.**
 LIVE: SDK-embedded cases queue on `localhost:8899` renders in **dark theme** (6
 real cases, no chrome, auto-resized); copilot surface renders headless with its

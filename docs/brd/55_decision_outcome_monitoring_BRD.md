@@ -1,7 +1,7 @@
 # BRD 55 — Decision Outcome Monitoring
 
 **Deliverable type:** Core capability (case-service + eval-service + chart-service + agent-runtime)
-**Publisher:** Windrose · **Initial version:** 1.0.0 · **Status:** authored (DESIGNED; build sequenced after BRD 54)
+**Publisher:** Datacern · **Initial version:** 1.0.0 · **Status:** authored (DESIGNED; build sequenced after BRD 54)
 **Closes:** the partial Decision-Monitoring capability. See `docs/design/di-completeness-roadmap.md`.
 
 ---
@@ -15,7 +15,7 @@ decisions that produced them, surface decision-effectiveness KPIs, detect drift
 on the DECISION (not just the model), and feed that signal into the learning
 loop and BRD 54 decision models.
 
-**Why.** Windrose captures corrections (M1/M2) and model metrics, but the
+**Why.** Datacern captures corrections (M1/M2) and model metrics, but the
 article's Decision-Monitoring capability is specifically about *outcome*
 tracking — the feedback loop that "separates a true DI platform from a static
 rules engine." Today a resolved case records its disposition; it does not record

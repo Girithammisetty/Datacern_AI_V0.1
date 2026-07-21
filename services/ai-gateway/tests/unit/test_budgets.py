@@ -50,7 +50,7 @@ async def test_ac2_workspace_budget_exhausted_402(client, container):
 
     r = await client.post(
         "/v1/chat/completions", json=CHAT_BODY,
-        headers=dp_headers(secret, **{"x-windrose-workspace-id": WORKSPACE}),
+        headers=dp_headers(secret, **{"x-datacern-workspace-id": WORKSPACE}),
     )
     assert r.status_code == 402, r.text
     err = r.json()["error"]
@@ -62,7 +62,7 @@ async def test_ac2_workspace_budget_exhausted_402(client, container):
     assert container.provider_client.calls == []  # no provider call
 
     span = container.tracer.spans_named("chat")[-1]
-    assert span.attributes["windrose.rejected_stage"] == "budget_preflight"
+    assert span.attributes["datacern.rejected_stage"] == "budget_preflight"
 
 
 async def test_br9_most_specific_exhausted_scope_named(client, container):
@@ -77,7 +77,7 @@ async def test_br9_most_specific_exhausted_scope_named(client, container):
     await _seed_spend(container, w, 100)
     r = await client.post(
         "/v1/chat/completions", json=CHAT_BODY,
-        headers=dp_headers(secret, **{"x-windrose-workspace-id": WORKSPACE}),
+        headers=dp_headers(secret, **{"x-datacern-workspace-id": WORKSPACE}),
     )
     assert r.status_code == 402
     assert r.json()["error"]["details"]["scope_type"] == "workspace"
@@ -98,7 +98,7 @@ async def test_br12_default_tenant_budget_applies(client, container):
 
 
 async def test_degradation_serves_lowest_rung(client, container):
-    """AIG-FR-007: ≥ degrade_pct → rung 0 + x-windrose-degraded: budget."""
+    """AIG-FR-007: ≥ degrade_pct → rung 0 + x-datacern-degraded: budget."""
     await seed_default_deployments(container)
     _, secret = await mint_key(container)
     budget = await _create_budget(container, scope_type="tenant", scope_ref=TENANT_A,
@@ -109,8 +109,8 @@ async def test_degradation_serves_lowest_rung(client, container):
         headers=dp_headers(secret),
     )
     assert r.status_code == 200, r.text
-    assert r.headers["x-windrose-rung"] == "0"
-    assert r.headers["x-windrose-degraded"] == "budget"
+    assert r.headers["x-datacern-rung"] == "0"
+    assert r.headers["x-datacern-degraded"] == "budget"
 
 
 async def test_escalation_denied_while_degraded(client, container):
@@ -120,12 +120,12 @@ async def test_escalation_denied_while_degraded(client, container):
                                   limit_usd=1.0)
     r1 = await client.post("/v1/chat/completions", json=CHAT_BODY,
                            headers=dp_headers(secret))
-    prior_id = r1.headers["x-windrose-request-id"]
+    prior_id = r1.headers["x-datacern-request-id"]
     await _seed_spend(container, budget, 96)
     r2 = await client.post(
         "/v1/chat/completions", json=CHAT_BODY,
-        headers=dp_headers(secret, **{"x-windrose-escalate": "true",
-                                      "x-windrose-prior-request-id": prior_id}),
+        headers=dp_headers(secret, **{"x-datacern-escalate": "true",
+                                      "x-datacern-prior-request-id": prior_id}),
     )
     assert r2.status_code == 403
     assert r2.json()["error"]["code"] == "LADDER_CAP"
@@ -204,7 +204,7 @@ async def test_ac14_judge_uses_system_budget_and_temp0(client, container):
         "/v1/chat/completions",
         json={**CHAT_BODY, "temperature": 0.9},
         headers=dp_headers(secret, request_class="judge",
-                           **{"x-windrose-feature": "eval"}),
+                           **{"x-datacern-feature": "eval"}),
     )
     assert r.status_code == 200, r.text
     # temperature forced to 0 at the provider

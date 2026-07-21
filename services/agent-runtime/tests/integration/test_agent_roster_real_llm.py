@@ -80,12 +80,12 @@ pytestmark = pytest.mark.integration
 VKEY = os.environ.get("AR_AI_GATEWAY_VKEY")
 TENANT = os.environ.get("AR_AIGW_TENANT", "11111111-1111-4111-8111-111111111111")
 JWT_PRIV_PATH = os.environ.get("AR_AIGW_JWT_PRIV", "/tmp/aigw_priv.pem")
-# The ai-gateway verifies X-Windrose-JWT against the IdP JWKS, so the token MUST
+# The ai-gateway verifies X-Datacern-JWT against the IdP JWKS, so the token MUST
 # carry the signing key's `kid` header and the issuer/audience the gateway trusts.
 # Defaults match the local dev/e2e harness key (deploy/e2e/keys/idp_private.pem,
 # kid "e2e-harness-key-1"); override for a different signer.
-JWT_ISS = os.environ.get("AR_AIGW_JWT_ISS", "https://identity.windrose.ai")
-JWT_AUD = os.environ.get("AR_AIGW_JWT_AUD", "windrose")
+JWT_ISS = os.environ.get("AR_AIGW_JWT_ISS", "https://identity.datacern.ai")
+JWT_AUD = os.environ.get("AR_AIGW_JWT_AUD", "datacern")
 JWT_KID = os.environ.get("AR_AIGW_JWT_KID", "e2e-harness-key-1")
 
 _MODEL_URN = f"wr:{TENANT}:experiment:model/claims-fraud"
@@ -110,7 +110,7 @@ def _jwt_provider(tenant_id: str) -> str:
 
 def _real_llm() -> AiGatewayLlmClient:
     return AiGatewayLlmClient(
-        AI_GATEWAY, model="windrose-auto", virtual_key=VKEY,
+        AI_GATEWAY, model="datacern-auto", virtual_key=VKEY,
         jwt_provider=_jwt_provider, temperature=0.4, max_tokens=220)
 
 

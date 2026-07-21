@@ -10,8 +10,8 @@ package authz
 import (
 	"context"
 
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/realtime-hub/internal/topics"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/realtime-hub/internal/topics"
 )
 
 // Actions (MASTER-FR-016 naming: <service>.<resource>.<verb>). Every action

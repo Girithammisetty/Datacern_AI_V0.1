@@ -4,7 +4,7 @@
 #   1. external-secrets GSA — Secret Manager accessor, bound to the ESO KSA.
 #      Its email goes on the ESO ServiceAccount annotation
 #      (iam.gke.io/gcp-service-account).
-#   2. storage GSA — object admin on the four Windrose buckets, bound to each
+#   2. storage GSA — object admin on the four Datacern buckets, bound to each
 #      workload KSA that touches GCS. Its email goes on those KSAs' annotations.
 #
 # No SA keys are ever created; access is entirely via Workload Identity.
@@ -19,12 +19,12 @@ locals {
 
 resource "google_service_account" "external_secrets" {
   account_id   = "${var.name_prefix}-eso"
-  display_name = "Windrose External Secrets accessor"
+  display_name = "Datacern External Secrets accessor"
 }
 
-# Read-only access to the windrose-secrets secret (scoped to the one secret).
+# Read-only access to the datacern-secrets secret (scoped to the one secret).
 resource "google_secret_manager_secret_iam_member" "eso_accessor" {
-  secret_id = google_secret_manager_secret.windrose.secret_id
+  secret_id = google_secret_manager_secret.datacern.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.external_secrets.email}"
 }
@@ -42,7 +42,7 @@ resource "google_service_account_iam_member" "eso_wi" {
 
 resource "google_service_account" "storage" {
   account_id   = "${var.name_prefix}-storage"
-  display_name = "Windrose GCS workload identity"
+  display_name = "Datacern GCS workload identity"
 }
 
 # Object admin scoped to each bucket (not project-wide).

@@ -16,11 +16,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/parquet-go/parquet-go"
 
-	"github.com/windrose-ai/audit-service/internal/chstore"
-	"github.com/windrose-ai/audit-service/internal/domain"
-	"github.com/windrose-ai/audit-service/internal/meta"
-	"github.com/windrose-ai/audit-service/internal/pgstore"
-	"github.com/windrose-ai/audit-service/internal/worm"
+	"github.com/datacern-ai/audit-service/internal/chstore"
+	"github.com/datacern-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/meta"
+	"github.com/datacern-ai/audit-service/internal/pgstore"
+	"github.com/datacern-ai/audit-service/internal/worm"
 )
 
 // Version is the exporter version stamped into manifests (AUD-FR-021).

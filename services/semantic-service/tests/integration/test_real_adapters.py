@@ -107,7 +107,7 @@ async def test_semantic_event_publishes_to_real_kafka_and_is_consumed(engine, cl
     consumer group reads the master envelope back. Hits: Postgres + Redpanda."""
     _require(9092, "Redpanda")
     _require(6379, "Redis")
-    from windrose_common.kafka import KafkaConfig, KafkaConsumer, KafkaProducerClient
+    from datacern_common.kafka import KafkaConfig, KafkaConsumer, KafkaProducerClient
 
     unique = uuid.uuid4().hex[:8]
     topic = f"semantic.events.v1.it{unique}"
@@ -170,8 +170,8 @@ async def test_opa_authz_decision_via_real_container():
     """
     _require(8281, "OPA")
     _require(6379, "Redis")
-    from windrose_common.opaclient import projection_key
-    from windrose_common.redisx import RedisProjection, build_redis
+    from datacern_common.opaclient import projection_key
+    from datacern_common.redisx import RedisProjection, build_redis
 
     from app.api.auth import OpaAuthzClient, Principal
 

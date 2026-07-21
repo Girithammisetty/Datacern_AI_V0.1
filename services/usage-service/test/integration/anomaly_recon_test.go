@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
-	"github.com/windrose-ai/usage-service/internal/events"
-	"github.com/windrose-ai/usage-service/internal/recon"
+	"github.com/datacern-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/events"
+	"github.com/datacern-ai/usage-service/internal/recon"
 )
 
 // TestAC08_AnomalyZScore: 28 days of history (mean 100, stddev 5) then a 130

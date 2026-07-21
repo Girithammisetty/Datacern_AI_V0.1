@@ -236,7 +236,7 @@ async def test_agent_runtime_mints_key_via_spiffe(client, container):
         "principal_type": "agent", "principal_id": "analytics",
         "tenant_id": TENANT_A, "ttl_seconds": 3600,
         "allowed_request_classes": ["chat", "sql-gen"],
-    }, headers={"x-client-spiffe-id": "spiffe://windrose/ns/ai/sa/agent-runtime"})
+    }, headers={"x-client-spiffe-id": "spiffe://datacern/ns/ai/sa/agent-runtime"})
     assert r.status_code == 201, r.text
     assert r.json()["data"]["expires_at"] is not None
 

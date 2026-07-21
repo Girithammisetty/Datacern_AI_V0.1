@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 const ruleCols = `id, tenant_id, scope, subject_type, subject_id, event_types, resource_filter, channels, digest_enabled, digest_window, active, created_by, created_at, updated_at, deleted_at`

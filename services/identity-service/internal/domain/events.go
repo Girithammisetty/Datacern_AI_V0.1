@@ -52,7 +52,7 @@ func NewEvent(eventType string, tenantID uuid.UUID, actor Actor, urn string, now
 	}
 }
 
-// URN builds a windrose resource URN: wr:<tenant_id>:<service>:<type>/<id>
+// URN builds a datacern resource URN: wr:<tenant_id>:<service>:<type>/<id>
 // (MASTER-FR-013). identity-service resources use service segment "identity".
 func URN(tenantID uuid.UUID, resourceType, resourceID string) string {
 	return "wr:" + tenantID.String() + ":identity:" + resourceType + "/" + resourceID

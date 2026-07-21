@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n/messages";
 import { NAV_ITEMS, NAV_GROUP_LABEL } from "@/lib/authz/registry";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
-import { WindroseLogo } from "@/components/brand/WindroseLogo";
+import { DatacernLogo } from "@/components/brand/DatacernLogo";
 
 /**
  * Primary navigation. Renders ONLY the items the viewer's capabilities/roles
@@ -28,7 +28,7 @@ export function Sidebar({ pendingCount }: { pendingCount?: number }) {
       className="hidden w-52 shrink-0 flex-col gap-0.5 border-r bg-card/50 p-3 md:flex"
     >
       <div className="mb-4 flex items-center gap-2 px-2">
-        <WindroseLogo className="size-7 shrink-0" />
+        <DatacernLogo className="size-7 shrink-0" />
         <span className="text-lg font-bold tracking-tight">{t("app.name")}</span>
       </div>
       {items.map(({ key, href, icon: Icon, label, group }, i) => {

@@ -37,9 +37,9 @@ const dashboardsResult = {
 function subscription(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: "rep-1", urn: "wr:t:notification:report_subscription/rep-1", dashboardId: "dash-1", workspaceId: "ws-9",
-    name: "Weekly claims summary", recipients: ["manager@demo.windrose"], cadence: "weekly", sendHour: 8,
+    name: "Weekly claims summary", recipients: ["manager@demo.datacern"], cadence: "weekly", sendHour: 8,
     sendWeekday: 1, timezone: "UTC", format: "html", enabled: true, lastSentAt: null, lastStatus: "",
-    lastError: "", createdBy: "manager@demo.windrose", createdAt: "2026-07-12T00:00:00Z", updatedAt: "2026-07-12T00:00:00Z",
+    lastError: "", createdBy: "manager@demo.datacern", createdAt: "2026-07-12T00:00:00Z", updatedAt: "2026-07-12T00:00:00Z",
     ...overrides,
   };
 }
@@ -81,7 +81,7 @@ describe("Team reports page (notification-service report subscriptions)", () => 
     renderWithProviders(<DashboardReportsPage />);
     expect(await screen.findByText("Weekly claims summary")).toBeInTheDocument();
     expect(screen.getByText("Claims overview")).toBeInTheDocument();
-    expect(screen.getByText("manager@demo.windrose")).toBeInTheDocument();
+    expect(screen.getByText("manager@demo.datacern")).toBeInTheDocument();
   });
 
   it("creates a report subscription and posts real recipients/cadence to the BFF", async () => {
@@ -93,7 +93,7 @@ describe("Team reports page (notification-service report subscriptions)", () => 
     const dialog = await screen.findByRole("dialog");
     await user.selectOptions(within(dialog).getByLabelText("Dashboard"), "dash-1");
     await user.type(within(dialog).getByLabelText("Subscription name"), "Monthly ops digest");
-    await user.type(within(dialog).getByLabelText("Recipients"), "a@demo.windrose, b@demo.windrose");
+    await user.type(within(dialog).getByLabelText("Recipients"), "a@demo.datacern, b@demo.datacern");
     await user.selectOptions(within(dialog).getByLabelText("Cadence"), "daily");
     await user.click(within(dialog).getByRole("button", { name: "New subscription" }));
 
@@ -102,7 +102,7 @@ describe("Team reports page (notification-service report subscriptions)", () => 
       expect(call?.vars.input).toMatchObject({
         dashboardId: "dash-1",
         name: "Monthly ops digest",
-        recipients: ["a@demo.windrose", "b@demo.windrose"],
+        recipients: ["a@demo.datacern", "b@demo.datacern"],
         cadence: "daily",
       });
     });
@@ -146,6 +146,6 @@ describe("Team reports page (notification-service report subscriptions)", () => 
     await waitFor(() => {
       expect(requests.some((r) => r.doc.includes("mutation TriggerReportSubscription") && r.vars.id === "rep-1")).toBe(true);
     });
-    expect(await screen.findByTestId("report-banner")).toHaveTextContent("manager@demo.windrose");
+    expect(await screen.findByTestId("report-banner")).toHaveTextContent("manager@demo.datacern");
   });
 });

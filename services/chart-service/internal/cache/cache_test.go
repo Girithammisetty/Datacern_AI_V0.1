@@ -3,7 +3,7 @@ package cache
 import (
 	"testing"
 
-	"github.com/windrose-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/chart-service/internal/domain"
 )
 
 // TestKeyDeterminism: the same variables/filters (any order) → same key/etag.

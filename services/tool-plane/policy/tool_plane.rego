@@ -1,4 +1,4 @@
-# Windrose tool-plane authorization policy (BRD 13 §3, TPL-FR-032).
+# Datacern tool-plane authorization policy (BRD 13 §3, TPL-FR-032).
 #
 # The mcp-gateway enforcement pipeline POSTs the normative OPA input document
 # (BRD §3) to the local OPA sidecar; this policy composes the decision:
@@ -13,7 +13,7 @@
 # enum_subset, maxItems). For proposal executions the signed grant's args_digest
 # must match. The decision carries a machine reason and the violated constraint id
 # so the audit event can record it (AC-3).
-package windrose.tool_plane
+package datacern.tool_plane
 
 import rego.v1
 

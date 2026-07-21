@@ -86,7 +86,7 @@ async def _register_and_bootstrap(container, settings):
 
 
 async def _start_workers(container, settings):
-    from windrose_common.kafka import KafkaConfig, KafkaProducerClient
+    from datacern_common.kafka import KafkaConfig, KafkaProducerClient
 
     from app.events.bus import KafkaOutboxBus
     from app.events.consumer import CONSUMED_TOPICS, KafkaPipelineConsumer
@@ -172,11 +172,11 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.state.token_verifier = container.token_verifier
     app.state.authz = container.authz
 
-    # Observability (MASTER-FR-050): tracing (no-op unless WINDROSE_OTEL_ENABLED)
+    # Observability (MASTER-FR-050): tracing (no-op unless DATACERN_OTEL_ENABLED)
     # + RED metrics middleware. RED is added last so it is OUTERMOST and times
     # the whole request incl. auth.
-    from windrose_common.metricsx import RedMiddleware, instrument_app
-    from windrose_common.otelx import configure_tracing
+    from datacern_common.metricsx import RedMiddleware, instrument_app
+    from datacern_common.otelx import configure_tracing
 
     configure_tracing("pipeline-orchestrator")
     app.add_middleware(AuthMiddleware)

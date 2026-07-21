@@ -2,12 +2,12 @@
 
 ## Problem
 
-Windrose is a decision platform, but data flow is one-way. The 19 connectors
+Datacern is a decision platform, but data flow is one-way. The 19 connectors
 **pull** a tenant's data in (every connector config is "the database/schema to
 read from"); the platform then produces decisions (case dispositions, approved
 proposals, inference scores); but there is **no path to write those decisions
 back** to the tenant's system of record (SoR). A denial or an approved
-prior-auth is stranded inside Windrose — the only egress today is a manual
+prior-auth is stranded inside Datacern — the only egress today is a manual
 "Export CSV" on the Cases page.
 
 This is a named, deliberately-deferred requirement, not a new idea. Every

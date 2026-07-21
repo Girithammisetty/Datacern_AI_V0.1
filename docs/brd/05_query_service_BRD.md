@@ -1,7 +1,7 @@
 # BRD 05 — query-service
 
 **Service:** query-service · **Language:** Go · **Phase:** 1
-**Inherits:** `00_MASTER_BRD.md` · **Architecture:** `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6, §9
+**Inherits:** `00_MASTER_BRD.md` · **Architecture:** `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6, §9
 **V1 sources mined:** `ido/app/models/{query,saved_query,dataset}.rb` (`process_vars!`, `build_statement`, `verify_statement`), `ido/app/controllers/api/v1/queries_controller.rb` routes, Blazer-based execution, `ido/config/settings.yml` warehouse config/timeouts
 
 ---

@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/domain"
 )
 
 // ResolveVersion returns the version the gateway should evaluate: the published

@@ -45,6 +45,6 @@ async def metrics(request: Request):
         "# TYPE mlflow_mirror_drift_total gauge",
         f"mlflow_mirror_drift_total {gauges.get('mlflow_mirror_drift_total', 0)}",
     ]
-    from windrose_common.metricsx import REGISTRY
+    from datacern_common.metricsx import REGISTRY
     body = "\n".join(lines) + "\n" + REGISTRY.render()
     return Response(body, media_type="text/plain; version=0.0.4")

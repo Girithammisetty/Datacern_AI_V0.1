@@ -3,7 +3,7 @@
 Two wirings, selected by ``settings.adapter_mode``:
 
 * ``"real"`` (runtime default via ``Settings.from_env``) wires the shared
-  ``windrose_common`` adapters against local, protocol-compatible infra —
+  ``datacern_common`` adapters against local, protocol-compatible infra —
   MinIO (object store), the Iceberg REST catalog (table writer), Vault
   (secrets), Redpanda/Kafka (event publisher) and OPA (policy). No stub is
   reachable from this path (CONVENTIONS.md END STATE).

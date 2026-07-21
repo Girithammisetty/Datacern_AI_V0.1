@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/rbac-service/internal/events"
-	"github.com/windrose-ai/rbac-service/internal/projection"
+	"github.com/datacern-ai/rbac-service/internal/events"
+	"github.com/datacern-ai/rbac-service/internal/projection"
 )
 
 // ---- projection.SnapshotLoader ---------------------------------------------

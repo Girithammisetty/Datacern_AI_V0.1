@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/domain"
 )
 
 // Topics (MASTER-FR-030).

@@ -49,7 +49,7 @@ soak:
 # ---- Demo pack control -----------------------------------------------------
 # Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway
 # `wr-demo-<pack>` tenant for a demo, then tear it down cleanly afterwards. The
-# main `demo.windrose` tenant is never touched. Needs the stack up (`make up`).
+# main `demo.datacern` tenant is never touched. Needs the stack up (`make up`).
 #   make demo-list                       # packs you can load + demos loaded now
 #   make demo-load PACK=card-disputes    # spin up wr-demo-card-disputes
 #   make demo-clean PACK=card-disputes   # tear it down

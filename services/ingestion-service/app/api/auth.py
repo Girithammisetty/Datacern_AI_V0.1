@@ -2,7 +2,7 @@
 
 RS256 only; `alg=none` is structurally impossible (allow-list). Verification
 uses a configured static public key (unit tier) or a real cached JWKS refresh
-from identity-service (runtime, JWKSKeyProvider via windrose_common).
+from identity-service (runtime, JWKSKeyProvider via datacern_common).
 """
 
 from __future__ import annotations
@@ -56,12 +56,12 @@ class Principal:
 
 
 class JWKSKeyProvider:
-    """Real cached JWKS provider via the shared ``windrose_common`` JwksCache:
+    """Real cached JWKS provider via the shared ``datacern_common`` JwksCache:
     fetches identity-service's JWKS over HTTP and caches keys by ``kid`` with a
     TTL refresh (MASTER-FR-010). Runtime key provider for the JWKS auth path."""
 
     def __init__(self, jwks_url: str, ttl_seconds: int = 300) -> None:
-        from windrose_common.authjwt import JwksCache
+        from datacern_common.authjwt import JwksCache
 
         self.jwks_url = jwks_url
         self._cache = JwksCache(jwks_url, ttl_seconds=ttl_seconds)
@@ -77,7 +77,7 @@ async def verify_token_async(
     the static-PEM sync verifier when no JWKS is configured."""
     if settings.jwt_public_key_pem or jwks is None:
         return verify_token(token, settings)
-    from windrose_common.authjwt import InvalidTokenError, JwtVerifier
+    from datacern_common.authjwt import InvalidTokenError, JwtVerifier
 
     verifier = JwtVerifier(
         issuer=settings.jwt_issuer, audience=settings.jwt_audience, jwks=jwks._cache

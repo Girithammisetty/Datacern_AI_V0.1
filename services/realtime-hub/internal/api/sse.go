@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/realtime-hub/internal/fanout"
+	"github.com/datacern-ai/realtime-hub/internal/fanout"
 )
 
 // handleSSE is the primary transport (RTH-FR-001): GET /api/v1/stream. It

@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 const webhookCols = `id, tenant_id, url, event_types, secrets, active, verified_at, circuit_state, circuit_opened_at, consecutive_failures, created_by, created_at, updated_at`

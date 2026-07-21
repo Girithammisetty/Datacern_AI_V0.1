@@ -1,7 +1,7 @@
 [project]
 name = "ingestion-service"
 version = "0.1.0"
-description = "Windrose ingestion-service: connections, ingestion jobs, resumable uploads, schedules"
+description = "Datacern ingestion-service: connections, ingestion jobs, resumable uploads, schedules"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -25,7 +25,7 @@ dependencies = [
     "pyarrow>=16",
     "fastavro>=1.9",
     "httpx>=0.27",
-    "windrose-common",
+    "datacern-common",
 ]
 
 # Credential-gated cloud/SaaS driver SDKs. Their adapter code is real and
@@ -43,7 +43,7 @@ cloud = [
     "databricks-sql-connector>=3.4",
     "simple-salesforce>=1.12",
     # Object-store / data-lake SOURCE connectors (credential-gated backends).
-    # S3 uses boto3 (already a base dep via windrose-common), so it stays out of
+    # S3 uses boto3 (already a base dep via datacern-common), so it stays out of
     # this group and is verified live against MinIO.
     "google-cloud-storage>=2.18",
     "azure-storage-blob>=12.22",
@@ -56,7 +56,7 @@ cloud = [
 ]
 
 [tool.uv.sources]
-windrose-common = { path = "../../libs/py-common", editable = true }
+datacern-common = { path = "../../libs/py-common", editable = true }
 
 [dependency-groups]
 dev = [

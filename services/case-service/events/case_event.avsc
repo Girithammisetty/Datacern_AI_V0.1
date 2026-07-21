@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "CaseEnvelope",
-  "namespace": "ai.windrose.case.events.v1",
+  "namespace": "ai.datacern.case.events.v1",
   "doc": "Master event envelope (MASTER-FR-031) carried on case.events.v1. Payload is the schemaless per-type map serialized as a JSON string; the concrete event_type values are enumerated in the doc below.",
   "fields": [
     {"name": "event_id", "type": {"type": "string", "logicalType": "uuid"}},

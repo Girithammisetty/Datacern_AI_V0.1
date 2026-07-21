@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "AiAgentRun",
-  "namespace": "windrose.agent.events.v1",
+  "namespace": "datacern.agent.events.v1",
   "doc": "ai.agent_run.v1 payload (ART-FR-011). Run lifecycle transitions. Emitted inside the master envelope's `payload` (JSON-encoded).",
   "fields": [
     {"name": "run_id", "type": "string"},

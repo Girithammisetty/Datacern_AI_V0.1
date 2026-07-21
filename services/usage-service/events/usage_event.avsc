@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "UsageEventEnvelope",
-  "namespace": "ai.windrose.usage.events",
+  "namespace": "ai.datacern.usage.events",
   "doc": "usage.events.v1 — platform master envelope (MASTER-FR-031). usage-service emits budget.threshold/exhausted/reset, budget.created/updated/deleted, usage.anomaly_detected, usage.reconciliation_variance, usage.month_refinalized, ratecard.activated and adjustment.recorded. Partition key = tenant_id. The schemaless payload is carried as a JSON string field per the shared go-common envelope schema; the payload shapes per event_type are documented in BRD 17 §6.",
   "fields": [
     {"name": "event_id", "type": {"type": "string", "logicalType": "uuid"}},

@@ -5,13 +5,13 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // OPAClient is the real runtime authorizer (MASTER-FR-012): each decision loads
 // the caller's permissions_flat projection from Redis (rbac key scheme,
-// RBC-FR-040) and POSTs it to the local OPA sidecar's windrose.authz_input
+// RBC-FR-040) and POSTs it to the local OPA sidecar's datacern.authz_input
 // bundle. It fails closed on any transport error. This is the same shared
 // libs/go-common implementation every service uses, so audit-service's
 // allow/deny is byte-for-byte rbac's decision for the same projection.

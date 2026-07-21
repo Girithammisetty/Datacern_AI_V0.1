@@ -11,7 +11,7 @@
 #
 # Demo tenants are named `wr-demo-<pack>` so they are always cleanup-eligible
 # (wr-* prefix + recorded in .multitenant_state.json) and can never collide with
-# the platform's main `demo.windrose` tenant, which cleanup refuses by design.
+# the platform's main `demo.datacern` tenant, which cleanup refuses by design.
 #
 # Usage:
 #   packs/demo.sh list                 # available packs + loaded demo tenants
@@ -85,7 +85,7 @@ PYEOF
       --display "$(title_of "$PACK") Demo" --short "$(short_of "$PACK")"
     [ "$DRY" = 1 ] && exit 0
     say ""
-    say "${GRN}ready${NC} — log in at ${BLD}http://localhost:3000/login${NC} as ${BLD}admin@$(short_of "$PACK").windrose${NC} (any password)"
+    say "${GRN}ready${NC} — log in at ${BLD}http://localhost:3000/login${NC} as ${BLD}admin@$(short_of "$PACK").datacern${NC} (any password)"
     say "  role logins: packs/MULTITENANT_LOGINS.md    tear down: ${BLD}packs/demo.sh clean $PACK${NC}"
     ;;
 
@@ -94,7 +94,7 @@ PYEOF
     T="$(tenant_of "$PACK")"
     say "${BLD}Cleaning up${NC} demo tenant '${T}' …"
     run "$PY" cleanup_pack_tenants.py --tenant "$T" --yes
-    [ "$DRY" = 1 ] || say "${GRN}done${NC} — '${T}' removed. The main demo.windrose tenant is untouched."
+    [ "$DRY" = 1 ] || say "${GRN}done${NC} — '${T}' removed. The main demo.datacern tenant is untouched."
     ;;
 
   clean-all)

@@ -76,7 +76,7 @@ class OpenAIEmbeddingClient:
         if self.api_key:
             headers["authorization"] = f"Bearer {self.api_key}"
         # Forward tenant for per-tenant budgeting/attribution at the gateway.
-        headers["x-windrose-tenant-id"] = tenant_id
+        headers["x-datacern-tenant-id"] = tenant_id
         client = self._http()
         resp = await client.post(
             f"{self.base_url}/embeddings",

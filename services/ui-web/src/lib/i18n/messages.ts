@@ -4,7 +4,7 @@
  * {name} interpolation. RTL-safe layout uses logical CSS properties.
  */
 export const en = {
-  "app.name": "Windrose AI",
+  "app.name": "Datacern AI",
   "app.tagline": "Decision Intelligence for regulated operations",
   "nav.home": "Home",
   "nav.data": "Data",

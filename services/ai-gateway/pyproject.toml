@@ -1,7 +1,7 @@
 [project]
 name = "ai-gateway"
 version = "0.1.0"
-description = "Windrose ai-gateway: the single choke point for every LLM/embedding call"
+description = "Datacern ai-gateway: the single choke point for every LLM/embedding call"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -17,11 +17,11 @@ dependencies = [
     "redis>=5.0",
     "jsonschema>=4.22",
     "pgvector>=0.3",
-    "windrose-common",
+    "datacern-common",
 ]
 
 [tool.uv.sources]
-windrose-common = { path = "../../libs/py-common", editable = true }
+datacern-common = { path = "../../libs/py-common", editable = true }
 
 [dependency-groups]
 dev = [

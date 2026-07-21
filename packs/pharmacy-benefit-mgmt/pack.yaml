@@ -1,5 +1,5 @@
 # pharmacy-benefit-mgmt capability pack (BRD 28) — Core-neutral edition.
-# Installable TODAY against Windrose Core's public APIs via packctl; the
+# Installable TODAY against Datacern Core's public APIs via packctl; the
 # manifest envelope follows BRD 23 (PKG-FR-001/003) so this bundle is
 # forward-compatible with pack-service when it ships. Components the current
 # Core cannot materialize are declared under `deferred` with the exact BRD 28
@@ -7,7 +7,7 @@
 pack_manifest: 1
 name: pharmacy-benefit-mgmt
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted pharmacy benefit management for PBMs, health plans, and
   Medicare Part D sponsors: Rx prior-authorization review with formulary and

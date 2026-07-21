@@ -49,7 +49,7 @@ function headerVal(v: string | string[] | undefined): string | undefined {
 
 export async function main(): Promise<http.Server> {
   // Env-gated OpenTelemetry tracing (see ./tracing.ts). Same contract as the
-  // Go/Python services — WINDROSE_OTEL_ENABLED / OTEL_EXPORTER_OTLP_ENDPOINT —
+  // Go/Python services — DATACERN_OTEL_ENABLED / OTEL_EXPORTER_OTLP_ENDPOINT —
   // and a genuine no-op when unset. Manual instrumentation, so no `--require`
   // preload or ESM loader hook is needed: the two seams that matter are the
   // inbound /graphql server span below and the outbound ServiceClient

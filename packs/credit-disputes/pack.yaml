@@ -3,14 +3,14 @@
 # furnishers, consumer reporting agencies, debt buyers/collectors, fintech
 # servicers). Distinct from the card-disputes pack (Reg E/Z TRANSACTION
 # disputes): this pack governs what gets reported about a consumer, not
-# whether a charge stands. Installable TODAY against Windrose Core's public
+# whether a charge stands. Installable TODAY against Datacern Core's public
 # APIs via packctl; the manifest envelope follows BRD 23 (PKG-FR-001/003).
 # Components the current Core cannot materialize are declared under
 # `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: credit-disputes
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted FCRA credit-reporting dispute investigation for furnishers and
   CRAs: reinvestigation triage with regulatory-clock awareness (FCRA 611

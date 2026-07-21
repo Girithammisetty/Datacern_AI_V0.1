@@ -1,6 +1,6 @@
 # BRD 46 — `benefits-appeals` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32 pattern). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending; pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Government benefits eligibility adjudication and appeals AI for state/county agencies: due-process-grounded determination triage across unemployment insurance, SNAP, Medicaid eligibility, TANF, and state disability — processing-deadline awareness (SNAP 7-day expedited / 30-day, UI first-payment promptness), appeal-hearing packet preparation, overpayment establishment and waiver review, and identity-fraud watch balanced against false-positive harm. Sells to state workforce and human-services agencies, county eligibility offices, and government BPO contractors that operate eligibility and appeals workloads.
 
-**Why this vertical.** Eligibility determinations are the canonical governed human-decision workload: every adverse action carries constitutional due-process requirements (Goldberg v. Kelly pre-termination hearing rights, reasoned written notice, appeal rights), hard processing standards (SNAP expedited 7-day, UI promptness measures), and federal improper-payment measurement exposure — while the pandemic proved both historic identity-fraud losses AND the harm of blunt automation (the MiDAS-style false-fraud debacles). Backlogs are chronic, appeals volumes are rising, and agencies are under explicit human-in-the-loop mandates for automated eligibility systems — the exact governed decision shape of the Windrose Core, proven by the alert/dispute-adjudication packs (BRD 30/32).
+**Why this vertical.** Eligibility determinations are the canonical governed human-decision workload: every adverse action carries constitutional due-process requirements (Goldberg v. Kelly pre-termination hearing rights, reasoned written notice, appeal rights), hard processing standards (SNAP expedited 7-day, UI promptness measures), and federal improper-payment measurement exposure — while the pandemic proved both historic identity-fraud losses AND the harm of blunt automation (the MiDAS-style false-fraud debacles). Backlogs are chronic, appeals volumes are rising, and agencies are under explicit human-in-the-loop mandates for automated eligibility systems — the exact governed decision shape of the Datacern Core, proven by the alert/dispute-adjudication packs (BRD 30/32).
 
 **Business value.** Deadline-breach elimination (expedited SNAP and hearing-packet clocks), examiner throughput (evidence-first triage pre-routing), overpayment recovery discipline with waiver fairness (agency-error fault analysis), false-positive reduction on identity flags (verification pathways instead of freezes), appeal-overturn reduction (notice/evidence quality), and audit-ready decision files (every adverse action carries findings + provenance).
 
@@ -98,7 +98,7 @@ Authored materialization: 3 datasets (determinations 26 / claims 30 / claimants 
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): state benefits system of record, wage-record/new-hire cross-match feeds, identity-verification services, hearing-docket systems.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): state benefits system of record, wage-record/new-hire cross-match feeds, identity-verification services, hearing-docket systems.
 
 ## 7. NFRs (deltas)
 

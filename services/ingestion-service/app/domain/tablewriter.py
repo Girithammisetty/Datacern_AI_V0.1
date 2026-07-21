@@ -8,7 +8,7 @@ decode/write and the single atomic snapshot commit:
 
 ParquetFileTableWriter is the unit-tier double (real parquet files + a snapshot
 ledger). IcebergTableWriter is the real runtime writer (pyiceberg REST catalog +
-MinIO via windrose_common).
+MinIO via datacern_common).
 """
 
 from __future__ import annotations
@@ -182,7 +182,7 @@ class ParquetFileTableWriter:
 
 
 class IcebergTableWriter:
-    """Real Iceberg bronze writer via the shared ``windrose_common`` pyiceberg
+    """Real Iceberg bronze writer via the shared ``datacern_common`` pyiceberg
     adapter against the REST catalog + MinIO. ``stage`` streams batches into a
     temporary parquet file (bounded); ``commit`` appends it to
     ``bronze.<tenant_id>.ds_<dataset_id>`` in exactly one snapshot carrying the
@@ -192,14 +192,14 @@ class IcebergTableWriter:
         self,
         catalog_uri: str = "http://localhost:8181",
         *,
-        warehouse: str = "s3://windrose-warehouse/",
+        warehouse: str = "s3://datacern-warehouse/",
         s3_endpoint: str = "http://localhost:9000",
-        s3_access_key: str = "windrose",
-        s3_secret_key: str = "windrose_dev",
+        s3_access_key: str = "datacern",
+        s3_secret_key: str = "datacern_dev",
         s3_region: str = "us-east-1",
     ) -> None:
-        from windrose_common.iceberg import IcebergConfig
-        from windrose_common.iceberg import IcebergTableWriter as _Writer
+        from datacern_common.iceberg import IcebergConfig
+        from datacern_common.iceberg import IcebergTableWriter as _Writer
 
         cfg = IcebergConfig(
             uri=catalog_uri,
@@ -239,7 +239,7 @@ class IcebergTableWriter:
         return await self._writer.has_snapshot(table, ingestion_id)
 
     def _to_common(self, staged: StagedAppend):
-        from windrose_common.iceberg import StagedAppend as _Staged
+        from datacern_common.iceberg import StagedAppend as _Staged
 
         staging = Path(tempfile.gettempdir()) / f"wr-iceberg-stage-{staged.staging_token}.parquet"
         return _Staged(

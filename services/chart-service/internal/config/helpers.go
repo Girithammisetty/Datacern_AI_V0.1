@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 
-	"github.com/windrose-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/authjwt"
 )
 
 func sprintfType(v any) string { return fmt.Sprintf("%T", v) }

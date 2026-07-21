@@ -11,8 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/tool-plane/internal/api"
-	"github.com/windrose-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/api"
+	"github.com/datacern-ai/tool-plane/internal/domain"
 )
 
 // ---- HTTP helpers ------------------------------------------------------------
@@ -411,7 +411,7 @@ func TestAC6_SemanticDiscovery(t *testing.T) {
 
 	// Discovery is guarded by tool.tool.read: the agent must carry the action in
 	// scope (agent_obo scope gate) AND its OBO user must hold the tenant-scoped
-	// action in the rbac projection — the real OPA windrose.authz_input decision.
+	// action in the rbac projection — the real OPA datacern.authz_input decision.
 	h.seedTenantAction(context.Background(), tenant.String(), "user:u1", "tool.tool.read")
 	token := h.agentToken(tenant.String(), "case-triage", "3", "user:u1", []string{"tool.tool.read"})
 	code, out := h.registryDo(t, token, http.MethodPost, "/api/v1/discovery/search", map[string]any{
@@ -574,7 +574,7 @@ func TestAC15_ManifestIdentityMismatch(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"tool_id": "case.spoof", "display_name": "x", "owner_service": "case-service", "owner_team": "t"})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tools", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+opToken)
-	req.Header.Set("X-Spiffe-Id", "spiffe://windrose/ns/prod/sa/chart-service") // != owner_service
+	req.Header.Set("X-Spiffe-Id", "spiffe://datacern/ns/prod/sa/chart-service") // != owner_service
 	rec := httptest.NewRecorder()
 	h.registry.Router().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {

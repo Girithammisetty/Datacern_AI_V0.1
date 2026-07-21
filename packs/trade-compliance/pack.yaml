@@ -1,14 +1,14 @@
 # trade-compliance capability pack — Core-neutral edition: customs / trade
 # compliance decisioning for the importer and broker side (importers, customs
 # brokers, freight forwarders, trade-compliance teams). Installable TODAY
-# against Windrose Core's public APIs via packctl; the manifest envelope
+# against Datacern Core's public APIs via packctl; the manifest envelope
 # follows BRD 23 (PKG-FR-001/003). Components the current Core cannot
 # materialize are declared under `deferred` — recorded in the install ledger,
 # never faked.
 pack_manifest: 1
 name: trade-compliance
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted customs and trade-compliance decisioning for US importers,
   customs brokers, and freight forwarders: HS classification review with

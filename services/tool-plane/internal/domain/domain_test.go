@@ -41,7 +41,7 @@ func TestValidateSchemaDoc(t *testing.T) {
 
 func TestAffectedURNs_CrossTenant(t *testing.T) {
 	schema := map[string]any{"properties": map[string]any{
-		"case_id": map[string]any{"type": "string", "x-windrose-urn": "wr:{tenant}:case:case/{value}"},
+		"case_id": map[string]any{"type": "string", "x-datacern-urn": "wr:{tenant}:case:case/{value}"},
 	}}
 	urns := AffectedURNs(schema, map[string]any{"case_id": "c1"}, "t-42")
 	if len(urns) != 1 || urns[0] != "wr:t-42:case:case/c1" {
@@ -54,17 +54,17 @@ func TestAffectedURNs_CrossTenant(t *testing.T) {
 	}
 }
 
-// A role-governed URN field (x-windrose-urn-obo:false) still expands for the
+// A role-governed URN field (x-datacern-urn-obo:false) still expands for the
 // cross-tenant guard (AffectedURNs) but is excluded from the per-resource
 // obo-grant intersection (AffectedOboURNs), while a default-annotated field
 // stays in both.
 func TestAffectedOboURNs_RoleGovernedOptOut(t *testing.T) {
 	schema := map[string]any{"properties": map[string]any{
 		"case_id": map[string]any{"type": "string",
-			"x-windrose-urn": "wr:{tenant}:case:case/{value}"},
+			"x-datacern-urn": "wr:{tenant}:case:case/{value}"},
 		"model_version_urn": map[string]any{"type": "string",
-			"x-windrose-urn":     "wr:{tenant}:experiment:model_version/{value}",
-			"x-windrose-urn-obo": false},
+			"x-datacern-urn":     "wr:{tenant}:experiment:model_version/{value}",
+			"x-datacern-urn-obo": false},
 	}}
 	args := map[string]any{"case_id": "c1", "model_version_urn": "mv1"}
 

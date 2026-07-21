@@ -2,7 +2,7 @@
 
 Phase 3 of `docs/design/byo-infra-hardening.md`. Lets a customer's SIEM
 (Splunk, Sentinel, Chronicle, Datadog Security, or any generic Kafka/webhook
-consumer) consume Windrose's audit trail without polling the search API.
+consumer) consume Datacern's audit trail without polling the search API.
 
 ## What this is (and isn't)
 
@@ -25,7 +25,7 @@ integration posture (BYO connectors, not maintained-by-us adapters).
 
 ## Schema reference
 
-Every exported event is a standard Windrose platform envelope (the same
+Every exported event is a standard Datacern platform envelope (the same
 `event.Envelope` shape — `libs/go-common/event/envelope.go` — every other
 service publishes with), so a raw-Kafka consumer and a webhook consumer
 receive **byte-identical JSON**: the webhook sender POSTs the marshaled
@@ -137,7 +137,7 @@ this change) or WORM export (`internal/export/export.go`, also untouched).
 
 Any Kafka-consuming SIEM connector (Splunk's Kafka Connect, Sentinel's Event
 Hub-compatible ingestion, Chronicle's forwarder, or a bespoke consumer) can
-subscribe to `audit.export.v1` the same way any Windrose service subscribes to
+subscribe to `audit.export.v1` the same way any Datacern service subscribes to
 a platform topic. A minimal generic consumer:
 
 ```python
@@ -185,7 +185,7 @@ as the "per-tenant config" for Phase 3; no new table was needed since
 "this tenant's URL + which event types to forward":
 
 ```bash
-curl -X POST https://notification.<tenant>.windrose.ai/api/v1/webhooks \
+curl -X POST https://notification.<tenant>.datacern.ai/api/v1/webhooks \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{
         "url": "https://http-inputs-<splunk-host>.splunkcloud.com/services/collector/event",
@@ -222,7 +222,7 @@ def receive():
             "actor": body["actor"], "resource_urn": body["resource_urn"],
             "occurred_at": body["occurred_at"], "trace_id": body["trace_id"],
         },
-        "sourcetype": "windrose:audit:export",
+        "sourcetype": "datacern:audit:export",
         "time": body["occurred_at"],
     }
     requests.post(HEC_URL, json=evt,
@@ -230,7 +230,7 @@ def receive():
     return jsonify({"status": "received"})
 ```
 
-Deliveries are HMAC-signed (`X-Windrose-Signature: v1=<hex>`, over
+Deliveries are HMAC-signed (`X-Datacern-Signature: v1=<hex>`, over
 `"<unix_timestamp>.<raw body>"`) with a rotatable per-endpoint secret
 (`internal/channels/webhook/sign.go`); verify it before trusting the payload.
 Delivery status/history is queryable via

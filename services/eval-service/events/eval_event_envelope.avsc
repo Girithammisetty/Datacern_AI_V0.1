@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "EvalEventEnvelope",
-  "namespace": "windrose.eval.events.v1",
+  "namespace": "datacern.eval.events.v1",
   "doc": "Master event envelope (MASTER-FR-031) for eval.events.v1: gate.completed, canary.scored, canary.failed_early, dataset.version_frozen, case.promoted, slo.budget_burn, eval_run.completed|failed.",
   "fields": [
     {"name": "event_id", "type": "string"},

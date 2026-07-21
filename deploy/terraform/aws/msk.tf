@@ -4,7 +4,7 @@
 # SASL/SCRAM on MSK requires the credential to live in a Secrets Manager secret
 # whose name is prefixed "AmazonMSK_" and that is encrypted with a customer-
 # managed KMS key (the default aws/secretsmanager key is rejected). The same
-# username/password is also surfaced in windrose-secrets (see secrets.tf).
+# username/password is also surfaced in datacern-secrets (see secrets.tf).
 
 resource "random_password" "kafka_scram" {
   length  = 32

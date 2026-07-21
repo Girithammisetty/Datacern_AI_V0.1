@@ -2,7 +2,7 @@
 // local OPA sidecar over the rbac-service permissions_flat projection
 // (MASTER-FR-012), exactly like every other Go service: the request path reads
 // the caller's projection slice from Redis (rbac's RBC-FR-040 key scheme) and
-// POSTs it to OPA, which evaluates the shared windrose.authz_input Rego bundle.
+// POSTs it to OPA, which evaluates the shared datacern.authz_input Rego bundle.
 // The ScopeAuthorizer (token-scope enforcement) remains only as a documented
 // dev/test fallback when no OPA sidecar is configured.
 package authz
@@ -12,10 +12,10 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 // Authorizer decides whether a principal may perform an action on a resource.
@@ -38,7 +38,7 @@ func (ScopeAuthorizer) Allow(_ context.Context, c *domain.Claims, action, _ stri
 // (1) loads the caller's permissions_flat projection slice from Redis (the
 // rbac-service key scheme, RBC-FR-040) via the shared go-common ProjectionLoader
 // and (2) POSTs it as `input` to the local OPA sidecar, which evaluates the
-// windrose.authz_input Rego bundle. The decision is byte-for-byte the one rbac's
+// datacern.authz_input Rego bundle. The decision is byte-for-byte the one rbac's
 // Go Decide returns for the same projection — so a tenant Admin's projection
 // admin flag (BR-7) authorizes identity's guarded actions (identity.user.admin,
 // identity.service_account.admin, identity.credential.read, identity.tenant.*)

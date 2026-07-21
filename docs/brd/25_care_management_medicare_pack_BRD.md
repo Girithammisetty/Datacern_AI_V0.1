@@ -1,17 +1,17 @@
 # BRD 25 — `care-management-medicare` capability pack
 
-**Deliverable type:** Capability Pack (published via pack-service, BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (published via pack-service, BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 2 (**first provider-side pack** — ships after `insurance-claims-payer` v1 has 3 production references).
-**Inherits:** `00_MASTER_BRD.md`, `23_pack_service_BRD.md`. Architecture: `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6, §9; `../../WINDROSE_STRATEGY.md` §7 (Horizons).
+**Inherits:** `00_MASTER_BRD.md`, `23_pack_service_BRD.md`. Architecture: `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6, §9; `../../DATACERN_STRATEGY.md` §7 (Horizons).
 **Reference implementation:** `24_insurance_claims_payer_pack_BRD.md` — this BRD deliberately mirrors that structure to prove the pack thesis (Core-neutral installation across inverted buyer types).
 
 ---
 
 ## 1. Overview
 
-**Purpose.** `care-management-medicare` is the **first provider-side vertical solution** on Windrose Core: a signed, versioned Capability Pack (BRD 23) that turns the horizontal platform into a *product* for medical practices, FQHCs, RHCs, and health-system ambulatory groups billing Medicare's care-management program family — **CCM · PCM · TCM · BHI · CoCM · RPM · RTM · APCM (2025)** — with net-new revenue capture, documentation-burden reduction, and audit-defensible compliance from day one.
+**Purpose.** `care-management-medicare` is the **first provider-side vertical solution** on Datacern Core: a signed, versioned Capability Pack (BRD 23) that turns the horizontal platform into a *product* for medical practices, FQHCs, RHCs, and health-system ambulatory groups billing Medicare's care-management program family — **CCM · PCM · TCM · BHI · CoCM · RPM · RTM · APCM (2025)** — with net-new revenue capture, documentation-burden reduction, and audit-defensible compliance from day one.
 
-**Why this is the sharpest provider wedge.** These programs are massively under-billed today (~10–20M eligible Medicare beneficiaries not enrolled). The primary blocker is **documentation burden**, not clinical judgment — care managers spend 30–50% of a session writing the note that justifies the billing code, and every code (99490, 99457, 99495, 99484, G0556, etc.) requires minute-level time tracking, consent, care plan, and activity log. RAC + MAC audits target these codes as high-fraud risk. This is exactly the workflow Windrose's proposal-mode + audit chain + governed-decision model addresses natively: every AI-drafted care plan, code proposal, and RPM review note is a proposal a clinician approves with citations to the specific documentation evidence, generating both revenue lift and compliance defense.
+**Why this is the sharpest provider wedge.** These programs are massively under-billed today (~10–20M eligible Medicare beneficiaries not enrolled). The primary blocker is **documentation burden**, not clinical judgment — care managers spend 30–50% of a session writing the note that justifies the billing code, and every code (99490, 99457, 99495, 99484, G0556, etc.) requires minute-level time tracking, consent, care plan, and activity log. RAC + MAC audits target these codes as high-fraud risk. This is exactly the workflow Datacern's proposal-mode + audit chain + governed-decision model addresses natively: every AI-drafted care plan, code proposal, and RPM review note is a proposal a clinician approves with citations to the specific documentation evidence, generating both revenue lift and compliance defense.
 
 **Business value.** (a) **Revenue capture**: ~$65–275 per patient per program per month (or per episode for TCM), of which 40–70% is currently missed for eligible patients. (b) **Labor reduction**: care managers double or triple their patient panel with AI-assisted documentation. (c) **Compliance defense**: every billed claim ships with a complete provenance chain suitable for RAC/MAC audit. (d) **New-year adaptability**: 2025 APCM bundle (G0556/G0557/G0558) and future CMS changes are pack-version updates, not custom development.
 
@@ -48,8 +48,8 @@ Personas: **Care Manager RN (CM-RN)**, **Care Manager LPN/MA (CM-LPN)**, **Clini
 pack_manifest: 1
 name: care-management-medicare
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
-license: { spdx_id: "Commercial", url: "https://windrose.ai/licenses/care-management" }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
+license: { spdx_id: "Commercial", url: "https://datacern.ai/licenses/care-management" }
 description: "AI-assisted Medicare care management (CCM/PCM/TCM/BHI/CoCM/RPM/RTM/APCM) for providers, FQHCs, and health-system ambulatory groups."
 categories: [healthcare, provider, care-management, chronic-care, remote-monitoring, medicare]
 regulatory: [cms_ccm_rules, cms_rpm_rules, cms_apcm_2025, no_surprises_act, hipaa, hitrust_csf, rac_audit_defensible]
@@ -124,10 +124,10 @@ components:
 | `Discharge` | patient_id, admit_date, discharge_date, facility_id, diagnosis_summary, med_reconciliation_status | HL7 ADT feed / EHR |
 | `Consent` | patient_id, program_code (ccm/pcm/tcm/bhi/rpm/rtm/apcm), signed_date, revoked_date? | Consent management system / EHR |
 | `CarePlan` | plan_id, patient_id, goals[], interventions[], review_due, last_reviewed_by, last_reviewed_at | EHR care mgmt module |
-| `CareCoordinationActivity` | activity_id, patient_id, staff_id, timestamp, duration_min, activity_type (phone/portal/med_rev/coord_call), note_text, cited_evidence_refs | Windrose case-service |
+| `CareCoordinationActivity` | activity_id, patient_id, staff_id, timestamp, duration_min, activity_type (phone/portal/med_rev/coord_call), note_text, cited_evidence_refs | Datacern case-service |
 | `DeviceReading` | patient_id, device_type (bp/glucose/spo2/weight/hr/rtm), value, unit, timestamp, device_vendor, device_id | RPM vendor connectors |
-| `BillingCandidate` | patient_id, program_code, cpt_code, service_month, activities_ref[], total_time_min, proposed_by (agent_id), proposed_at, decision (pending/bill/hold/adjust) | Windrose case-service (proposal → decision) |
-| `RACAuditPackage` | claim_id, cpt_code, service_month, evidence_bundle_ref (signed archive) | Windrose audit-service |
+| `BillingCandidate` | patient_id, program_code, cpt_code, service_month, activities_ref[], total_time_min, proposed_by (agent_id), proposed_at, decision (pending/bill/hold/adjust) | Datacern case-service (proposal → decision) |
+| `RACAuditPackage` | claim_id, cpt_code, service_month, evidence_bundle_ref (signed archive) | Datacern audit-service |
 
 - **CMM-FR-011 (Must)** PHI-bearing fields tagged `phi: true` in the ontology (member_id, MBI, DOB, address, phone, MRN, all note text). ai-gateway PHI redaction (BRD 12 §AIG-FR-050) applies at hosted-provider boundary; SLM tier (self-hosted) is exempt only when the tenant's HIPAA config permits (`hipaa.self_hosted_phi_allowed: true`).
 
@@ -368,9 +368,9 @@ See §3 CMM-FR-001 for the top-level manifest. OCI artifact layout mirrors BRD 2
 
 ## 8. Dependencies
 
-- **Windrose services:** all Core BRDs (01–22) + BRD 23 pack-service + BRD 17 usage-service for cost-per-decision panels + BRD 16 eval-service for release gate + BRD 15 memory-service for prior-care-plan RAG.
+- **Datacern services:** all Core BRDs (01–22) + BRD 23 pack-service + BRD 17 usage-service for cost-per-decision panels + BRD 16 eval-service for release gate + BRD 15 memory-service for prior-care-plan RAG.
 - **External systems (customer's):** Epic Ambulatory / Athena / eCW / NextGen / Cerner Ambulatory (EHR); Optimize Health / Cadence / iHealth / Rimidi / Impilo (RPM devices); RingCentral / Zoom for Healthcare / Doxy.me (telephony/telehealth); Waystar / Availity / Change Healthcare (clearinghouse for claim submission); optional: Salesforce Health Cloud (care-management workflow layer some practices use).
-- **Regulatory:** Windrose ships HIPAA BAA + template + HITRUST + SOC 2; pack ships CMS rule documentation crosswalks per program family; RAC/MAC audit-response playbook.
+- **Regulatory:** Datacern ships HIPAA BAA + template + HITRUST + SOC 2; pack ships CMS rule documentation crosswalks per program family; RAC/MAC audit-response playbook.
 
 ## 9. NFRs (deltas from master)
 
@@ -402,7 +402,7 @@ See §3 CMM-FR-001 for the top-level manifest. OCI artifact layout mirrors BRD 2
 - **AC-12** Given a Presidio + HIPAA-custom detector at the ai-gateway boundary, When the Care Scribe processes a transcript containing patient MBI and DOB, Then the hosted-provider prompt log contains typed placeholders `<PII:MBI:1>` and `<PII:DOB:1>` — verified by prompt-log sample audit.
 - **AC-13** Given the CCO invokes `POST /packs/care-management-medicare/audit_bundle?claim_id=99490-…`, When generated, Then a signed archive returns within 5 min containing consent, all activities with times + notes, care plan review, cited evidence, reviewer identity, and CPT-rule citations; second run with `redact_phi: true` returns the same bundle with PHI redacted for external submission.
 - **AC-14** Given a `care-management-medicare@1.0.0 → 1.1.0` upgrade adding the 2025 APCM tier rules (G0556/G0557/G0558), When executed, Then the upgrade materializes the new guardrail policy + agent-recipe update; existing CCM enrollments are preserved; new enrollments after the APCM opt-in date use APCM codes.
-- **AC-15** Given a fresh cell with only Core BRDs 01–23 installed (no vertical pack), When `care-management-medicare@1.0.0` installs, Then no Core service requires a patch — this pack ships and runs on unmodified Core (**pack thesis Test 1 per `WINDROSE_CORE_CAPABILITIES.md` §6**).
+- **AC-15** Given a fresh cell with only Core BRDs 01–23 installed (no vertical pack), When `care-management-medicare@1.0.0` installs, Then no Core service requires a patch — this pack ships and runs on unmodified Core (**pack thesis Test 1 per `DATACERN_CORE_CAPABILITIES.md` §6**).
 
 ## 11. Out of scope / future
 

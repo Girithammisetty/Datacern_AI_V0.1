@@ -10,13 +10,13 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from windrose_common.kafka import KafkaConsumer, KafkaProducerClient
-from windrose_common.outbox import OutboxRelay, OutboxTableSpec
-from windrose_common.redisx import RedisDedupStore, build_redis
+from datacern_common.kafka import KafkaConsumer, KafkaProducerClient
+from datacern_common.outbox import OutboxRelay, OutboxTableSpec
+from datacern_common.redisx import RedisDedupStore, build_redis
 
 pytestmark = pytest.mark.integration
 
-PG_URL = "postgresql+asyncpg://windrose:windrose_dev@localhost:5432/windrose"
+PG_URL = "postgresql+asyncpg://datacern:datacern_dev@localhost:5432/datacern"
 
 
 async def test_relay_polls_postgres_and_publishes_to_kafka(postgres, kafka, redis_up, unique):

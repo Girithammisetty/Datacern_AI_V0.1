@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"os"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/redisx"
+	gcevent "github.com/datacern-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // IngestHandler processes one decoded metering envelope (implemented by

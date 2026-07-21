@@ -1,12 +1,12 @@
 # ai-gateway
 
-The single choke point for **every** LLM/embedding call on the Windrose
+The single choke point for **every** LLM/embedding call on the Datacern
 platform: OpenAI-compatible proxy with per-cloud affinity routing, model
 ladders, hierarchical hard budgets, virtual keys, tenant-scoped semantic
 cache, gateway-tier guardrails, token metering, and SSE streaming.
 
 Spec: `docs/brd/12_ai_gateway_BRD.md` inheriting `docs/brd/00_MASTER_BRD.md`.
-Layout per `Windrose-ai/CONVENTIONS.md` (Python service, wave-1 self-contained).
+Layout per `Datacern-ai/CONVENTIONS.md` (Python service, wave-1 self-contained).
 
 **Architecture decision.** The gateway is built as a FastAPI application with
 an in-process enforcement pipeline (`app/domain/pipeline.py`, the normative §7
@@ -52,7 +52,7 @@ default budgets, price version, admission caps, cache thresholds, timeouts.
 app/
   api/        data plane (/v1/chat/completions, /v1/completions, /v1/embeddings),
               admin plane (/api/v1/admin/*), dual auth middleware (virtual key +
-              X-Windrose-JWT), error envelope, Idempotency-Key
+              X-Datacern-JWT), error envelope, Idempotency-Key
   domain/     pipeline (enforcement stages, §7 order), budgets (stacked windows,
               reserve/settle, thresholds), ladders (resolve/escalate/degrade),
               routing (cloud affinity, circuit breaker, failover plan, health),
@@ -78,7 +78,7 @@ reserve, top-down) → ladder resolve (class → rung → cloud-affinity deploym
 → provider call (retry/failover, ≤3 attempts / ≤2 providers) → guardrails-out
 (schema validation → retry → escalate; de-redaction) → cache write → budget
 settle (+ threshold events, exactly-once) → metering event → response. The
-rejecting stage is stamped on the span as `windrose.rejected_stage`.
+rejecting stage is stamped on the span as `datacern.rejected_stage`.
 
 ## Adapter / stub inventory
 

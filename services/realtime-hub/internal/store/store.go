@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/windrose-ai/realtime-hub/migrations"
+	"github.com/datacern-ai/realtime-hub/migrations"
 )
 
 // Migrate applies the embedded forward-only migrations (MASTER-FR-060).

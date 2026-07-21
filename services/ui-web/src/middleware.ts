@@ -65,7 +65,7 @@ export function middleware(req: NextRequest) {
     }
     // Allow framing ONLY by the tenant's configured origins (never '*').
     const ancestors =
-      ancestorsFromToken || process.env.WINDROSE_EMBED_ANCESTORS || "'self'";
+      ancestorsFromToken || process.env.DATACERN_EMBED_ANCESTORS || "'self'";
     res.headers.set("Content-Security-Policy", `frame-ancestors ${ancestors}`);
     return res;
   }
@@ -89,6 +89,6 @@ export function middleware(req: NextRequest) {
 export const config = {
   // Guard everything except login, API routes, and static assets.
   matcher: [
-    "/((?!login|welcome|api|_next/static|_next/image|favicon.ico|icon.svg|windrose-embed.js).*)",
+    "/((?!login|welcome|api|_next/static|_next/image|favicon.ico|icon.svg|datacern-embed.js).*)",
   ],
 };

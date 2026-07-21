@@ -2,7 +2,7 @@
 // A service authorizes locally by (1) reading the caller's permissions_flat
 // projection slice from Redis (the rbac-service key scheme, RBC-FR-040) and
 // (2) POSTing it as `input` to its local OPA sidecar, which evaluates the
-// windrose.authz_input Rego bundle. This never calls rbac-service synchronously
+// datacern.authz_input Rego bundle. This never calls rbac-service synchronously
 // in the request path. The decision is byte-for-byte the same one rbac's Go
 // `Decide` returns for the same projection — proven by the rbac parity suite.
 package opaclient
@@ -84,7 +84,7 @@ type Decision struct {
 type Client struct {
 	// BaseURL is the OPA server, e.g. http://localhost:8281.
 	BaseURL string
-	// Path is the data document evaluated (default windrose/authz_input/result).
+	// Path is the data document evaluated (default datacern/authz_input/result).
 	Path   string
 	client *http.Client
 	// fb is the optional Redis-miss fallback (RBC-FR-045), set via
@@ -97,7 +97,7 @@ type Client struct {
 func New(baseURL string) *Client {
 	return &Client{
 		BaseURL: baseURL,
-		Path:    "windrose/authz_input/result",
+		Path:    "datacern/authz_input/result",
 		client:  &http.Client{Timeout: 3 * time.Second},
 	}
 }

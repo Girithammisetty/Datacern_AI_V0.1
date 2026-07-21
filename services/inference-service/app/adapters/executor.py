@@ -22,8 +22,8 @@ import pyarrow.parquet as pq
 
 from app.domain.ports import ResolvedDataset, ResolvedModel, ScoringResult
 
-_SYS_JOB = "_windrose_job_id"
-_SYS_MODEL = "_windrose_model_version"
+_SYS_JOB = "_datacern_job_id"
+_SYS_MODEL = "_datacern_model_version"
 _SYS_SCORED = "_scored_at"
 
 
@@ -31,14 +31,14 @@ class LocalScoringExecutor:
     def __init__(
         self,
         *,
-        datasets_bucket: str = "windrose-datasets",
+        datasets_bucket: str = "datacern-datasets",
         s3_endpoint_url: str = "http://localhost:9000",
-        s3_access_key: str = "windrose",
-        s3_secret_key: str = "windrose_dev",
+        s3_access_key: str = "datacern",
+        s3_secret_key: str = "datacern_dev",
         s3_region: str = "us-east-1",
         mlflow_tracking_uri: str = "http://localhost:5500",
     ) -> None:
-        from windrose_common.objectstore import S3Config, build_s3_client
+        from datacern_common.objectstore import S3Config, build_s3_client
 
         self._bucket = datasets_bucket
         self._cfg = S3Config(

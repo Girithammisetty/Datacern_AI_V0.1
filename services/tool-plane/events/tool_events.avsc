@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "ToolEvent",
-  "namespace": "ai.windrose.tool_plane",
+  "namespace": "ai.datacern.tool_plane",
   "doc": "tool.events.v1 — tool-plane lifecycle events (BRD §6). event_type is one of tool.registered, tool.version_published, tool.deprecated, tool.retired, tool.quarantined, tool.killed, tool.unkilled, tool.sla_breached, tenant_tool.enabled|disabled, byo.submitted|approved|rejected. Rides the platform master envelope; this schema documents the payload superset.",
   "fields": [
     {"name": "tool_id", "type": ["null", "string"], "default": null},

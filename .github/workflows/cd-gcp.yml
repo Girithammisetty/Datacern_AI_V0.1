@@ -1,4 +1,4 @@
-# Windrose — Continuous Deployment to GKE (GCP)
+# Datacern — Continuous Deployment to GKE (GCP)
 #
 # Keyless auth via Workload Identity Federation. No cloud keys are stored: the
 # job mints a short-lived token from GitHub's OIDC identity.
@@ -6,15 +6,15 @@
 # Required GitHub secrets (Settings -> Secrets and variables -> Actions):
 #   GCP_WIF_PROVIDER  full resource name of the WIF provider
 #                     (projects/NNN/locations/global/workloadIdentityPools/POOL/providers/PROVIDER)
-#   GCP_DEPLOY_SA     deploy service account email (windrose-ci-deploy@<project>.iam.gserviceaccount.com)
+#   GCP_DEPLOY_SA     deploy service account email (datacern-ci-deploy@<project>.iam.gserviceaccount.com)
 #
 # Required GitHub variables (vars.*):
 #   GCP_PROJECT_ID    target project id
 #   GCP_REGION        region, e.g. us-central1   (GKE cluster location)
 #   GKE_CLUSTER       GKE cluster name (Terraform output gke_cluster_name)
 # Optional variables:
-#   HELM_RELEASE      Helm release name           (default: windrose)
-#   HELM_NAMESPACE    target namespace            (default: windrose)
+#   HELM_RELEASE      Helm release name           (default: datacern)
+#   HELM_NAMESPACE    target namespace            (default: datacern)
 #   ESO_VERSION       External Secrets chart ver  (default: 0.9.20)
 #   INSTALL_ESO       "true" to install/upgrade External Secrets Operator (default: false)
 #
@@ -42,8 +42,8 @@ permissions:
   id-token: write # required for WIF (mint the OIDC token)
 
 env:
-  HELM_RELEASE: ${{ vars.HELM_RELEASE || 'windrose' }}
-  HELM_NAMESPACE: ${{ vars.HELM_NAMESPACE || 'windrose' }}
+  HELM_RELEASE: ${{ vars.HELM_RELEASE || 'datacern' }}
+  HELM_NAMESPACE: ${{ vars.HELM_NAMESPACE || 'datacern' }}
   ESO_VERSION: ${{ vars.ESO_VERSION || '0.9.20' }}
 
 jobs:
@@ -126,11 +126,11 @@ jobs:
                 projectID: "${{ vars.GCP_PROJECT_ID }}"
           EOF
 
-      - name: Helm deploy Windrose
+      - name: Helm deploy Datacern
         run: |
-          helm upgrade --install "${HELM_RELEASE}" deploy/helm/windrose \
+          helm upgrade --install "${HELM_RELEASE}" deploy/helm/datacern \
             --namespace "${HELM_NAMESPACE}" \
-            -f deploy/helm/windrose/values-gcp.yaml \
+            -f deploy/helm/datacern/values-gcp.yaml \
             --set global.imageTag="${{ steps.tag.outputs.image_tag }}" \
             --set global.project="${{ vars.GCP_PROJECT_ID }}" \
             --set global.region="${{ vars.GCP_REGION }}" \

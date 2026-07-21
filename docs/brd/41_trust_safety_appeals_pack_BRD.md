@@ -1,6 +1,6 @@
 # BRD 41 — `trust-safety-appeals` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32/33). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending (packctl validate passing); pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Trust & safety appeals adjudication AI for online platforms: internal complaint-handling for content and account enforcement appeals (removals, suspensions, demonetizations, ranking restrictions) with statutory-deadline awareness, classifier false-positive detection, brigading/report-integrity screening, policy-gap escalation, and the overturn-rate feedback loop into enforcement quality. Sells to social/UGC platforms, marketplaces, gaming platforms, and dating apps — anyone carrying EU DSA / UK OSA process obligations.
 
-**Why this vertical.** The DSA makes appeals a regulated workflow: statements of reasons for every restriction (Art. 17), an internal complaint-handling system whose decisions are timely, non-discriminatory, and never taken solely by automated means (Art. 20), out-of-court dispute settlement (Art. 21), and transparency reporting on complaint volumes, outcomes, and median decision time (Arts. 15/24); the UK OSA layers comparable complaints and transparency duties under Ofcom. Every determination is documented, contestable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Windrose Core, and the alert-adjudication pattern is already proven by BRD 30/32. Uniquely, appeal outcomes are also the training labels for the enforcement classifiers — the human-correction→retrain loop is the product thesis itself.
+**Why this vertical.** The DSA makes appeals a regulated workflow: statements of reasons for every restriction (Art. 17), an internal complaint-handling system whose decisions are timely, non-discriminatory, and never taken solely by automated means (Art. 20), out-of-court dispute settlement (Art. 21), and transparency reporting on complaint volumes, outcomes, and median decision time (Arts. 15/24); the UK OSA layers comparable complaints and transparency duties under Ofcom. Every determination is documented, contestable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Datacern Core, and the alert-adjudication pattern is already proven by BRD 30/32. Uniquely, appeal outcomes are also the training labels for the enforcement classifiers — the human-correction→retrain loop is the product thesis itself.
 
 **Business value.** Deadline-breach elimination (complaint-clock watch), reviewer throughput (triage pre-routing, duplicate collapse), enforcement-quality lift (overturn-rate segmentation feeding classifier retraining), report-integrity defense (brigading screens), regulator-ready transparency stats, and audit-ready decision files (every determination carries its findings + provenance).
 
@@ -98,7 +98,7 @@ Authored materialization: 3 datasets (appeals 26 / enforcements 30 / accounts 12
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): the customer's enforcement/moderation stack, classifier scoring stores, report pipelines, identity/session-anomaly systems, brand-rights registries.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): the customer's enforcement/moderation stack, classifier scoring stores, report pipelines, identity/session-anomaly systems, brand-rights registries.
 
 ## 7. NFRs (deltas)
 

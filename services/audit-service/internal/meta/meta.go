@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
+	gcevent "github.com/datacern-ai/go-common/event"
 )
 
 // Topic is audit-service's meta-audit topic.

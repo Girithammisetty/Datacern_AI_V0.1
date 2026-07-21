@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/go-common/metricsx"
-	"github.com/windrose-ai/tool-plane/internal/domain"
-	"github.com/windrose-ai/tool-plane/internal/enforce"
-	"github.com/windrose-ai/tool-plane/internal/mcp"
-	"github.com/windrose-ai/tool-plane/internal/register"
-	"github.com/windrose-ai/tool-plane/internal/store"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/metricsx"
+	"github.com/datacern-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/enforce"
+	"github.com/datacern-ai/tool-plane/internal/mcp"
+	"github.com/datacern-ai/tool-plane/internal/register"
+	"github.com/datacern-ai/tool-plane/internal/store"
 )
 
 // GatewayServer is the mcp-gateway data plane: the single /mcp Streamable-HTTP
@@ -112,7 +112,7 @@ func (g *GatewayServer) handleMCP(w http.ResponseWriter, r *http.Request) {
 		g.writeRPC(w, req.ID, map[string]any{
 			"protocolVersion": mcp.SpecVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": true}},
-			"serverInfo":      map[string]any{"name": "windrose-mcp-gateway", "version": "1.0.0"},
+			"serverInfo":      map[string]any{"name": "datacern-mcp-gateway", "version": "1.0.0"},
 		}, nil)
 	case "tools/list":
 		g.handleToolsList(w, r, req, cl)
@@ -301,7 +301,7 @@ const evalScope = "tool.eval"
 // honoured only when the VERIFIED token carries the eval scope; a plain agent
 // cannot turn its own write calls into audited no-op stubs via _meta or a header.
 func evalAuthorized(cl *authjwt.Claims, r *http.Request) bool {
-	requested := r.Header.Get("x-windrose-eval") == "true"
+	requested := r.Header.Get("x-datacern-eval") == "true"
 	if !requested {
 		return false
 	}

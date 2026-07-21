@@ -1,6 +1,6 @@
 """Real OPA authz (MASTER-FR-012): the OpaAuthzClient reads the per-request
 permissions projection from real Redis and POSTs it to the real OPA sidecar
-(windrose.authz_input); allow/deny decisions come from the live Rego bundle."""
+(datacern.authz_input); allow/deny decisions come from the live Rego bundle."""
 
 from __future__ import annotations
 
@@ -48,8 +48,8 @@ async def test_real_opa_allow_and_deny(pg):
     if not _redis_up():
         pytest.skip(f"Redis unreachable at {REDIS_URL}")
 
-    from windrose_common.opaclient import projection_key
-    from windrose_common.redisx import RedisProjection, build_redis
+    from datacern_common.opaclient import projection_key
+    from datacern_common.redisx import RedisProjection, build_redis
 
     from app.api.auth import OpaAuthzClient
 

@@ -63,8 +63,8 @@ async def chat_completions(request: Request, agent_key: str, body: dict = Body(.
         principal=principal, agent_key=agent_key, inputs=inputs, session=session)
 
     headers = {
-        "x-windrose-stream-topic": f"agent_run:{run.run_id}",
-        "x-windrose-ai-generated": "true",
+        "x-datacern-stream-topic": f"agent_run:{run.run_id}",
+        "x-datacern-ai-generated": "true",
     }
     payload = {"data": {"run_id": run.run_id, "session_id": session.session_id,
                         "agent_version": session.agent_version, **result}}

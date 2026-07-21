@@ -14,12 +14,12 @@ class Settings(BaseSettings):
     # tenant isolation on the running service. Migrations run as a privileged role
     # via INF_MIGRATE_URL; the service must never connect as a superuser/owner.
     database_url: str = (
-        "postgresql+asyncpg://inference_app:inference_app@localhost:5432/windrose"
+        "postgresql+asyncpg://inference_app:inference_app@localhost:5432/datacern"
     )
 
     # AuthN (MASTER-FR-010/011). In dev/tests a static PEM is used; prod uses JWKS.
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwt_public_key_pem: str | None = None
     jwks_url: str | None = None
     jwks_ttl_seconds: int = 300
@@ -27,10 +27,10 @@ class Settings(BaseSettings):
     # Internal (service-to-service) SPIFFE identities allowed on /internal/v1.
     spiffe_header: str = "x-client-spiffe-id"
     internal_allowed_spiffe: list[str] = [
-        "spiffe://windrose/ns/data/sa/pipeline-orchestrator",
-        "spiffe://windrose/ns/data/sa/experiment-service",
-        "spiffe://windrose/ns/data/sa/dataset-service",
-        "spiffe://windrose/ns/tools/sa/mcp-gateway",
+        "spiffe://datacern/ns/data/sa/pipeline-orchestrator",
+        "spiffe://datacern/ns/data/sa/experiment-service",
+        "spiffe://datacern/ns/data/sa/dataset-service",
+        "spiffe://datacern/ns/tools/sa/mcp-gateway",
     ]
 
     # Adapter selection: True (the default) wires the real adapters against local
@@ -42,10 +42,10 @@ class Settings(BaseSettings):
     # Real infra endpoints (deploy/docker-compose.dev.yml defaults)
     mlflow_tracking_uri: str = "http://localhost:5500"
     s3_endpoint_url: str = "http://localhost:9000"
-    s3_access_key: str = "windrose"
-    s3_secret_key: str = "windrose_dev"
+    s3_access_key: str = "datacern"
+    s3_secret_key: str = "datacern_dev"
     s3_region: str = "us-east-1"
-    datasets_bucket: str = "windrose-datasets"
+    datasets_bucket: str = "datacern-datasets"
     kafka_bootstrap_servers: str = "localhost:9092"
     redis_url: str = "redis://localhost:6379/0"
     opa_url: str = "http://localhost:8281"

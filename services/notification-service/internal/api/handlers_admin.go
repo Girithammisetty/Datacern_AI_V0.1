@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {

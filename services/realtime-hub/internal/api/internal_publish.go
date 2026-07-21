@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/httpx"
-	"github.com/windrose-ai/realtime-hub/internal/events"
-	"github.com/windrose-ai/realtime-hub/internal/fanout"
-	"github.com/windrose-ai/realtime-hub/internal/topics"
+	"github.com/datacern-ai/go-common/httpx"
+	"github.com/datacern-ai/realtime-hub/internal/events"
+	"github.com/datacern-ai/realtime-hub/internal/fanout"
+	"github.com/datacern-ai/realtime-hub/internal/topics"
 )
 
 // ScopePublish is the token scope a producer must hold to publish internally

@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/channels/webhook"
-	"github.com/windrose-ai/notification-service/internal/domain"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/channels/webhook"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // TestAC01_RealKafkaToInAppEmailRealtime: a real case.assigned event from real
@@ -25,7 +25,7 @@ func TestAC01_RealKafkaToInAppEmailRealtime(t *testing.T) {
 	h.mailpitDeleteAll(t)
 	tenant := uuid.New()
 	user := "u-" + uuid.NewString()[:8]
-	h.seedUser(t, tenant.String(), user, user+"@windrose.local")
+	h.seedUser(t, tenant.String(), user, user+"@datacern.local")
 
 	// Subscribe to the realtime-hub Redis channel before publishing.
 	sub := h.rc.R.Subscribe(context.Background(), inappChannel(tenant.String(), user))
@@ -50,7 +50,7 @@ func TestAC01_RealKafkaToInAppEmailRealtime(t *testing.T) {
 	waitFor(t, 15*time.Second, func() bool {
 		for _, m := range h.mailpitMessages(t) {
 			for _, to := range m.To {
-				if to.Address == user+"@windrose.local" {
+				if to.Address == user+"@datacern.local" {
 					return true
 				}
 			}
@@ -89,7 +89,7 @@ func TestAC03_KafkaRedeliveryDedup(t *testing.T) {
 }
 
 // TestAC04_WebhookHMACRealPost: a registered endpoint receives a real signed
-// POST whose X-Windrose-Signature verifies with HMAC-SHA256 over timestamp.body
+// POST whose X-Datacern-Signature verifies with HMAC-SHA256 over timestamp.body
 // (AC-4). Real: Kafka → pipeline → real HTTP webhook target.
 func TestAC04_WebhookHMACRealPost(t *testing.T) {
 	h := requireHarness(t)
@@ -217,7 +217,7 @@ func TestAC09_RateLimitToDigest(t *testing.T) {
 	tenant := uuid.New()
 	user := "rl-" + uuid.NewString()[:8]
 	ctx := context.Background()
-	h.seedUser(t, tenant.String(), user, user+"@windrose.local")
+	h.seedUser(t, tenant.String(), user, user+"@datacern.local")
 
 	// 25 immediate emails; cap is 20/hour → 21..25 convert to digest.
 	for i := 0; i < 25; i++ {
@@ -231,7 +231,7 @@ func TestAC09_RateLimitToDigest(t *testing.T) {
 	count := 0
 	for _, m := range h.mailpitMessages(t) {
 		for _, to := range m.To {
-			if to.Address == user+"@windrose.local" {
+			if to.Address == user+"@datacern.local" {
 				count++
 			}
 		}
@@ -247,9 +247,9 @@ func TestAC09_RateLimitToDigest(t *testing.T) {
 	// into a single digest email (seeded digest.warning subject).
 	waitFor(t, 20*time.Second, func() bool {
 		for _, m := range h.mailpitMessages(t) {
-			if m.Subject == "[Windrose] Your notification digest" {
+			if m.Subject == "[Datacern] Your notification digest" {
 				for _, to := range m.To {
-					if to.Address == user+"@windrose.local" {
+					if to.Address == user+"@datacern.local" {
 						return true
 					}
 				}

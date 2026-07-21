@@ -1,12 +1,12 @@
 # healthcare-provider-rcm capability pack (BRD 26) — Core-neutral edition.
-# Installable TODAY against Windrose Core's public APIs via packctl; the
+# Installable TODAY against Datacern Core's public APIs via packctl; the
 # manifest envelope follows BRD 23 (PKG-FR-001/003). Components the current
 # Core cannot materialize are declared under `deferred` with the exact BRD 26
 # requirement they trace to — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: healthcare-provider-rcm
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   Provider-side revenue cycle management for medical groups, hospitals, and
   RCM outsourcers (BRD 26): claim/remit/denial/AR semantic models with the

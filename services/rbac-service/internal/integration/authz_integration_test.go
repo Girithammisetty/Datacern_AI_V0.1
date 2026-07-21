@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/windrose-ai/rbac-service/internal/authz"
-	"github.com/windrose-ai/rbac-service/internal/domain"
-	"github.com/windrose-ai/rbac-service/internal/events"
-	"github.com/windrose-ai/rbac-service/internal/projection"
-	"github.com/windrose-ai/rbac-service/internal/store"
+	"github.com/datacern-ai/rbac-service/internal/authz"
+	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/events"
+	"github.com/datacern-ai/rbac-service/internal/projection"
+	"github.com/datacern-ai/rbac-service/internal/store"
 )
 
 func (h *harness) serviceToken(t *testing.T, tenant uuid.UUID) string {

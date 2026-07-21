@@ -11,10 +11,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/query-service/internal/datasets"
-	"github.com/windrose-ai/query-service/internal/domain"
-	"github.com/windrose-ai/query-service/internal/exec"
-	"github.com/windrose-ai/query-service/internal/results"
+	"github.com/datacern-ai/query-service/internal/datasets"
+	"github.com/datacern-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/exec"
+	"github.com/datacern-ai/query-service/internal/results"
 )
 
 // DatasetNamer resolves a dataset id to its logical name via dataset-service's

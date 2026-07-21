@@ -43,24 +43,24 @@ class LocalFSObjectStore:
     async def signed_url(self, key: str, ttl_hours: int) -> str:
         expires = int(time.time()) + ttl_hours * 3600
         sig = hmac.new(self._secret, f"{key}:{expires}".encode(), sha256).hexdigest()[:32]
-        return f"https://objects.windrose.local/{quote(key)}?expires={expires}&sig={sig}"
+        return f"https://objects.datacern.local/{quote(key)}?expires={expires}&sig={sig}"
 
 
 class S3ObjectStore:
-    """Real S3 blob store (MinIO in dev) via the shared ``windrose_common``
+    """Real S3 blob store (MinIO in dev) via the shared ``datacern_common``
     adapter: profile blobs land in object storage and reads return real presigned
     GET URLs (24h TTL, DST-FR-027). Runtime object store."""
 
     def __init__(
         self,
-        bucket: str = "windrose-profiles",
+        bucket: str = "datacern-profiles",
         *,
         endpoint_url: str = "http://localhost:9000",
-        access_key: str = "windrose",
-        secret_key: str = "windrose_dev",
+        access_key: str = "datacern",
+        secret_key: str = "datacern_dev",
         region: str = "us-east-1",
     ):
-        from windrose_common.objectstore import S3BlobObjectStore, S3Config
+        from datacern_common.objectstore import S3BlobObjectStore, S3Config
 
         self._store = S3BlobObjectStore(
             S3Config(

@@ -1,7 +1,7 @@
 # BRD 06 — semantic-service
 
 **Service:** semantic-service · **Language:** Python (FastAPI) · **Phase:** 2
-**Inherits:** `00_MASTER_BRD.md` · **Architecture:** `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §5, §6, §8.4
+**Inherits:** `00_MASTER_BRD.md` · **Architecture:** `../../DATACERN_PLATFORM_ARCHITECTURE.md` §5, §6, §8.4
 **V1 sources mined:** `NEMESIS_SERVER_AGGREGATION_SPEC.md` (agg-fn whitelist, per-chart translation, identifier quoting, drilldown), `ido/app/models/{query,saved_query}.rb`, chart `config/meta` conventions (`config.x/y/dataseries`, `meta.ySeries[].aggregateType`, `meta.aggregate.type/checked`)
 
 ---

@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://semantic:semantic@localhost:5432/semantic"
 
     # AuthN (MASTER-FR-010/011). In dev/tests a static PEM is used; prod uses JWKS.
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwt_public_key_pem: str | None = None
     jwks_url: str | None = None
     jwks_ttl_seconds: int = 300
@@ -22,13 +22,13 @@ class Settings(BaseSettings):
     # sidecar after mTLS termination (MASTER-FR-014).
     spiffe_header: str = "x-client-spiffe-id"
     internal_allowed_spiffe: list[str] = [
-        "spiffe://windrose/ns/viz/sa/chart-service",
-        "spiffe://windrose/ns/data/sa/query-service",
-        "spiffe://windrose/ns/ai/sa/agent-runtime",
+        "spiffe://datacern/ns/viz/sa/chart-service",
+        "spiffe://datacern/ns/data/sa/query-service",
+        "spiffe://datacern/ns/ai/sa/agent-runtime",
     ]
     # semantic-service's own SPIFFE identity, forwarded on outbound internal
     # (service-to-service) calls to dataset-service.
-    service_spiffe_id: str = "spiffe://windrose/ns/data/sa/semantic-service"
+    service_spiffe_id: str = "spiffe://datacern/ns/data/sa/semantic-service"
 
     events_topic: str = "semantic.events.v1"
 

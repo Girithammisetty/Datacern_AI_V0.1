@@ -5,7 +5,7 @@ locals {
   base_name = "${var.name_prefix}-${var.environment}"
 
   common_tags = merge({
-    platform    = "windrose"
+    platform    = "datacern"
     environment = var.environment
     managed_by  = "terraform"
   }, var.tags)
@@ -51,7 +51,7 @@ locals {
   # Final Key Vault secret set. user-provided (var.secrets) overrides computed.
   # NOTE: Key Vault secret names cannot contain "_", so each name is hyphenated
   # (POSTGRES_HOST -> postgres-host). External Secrets maps them back to the
-  # UPPER_SNAKE keys expected in the `windrose-secrets` cluster Secret.
+  # UPPER_SNAKE keys expected in the `datacern-secrets` cluster Secret.
   all_secrets = merge(local.computed_secrets, var.secrets)
 
   key_vault_secret_names = {

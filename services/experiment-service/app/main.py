@@ -69,7 +69,7 @@ async def _lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(reconcile_loop(container, stop)))
 
         try:
-            from windrose_common.kafka import KafkaConfig, KafkaProducerClient
+            from datacern_common.kafka import KafkaConfig, KafkaProducerClient
 
             from app.events.consumer import (
                 DatasetEventHandler,
@@ -138,8 +138,8 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.state.token_verifier = container.token_verifier
     app.state.authz = container.authz
 
-    from windrose_common.metricsx import RedMiddleware, instrument_app
-    from windrose_common.otelx import configure_tracing
+    from datacern_common.metricsx import RedMiddleware, instrument_app
+    from datacern_common.otelx import configure_tracing
     configure_tracing("experiment-service")
     app.add_middleware(AuthMiddleware)
     app.add_middleware(TraceMiddleware)

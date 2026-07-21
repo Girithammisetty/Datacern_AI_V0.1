@@ -1,6 +1,6 @@
 # BRD 32 — `card-disputes` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack #1 (first post-BRD-24-31 wave). Reference pattern: BRD 24/30.
 **Status:** v1.0.0 SHIPPED Core-neutral via packctl (tenant `wr-disputes`); pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Card dispute and chargeback adjudication AI for US issuers: Reg E (debit) / Reg Z (credit) error-resolution with regulatory-clock awareness, provisional-credit governance, first-party fraud escalation, and network chargeback recovery (Visa/Mastercard reason-code grounded). Sells to banks, credit unions, and fintech card program managers / issuer-processors.
 
-**Why this vertical.** Reg E/Reg Z disputes carry hard statutory deadlines (10-business-day provisional-credit decisions, 45/90-day investigations, 2-billing-cycle Reg Z resolution) and CFPB examination exposure; volumes are enormous and rising with CNP fraud and first-party ("friendly") fraud. Every determination is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Windrose Core, and the alert-adjudication pattern is already proven by BRD 30 (banking-aml).
+**Why this vertical.** Reg E/Reg Z disputes carry hard statutory deadlines (10-business-day provisional-credit decisions, 45/90-day investigations, 2-billing-cycle Reg Z resolution) and CFPB examination exposure; volumes are enormous and rising with CNP fraud and first-party ("friendly") fraud. Every determination is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Datacern Core, and the alert-adjudication pattern is already proven by BRD 30 (banking-aml).
 
 **Business value.** Deadline-breach elimination (Reg E clock watch), analyst throughput (triage pre-routing), chargeback recovery lift (reason-code + compelling-evidence fit, CE 3.0 pre-screen), first-party fraud loss reduction, and exam-ready decision files (every denial carries its findings + provenance).
 
@@ -98,7 +98,7 @@ SHIPPED materialization: 3 datasets (disputes 26 / transactions 30 / cardholders
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): issuer processor of record, VROL/Mastercom credentials, carrier tracking APIs.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): issuer processor of record, VROL/Mastercom credentials, carrier tracking APIs.
 
 ## 7. NFRs (deltas)
 

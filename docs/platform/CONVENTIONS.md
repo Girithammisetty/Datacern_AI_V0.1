@@ -1,4 +1,4 @@
-# Windrose Repo Conventions
+# Datacern Repo Conventions
 
 Authoritative requirements: `../docs/brd/00_MASTER_BRD.md` (inherited by every service) and
 each service's own BRD. This file adds repo mechanics only.

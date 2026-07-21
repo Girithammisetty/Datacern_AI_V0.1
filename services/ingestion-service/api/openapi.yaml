@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ingestion-service
-  description: 'Windrose ingestion-service (BRD 03): connections, ingestion jobs,
+  description: 'Datacern ingestion-service (BRD 03): connections, ingestion jobs,
     resumable uploads, schedules, webhook push.'
   version: 0.1.0
 paths:
@@ -1234,14 +1234,14 @@ paths:
         schema:
           type: string
           title: Path Token
-      - name: X-Windrose-Signature
+      - name: X-Datacern-Signature
         in: header
         required: false
         schema:
           anyOf:
           - type: string
           - type: 'null'
-          title: X-Windrose-Signature
+          title: X-Datacern-Signature
       responses:
         '200':
           description: Successful Response

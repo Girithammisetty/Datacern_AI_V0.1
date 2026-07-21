@@ -1,6 +1,6 @@
 # BRD 49 — `ap-invoice-audit` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32 pattern). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending (packctl validate green); pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Accounts-payable invoice exception and fraud audit AI: three-way-match exception triage with payment-run deadline awareness, duplicate-payment interception (including OCR-variant resubmissions), BEC/vendor-impersonation banking-change defense with out-of-band verification discipline, shell-vendor and split-invoicing detection, and post-payment recovery workflow. Sells to enterprise finance / AP shared-services organizations, procure-to-pay BPOs, and audit-recovery firms.
 
-**Why this vertical.** AP disbursements sit on hard operational clocks (payment runs, early-payment discount windows, net-terms deadlines) inside a SOX/ICFR control regime; duplicate payments, BEC banking-change fraud, and shell vendors are enormous, well-documented loss surfaces, and an entire contingency-fee recovery-audit industry exists to claw back what the controls missed. Every block/release is a documented, evidence-driven, four-eyes human determination — the exact governed decision shape of the Windrose Core, and the exception-adjudication pattern is already proven by BRD 30/32.
+**Why this vertical.** AP disbursements sit on hard operational clocks (payment runs, early-payment discount windows, net-terms deadlines) inside a SOX/ICFR control regime; duplicate payments, BEC banking-change fraud, and shell vendors are enormous, well-documented loss surfaces, and an entire contingency-fee recovery-audit industry exists to claw back what the controls missed. Every block/release is a documented, evidence-driven, four-eyes human determination — the exact governed decision shape of the Datacern Core, and the exception-adjudication pattern is already proven by BRD 30/32.
 
 **Business value.** Duplicate-payment prevention (block before disbursement, not recovery after), BEC loss avoidance (banking-change verification discipline at the moment of maximum risk), shell-vendor and threshold-splitting detection, discount-window protection (deadline-runway-ranked queues so holds don't burn 2/10-net-30 economics), recovery-audit lift, and exam-ready decision files (every block/release carries its findings + provenance).
 
@@ -99,7 +99,7 @@ Authored materialization: 3 datasets (exceptions 26 / invoices 30 / vendors 12 �
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): ERP/P2P system of record, bank gateway schedules, TIN-matching and sanctions-screening services.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): ERP/P2P system of record, bank gateway schedules, TIN-matching and sanctions-screening services.
 
 ## 7. NFRs (deltas)
 

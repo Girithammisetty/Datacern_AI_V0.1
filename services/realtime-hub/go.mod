@@ -1,4 +1,4 @@
-module github.com/windrose-ai/realtime-hub
+module github.com/datacern-ai/realtime-hub
 
 go 1.26.5
 
@@ -11,7 +11,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.21.0
-	github.com/windrose-ai/go-common v0.0.0
+	github.com/datacern-ai/go-common v0.0.0
 )
 
 require (
@@ -56,4 +56,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/windrose-ai/go-common => ../../libs/go-common
+replace github.com/datacern-ai/go-common => ../../libs/go-common

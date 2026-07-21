@@ -19,7 +19,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/windrose-ai/case-service/internal/authz"
+	"github.com/datacern-ai/case-service/internal/authz"
 )
 
 // Config carries the endpoint + credentials for the registration call.

@@ -1,6 +1,6 @@
 # usage-service (Go)
 
-Metering, cost-attribution and budget-enforcement authority for the Windrose
+Metering, cost-attribution and budget-enforcement authority for the datacern
 platform (BRD 17). Consumes usage events from every service, aggregates them
 into per-tenant/workspace/user/agent rollups, exposes showback + chargeback
 reporting, maintains budget objects whose threshold events gate LLM spend at
@@ -32,7 +32,7 @@ OPA — with no runtime stubs (CONVENTIONS END STATE).
 
 ```
 # real infra (repo root): docker compose -f deploy/docker-compose.dev.yml up -d
-createdb usage   # or: psql -U windrose -c 'CREATE DATABASE usage'
+createdb usage   # or: psql -U datacern -c 'CREATE DATABASE usage'
 make run
 ```
 
@@ -40,7 +40,7 @@ Default env wires REAL adapters (no flags):
 
 | Var | Default | Adapter |
 |---|---|---|
-| `MIGRATE_DATABASE_URL` | `postgres://windrose:windrose_dev@localhost:5432/usage` | owner DSN for migrations (creates the runtime role) |
+| `MIGRATE_DATABASE_URL` | `postgres://datacern:datacern_dev@localhost:5432/usage` | owner DSN for migrations (creates the runtime role) |
 | `DATABASE_URL` | `postgres://usage_app:usage_app@localhost:5432/usage` | **non-owner** NOSUPERUSER NOBYPASSRLS runtime role (RLS applies) |
 | `KAFKA_BROKERS` | `localhost:9092` | Redpanda |
 | `REDIS_ADDR` | `localhost:6379` | Redis |

@@ -1,0 +1,90 @@
+{{- /* One Deployment per entry in .Values.services (mirrors deploy/services.yaml). */}}
+{{- $root := . -}}
+{{- range $svc := .Values.services }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $svc.name }}
+  labels:
+    {{- include "datacern.labels" $root | nindent 4 }}
+    {{- include "datacern.selectorLabels" (dict "svc" $svc "root" $root) | nindent 4 }}
+spec:
+  replicas: {{ default 1 $svc.replicas }}
+  selector:
+    matchLabels:
+      {{- include "datacern.selectorLabels" (dict "svc" $svc "root" $root) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "datacern.labels" $root | nindent 8 }}
+        {{- include "datacern.selectorLabels" (dict "svc" $svc "root" $root) | nindent 8 }}
+      annotations:
+        # Roll pods when the non-secret config changes.
+        checksum/config: {{ toYaml $root.Values.config | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "datacern.serviceAccountName" $root }}
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $svc.name }}
+          image: {{ include "datacern.image" (dict "svc" $svc "root" $root) }}
+          imagePullPolicy: {{ default "IfNotPresent" $root.Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+          envFrom:
+            - configMapRef:
+                name: datacern-config
+            - secretRef:
+                name: {{ $root.Values.secrets.name }}
+          {{- /* Per-service env: maps the exact var names THIS service reads
+                 (Go = unprefixed DATABASE_URL/REDIS_ADDR/KAFKA_BROKERS; Python =
+                 <PREFIX>_ names) to the shared/per-service secret + config keys.
+                 env wins over envFrom, so each service gets its own DB DSN. */}}
+          {{- with $svc.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          startupProbe:
+            httpGet:
+              path: {{ include "datacern.readyPath" (dict "svc" $svc) }}
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: {{ include "datacern.readyPath" (dict "svc" $svc) }}
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: {{ include "datacern.livePath" (dict "svc" $svc) }}
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml (default $root.Values._resourceTiers.small $svc.resources) | nindent 12 }}
+          securityContext:
+            {{- /* A service may override the whole block (booleans don't merge cleanly). */}}
+            {{- toYaml (default $root.Values.securityContext $svc.securityContext) | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- with $svc.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- with $svc.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}

@@ -6,11 +6,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/windrose-ai/go-common/metricsx"
-	"github.com/windrose-ai/query-service/internal/authz"
-	"github.com/windrose-ai/query-service/internal/exec"
-	"github.com/windrose-ai/query-service/internal/results"
-	"github.com/windrose-ai/query-service/internal/store"
+	"github.com/datacern-ai/go-common/metricsx"
+	"github.com/datacern-ai/query-service/internal/authz"
+	"github.com/datacern-ai/query-service/internal/exec"
+	"github.com/datacern-ai/query-service/internal/results"
+	"github.com/datacern-ai/query-service/internal/store"
 )
 
 // Server wires the HTTP layer.

@@ -24,24 +24,24 @@ install_one() {
   fi
 }
 
-install_one workers-comp-claims      wr-wcomp        "Windrose Workers Comp"          wcomp        no
-install_one trade-compliance         wr-trade        "Windrose Trade Compliance"      trade        no
-install_one trucking-claims          wr-trucking     "Windrose Trucking Claims"       trucking     no
-install_one warranty-claims          wr-warranty     "Windrose Warranty Claims"       warranty     no
-install_one mortgage-loss-mitigation wr-lossmit      "Windrose Loss Mitigation"       lossmit      no
-install_one credit-disputes          wr-fcra         "Windrose Credit Disputes"       fcra         no
-install_one background-screening     wr-screening    "Windrose Background Screening"  screening    no
-install_one trust-safety-appeals     wr-appeals      "Windrose Trust & Safety"        appeals      no
-install_one device-complaints        wr-mdr          "Windrose Device Vigilance"      mdr          no
-install_one underwriting-intake      wr-uw           "Windrose Underwriting Intake"   uw           no
-install_one chargeback-representment wr-merchant     "Windrose Merchant Disputes"     merchant     no
-install_one seller-vetting           wr-marketplace  "Windrose Marketplace Integrity" marketplace  no
-install_one benefits-appeals         wr-benefits     "Windrose Benefits Adjudication" benefits     no
-install_one utility-inspections      wr-utility      "Windrose Utility Inspections"   utility      no
-install_one construction-claims      wr-construction "Windrose Construction Claims"   construction no
-install_one ap-invoice-audit         wr-apaudit      "Windrose AP Audit"              apaudit      no
-install_one manufacturing-mrb        wr-mrb          "Windrose Manufacturing Quality" mrb          no
-install_one tax-notices              wr-tax          "Windrose Tax Notices"           tax          restart
+install_one workers-comp-claims      wr-wcomp        "Datacern Workers Comp"          wcomp        no
+install_one trade-compliance         wr-trade        "Datacern Trade Compliance"      trade        no
+install_one trucking-claims          wr-trucking     "Datacern Trucking Claims"       trucking     no
+install_one warranty-claims          wr-warranty     "Datacern Warranty Claims"       warranty     no
+install_one mortgage-loss-mitigation wr-lossmit      "Datacern Loss Mitigation"       lossmit      no
+install_one credit-disputes          wr-fcra         "Datacern Credit Disputes"       fcra         no
+install_one background-screening     wr-screening    "Datacern Background Screening"  screening    no
+install_one trust-safety-appeals     wr-appeals      "Datacern Trust & Safety"        appeals      no
+install_one device-complaints        wr-mdr          "Datacern Device Vigilance"      mdr          no
+install_one underwriting-intake      wr-uw           "Datacern Underwriting Intake"   uw           no
+install_one chargeback-representment wr-merchant     "Datacern Merchant Disputes"     merchant     no
+install_one seller-vetting           wr-marketplace  "Datacern Marketplace Integrity" marketplace  no
+install_one benefits-appeals         wr-benefits     "Datacern Benefits Adjudication" benefits     no
+install_one utility-inspections      wr-utility      "Datacern Utility Inspections"   utility      no
+install_one construction-claims      wr-construction "Datacern Construction Claims"   construction no
+install_one ap-invoice-audit         wr-apaudit      "Datacern AP Audit"              apaudit      no
+install_one manufacturing-mrb        wr-mrb          "Datacern Manufacturing Quality" mrb          no
+install_one tax-notices              wr-tax          "Datacern Tax Notices"           tax          restart
 
 echo "=== batch done, fail=$fail ==="
 exit $fail

@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/rbac-service/internal/events"
+	"github.com/datacern-ai/rbac-service/internal/events"
 )
 
 // InsertOutbox appends an event to the transactional outbox inside the

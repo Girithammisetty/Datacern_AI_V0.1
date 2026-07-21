@@ -67,7 +67,7 @@ pipeline-orchestrator audits each create.
   `pipeline-orchestrator` → `{PIPELINE}/internal/v1/mcp/invoke`.
 - Recipe: new `register_ml_lifecycle_tools()` in `deploy/e2e/lib/seed.py`
   mirroring `register_inference_tool` (semantic_description ≥40 chars with
-  "use when", x-windrose-urn annotations, deprecate-then-publish idempotency).
+  "use when", x-datacern-urn annotations, deprecate-then-publish idempotency).
 
 ### 3.3 agent-runtime
 - `app/adapters/pipeline.py`: add `PipelineWriter.instantiate(algorithm, body,

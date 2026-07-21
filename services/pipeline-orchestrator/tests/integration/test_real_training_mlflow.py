@@ -19,7 +19,7 @@ from tests.integration.conftest import MLFLOW_URI, mlflow_up
 pytestmark = pytest.mark.integration
 
 DATASET_URN = f"wr:{TENANT_A}:dataset:dataset/claims-fraud"
-EXPERIMENT = "windrose-pipeline-it"
+EXPERIMENT = "datacern-pipeline-it"
 
 
 def _disposition(i: int):

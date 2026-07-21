@@ -4,13 +4,13 @@
 # identity-service's GCPKMSSigner need (a) Secret Manager access namespaced
 # under an app-secrets prefix and (b) a pre-existing Cloud KMS key ring — Key
 # Rings can't be created dynamically by the app (they're also undeletable, so
-# Windrose deliberately never creates one per boot; `gcpkms.Signer` assumes
+# Datacern deliberately never creates one per boot; `gcpkms.Signer` assumes
 # one already exists, provisioned here).
 #
 # Off by default (`enable_app_secrets_backend = false`) and a no-op unless
 # `secrets_backend = "gcp"` — this file adds nothing to a Vault-backed (the
 # default) or non-GCP deployment. Distinct from secretmanager.tf's single
-# `windrose-secrets` blob, which only holds INFRA credentials synced by
+# `datacern-secrets` blob, which only holds INFRA credentials synced by
 # External Secrets Operator.
 
 variable "secrets_backend" {
@@ -44,7 +44,7 @@ locals {
 resource "google_service_account" "app_secrets" {
   count        = local.app_secrets_backend_enabled ? 1 : 0
   account_id   = "${var.name_prefix}-app-secrets"
-  display_name = "Windrose app secrets/signing (SECRETS_BACKEND=gcp)"
+  display_name = "Datacern app secrets/signing (SECRETS_BACKEND=gcp)"
 }
 
 resource "google_service_account_iam_member" "app_secrets_wi" {
@@ -68,7 +68,7 @@ resource "google_project_iam_member" "app_secrets_manager" {
 
   condition {
     title       = "app-secrets-prefix-only"
-    description = "Only secrets named ${local.app_secrets_id_prefix}* (Windrose app secrets, not the windrose-secrets infra-creds blob)."
+    description = "Only secrets named ${local.app_secrets_id_prefix}* (Datacern app secrets, not the datacern-secrets infra-creds blob)."
     expression  = "resource.name.startsWith(\"projects/${var.project_id}/secrets/${local.app_secrets_id_prefix}\")"
   }
 }

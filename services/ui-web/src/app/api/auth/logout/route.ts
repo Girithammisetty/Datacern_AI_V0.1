@@ -1,7 +1,7 @@
 /**
- * Sign out. Always clears every local Windrose cookie. For a real-OIDC
+ * Sign out. Always clears every local Datacern cookie. For a real-OIDC
  * session this ALSO performs RP-initiated (single) logout at the IdP — a
- * click on "Sign out" that only cleared the Windrose cookie left the IdP's
+ * click on "Sign out" that only cleared the Datacern cookie left the IdP's
  * own SSO session alive, so "Sign in with SSO" right after silently
  * re-authenticated with no credential prompt at all. GET (not POST) because
  * completing single logout requires a real browser navigation through the
@@ -40,7 +40,7 @@ async function handleLogout(req: NextRequest): Promise<NextResponse> {
         }
       } catch {
         // Fall through to a local-only logout — the user is still signed out
-        // of Windrose even if the IdP round-trip couldn't be started.
+        // of Datacern even if the IdP round-trip couldn't be started.
       }
     }
   }

@@ -1,4 +1,4 @@
-module github.com/windrose-ai/notification-service
+module github.com/datacern-ai/notification-service
 
 go 1.26.5
 
@@ -14,7 +14,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/redis v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.43.0
-	github.com/windrose-ai/go-common v0.0.0
+	github.com/datacern-ai/go-common v0.0.0
 )
 
 require (
@@ -89,4 +89,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/windrose-ai/go-common => ../../libs/go-common
+replace github.com/datacern-ai/go-common => ../../libs/go-common

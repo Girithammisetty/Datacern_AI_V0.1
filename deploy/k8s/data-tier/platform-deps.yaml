@@ -7,7 +7,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: opa
-  namespace: windrose
+  namespace: datacern
 spec:
   selector: { app: opa }
   ports:
@@ -17,7 +17,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: opa
-  namespace: windrose
+  namespace: datacern
 spec:
   replicas: 1
   selector:
@@ -46,7 +46,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: keycloak
-  namespace: windrose
+  namespace: datacern
 spec:
   selector: { app: keycloak }
   ports:
@@ -56,7 +56,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: keycloak
-  namespace: windrose
+  namespace: datacern
 spec:
   replicas: 1
   selector:
@@ -82,7 +82,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: temporal
-  namespace: windrose
+  namespace: datacern
 spec:
   selector: { app: temporal }
   ports:
@@ -92,7 +92,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: temporal
-  namespace: windrose
+  namespace: datacern
 spec:
   replicas: 1
   selector:
@@ -107,8 +107,8 @@ spec:
           env:
             - { name: DB, value: postgres12 }
             - { name: DB_PORT, value: "5432" }
-            - { name: POSTGRES_USER, value: windrose }
-            - { name: POSTGRES_PWD, value: windrose_dev }
+            - { name: POSTGRES_USER, value: datacern }
+            - { name: POSTGRES_PWD, value: datacern_dev }
             - { name: POSTGRES_SEEDS, value: postgres }
           ports:
             - containerPort: 7233
@@ -120,7 +120,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mlflow
-  namespace: windrose
+  namespace: datacern
 spec:
   selector: { app: mlflow }
   ports:
@@ -130,7 +130,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mlflow
-  namespace: windrose
+  namespace: datacern
 spec:
   replicas: 1
   selector:
@@ -144,16 +144,16 @@ spec:
           image: ghcr.io/mlflow/mlflow:v3.14.0
           env:
             - { name: MLFLOW_S3_ENDPOINT_URL, value: http://minio:9000 }
-            - { name: AWS_ACCESS_KEY_ID, value: windrose }
-            - { name: AWS_SECRET_ACCESS_KEY, value: windrose_dev }
+            - { name: AWS_ACCESS_KEY_ID, value: datacern }
+            - { name: AWS_SECRET_ACCESS_KEY, value: datacern_dev }
           command:
             - bash
             - -c
             - >
               pip install --no-cache-dir psycopg2-binary boto3 >/tmp/pipe.log 2>&1 &&
               mlflow server --host 0.0.0.0 --port 5000
-              --backend-store-uri postgresql://windrose:windrose_dev@postgres:5432/mlflow
-              --artifacts-destination s3://windrose-ml/mlflow --serve-artifacts
+              --backend-store-uri postgresql://datacern:datacern_dev@postgres:5432/mlflow
+              --artifacts-destination s3://datacern-ml/mlflow --serve-artifacts
           ports:
             - containerPort: 5000
           readinessProbe:
@@ -167,12 +167,12 @@ spec:
 # Ollama — local CPU LLM (NOT in docker-compose.dev.yml; on the Mac dev stack it
 # runs natively on the host. In-cluster it needs its own Deployment + a volume
 # for pulled models). Pull a small model after rollout:
-#   kubectl -n windrose exec deploy/ollama -- ollama pull llama3.2:3b
+#   kubectl -n datacern exec deploy/ollama -- ollama pull llama3.2:3b
 apiVersion: v1
 kind: Service
 metadata:
   name: ollama
-  namespace: windrose
+  namespace: datacern
 spec:
   selector: { app: ollama }
   ports:
@@ -182,7 +182,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: ollama
-  namespace: windrose
+  namespace: datacern
 spec:
   serviceName: ollama
   replicas: 1

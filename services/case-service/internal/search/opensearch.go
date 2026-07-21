@@ -22,7 +22,7 @@ import (
 	"github.com/google/uuid"
 	opensearch "github.com/opensearch-project/opensearch-go/v3"
 
-	"github.com/windrose-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/domain"
 )
 
 // Client is the real OpenSearch adapter.

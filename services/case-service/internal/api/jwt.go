@@ -1,7 +1,7 @@
 // Package api is case-service's HTTP layer: chi router, JWT/tenant-context
 // middleware, the master-BRD error envelope and pagination, Idempotency-Key
 // replay, and the resource handlers. Contracts are identical to the other
-// Windrose services (same claim names, same error codes, same envelope).
+// Datacern services (same claim names, same error codes, same envelope).
 package api
 
 import (
@@ -19,7 +19,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/domain"
 )
 
 // Claims are the platform JWT claims (MASTER-FR-011).

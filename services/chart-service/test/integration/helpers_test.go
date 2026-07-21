@@ -29,7 +29,7 @@ func opaReachable(ctx context.Context, opaURL string) bool {
 // tenant-admin allow for every listed action, using the rbac key scheme the
 // go-common loader reads. The catalog marks each action workspace_scoped (as
 // chart-service registers them); the admin-flag short-circuit in
-// windrose_authz_input.rego then allows any known action in a valid workspace
+// datacern_authz_input.rego then allows any known action in a valid workspace
 // context.
 func seedAdminProjection(t *testing.T, h *harness, tenant, user, wsID string, actions []string) {
 	t.Helper()

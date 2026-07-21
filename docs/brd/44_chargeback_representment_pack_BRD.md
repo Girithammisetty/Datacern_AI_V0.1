@@ -1,6 +1,6 @@
 # BRD 44 — `chargeback-representment` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending; pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Merchant-side chargeback response and representment AI — the merchant/PSP mirror of the issuer `card-disputes` pack (BRD 32): decide which incoming chargebacks to fight, with what reason-code-matched compelling evidence, at what economics. Sells to large merchants/e-commerce operators, PSPs/acquirers offering managed disputes, and marketplaces.
 
-**Why this vertical.** Every issuer chargeback lands on a merchant with a short acquirer response clock (network windows run roughly 20-45 days; acquirer deadlines are earlier) and a fixed fee regardless of outcome. Win rates hinge on matching evidence to the reason code (delivery confirmation for not-received, usage logs for digital goods, CE 3.0 priors for CNP fraud), while Visa VDMP/VFMP and Mastercard ECM/HECM monitoring programs punish dispute RATIOS that representment wins do not reduce — so fight/accept discipline, friendly-fraud prevention, and pre-dispute deduplication are program-level economics, not case heroics. Evidence-driven, deadline-bound, human-approved decisions: exactly the governed decision shape of the Windrose Core, proven by BRD 30/32.
+**Why this vertical.** Every issuer chargeback lands on a merchant with a short acquirer response clock (network windows run roughly 20-45 days; acquirer deadlines are earlier) and a fixed fee regardless of outcome. Win rates hinge on matching evidence to the reason code (delivery confirmation for not-received, usage logs for digital goods, CE 3.0 priors for CNP fraud), while Visa VDMP/VFMP and Mastercard ECM/HECM monitoring programs punish dispute RATIOS that representment wins do not reduce — so fight/accept discipline, friendly-fraud prevention, and pre-dispute deduplication are program-level economics, not case heroics. Evidence-driven, deadline-bound, human-approved decisions: exactly the governed decision shape of the Datacern Core, proven by BRD 30/32.
 
 **Business value.** Recovery lift (CE 3.0 pre-screen, evidence-to-reason-code matching), zero missed response deadlines, fee savings from economics-thresholded accepts and alert deduplication (never refund twice), friendly-fraud loss reduction via block-list feed, monitoring-program headroom protection, and audit-ready decision files (every filing and accept carries findings + provenance).
 
@@ -99,7 +99,7 @@ Authored materialization: 3 datasets (chargebacks 26 / orders 30 / customers 12 
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): PSP/acquirer of record, VROL/Mastercom access via acquirer, alert-rail enrollment (RDR/Ethoca-style), OMS + carrier tracking credentials.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): PSP/acquirer of record, VROL/Mastercom access via acquirer, alert-rail enrollment (RDR/Ethoca-style), OMS + carrier tracking credentials.
 
 ## 7. NFRs (deltas)
 

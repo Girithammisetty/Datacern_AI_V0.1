@@ -1,6 +1,6 @@
 # BRD 37 — `warranty-claims` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 (post-BRD-24-31 wave). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending; pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** OEM warranty-claims adjudication AI for manufacturers paying dealer/service-network claims: intake triage with payment-decision deadline awareness, dealer claim-padding surveillance with audit escalation, component failure early-warning detection by build batch, supplier cost recovery (warranty chargebacks), goodwill governance, and safety-recall routing. Sells to auto OEMs, heavy-equipment/ag OEMs, appliance/electronics manufacturers, and extended-warranty administrators.
 
-**Why this vertical.** Warranty is a multi-billion-dollar cost line accrued at sale (reserve accounting) and adjudicated claim-by-claim against dealer agreements with hard payment-decision clocks; padding/leakage, missed supplier recoveries, and late field-failure signals are chronic and expensive, while safety-recall interplay (NHTSA) and Magnuson-Moss tie-in rules make wrongful denial a regulatory exposure. Every determination is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Windrose Core, proven by the BRD 30/32 adjudication packs.
+**Why this vertical.** Warranty is a multi-billion-dollar cost line accrued at sale (reserve accounting) and adjudicated claim-by-claim against dealer agreements with hard payment-decision clocks; padding/leakage, missed supplier recoveries, and late field-failure signals are chronic and expensive, while safety-recall interplay (NHTSA) and Magnuson-Moss tie-in rules make wrongful denial a regulatory exposure. Every determination is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Datacern Core, proven by the BRD 30/32 adjudication packs.
 
 **Business value.** Deadline-breach elimination on the payment-decision clock, analyst throughput (triage pre-routing), warranty leakage reduction (labor-op trimming + audit selection), supplier recovery lift (attribution evidence discipline), earlier field-failure containment (build-batch clusters), governed goodwill spend, and audit-ready decision files (every denial carries dealer-communicable findings + provenance).
 
@@ -100,7 +100,7 @@ Authored materialization: 3 datasets (claims 26 / units 30 / dealers 12 — seed
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): OEM warranty system of record, DMS claim feeds, supplier quality/chargeback rails, NHTSA campaign data (vehicle OEMs).
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): OEM warranty system of record, DMS claim feeds, supplier quality/chargeback rails, NHTSA campaign data (vehicle OEMs).
 
 ## 7. NFRs (deltas)
 

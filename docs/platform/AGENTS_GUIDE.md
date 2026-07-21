@@ -1,4 +1,4 @@
-# Windrose Agents — How They Work & Where to See Them
+# Datacern Agents — How They Work & Where to See Them
 
 **Date:** 2026-07-12 · **Audience:** developers debugging or verifying agent behavior.
 **Companion docs:** `WALKTHROUGH.md` (persona walkthrough) · `BUILD_STATUS.md` (implementation status) · `../docs/brd/14_agent_runtime_BRD.md` (specification) · `../docs/brd/13_tool_plane_BRD.md` (tool authority chain) · `../docs/brd/12_ai_gateway_BRD.md` (LLM routing).
@@ -9,7 +9,7 @@
 
 ## 1. The mental model — five moving parts
 
-An agent in Windrose is not "an LLM in a loop." It's a **governed compound object** with five parts:
+An agent in Datacern is not "an LLM in a loop." It's a **governed compound object** with five parts:
 
 ```
                                  ┌── ai-gateway (LLM calls, budgets, cascade)
@@ -155,7 +155,7 @@ docker exec -it $(docker ps -qf name=redpanda) rpk topic consume case.events.v1 
 
 ```bash
 # Connect to agent-runtime DB
-docker exec -it $(docker ps -qf name=postgres) psql -U windrose -d agent_runtime
+docker exec -it $(docker ps -qf name=postgres) psql -U datacern -d agent_runtime
 
 # Last 5 sessions
 \x on
@@ -214,8 +214,8 @@ Go to `/cases/CLM-1001`, hit the "Ask copilot" or "Generate disposition" button 
 # Get a token for the adjuster persona (dev mode)
 TOKEN=$(curl -s -c /tmp/w.jar -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"adjuster@demo.windrose"}' && \
-  grep -o 'windrose_session=[^;]*' /tmp/w.jar | cut -d= -f2)
+  -d '{"email":"adjuster@demo.datacern"}' && \
+  grep -o 'datacern_session=[^;]*' /tmp/w.jar | cut -d= -f2)
 
 # Create a run for the analytics agent (read-only, safe to call any time)
 curl -s -X POST http://localhost:8306/api/v1/runs \
@@ -326,7 +326,7 @@ On the run detail page (`/copilot/runs/{id}`), the Stat panel shows Cost / Input
 
 ## 10. The one-paragraph summary
 
-Windrose agents are LangGraph state machines wrapped in Temporal workflows, executed inside `agent-runtime`. Every LLM call goes through `ai-gateway` (budgets + guardrails). Every tool call goes through `tool-plane` (MCP registry + signed-grant authz). Every intent to write becomes a `Proposal` row that a human decides on in `/inbox`; approval issues a JWKS-signed grant that `tool-plane` verifies before the domain service (case-service, etc.) accepts the write. Full visibility surfaces are: `/copilot/runs` (list), `/copilot/runs/{id}` (trace visualizer), `/inbox` (proposals), `/admin/audit` (every action). Backing evidence is in Kafka topics `ai.*`/`agent.events.v1`, the `agent_runtime` Postgres DB, and `logs/agent-runtime.log`.
+Datacern agents are LangGraph state machines wrapped in Temporal workflows, executed inside `agent-runtime`. Every LLM call goes through `ai-gateway` (budgets + guardrails). Every tool call goes through `tool-plane` (MCP registry + signed-grant authz). Every intent to write becomes a `Proposal` row that a human decides on in `/inbox`; approval issues a JWKS-signed grant that `tool-plane` verifies before the domain service (case-service, etc.) accepts the write. Full visibility surfaces are: `/copilot/runs` (list), `/copilot/runs/{id}` (trace visualizer), `/inbox` (proposals), `/admin/audit` (every action). Backing evidence is in Kafka topics `ai.*`/`agent.events.v1`, the `agent_runtime` Postgres DB, and `logs/agent-runtime.log`.
 
 ## 11. Cross-references
 
@@ -335,4 +335,4 @@ Windrose agents are LangGraph state machines wrapped in Temporal workflows, exec
 - **BRD 12 ai-gateway** — LLM routing + budgets + guardrails; §3.8 cost mechanisms (design-only).
 - **BRD 24 insurance-claims-payer** — the three payer agents (Prior-Auth, Appeal Analyst, Denial-Rationale) that will land on this same infrastructure.
 - **WALKTHROUGH.md** — persona-driven testing (the story arc the agents participate in).
-- **WINDROSE_MODEL_STRATEGY.md** — how the ai-gateway decides between SLM (own GPUs) vs hosted frontier LLMs.
+- **DATACERN_MODEL_STRATEGY.md** — how the ai-gateway decides between SLM (own GPUs) vs hosted frontier LLMs.

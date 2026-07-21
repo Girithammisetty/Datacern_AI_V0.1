@@ -10,8 +10,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // Actions (MASTER-FR-016 naming: <service>.<resource>.<verb>). Every verb is

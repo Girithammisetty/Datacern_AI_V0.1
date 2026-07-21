@@ -2,7 +2,7 @@
 
 - Admin plane: RS256 platform JWT in `Authorization: Bearer` (MASTER-FR-010/011).
 - Data plane: virtual key in `Authorization: Bearer nk-…` PLUS the platform JWT
-  in `X-Windrose-JWT` (AIG-FR-001).
+  in `X-Datacern-JWT` (AIG-FR-001).
 - `alg=none` is impossible by construction — the allowed algorithm list is
   pinned to ["RS256"] (MASTER-FR-014).
 - Authorization: scope check behind an AuthzClient port; the OPA sidecar
@@ -123,17 +123,17 @@ class LocalScopeAuthz:
 
 
 class OpaAuthzClient:
-    """Real OPA authorization via the shared ``windrose_common`` client: reads
+    """Real OPA authorization via the shared ``datacern_common`` client: reads
     the per-request permissions projection from Redis and POSTs it as ``input``
-    to the OPA data API (``windrose/authz_input``), returning allow/deny
+    to the OPA data API (``datacern/authz_input``), returning allow/deny
     (MASTER-FR-012). This is the runtime authz client wired by ``main.py`` when
     ``use_real_adapters`` is set; the Redis client and OPA HTTP connection are
     established lazily."""
 
     def __init__(self, opa_url: str = "http://localhost:8281", *,
                  redis_url: str = "redis://localhost:6379/0"):
-        from windrose_common.opaclient import OpaClient
-        from windrose_common.redisx import RedisProjection, build_redis
+        from datacern_common.opaclient import OpaClient
+        from datacern_common.redisx import RedisProjection, build_redis
 
         self._redis = build_redis(redis_url)
         self._client = OpaClient(opa_url, projection=RedisProjection(self._redis))

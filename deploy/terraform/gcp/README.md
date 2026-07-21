@@ -1,9 +1,9 @@
-# Windrose — GCP infrastructure (Terraform)
+# Datacern — GCP infrastructure (Terraform)
 
-Provisions the managed infrastructure the Windrose platform runs on, and publishes
+Provisions the managed infrastructure the Datacern platform runs on, and publishes
 the runtime secret payload into **Secret Manager** so the Helm chart's
 `values-gcp.yaml` (via External Secrets Operator) can sync it into the cluster
-Secret `windrose-secrets`. Credentials are **referenced, never hardcoded** — you
+Secret `datacern-secrets`. Credentials are **referenced, never hardcoded** — you
 fill them in later through `var.secrets` / `TF_VAR_*` / CI.
 
 ## What it creates
@@ -16,7 +16,7 @@ fill them in later through `var.secrets` / `TF_VAR_*` / CI.
 | `memorystore.tf` | Memorystore for Redis (private, AUTH + TLS) |
 | `kafka.tf` | Managed Service for Apache Kafka (default) **or** Pub/Sub topics fallback (`kafka_backend`) |
 | `gcs.tf` | Buckets: warehouse, uploads, profiles, pipelines (uniform access, versioning) |
-| `secretmanager.tf` | `${name_prefix}-windrose-secrets` — JSON payload of derived endpoints + `var.secrets` |
+| `secretmanager.tf` | `${name_prefix}-datacern-secrets` — JSON payload of derived endpoints + `var.secrets` |
 | `iam.tf` | Workload Identity GSAs: External-Secrets (Secret Manager accessor) + storage (GCS/Kafka), bound to the Helm KSAs |
 | `artifactregistry.tf` | Docker repo (guarded by `create_registry`) |
 
@@ -94,9 +94,9 @@ terraform output -json
 - Annotate each GCS-using KSA (see `gcs_workload_ksas`) with
   `iam.gke.io/gcp-service-account = <storage_gsa_email>`.
 - Point the `ExternalSecret` remoteRef at `secret_id`
-  (`${name_prefix}-windrose-secrets`), using `dataFrom.extract` so each JSON key
-  becomes a key in `windrose-secrets`.
-- Put non-secret endpoints in `windrose-config` (ConfigMap): bucket names from
+  (`${name_prefix}-datacern-secrets`), using `dataFrom.extract` so each JSON key
+  becomes a key in `datacern-secrets`.
+- Put non-secret endpoints in `datacern-config` (ConfigMap): bucket names from
   `gcs_buckets` (`ICEBERG_WAREHOUSE = gs://<warehouse bucket>`), etc.
 
 ## Workload Identity Federation for CI (keyless GitHub Actions)
@@ -105,14 +105,14 @@ The `cd-gcp.yml` workflow authenticates with no stored keys. One-time setup:
 
 ```bash
 PROJECT_ID=<project_id>
-POOL=windrose-github
+POOL=datacern-github
 PROVIDER=github
 REPO=<org>/<repo>
 
 # 1. Deploy service account for CI.
-gcloud iam service-accounts create windrose-ci-deploy \
-  --project "$PROJECT_ID" --display-name "Windrose CI deploy"
-DEPLOY_SA="windrose-ci-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
+gcloud iam service-accounts create datacern-ci-deploy \
+  --project "$PROJECT_ID" --display-name "Datacern CI deploy"
+DEPLOY_SA="datacern-ci-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # 2. Roles it needs to run helm against GKE (+ read images).
 for R in roles/container.developer roles/container.clusterViewer roles/artifactregistry.writer; do
@@ -122,7 +122,7 @@ done
 
 # 3. Workload Identity Pool + GitHub OIDC provider.
 gcloud iam workload-identity-pools create "$POOL" \
-  --project "$PROJECT_ID" --location global --display-name "Windrose GitHub"
+  --project "$PROJECT_ID" --location global --display-name "Datacern GitHub"
 gcloud iam workload-identity-pools providers create-oidc "$PROVIDER" \
   --project "$PROJECT_ID" --location global --workload-identity-pool "$POOL" \
   --display-name "GitHub OIDC" \
@@ -148,7 +148,7 @@ Then set in GitHub → Settings → Secrets and variables → Actions:
 | Name | Kind | Value |
 |---|---|---|
 | `GCP_WIF_PROVIDER` | secret | provider resource name from step 5 |
-| `GCP_DEPLOY_SA` | secret | `windrose-ci-deploy@<project>.iam.gserviceaccount.com` |
+| `GCP_DEPLOY_SA` | secret | `datacern-ci-deploy@<project>.iam.gserviceaccount.com` |
 | `GKE_CLUSTER` | var/secret | `gke_cluster_name` output |
 | `GCP_REGION` | var/secret | region |
 | `GCP_PROJECT_ID` | var/secret | project id |

@@ -1,6 +1,6 @@
 # BRD 39 — `credit-disputes` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32 pattern). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending; pack-service-tier components declared `deferred` in the manifest.
 
@@ -12,7 +12,7 @@
 
 **Not the card-disputes pack.** This pack is deliberately distinct from `card-disputes` (BRD 32). BRD 32 governs Reg E / Reg Z **transaction** disputes — whether a charge stands and who eats the money (provisional credit, chargebacks, merchant recovery). This pack governs FCRA **reporting** disputes — whether what a furnisher tells the credit bureaus about a consumer is accurate, complete, and timely (corrections, deletions, blocks, notices). Different statutes (FCRA 611/623(b)/605B + Reg V vs. Reg E/Z + network rules), different clocks (30/45 days and 4 business days vs. 10 business days and 2 billing cycles), different counterparties (CRAs and furnishers vs. merchants and networks), different governed action (change what is reported vs. move money). A card dispute can *trigger* a reporting dispute (the account must be marked disputed, and a resolved billing error must not be reported delinquent) — that interplay is a grounding memory here, not an overlap.
 
-**Why this vertical.** FCRA reinvestigations carry hard statutory deadlines (30/45-day windows, 5-business-day forward/notice steps, 4-business-day 605B blocks) and dispute volumes at the nationwide CRAs run to tens of millions of items per year, with credit-reporting complaints persistently the largest CFPB complaint category. The CFPB has repeatedly flagged furnisher dispute-handling — especially perfunctory "match-and-verify" ACDV responses — in supervisory highlights and enforcement, and FCRA private litigation over unreasonable investigations is a mature, growing docket. Every determination is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Windrose Core, proven by BRD 30 (banking-aml) and BRD 32 (card-disputes).
+**Why this vertical.** FCRA reinvestigations carry hard statutory deadlines (30/45-day windows, 5-business-day forward/notice steps, 4-business-day 605B blocks) and dispute volumes at the nationwide CRAs run to tens of millions of items per year, with credit-reporting complaints persistently the largest CFPB complaint category. The CFPB has repeatedly flagged furnisher dispute-handling — especially perfunctory "match-and-verify" ACDV responses — in supervisory highlights and enforcement, and FCRA private litigation over unreasonable investigations is a mature, growing docket. Every determination is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Datacern Core, proven by BRD 30 (banking-aml) and BRD 32 (card-disputes).
 
 **Business value.** Deadline-breach elimination (611/605B clock watch, day-26 ACDVs never slip), investigator throughput (triage pre-routing), litigation-loss reduction (reasonable-investigation depth on not-mine and identity-theft claims), furnisher-accuracy exam readiness (every determination carries record-level findings + provenance), and repeat-dispute cost control (documented frivolous handling instead of endless re-verification).
 
@@ -103,7 +103,7 @@ Authored materialization: 3 datasets (disputes 26 / tradelines 30 / consumers 12
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): e-OSCAR participation, Metro 2 extracts from the furnisher's servicing platforms, FTC report intake, letter vendor.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): e-OSCAR participation, Metro 2 extracts from the furnisher's servicing platforms, FTC report intake, letter vendor.
 
 ## 7. NFRs (deltas)
 

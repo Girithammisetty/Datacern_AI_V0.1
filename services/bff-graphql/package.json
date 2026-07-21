@@ -2,7 +2,7 @@
   "name": "bff-graphql",
   "version": "0.1.0",
   "private": true,
-  "description": "Windrose GraphQL Backend-For-Frontend: UI-shaped aggregation over the domain services' REST APIs. JWT passthrough, no business logic, no authz.",
+  "description": "Datacern GraphQL Backend-For-Frontend: UI-shaped aggregation over the domain services' REST APIs. JWT passthrough, no business logic, no authz.",
   "type": "module",
   "engines": {
     "node": ">=20 <21"

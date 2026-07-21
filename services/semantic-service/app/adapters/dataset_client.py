@@ -49,7 +49,7 @@ class HttpDatasetClient:
         self,
         base_url: str = "http://localhost:8083",
         *,
-        spiffe_id: str = "spiffe://windrose/ns/data/sa/semantic-service",
+        spiffe_id: str = "spiffe://datacern/ns/data/sa/semantic-service",
         spiffe_header: str = "x-client-spiffe-id",
         timeout_s: float = 5.0,
     ) -> None:
@@ -74,7 +74,7 @@ class HttpDatasetClient:
     def _headers(self, tenant_id: str) -> dict[str, str]:
         return {
             self.spiffe_header: self.spiffe_id,
-            "x-windrose-tenant-id": tenant_id,
+            "x-datacern-tenant-id": tenant_id,
             "accept": "application/json",
         }
 

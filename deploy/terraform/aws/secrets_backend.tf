@@ -4,7 +4,7 @@
 # identity-service's JWT signer both select the AWS adapters), the workload
 # needs permission to (a) create/read/delete Secrets Manager entries under its
 # own app-secrets namespace and (b) manage an asymmetric KMS signing key —
-# distinct from `secrets.tf`'s single `windrose-secrets` blob, which only
+# distinct from `secrets.tf`'s single `datacern-secrets` blob, which only
 # holds INFRA credentials synced by External Secrets Operator.
 #
 # Off by default (`enable_app_secrets_backend = false`) and a no-op unless
@@ -37,7 +37,7 @@ locals {
 # ---------------------------------------------------------------------------
 # Secrets Manager: connector credentials (AWSSecretsManagerStore) and the
 # folded embed-secret hash, all namespaced under app_secrets_path_prefix so
-# this policy can't touch the windrose-secrets infra-creds blob.
+# this policy can't touch the datacern-secrets infra-creds blob.
 # ---------------------------------------------------------------------------
 data "aws_iam_policy_document" "workload_app_secrets" {
   count = local.app_secrets_backend_enabled ? 1 : 0
@@ -82,7 +82,7 @@ data "aws_iam_policy_document" "workload_app_signing_kms" {
     resources = ["*"]
     condition {
       test     = "StringEquals"
-      variable = "aws:RequestTag/windrose:role"
+      variable = "aws:RequestTag/datacern:role"
       values   = ["identity-signer"]
     }
   }
@@ -108,7 +108,7 @@ data "aws_iam_policy_document" "workload_app_signing_kms" {
     resources = ["*"]
     condition {
       test     = "StringEquals"
-      variable = "aws:ResourceTag/windrose:role"
+      variable = "aws:ResourceTag/datacern:role"
       values   = ["identity-signer"]
     }
   }

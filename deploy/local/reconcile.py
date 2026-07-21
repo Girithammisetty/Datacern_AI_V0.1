@@ -32,7 +32,7 @@ from lib.common import superadmin_token  # noqa: E402
 RBAC = os.environ.get("RBAC_URL", "http://localhost:8302")
 IDENTITY_DSN = os.environ.get(
     "IDENTITY_DSN",
-    "host=localhost port=5432 dbname=identity user=windrose password=windrose_dev")
+    "host=localhost port=5432 dbname=identity user=datacern password=datacern_dev")
 
 
 def active_tenants() -> list[str]:

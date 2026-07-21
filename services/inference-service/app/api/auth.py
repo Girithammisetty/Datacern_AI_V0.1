@@ -4,7 +4,7 @@
   ["RS256"]).
 - Authorization: local scope check (unit/dev) behind the AuthzClient port; the
   real OPA sidecar adapter (MASTER-FR-012) reads the Redis permissions projection
-  and POSTs ``windrose.authz_input``.
+  and POSTs ``datacern.authz_input``.
 """
 
 from __future__ import annotations
@@ -140,21 +140,21 @@ class LocalScopeAuthz:
 
 
 class OpaAuthzClient:
-    """Real OPA authorization via the shared ``windrose_common`` client: reads the
+    """Real OPA authorization via the shared ``datacern_common`` client: reads the
     per-request permissions projection from Redis and POSTs it as ``input`` to the
-    OPA data API (``windrose.authz_input``), returning allow/deny (MASTER-FR-012).
+    OPA data API (``datacern.authz_input``), returning allow/deny (MASTER-FR-012).
     Runtime authz client."""
 
     def __init__(self, opa_url: str = "http://localhost:8281",
                  *, redis_url: str = "redis://localhost:6379/0"):
-        from windrose_common.opaclient import OpaClient
-        from windrose_common.redisx import build_redis
+        from datacern_common.opaclient import OpaClient
+        from datacern_common.redisx import build_redis
 
         self._redis = build_redis(redis_url)
         self._client = OpaClient(opa_url)
 
     async def allow(self, principal: Principal, action: str, resource_urn: str | None) -> bool:
-        from windrose_common.projection import load_projection
+        from datacern_common.projection import load_projection
 
         subject = {
             "id": principal.effective_user, "typ": principal.typ, "scopes": principal.scopes,

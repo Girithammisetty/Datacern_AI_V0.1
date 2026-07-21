@@ -3,7 +3,7 @@ package topics
 import (
 	"strings"
 
-	"github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/go-common/event"
 )
 
 // Rule maps a Kafka event_type pattern to a topic template (RTH-FR-020 routing

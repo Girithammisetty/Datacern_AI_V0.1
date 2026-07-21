@@ -12,9 +12,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/usage-service/internal/anomaly"
-	"github.com/windrose-ai/usage-service/internal/domain"
-	"github.com/windrose-ai/usage-service/internal/store"
+	"github.com/datacern-ai/usage-service/internal/anomaly"
+	"github.com/datacern-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/store"
 )
 
 // Runner bundles the store the jobs act on.

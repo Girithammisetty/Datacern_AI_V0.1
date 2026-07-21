@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import modal
 
-APP_NAME = "windrose-slm-trainer"
+APP_NAME = "datacern-slm-trainer"
 
 # Pinned so a rebuild is deliberate: this recipe is validated against these
 # versions, and silent upstream API drift (TRL in particular) breaks training.
@@ -43,7 +43,7 @@ TRAINING_IMAGE = modal.Image.debian_slim(python_version="3.11").pip_install(
 
 # Adapters persist here across runs; ModalGpuTrainer returns a modal:// URI into
 # this volume as the artifact reference.
-ADAPTER_VOLUME = modal.Volume.from_name("windrose-slm-adapters", create_if_missing=True)
+ADAPTER_VOLUME = modal.Volume.from_name("datacern-slm-adapters", create_if_missing=True)
 ADAPTER_ROOT = "/adapters"
 
 app = modal.App(APP_NAME)

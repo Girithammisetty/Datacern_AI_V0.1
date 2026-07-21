@@ -112,7 +112,7 @@ async def _publish_agent_version(store, signing_key, key, version, display, desc
                    "thresholds": {"min_score": 0.6}},
         eval_gate_result_id="seed-gate-pass",
         a2a_card=card, card_signature=signature,
-        principal_ref=f"spiffe://windrose/ns/ai/agent/{key}", status="published"))
+        principal_ref=f"spiffe://datacern/ns/ai/agent/{key}", status="published"))
 
 
 async def seed_catalog(store, signing_key, *,

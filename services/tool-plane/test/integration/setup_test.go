@@ -26,16 +26,16 @@ import (
 	"github.com/redis/go-redis/v9"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
-	"github.com/windrose-ai/tool-plane/internal/api"
-	"github.com/windrose-ai/tool-plane/internal/authz"
-	"github.com/windrose-ai/tool-plane/internal/embed"
-	"github.com/windrose-ai/tool-plane/internal/enforce"
-	"github.com/windrose-ai/tool-plane/internal/mcp"
-	"github.com/windrose-ai/tool-plane/internal/store"
-	"github.com/windrose-ai/tool-plane/policy"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
+	"github.com/datacern-ai/tool-plane/internal/api"
+	"github.com/datacern-ai/tool-plane/internal/authz"
+	"github.com/datacern-ai/tool-plane/internal/embed"
+	"github.com/datacern-ai/tool-plane/internal/enforce"
+	"github.com/datacern-ai/tool-plane/internal/mcp"
+	"github.com/datacern-ai/tool-plane/internal/store"
+	"github.com/datacern-ai/tool-plane/policy"
 )
 
 const (
@@ -43,9 +43,9 @@ const (
 	opaURL     = "http://localhost:8281"
 	ollamaURL  = "http://localhost:11434/v1"
 	kafkaBroker = "localhost:9092"
-	issuer     = "https://identity.windrose.test"
-	audience   = "windrose"
-	grantIssuer = "windrose-agent-runtime"
+	issuer     = "https://identity.datacern.test"
+	audience   = "datacern"
+	grantIssuer = "datacern-agent-runtime"
 )
 
 type harness struct {
@@ -193,7 +193,7 @@ func TestMain(m *testing.M) {
 		Health:     health,
 	}
 
-	// Real admin authorizer: OPA sidecar (windrose.authz_input bundle) + Redis
+	// Real admin authorizer: OPA sidecar (datacern.authz_input bundle) + Redis
 	// projection loader, exactly as cmd/registry wires it. The catalog key is
 	// merged (additively — the shared dev Redis may belong to a live stack) so
 	// `action_known` holds for tool-plane's actions, standing in for rbac's
@@ -265,7 +265,7 @@ func (h *harness) signGrant(tenant, toolID, tier, argsDigest string, exp time.Ti
 
 // seedCatalogActions merges tool-plane's action manifest into the global rbac
 // catalog projection key (perm:catalog:actions, rbac RedisWriter.WriteCatalog
-// format) so the windrose.authz_input policy's `action_known` holds. The merge
+// format) so the datacern.authz_input policy's `action_known` holds. The merge
 // is ADDITIVE: existing entries from a live rbac are preserved.
 func seedCatalogActions(ctx context.Context, rc *redisx.Client) error {
 	actions := map[string]bool{}

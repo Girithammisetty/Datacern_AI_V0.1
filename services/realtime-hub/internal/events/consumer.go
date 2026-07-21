@@ -13,11 +13,11 @@ import (
 	"log/slog"
 	"os"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	gckafka "github.com/windrose-ai/go-common/kafka"
+	gcevent "github.com/datacern-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
 
-	"github.com/windrose-ai/realtime-hub/internal/fanout"
-	"github.com/windrose-ai/realtime-hub/internal/topics"
+	"github.com/datacern-ai/realtime-hub/internal/fanout"
+	"github.com/datacern-ai/realtime-hub/internal/topics"
 )
 
 // PayloadCap is the max per-event payload the hub will fan out (RTH-FR-022).

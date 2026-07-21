@@ -1,6 +1,6 @@
 """Dependency wiring: memory (unit/dev) and sql (integration/prod) modes.
 
-Real mode (``EVAL_USE_REAL_ADAPTERS=true``) wires the shared ``windrose_common``
+Real mode (``EVAL_USE_REAL_ADAPTERS=true``) wires the shared ``datacern_common``
 adapters against local infra — Redpanda (Kafka bus), Redis (dedup), OPA (authz)
 — plus the real ai-gateway judge client and the DuckDB fixture warehouse, per
 CONVENTIONS.md END STATE (no runtime stubs). Otherwise the in-memory test doubles

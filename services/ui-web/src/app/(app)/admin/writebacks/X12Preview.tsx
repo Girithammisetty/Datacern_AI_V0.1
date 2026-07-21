@@ -2,7 +2,7 @@
  * BRD 57 BR-1: the approver must see the EXACT bytes that will transmit, not
  * a re-derived summary — ingestion-service renders X12 at propose time for
  * exactly this reason (`x12_out.py::render_for_writeback`). Segments are
- * terminated with "~" for every interchange Windrose renders (the default
+ * terminated with "~" for every interchange Datacern renders (the default
  * delimiter set `render_837`/`render_276` use when the caller supplies none,
  * which the writeback path always does), so splitting on it here is safe for
  * our own outbound renders specifically — not a general X12 parser.

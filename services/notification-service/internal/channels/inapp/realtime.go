@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // Publisher pushes in-app notifications to realtime-hub.

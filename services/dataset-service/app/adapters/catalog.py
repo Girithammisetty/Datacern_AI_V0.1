@@ -145,7 +145,7 @@ class LocalCatalog:
 
 
 class IcebergRestCatalog:
-    """Real Iceberg REST catalog adapter via the shared ``windrose_common``
+    """Real Iceberg REST catalog adapter via the shared ``datacern_common``
     pyiceberg client. Snapshot verification hits the catalog directly (BR-1 —
     never trust the caller); reads time-travel to a snapshot id; expiry uses the
     pyiceberg maintenance API. Runtime catalog."""
@@ -154,14 +154,14 @@ class IcebergRestCatalog:
         self,
         catalog_uri: str = "http://localhost:8181",
         *,
-        warehouse: str = "s3://windrose-warehouse/",
+        warehouse: str = "s3://datacern-warehouse/",
         s3_endpoint: str = "http://localhost:9000",
-        s3_access_key: str = "windrose",
-        s3_secret_key: str = "windrose_dev",
+        s3_access_key: str = "datacern",
+        s3_secret_key: str = "datacern_dev",
         s3_region: str = "us-east-1",
     ):
-        from windrose_common.iceberg import IcebergConfig
-        from windrose_common.iceberg import IcebergRestCatalog as _Catalog
+        from datacern_common.iceberg import IcebergConfig
+        from datacern_common.iceberg import IcebergRestCatalog as _Catalog
 
         self._catalog = _Catalog(
             IcebergConfig(

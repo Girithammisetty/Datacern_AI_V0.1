@@ -17,7 +17,7 @@ name: investigation-framework
 version: 1.0.0
 pack_class: library
 consumers_recommended: [payer-fwa-siu, banking-aml]
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   LIBRARY pack: reusable investigation primitives — shared investigator role
   catalog, investigation-lifecycle disposition vocabulary, and the

@@ -1,14 +1,14 @@
 # BRD 23 — pack-service (Capability Pack Registry & Installer)
 
 **Service:** pack-service · **Language:** Python (FastAPI) · **Phase:** 3 (marketplace tier = Phase 5)
-**Inherits:** `00_MASTER_BRD.md` · **Architecture:** `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §5, §6, §9, §13
+**Inherits:** `00_MASTER_BRD.md` · **Architecture:** `../../DATACERN_PLATFORM_ARCHITECTURE.md` §5, §6, §9, §13
 **Strategy source:** cross-vertical scaling wedge — one platform, N verticals delivered as signed, versioned, installable bundles instead of platform forks.
 
 ---
 
 ## 1. Overview
 
-**Purpose.** pack-service owns the lifecycle of **Capability Packs**: versioned, signed bundles that ship a vertical solution (ontology, semantic models, dashboards, case schemas, role catalogs, eval sets, guardrails, pipeline templates, model archetypes, agent recipes) as one installable artifact. The service registers packs, verifies signatures, plans installations into a workspace, executes those plans as batches of proposal-mode writes across downstream services, tracks what a pack materialized, and reverses those changes on uninstall — without ever overwriting a user's edits. It also runs a governed **Marketplace** for tenants to discover packs published by Windrose, partners, or their own SIs.
+**Purpose.** pack-service owns the lifecycle of **Capability Packs**: versioned, signed bundles that ship a vertical solution (ontology, semantic models, dashboards, case schemas, role catalogs, eval sets, guardrails, pipeline templates, model archetypes, agent recipes) as one installable artifact. The service registers packs, verifies signatures, plans installations into a workspace, executes those plans as batches of proposal-mode writes across downstream services, tracks what a pack materialized, and reverses those changes on uninstall — without ever overwriting a user's edits. It also runs a governed **Marketplace** for tenants to discover packs published by Datacern, partners, or their own SIs.
 
 **Business value.** In V1, every deployment is a bespoke engagement: analytics engineers rebuild the same claims-fraud dashboards, the same AML case fields, the same underwriting role catalog, per tenant. pack-service converts that per-tenant labor into a versioned artifact reused across tenants and verticals. A new tenant onboards a vertical in minutes; a new vertical is added by writing one pack rather than forking the platform. Because the pack is the *only* place vertical logic lives, the Core stays vertical-neutral and every core improvement benefits every vertical simultaneously. The signing/provenance chain plus a materialization ledger make packs auditable end-to-end, satisfying regulatory (EU AI Act, SR 11-7, NAIC Model 90) and supply-chain (SLSA-style) requirements out of the box.
 
@@ -18,7 +18,7 @@
 
 ## 2. Actors & user stories
 
-Personas: **Pack Author (PA)** — Windrose engineer, SI, or ISV who writes a pack; **Pack Steward (PS)** — customer role that approves what enters a tenant; **Tenant Admin (TA)** — installs/uninstalls; **Marketplace Curator (MC)** — Windrose team that reviews public listings; **Analyst / End User (AN)** — sees pack-provided artifacts; **Coding Agent (CA)** — implements per BRD; **Auditor (AU)**.
+Personas: **Pack Author (PA)** — Datacern engineer, SI, or ISV who writes a pack; **Pack Steward (PS)** — customer role that approves what enters a tenant; **Tenant Admin (TA)** — installs/uninstalls; **Marketplace Curator (MC)** — Datacern team that reviews public listings; **Analyst / End User (AN)** — sees pack-provided artifacts; **Coding Agent (CA)** — implements per BRD; **Auditor (AU)**.
 
 - **US-1** As PA, I write a `pack.yaml` manifest describing an *insurance-claims* pack (ontology, three semantic models, six dashboards, a case schema, an SLA policy, a role catalog, eval sets, guardrails, two pipeline templates), lint it locally against the v1 schema, and get errors that name exact JSON pointers before I ever upload.
 - **US-2** As PA, I publish version `2.3.1` from CI; my org's signing key signs the bundle, pack-service verifies the signature, records the SLSA provenance, and stores the artifact in the OCI registry.
@@ -43,13 +43,13 @@ Personas: **Pack Author (PA)** — Windrose engineer, SI, or ISV who writes a pa
   pack_manifest: 1
   name: insurance-claims                 # ^[a-z][a-z0-9-]{2,63}$
   version: 2.3.1                          # strict semver
-  publisher: { id: pub-windrose, name: "Windrose Inc.", contact: "packs@windrose.ai" }
+  publisher: { id: pub-datacern, name: "Datacern Inc.", contact: "packs@datacern.ai" }
   license: { spdx_id: "Apache-2.0" | "Commercial", url }
   description: "Claims triage + fraud detection for P&C insurers."
   categories: [insurance, claims, fraud]
   regulatory: [naic_model_90, nydfs_500]  # controlled vocabulary
   platform:
-    min_version: "1.4.0"                  # windrose platform semver
+    min_version: "1.4.0"                  # datacern platform semver
     clouds: [aws, azure, gcp]             # supported clouds; runtime pack-service picks templates matching the cell's cloud
   depends_on: [{ pack: core-financial-utils, version: "^1.0.0" }]
   components: { … }                       # see PKG-FR-003
@@ -77,7 +77,7 @@ Personas: **Pack Author (PA)** — Windrose engineer, SI, or ISV who writes a pa
 
 - **PKG-FR-004 (Must)** **Provenance & signing.** Publish requires a detached signature over the canonical pack tarball (cosign / Sigstore keyless allowed; long-lived publisher keys allowed for tenant-tier). pack-service verifies at publish, on install, and periodically for installed packs (rekeying detection). SLSA provenance (build system, source ref, materials) stored alongside; `provenance.level` recorded (1–3+).
 
-- **PKG-FR-005 (Should)** Packs are stored as **OCI artifacts** in the platform's registry (multi-cloud: ECR/ACR/Artifact Registry) with `application/vnd.windrose.pack.v1+tar` media type; the OCI digest is the canonical version reference and appears in every install ledger row.
+- **PKG-FR-005 (Should)** Packs are stored as **OCI artifacts** in the platform's registry (multi-cloud: ECR/ACR/Artifact Registry) with `application/vnd.datacern.pack.v1+tar` media type; the OCI digest is the canonical version reference and appears in every install ledger row.
 
 - **PKG-FR-006 (Must)** Version lifecycle `draft → in_review → published | rejected`; a rejected or superseded published version stays retrievable (`?version=`). Publish is atomic and gated by lint + signature verify + eval-set schema check + semver bump check.
 
@@ -159,7 +159,7 @@ Personas: **Pack Author (PA)** — Windrose engineer, SI, or ISV who writes a pa
 
 ### 4.1 Tables (Postgres, RLS)
 
-- **publishers** — `id uuidv7 PK`, `tenant_id NULL` (`NULL` = platform-owned), `name`, `contact_email`, `verified bool`, `trust_signal jsonb`, timestamps. Publishers with `tenant_id = NULL` are managed by Windrose; tenant publishers scope pack visibility.
+- **publishers** — `id uuidv7 PK`, `tenant_id NULL` (`NULL` = platform-owned), `name`, `contact_email`, `verified bool`, `trust_signal jsonb`, timestamps. Publishers with `tenant_id = NULL` are managed by Datacern; tenant publishers scope pack visibility.
 - **signing_keys** — `id`, `publisher_id FK`, `key_type text (cosign_keyless|cosign_key|sigstore_fulcio)`, `identity text` (issuer/subject or key fingerprint), `revoked_at NULL`, `notes`, timestamps. Unique per (publisher, identity).
 - **packs** — `id uuidv7 PK`, `tenant_id NULL`, `publisher_id FK`, `name text` (^[a-z][a-z0-9-]{2,63}$), `description`, `latest_published_version_id NULL`, `default_tier text (private|tenant-shared|marketplace)`, `deleted_at`, timestamps. `UNIQUE (publisher_id, lower(name))`.
 - **pack_versions** — `id`, `pack_id FK`, `semver text` (validated), `status text (draft|in_review|published|rejected|superseded|deprecated)`, `oci_digest text` (canonical artifact), `manifest jsonb ≤ 256KB` (or `manifest_ref` object-storage pointer above 64KB per master §2.7-061), `signatures jsonb`, `slsa_provenance jsonb`, `platform_min_version text`, `clouds text[]`, `depends_on jsonb`, `deprecated_reason text NULL`, `successor_version_id NULL`, timestamps. `UNIQUE (pack_id, semver)`. Immutable from `in_review` onward. Publish-time enforced constraint: cannot publish without a signature row.
@@ -248,7 +248,7 @@ POST /api/v1/installs
 Example — MCP tool `describe_pack`:
 ```json
 {"name":"describe_pack","arguments":{"pack":"insurance-claims"}}
-→ {"pack":"insurance-claims","publisher":"Windrose Inc.","verified":true,
+→ {"pack":"insurance-claims","publisher":"Datacern Inc.","verified":true,
    "versions":[{"semver":"2.4.0","status":"published","clouds":["aws","azure","gcp"],
                 "components_summary":{"semantic_models":3,"dashboards":6,"case_schemas":2,
                                      "eval_sets":4,"pipeline_templates":2,"agent_recipes":1},

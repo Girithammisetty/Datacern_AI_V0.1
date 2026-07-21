@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Windrose tool-plane API (tool-registry + mcp-gateway)
+  title: Datacern tool-plane API (tool-registry + mcp-gateway)
   version: "1.0.0"
   description: >
     Two deployables over one bounded context (BRD 13). tool-registry serves the

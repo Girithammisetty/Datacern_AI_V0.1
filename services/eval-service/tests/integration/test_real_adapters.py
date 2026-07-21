@@ -1,7 +1,7 @@
 """Real infra adapters with no stubs in the path (CONVENTIONS.md END STATE):
 
 * Redpanda / Kafka (localhost:9092) — real ``eval.events.v1`` publish + consume
-  through the shared ``windrose_common`` producer, and the outbox dispatcher.
+  through the shared ``datacern_common`` producer, and the outbox dispatcher.
 * OPA sidecar (localhost:8281) — real allow/deny authorization decisions.
 
 Each fixture auto-skips with a clear message when its dependency is unreachable."""
@@ -130,7 +130,7 @@ async def test_real_outbox_dispatch_to_kafka(container, clock):
 async def test_real_opa_authorization_decision():
     if not _reachable(f"{OPA_URL}/health"):
         pytest.skip("OPA unreachable at localhost:8281")
-    from windrose_common.opaclient import OpaClient
+    from datacern_common.opaclient import OpaClient
 
     opa = OpaClient(OPA_URL)
     tenant = str(uuid.uuid4())

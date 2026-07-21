@@ -41,7 +41,7 @@ resource "aws_security_group_rule" "redis_egress" {
 
 resource "aws_elasticache_replication_group" "this" {
   replication_group_id = "${var.name_prefix}-redis"
-  description          = "Windrose cache/dedup/rate-limit"
+  description          = "Datacern cache/dedup/rate-limit"
 
   engine         = var.redis_engine
   engine_version = var.redis_engine_version

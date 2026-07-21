@@ -14,15 +14,15 @@ import (
 
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/channels/email"
-	"github.com/windrose-ai/notification-service/internal/channels/inapp"
-	"github.com/windrose-ai/notification-service/internal/channels/webhook"
-	"github.com/windrose-ai/notification-service/internal/domain"
-	"github.com/windrose-ai/notification-service/internal/events"
-	"github.com/windrose-ai/notification-service/internal/preferences"
-	"github.com/windrose-ai/notification-service/internal/registry"
-	"github.com/windrose-ai/notification-service/internal/subscriptions"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/channels/email"
+	"github.com/datacern-ai/notification-service/internal/channels/inapp"
+	"github.com/datacern-ai/notification-service/internal/channels/webhook"
+	"github.com/datacern-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/events"
+	"github.com/datacern-ai/notification-service/internal/preferences"
+	"github.com/datacern-ai/notification-service/internal/registry"
+	"github.com/datacern-ai/notification-service/internal/subscriptions"
 )
 
 // RateLimiter is the per-recipient/per-tenant limit surface (NOTIF-FR-031/032),

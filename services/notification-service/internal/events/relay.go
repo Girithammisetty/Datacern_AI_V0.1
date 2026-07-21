@@ -3,8 +3,8 @@ package events
 import (
 	"context"
 
-	gcoutbox "github.com/windrose-ai/go-common/outbox"
-	"github.com/windrose-ai/notification-service/internal/store"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
+	"github.com/datacern-ai/notification-service/internal/store"
 )
 
 // OutboxSource adapts *store.PG to the go-common outbox.Source interface so the

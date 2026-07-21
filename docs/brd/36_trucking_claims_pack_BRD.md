@@ -1,6 +1,6 @@
 # BRD 36 — `trucking-claims` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32/33). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending (Core-neutral via packctl; pack-service-tier components declared `deferred` in the manifest).
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Trucking/logistics claims & safety adjudication AI for motor carriers, freight brokers, and 3PLs: cargo OS&D (over/short/damage) claim handling under the Carmack liability framework with filing-deadline awareness (9-month claim / 2-year suit windows on standard bill-of-lading terms), reefer temperature-excursion evidence workflow, carrier recovery filing, double-brokering / carrier identity-theft vetting, and telematics safety-event review with preventability-and-coaching discipline. Sells to asset carriers (Schneider-class enterprises down to regional fleets), freight brokerages, and 3PLs running mixed asset+brokerage networks.
 
-**Why this vertical.** Cargo claims carry hard contractual clocks (9-month filing, 30-day acknowledgment / 120-day disposition claims-processing practice under 49 CFR Part 370) and every determination is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Windrose Core. Safety-event reviews add litigation-discovery stakes ("nuclear verdict" exposure when telematics alerts are ignored or coaching is inconsistent), and double-brokering fraud is an industry-wide loss surface with a crisp red-flag signature. The alert-adjudication pattern is already proven by BRD 30/32.
+**Why this vertical.** Cargo claims carry hard contractual clocks (9-month filing, 30-day acknowledgment / 120-day disposition claims-processing practice under 49 CFR Part 370) and every determination is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Datacern Core. Safety-event reviews add litigation-discovery stakes ("nuclear verdict" exposure when telematics alerts are ignored or coaching is inconsistent), and double-brokering fraud is an industry-wide loss surface with a crisp red-flag signature. The alert-adjudication pattern is already proven by BRD 30/32.
 
 **Business value.** Deadline-breach elimination (filing/response clock watch), claims-analyst throughput (triage pre-routing), carrier-recovery lift (Carmack burden-shifting + evidence fit), double-broker fraud loss prevention (mid-load banking-change freeze), consistent litigation-defensible safety files (evidence-first preventability + documented coaching), and exam/discovery-ready decision provenance.
 
@@ -99,7 +99,7 @@ Authored materialization: 3 datasets (claims 26 / shipments 30 / carriers 12 —
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): tenant TMS of record, telematics/video platform, reefer telematics provider, FMCSA data services, claims mailbox/EDI.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): tenant TMS of record, telematics/video platform, reefer telematics provider, FMCSA data services, claims mailbox/EDI.
 
 ## 7. NFRs (deltas)
 

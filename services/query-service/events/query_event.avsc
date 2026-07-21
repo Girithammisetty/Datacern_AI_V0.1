@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "QueryEvent",
-  "namespace": "ai.windrose.query.v1",
+  "namespace": "ai.datacern.query.v1",
   "doc": "Envelope for query.events.v1 (MASTER-FR-031). Partition key = tenant_id. Event types: query.saved|updated|deleted, execution.started|succeeded|failed|cancelled|ceiling_exceeded, security.cross_tenant_denied, security.permission_denied.",
   "fields": [
     { "name": "event_id", "type": { "type": "string", "logicalType": "uuid" }, "doc": "uuidv7" },

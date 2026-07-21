@@ -7,8 +7,8 @@ package subscriptions
 import (
 	"strings"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/domain"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // Matches reports whether rule fires for env (NOTIF-FR-011).

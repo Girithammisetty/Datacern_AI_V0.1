@@ -99,7 +99,7 @@ class FlywheelHandler:
 
 
 class KafkaTopicConsumer:
-    """Real aiokafka consumer group over one topic via ``windrose_common``:
+    """Real aiokafka consumer group over one topic via ``datacern_common``:
     Redis dedup, retry/backoff, real DLQ (MASTER-FR-032/033). Runtime consumer."""
 
     def __init__(
@@ -112,7 +112,7 @@ class KafkaTopicConsumer:
         group_suffix: str,
         bootstrap_servers: str = "localhost:9092",
     ):
-        from windrose_common.kafka import KafkaConfig, KafkaConsumer
+        from datacern_common.kafka import KafkaConfig, KafkaConsumer
 
         self._consumer = KafkaConsumer(
             topic,

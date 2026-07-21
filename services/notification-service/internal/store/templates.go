@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 const templateCols = `id, tenant_id, key, channel, locale, version, subject_tpl, body_html_tpl, body_text_tpl, status, published_at, created_by, created_at`

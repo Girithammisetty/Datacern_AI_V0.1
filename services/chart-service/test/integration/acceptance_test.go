@@ -10,9 +10,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/chart-service/internal/authz"
-	"github.com/windrose-ai/chart-service/internal/events"
-	"github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/chart-service/internal/authz"
+	"github.com/datacern-ai/chart-service/internal/events"
+	"github.com/datacern-ai/go-common/event"
 )
 
 // TestAC01_EndToEndResolveThroughSemanticAndQuery: a saved bar chart resolves

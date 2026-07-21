@@ -16,17 +16,17 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/windrose-ai/query-service/internal/api"
-	"github.com/windrose-ai/query-service/internal/authz"
-	"github.com/windrose-ai/query-service/internal/datasets"
-	"github.com/windrose-ai/query-service/internal/engine"
-	"github.com/windrose-ai/query-service/internal/events"
-	"github.com/windrose-ai/query-service/internal/exec"
-	"github.com/windrose-ai/query-service/internal/register"
-	"github.com/windrose-ai/query-service/internal/results"
-	"github.com/windrose-ai/query-service/internal/store"
+	"github.com/datacern-ai/query-service/internal/api"
+	"github.com/datacern-ai/query-service/internal/authz"
+	"github.com/datacern-ai/query-service/internal/datasets"
+	"github.com/datacern-ai/query-service/internal/engine"
+	"github.com/datacern-ai/query-service/internal/events"
+	"github.com/datacern-ai/query-service/internal/exec"
+	"github.com/datacern-ai/query-service/internal/register"
+	"github.com/datacern-ai/query-service/internal/results"
+	"github.com/datacern-ai/query-service/internal/store"
 
-	"github.com/windrose-ai/go-common/otelx"
+	"github.com/datacern-ai/go-common/otelx"
 )
 
 func env(key, def string) string {
@@ -42,7 +42,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Distributed tracing (no-op unless WINDROSE_OTEL_ENABLED / an OTLP endpoint
+	// Distributed tracing (no-op unless DATACERN_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "query-service")
 	defer func() { _ = otelShutdown(context.Background()) }()
@@ -114,7 +114,7 @@ func main() {
 		},
 		&engine.Trino{
 			Endpoint: os.Getenv("TRINO_ENDPOINT"),
-			User:     env("TRINO_USER", "windrose"),
+			User:     env("TRINO_USER", "datacern"),
 			Catalog:  env("TRINO_CATALOG", "iceberg"),
 			Source:   "query-service",
 		},
@@ -152,7 +152,7 @@ func main() {
 		slog.Warn("EXPORT_SIGNING_SECRET unset; generated ephemeral secret (links break on restart)")
 	}
 
-	// Real authorization: the OPA sidecar evaluates the windrose.authz_input
+	// Real authorization: the OPA sidecar evaluates the datacern.authz_input
 	// bundle over the caller's Redis permissions_flat projection (MASTER-FR-012).
 	// No allow-all escape hatch in the runtime path — the permissive fake lives
 	// only in unit tests.

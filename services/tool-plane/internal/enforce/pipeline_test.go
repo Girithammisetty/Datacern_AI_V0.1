@@ -7,10 +7,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/tool-plane/internal/authz"
-	"github.com/windrose-ai/tool-plane/internal/domain"
-	"github.com/windrose-ai/tool-plane/internal/events"
-	"github.com/windrose-ai/tool-plane/internal/mcp"
+	"github.com/datacern-ai/tool-plane/internal/authz"
+	"github.com/datacern-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/events"
+	"github.com/datacern-ai/tool-plane/internal/mcp"
 )
 
 // ---- in-memory test doubles (unit tier only; never wired into cmd/) ---------
@@ -106,7 +106,7 @@ func readVersion() *domain.ToolVersion {
 		CostWeight: 1, SideEffects: domain.SideEffectNone,
 		InputSchema: map[string]any{
 			"type": "object", "additionalProperties": false, "required": []any{"case_id"},
-			"properties": map[string]any{"case_id": map[string]any{"type": "string", "x-windrose-urn": "wr:{tenant}:case:case/{value}"}},
+			"properties": map[string]any{"case_id": map[string]any{"type": "string", "x-datacern-urn": "wr:{tenant}:case:case/{value}"}},
 		},
 	}
 }

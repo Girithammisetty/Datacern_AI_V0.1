@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "IngestionEventEnvelope",
-  "namespace": "ai.windrose.ingestion.events.v1",
+  "namespace": "ai.datacern.ingestion.events.v1",
   "doc": "Envelope per MASTER-FR-031 for topic ingestion.events.v1. Partition key = tenant_id. Emitted event_types: connection.created/updated/deleted/test_failed, ingestion.created/started/progress/completed/failed/cancelled/transitioned, ingestion.schedule_fired/schedule_skipped, schedule.created, upload.expired, security.cross_tenant_denied.",
   "fields": [
     {"name": "event_id", "type": {"type": "string", "logicalType": "uuid"}},

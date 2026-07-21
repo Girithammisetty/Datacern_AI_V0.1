@@ -1,4 +1,4 @@
-# variables.tf — every knob for the Windrose Hetzner (k3s) dev/staging stack.
+# variables.tf — every knob for the Datacern Hetzner (k3s) dev/staging stack.
 #
 # Tuned for the "dev/staging, CPU-only, cheapest" profile: k3s (not managed
 # Kubernetes), built-in Traefik + klipper servicelb (no paid load balancer),
@@ -30,7 +30,7 @@ variable "ssh_public_key" {
 variable "name_prefix" {
   description = "Prefix for all resource names. Keep short, lowercase, RFC1035."
   type        = string
-  default     = "windrose"
+  default     = "datacern"
 
   validation {
     condition     = can(regex("^[a-z][a-z0-9-]{1,19}$", var.name_prefix))
@@ -95,7 +95,7 @@ variable "control_plane_type" {
 }
 
 ########################################
-# Agent (worker) pool — holds the whole Windrose stack
+# Agent (worker) pool — holds the whole Datacern stack
 ########################################
 
 variable "agent_count" {

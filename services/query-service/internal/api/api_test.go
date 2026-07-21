@@ -20,14 +20,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/windrose-ai/query-service/internal/authz"
-	"github.com/windrose-ai/query-service/internal/datasets"
-	"github.com/windrose-ai/query-service/internal/domain"
-	"github.com/windrose-ai/query-service/internal/engine"
-	"github.com/windrose-ai/query-service/internal/events"
-	"github.com/windrose-ai/query-service/internal/exec"
-	"github.com/windrose-ai/query-service/internal/results"
-	"github.com/windrose-ai/query-service/internal/store"
+	"github.com/datacern-ai/query-service/internal/authz"
+	"github.com/datacern-ai/query-service/internal/datasets"
+	"github.com/datacern-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/engine"
+	"github.com/datacern-ai/query-service/internal/events"
+	"github.com/datacern-ai/query-service/internal/exec"
+	"github.com/datacern-ai/query-service/internal/results"
+	"github.com/datacern-ai/query-service/internal/store"
 )
 
 // fakeEngine mirrors the broker-tier fake for API-level tests.
@@ -117,7 +117,7 @@ func newAPIFixture(t *testing.T, az authz.Authorizer) *apiFixture {
 	}
 	server := &Server{
 		Store: mem, Broker: broker, Results: broker.Results, Authz: az,
-		Verifier:     NewVerifierStatic(&key.PublicKey, "windrose-test", "windrose"),
+		Verifier:     NewVerifierStatic(&key.PublicKey, "datacern-test", "datacern"),
 		ExportSecret: []byte("test-secret"),
 	}
 	ts := httptest.NewServer(server.Router())
@@ -131,7 +131,7 @@ func (f *apiFixture) token(t *testing.T, tenant uuid.UUID, typ, sub string, extr
 	t.Helper()
 	claims := jwt.MapClaims{
 		"sub": sub, "tenant_id": tenant.String(), "typ": typ,
-		"iss": "windrose-test", "aud": "windrose",
+		"iss": "datacern-test", "aud": "datacern",
 		"exp": time.Now().Add(5 * time.Minute).Unix(),
 	}
 	for k, v := range extra {
@@ -544,7 +544,7 @@ func TestAuthentication(t *testing.T) {
 	// alg=none forbidden (MASTER-FR-014)
 	none := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
 		"sub": "u1", "tenant_id": f.tenantA.String(),
-		"exp": time.Now().Add(time.Minute).Unix(), "iss": "windrose-test", "aud": "windrose",
+		"exp": time.Now().Add(time.Minute).Unix(), "iss": "datacern-test", "aud": "datacern",
 	})
 	tok, err := none.SignedString(jwt.UnsafeAllowNoneSignatureType)
 	require.NoError(t, err)

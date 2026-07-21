@@ -40,11 +40,11 @@ fi
 
 say "booting experiment-service from this tree"
 export EXP_DATABASE_URL="postgresql+asyncpg://experiment_app:experiment_app@localhost:5432/experiment"
-export EXP_MIGRATE_URL="postgresql+psycopg://windrose:windrose_dev@localhost:5432/experiment"
+export EXP_MIGRATE_URL="postgresql+psycopg://datacern:datacern_dev@localhost:5432/experiment"
 export EXP_USE_REAL_ADAPTERS=true EXP_ENV=dev
 export EXP_MLFLOW_TRACKING_URI="$MLFLOW_URL"
 export EXP_KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BROKERS" EXP_REDIS_URL="$REDIS_URL" EXP_OPA_URL="$OPA_URL"
-export EXP_S3_ENDPOINT_URL="$S3_ENDPOINT" EXP_S3_ACCESS_KEY=windrose EXP_S3_SECRET_KEY=windrose_dev
+export EXP_S3_ENDPOINT_URL="$S3_ENDPOINT" EXP_S3_ACCESS_KEY=datacern EXP_S3_SECRET_KEY=datacern_dev
 export EXP_S3_REGION=us-east-1
 export EXP_JWKS_URL="$WR_JWKS_URL" EXP_JWT_ISSUER="$WR_ISS" EXP_JWT_AUDIENCE="$WR_AUD"
 export EXP_RBAC_URL="$RBAC_URL" EXP_REGISTER_SIGNING_KEY_PEM="$(cat "$E2E/keys/idp_private.pem")"

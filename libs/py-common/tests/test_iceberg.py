@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from windrose_common.iceberg import IcebergRestCatalog, IcebergTableWriter, RowBatch
+from datacern_common.iceberg import IcebergRestCatalog, IcebergTableWriter, RowBatch
 
 pytestmark = pytest.mark.integration
 

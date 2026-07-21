@@ -1,7 +1,7 @@
 """X12 acknowledgments (BRD 57 REMAINING item) — TA1 interchange ack + 999
 implementation ack.
 
-Both close the loop on outbound governance built in inc-2: after Windrose
+Both close the loop on outbound governance built in inc-2: after Datacern
 transmits an approved 837, the payer's TA1/999 tells us whether the
 interchange and the individual transaction sets inside it were accepted.
 """

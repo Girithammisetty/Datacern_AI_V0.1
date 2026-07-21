@@ -1,6 +1,6 @@
 """Consumed events (BRD §6). A transport-agnostic ``PipelineEventConsumer.handle``
 dispatches by event_type; the real path drives it from one ``KafkaPipelineConsumer``
-per topic (windrose_common.KafkaConsumer: Redis dedup, retry/backoff, DLQ)."""
+per topic (datacern_common.KafkaConsumer: Redis dedup, retry/backoff, DLQ)."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ class PipelineEventConsumer:
 
 
 class _DedupPassthrough:
-    """windrose_common.KafkaConsumer owns commit semantics; the handler already
+    """datacern_common.KafkaConsumer owns commit semantics; the handler already
     dedups, so this pass-through avoids double-suppression."""
 
     async def already_processed(self, tenant_id, event_id):
@@ -67,11 +67,11 @@ class _DedupPassthrough:
 
 
 class KafkaPipelineConsumer:
-    """Real Kafka consumer-group runner for one topic (windrose_common)."""
+    """Real Kafka consumer-group runner for one topic (datacern_common)."""
 
     def __init__(self, topic, consumer, producer, *, group_id=None,
                  bootstrap_servers="localhost:9092"):
-        from windrose_common.kafka import KafkaConfig, KafkaConsumer
+        from datacern_common.kafka import KafkaConfig, KafkaConsumer
 
         self._runner = KafkaConsumer(
             topic, group_id or f"pipeline-orchestrator.{topic}", consumer.handle,

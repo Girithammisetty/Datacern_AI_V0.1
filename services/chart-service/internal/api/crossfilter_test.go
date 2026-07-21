@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/windrose-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/chart-service/internal/domain"
 )
 
 func TestScopeCrossFilters(t *testing.T) {

@@ -5,13 +5,13 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // OPA is the real runtime authorizer (MASTER-FR-012). Each decision loads the
 // caller's permissions_flat projection from Redis (rbac's key scheme) and POSTs
-// it to the local OPA sidecar evaluating the windrose.authz_input bundle. It
+// it to the local OPA sidecar evaluating the datacern.authz_input bundle. It
 // never calls rbac synchronously. Uses the shared go-common implementation so
 // the decision is byte-for-byte rbac's Go Decide for the same projection.
 type OPA struct {

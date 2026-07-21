@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
-	"github.com/windrose-ai/identity-service/internal/store/memory"
+	"github.com/datacern-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/store/memory"
 )
 
 // mkIDToken builds a syntactically-valid JWT carrying just an `iss` claim, so
@@ -57,7 +57,7 @@ func TestOIDCLogin_RoutesByIssuerToTenant(t *testing.T) {
 			t.Fatal(err)
 		}
 		if err := store.UpsertTenantIdpConfig(ctx, &domain.TenantIdpConfig{
-			TenantID: tc.id, Issuer: tc.iss, ClientID: "windrose", Enabled: true,
+			TenantID: tc.id, Issuer: tc.iss, ClientID: "datacern", Enabled: true,
 		}); err != nil {
 			t.Fatal(err)
 		}

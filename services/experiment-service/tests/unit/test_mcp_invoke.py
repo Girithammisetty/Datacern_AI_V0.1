@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from tests.conftest import TENANT_A, ctx_for, make_experiment, seed_finished_run
 
-GATEWAY_SPIFFE = "spiffe://windrose/ns/tools/sa/mcp-gateway"
+GATEWAY_SPIFFE = "spiffe://datacern/ns/tools/sa/mcp-gateway"
 HDR = {"x-client-spiffe-id": GATEWAY_SPIFFE}
 
 

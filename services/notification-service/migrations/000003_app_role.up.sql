@@ -1,6 +1,6 @@
 -- Non-owner, NOSUPERUSER, NOBYPASSRLS application role (systemic rule): the
 -- shipped default DATABASE_URL connects as this role, NOT as the schema owner
--- (windrose). Because it is neither the table owner nor a superuser, the RLS
+-- (datacern). Because it is neither the table owner nor a superuser, the RLS
 -- policies in 000002 actually bind it — a service that connected as the owner
 -- could silently bypass tenant isolation. Migrations run under the owner DSN
 -- (MIGRATE_DATABASE_URL); the runtime pool uses this role.

@@ -1,7 +1,7 @@
 # BRD 16 — eval-service
 
 **Service:** eval-service · **Language:** Python 3.12 (FastAPI + Temporal workers for eval runs) · **Phase:** 2 (analytics golden set + CI gate) → 4 (HITL flywheel, canary) → 5 (online sampling at scale, SLO computation)
-**Inherits:** `00_MASTER_BRD.md`. Architecture refs: `WINDROSE_PLATFORM_ARCHITECTURE.md` §8.8, principle 6 ("no agent change ships without an eval"); `WINDROSE_V3_AGENTIC_ARCHITECTURE.md` §5.11.
+**Inherits:** `00_MASTER_BRD.md`. Architecture refs: `DATACERN_PLATFORM_ARCHITECTURE.md` §8.8, principle 6 ("no agent change ships without an eval"); `DATACERN_V3_AGENTIC_ARCHITECTURE.md` §5.11.
 
 ---
 

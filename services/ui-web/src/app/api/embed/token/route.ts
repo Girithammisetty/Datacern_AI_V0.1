@@ -4,7 +4,7 @@
  * The tenant's BACKEND (never the browser) calls this with the shared embed
  * secret + the user context, and gets back a short-lived, tightly-scoped user
  * JWT + an embed URL to drop into an <iframe>. The token is a normal user JWT
- * (aud=windrose) so every downstream service accepts it; it additionally
+ * (aud=datacern) so every downstream service accepts it; it additionally
  * carries `embed:true` + a `surface` allowlist + a short TTL, and narrow
  * scopes bound to one workspace.
  *
@@ -61,7 +61,7 @@ async function proxyFederated(body: EmbedBody): Promise<NextResponse> {
  * key and the PER-TENANT embed secret + allowed origins). When IDENTITY_URL is
  * set we PROXY there — validating nothing locally, since identity owns the
  * per-tenant secret. In dev (no IDENTITY_URL) we mint locally with the harness
- * key gated by the single WINDROSE_EMBED_SECRET. */
+ * key gated by the single DATACERN_EMBED_SECRET. */
 async function proxyToIdentity(req: NextRequest, body: EmbedBody): Promise<NextResponse | null> {
   const identity = process.env.IDENTITY_URL;
   if (!identity) return null;
@@ -70,7 +70,7 @@ async function proxyToIdentity(req: NextRequest, body: EmbedBody): Promise<NextR
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
   const secret =
-    req.headers.get("x-windrose-embed-secret") ?? req.nextUrl.searchParams.get("secret") ?? "";
+    req.headers.get("x-datacern-embed-secret") ?? req.nextUrl.searchParams.get("secret") ?? "";
   const r = await fetch(`${identity.replace(/\/$/, "")}/api/v1/token/embed`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -109,9 +109,9 @@ export async function POST(req: NextRequest) {
   const proxied = await proxyToIdentity(req, body);
   if (proxied) return proxied;
 
-  // Dev fallback: local mint gated by the single WINDROSE_EMBED_SECRET.
+  // Dev fallback: local mint gated by the single DATACERN_EMBED_SECRET.
   const provided =
-    req.headers.get("x-windrose-embed-secret") ??
+    req.headers.get("x-datacern-embed-secret") ??
     req.nextUrl.searchParams.get("secret");
   if (!secretOk(provided)) {
     return NextResponse.json({ error: "invalid embed secret" }, { status: 401 });

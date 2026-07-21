@@ -20,18 +20,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/otelx"
-	"github.com/windrose-ai/go-common/redisx"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/otelx"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/usage-service/internal/api"
-	"github.com/windrose-ai/usage-service/internal/authz"
-	"github.com/windrose-ai/usage-service/internal/events"
-	"github.com/windrose-ai/usage-service/internal/ingest"
-	"github.com/windrose-ai/usage-service/internal/jobs"
-	"github.com/windrose-ai/usage-service/internal/metrics"
-	"github.com/windrose-ai/usage-service/internal/register"
-	"github.com/windrose-ai/usage-service/internal/store"
+	"github.com/datacern-ai/usage-service/internal/api"
+	"github.com/datacern-ai/usage-service/internal/authz"
+	"github.com/datacern-ai/usage-service/internal/events"
+	"github.com/datacern-ai/usage-service/internal/ingest"
+	"github.com/datacern-ai/usage-service/internal/jobs"
+	"github.com/datacern-ai/usage-service/internal/metrics"
+	"github.com/datacern-ai/usage-service/internal/register"
+	"github.com/datacern-ai/usage-service/internal/store"
 )
 
 func env(key, def string) string {
@@ -47,14 +47,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Distributed tracing (no-op unless WINDROSE_OTEL_ENABLED / an OTLP endpoint
+	// Distributed tracing (no-op unless datacern_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "usage-service")
 	defer func() { _ = otelShutdown(context.Background()) }()
 
 	// Migrations run as the owner/admin role (creates the non-owner runtime
 	// role usage_app); the service pool connects as usage_app (RLS applies).
-	adminURL := env("MIGRATE_DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/usage?sslmode=disable")
+	adminURL := env("MIGRATE_DATABASE_URL", "postgres://datacern:datacern_dev@localhost:5432/usage?sslmode=disable")
 	if err := store.Migrate(adminURL); err != nil {
 		slog.Error("migrations failed", "err", err)
 		os.Exit(1)

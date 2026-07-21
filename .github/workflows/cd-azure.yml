@@ -1,9 +1,9 @@
-# Windrose — Continuous Deployment to Azure (AKS)
+# Datacern — Continuous Deployment to Azure (AKS)
 #
 # Keyless: authenticates with azure/login via GitHub OIDC (no cloud keys stored).
 # Installs External Secrets Operator + an Azure Key Vault ClusterSecretStore
 # (Workload Identity), which syncs the Terraform-staged Key Vault secrets into the
-# in-cluster `windrose-secrets` Secret, then `helm upgrade --install`s the umbrella
+# in-cluster `datacern-secrets` Secret, then `helm upgrade --install`s the umbrella
 # chart and waits for rollout.
 #
 # ---------------------------------------------------------------------------
@@ -55,14 +55,14 @@ permissions:
   contents: read
 
 env:
-  CHART_PATH: deploy/helm/windrose
-  VALUES_FILE: deploy/helm/windrose/values-azure.yaml
-  RELEASE_NAME: windrose
-  RELEASE_NAMESPACE: windrose
+  CHART_PATH: deploy/helm/datacern
+  VALUES_FILE: deploy/helm/datacern/values-azure.yaml
+  RELEASE_NAME: datacern
+  RELEASE_NAMESPACE: datacern
   ESO_NAMESPACE: external-secrets
   ESO_SERVICE_ACCOUNT: external-secrets
-  SECRET_STORE_NAME: windrose-azure-kv
-  TARGET_SECRET_NAME: windrose-secrets
+  SECRET_STORE_NAME: datacern-azure-kv
+  TARGET_SECRET_NAME: datacern-secrets
 
 jobs:
   deploy:
@@ -143,7 +143,7 @@ jobs:
                   namespace: ${ESO_NAMESPACE}
           EOF
 
-      - name: Sync windrose-secrets from Key Vault
+      - name: Sync datacern-secrets from Key Vault
         run: |
           kubectl create namespace "${RELEASE_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
           # Pull every Key Vault secret and rewrite hyphenated names back to the
@@ -152,7 +152,7 @@ jobs:
           apiVersion: external-secrets.io/v1beta1
           kind: ExternalSecret
           metadata:
-            name: windrose-secrets
+            name: datacern-secrets
             namespace: ${RELEASE_NAMESPACE}
           spec:
             refreshInterval: 1h
@@ -178,12 +178,12 @@ jobs:
             sleep 10
             if [ "$i" = "30" ]; then
               echo "::error::Timed out waiting for ${TARGET_SECRET_NAME}"
-              kubectl -n "${RELEASE_NAMESPACE}" describe externalsecret windrose-secrets || true
+              kubectl -n "${RELEASE_NAMESPACE}" describe externalsecret datacern-secrets || true
               exit 1
             fi
           done
 
-      - name: Deploy Windrose (helm upgrade --install)
+      - name: Deploy Datacern (helm upgrade --install)
         run: |
           EXTRA_ARGS=()
           if [ -n "${{ vars.REGISTRY }}" ]; then

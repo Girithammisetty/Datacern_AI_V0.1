@@ -24,7 +24,7 @@ resource "aws_s3_bucket" "this" {
   bucket   = each.value
 
   tags = {
-    "windrose.io/bucket" = each.key
+    "datacern.io/bucket" = each.key
   }
 }
 

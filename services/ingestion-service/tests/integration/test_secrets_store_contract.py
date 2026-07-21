@@ -20,7 +20,7 @@ so a new backend can't silently drift from Vault's semantics:
   site of each parametrized case (see ``BACKENDS`` id strings).
 
 ``schedule_destroy`` has no single native mechanic across vendors (see the
-module docstring in ``windrose_common/secrets.py``), so the shared assertion
+module docstring in ``datacern_common/secrets.py``), so the shared assertion
 here is deliberately the common denominator: a future-dated destroy must NOT
 remove the secret immediately, and a past-due destroy must become unreadable
 once "swept" — where sweeping means ``run_due_destroys()`` for the two
@@ -74,7 +74,7 @@ def _reachable(host: str, port: int, timeout: float = 1.0) -> bool:
 # --------------------------------------------------------------------------
 # Fake clients for Azure/GCP — unit/mock tier, no real backend. Each mimics
 # just enough of the real SDK client surface for the adapter code in
-# windrose_common/secrets.py to drive, so the ADAPTER code under test is real
+# datacern_common/secrets.py to drive, so the ADAPTER code under test is real
 # (real method names, real request/response shapes); only the network
 # transport is faked, which is the standard, accepted pattern for testing
 # cloud SDK integrations without a live account (per the task's honesty note).
@@ -176,7 +176,7 @@ class _FakeGCPClient:
 # --------------------------------------------------------------------------
 # LocalStack: real local AWS Secrets Manager, session-scoped so it starts once
 # for the whole contract run. Not part of docker-compose.dev.yml (AWS isn't
-# one of Windrose's own local-infra choices), so it's spun up here directly
+# one of Datacern's own local-infra choices), so it's spun up here directly
 # via Testcontainers, exactly like the Postgres integration tier already does
 # for a service that also isn't in the dev compose file.
 # --------------------------------------------------------------------------
@@ -248,7 +248,7 @@ def _aws_factory_maker(endpoint: str):
 
 def _azure_factory() -> SecretsStore:
     store = AzureKeyVaultStore.__new__(AzureKeyVaultStore)
-    from windrose_common.secrets import AzureKeyVaultStore as _Azure
+    from datacern_common.secrets import AzureKeyVaultStore as _Azure
 
     store._store = _Azure.__new__(_Azure)
     store._store._client = _FakeAzureClient()
@@ -257,7 +257,7 @@ def _azure_factory() -> SecretsStore:
 
 def _gcp_factory() -> SecretsStore:
     store = GCPSecretManagerStore.__new__(GCPSecretManagerStore)
-    from windrose_common.secrets import GCPSecretManagerStore as _GCP
+    from datacern_common.secrets import GCPSecretManagerStore as _GCP
 
     store._store = _GCP.__new__(_GCP)
     store._store._client = _FakeGCPClient()

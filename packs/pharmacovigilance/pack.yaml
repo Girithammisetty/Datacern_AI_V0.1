@@ -1,13 +1,13 @@
 # pharmacovigilance capability pack — Core-neutral edition: adverse-event
 # (ICSR) case processing for pharma/biotech safety departments. Installable
-# TODAY against Windrose Core's public APIs via packctl; the manifest
+# TODAY against Datacern Core's public APIs via packctl; the manifest
 # envelope follows BRD 23 (PKG-FR-001/003). Components the current Core
 # cannot materialize are declared under `deferred` — recorded in the install
 # ledger, never faked.
 pack_manifest: 1
 name: pharmacovigilance
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted pharmacovigilance case processing (FDA 21 CFR 314.80/312.32,
   ICH E2A/E2D, EU GVP): ICSR intake triage with valid-case and duplicate

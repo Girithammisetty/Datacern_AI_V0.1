@@ -2,7 +2,7 @@
 
 **Status:** implemented — 2026-07-21 · live-green pending an infra recreate
 **Commits:** `cf78f3c` (case projection), `d3f1da5` (volumes + doctor), `108bbd3` (soak + CI gate)
-**Related:** memory `project_windrose_stability_doctor`, `project_windrose_stability_reconcile`
+**Related:** memory `project_datacern_stability_doctor`, `project_datacern_stability_reconcile`
 
 ---
 

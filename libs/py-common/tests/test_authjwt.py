@@ -14,10 +14,10 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from windrose_common.authjwt import InvalidTokenError, JwksCache, JwtVerifier
+from datacern_common.authjwt import InvalidTokenError, JwksCache, JwtVerifier
 
-ISSUER = "https://identity.windrose.local"
-AUDIENCE = "windrose"
+ISSUER = "https://identity.datacern.local"
+AUDIENCE = "datacern"
 
 
 def _make_key():

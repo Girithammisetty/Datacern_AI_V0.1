@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Restart identity-service + ui-web with the generic OIDC login enabled (BYO-P4),
-# pointed at the local Keycloak `windrose` realm (run keycloak_bootstrap.sh
+# pointed at the local Keycloak `datacern` realm (run keycloak_bootstrap.sh
 # first). OIDC_TENANT_ID must be a real tenant, so this reads TENANT_ID from the
 # running platform's context.env rather than the initial boot (where no tenant
 # exists yet). The dev/persona login stays on (AUTH_MODE=dev) so nothing else
@@ -38,9 +38,9 @@ boot() { local name="$1"; shift
   local pid=$!; disown "$pid" 2>/dev/null || true
   track_pid "$pid"; echo "$pid" > "$PID_DIR/${name}.pid"; }
 
-# The OIDC config for the local Keycloak windrose realm (keycloak_bootstrap.sh).
-export OIDC_ISSUER="${OIDC_ISSUER:-http://localhost:8180/realms/windrose}"
-export OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-windrose-web}"
+# The OIDC config for the local Keycloak datacern realm (keycloak_bootstrap.sh).
+export OIDC_ISSUER="${OIDC_ISSUER:-http://localhost:8180/realms/datacern}"
+export OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-datacern-web}"
 export OIDC_TENANT_ID="$TENANT_ID"
 export OIDC_REDIRECT_URI="http://localhost:3000/api/auth/callback"
 export NEXT_PUBLIC_OIDC_ENABLED="true"

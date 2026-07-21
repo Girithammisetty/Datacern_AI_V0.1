@@ -73,7 +73,7 @@ Claims (exactly what `tool-plane/internal/authz/proposal.go` verifies):
 
 | Claim | Value |
 |---|---|
-| `iss` | `windrose-agent-runtime` (constant `GRANT_ISSUER`; tool-plane pins this) |
+| `iss` | `datacern-agent-runtime` (constant `GRANT_ISSUER`; tool-plane pins this) |
 | `sub` | the human decider (`decided_by`) |
 | `exp` / `iat` | short-lived (120 s default) |
 | `proposal_id` | approved proposal id |

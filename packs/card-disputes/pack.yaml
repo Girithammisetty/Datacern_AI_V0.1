@@ -1,13 +1,13 @@
 # card-disputes capability pack — Core-neutral edition: Reg E / Reg Z card
 # dispute and chargeback adjudication for US issuers (banks, credit unions,
-# fintech program managers). Installable TODAY against Windrose Core's public
+# fintech program managers). Installable TODAY against Datacern Core's public
 # APIs via packctl; the manifest envelope follows BRD 23 (PKG-FR-001/003).
 # Components the current Core cannot materialize are declared under
 # `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: card-disputes
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted card dispute and chargeback workflow for US issuers: dispute
   intake triage with regulatory-clock awareness (Reg E provisional credit,

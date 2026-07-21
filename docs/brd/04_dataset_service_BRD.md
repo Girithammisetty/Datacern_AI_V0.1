@@ -1,7 +1,7 @@
 # BRD 04 — dataset-service
 
 **Service:** dataset-service · **Language:** Python (FastAPI) · **Phase:** 1
-**Inherits:** `00_MASTER_BRD.md` · **Architecture:** `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §5, §6, §9
+**Inherits:** `00_MASTER_BRD.md` · **Architecture:** `../../DATACERN_PLATFORM_ARCHITECTURE.md` §5, §6, §9
 **V1 sources mined:** `ido/app/models/{dataset,dataset_data_history,dataset_lineage}.rb`, `ido/app/controllers/api/v1/datasets_controller.rb`, `profiling-service/{app,profiler_service,data_profiler}.py`
 
 ---
@@ -45,7 +45,7 @@ Personas: **Data Engineer (DE)**, **Analyst (AN)**, **Data Steward (DS)**, **ML 
 - **DST-FR-008 (Could)** Dataset-level custom metadata key/values (≤32 pairs, string values ≤1KB).
 
 ### Profiling orchestration
-- **DST-FR-020 (Must)** On `ingestion.completed` (unless `skip_profiling`) or `POST /datasets/{id}/versions/{v}/profile`, the service launches a **containerized profiler job** (K8s Job on the `data` node pool, image `windrose/profiler`, resource-capped) parameterized by `{tenant_id, dataset_urn, version_no, iceberg_snapshot_id, sample_strategy}` — replacing V1's Flask thread + `callback_url` PUT.
+- **DST-FR-020 (Must)** On `ingestion.completed` (unless `skip_profiling`) or `POST /datasets/{id}/versions/{v}/profile`, the service launches a **containerized profiler job** (K8s Job on the `data` node pool, image `datacern/profiler`, resource-capped) parameterized by `{tenant_id, dataset_urn, version_no, iceberg_snapshot_id, sample_strategy}` — replacing V1's Flask thread + `callback_url` PUT.
 - **DST-FR-021 (Must)** Profiler reads the Iceberg snapshot directly (never via presigned CSV), profiles on full data up to 10M rows, else a deterministic 10M-row sample (`sample: {strategy, fraction, seed}` recorded in the profile).
 - **DST-FR-022 (Must)** Profiler writes the **profile document** (JSON, content per §4.4) and an HTML report to object storage `profiles/<tenant_id>/<dataset_id>/v<version_no>/profile.{json,html}`; only the pointer + summary land in Postgres (MASTER-FR-061; V1 stored whole profiles in `data_profile json` — designed out).
 - **DST-FR-023 (Must)** Job completion is reported by the profiler via an **mTLS service-to-service** call `PUT /internal/v1/profiles/{profile_id}` (SPIFFE identity, no unauthenticated callback as V1's `set_profile`), including failure taxonomy: `EMPTY_DATA, UNNAMED_COLUMNS, SAMPLING_FAILED, OOM, TIMEOUT, INTERNAL` (V1 profiler exceptions preserved as categories).

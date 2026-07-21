@@ -14,10 +14,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/audit-service/internal/chain"
-	"github.com/windrose-ai/audit-service/internal/domain"
-	"github.com/windrose-ai/audit-service/internal/meta"
-	"github.com/windrose-ai/audit-service/internal/pgstore"
+	"github.com/datacern-ai/audit-service/internal/chain"
+	"github.com/datacern-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/meta"
+	"github.com/datacern-ai/audit-service/internal/pgstore"
 )
 
 // resolveTenant returns the tenant to query. It is the caller's own tenant from

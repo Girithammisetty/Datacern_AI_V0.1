@@ -16,12 +16,12 @@ from app.container import build_container
 from app.domain.windows import window_start
 from app.main import create_app
 
-ISSUER = "https://identity.windrose.local"
-AUDIENCE = "windrose"
+ISSUER = "https://identity.datacern.local"
+AUDIENCE = "datacern"
 TENANT_A = "11111111-1111-4111-8111-111111111111"
 TENANT_B = "22222222-2222-4222-8222-222222222222"
 WORKSPACE = "33333333-3333-4333-8333-333333333333"
-SPIFFE_AGENT_RUNTIME = "spiffe://windrose/ns/ai/sa/agent-runtime"
+SPIFFE_AGENT_RUNTIME = "spiffe://datacern/ns/ai/sa/agent-runtime"
 
 
 class FakeClock:
@@ -82,10 +82,10 @@ def dp_headers(secret: str, tenant_id: str = TENANT_A, *, request_class: str | N
                token: str | None = None, **extra_headers) -> dict:
     headers = {
         "Authorization": f"Bearer {secret}",
-        "X-Windrose-JWT": token or make_token(tenant_id),
+        "X-Datacern-JWT": token or make_token(tenant_id),
     }
     if request_class:
-        headers["x-windrose-request-class"] = request_class
+        headers["x-datacern-request-class"] = request_class
     headers.update(extra_headers)
     return headers
 
@@ -180,6 +180,6 @@ def ledger_key_for(budget_id: str, window: str, clock, tz: str = "UTC") -> str:
 
 
 CHAT_BODY = {
-    "model": "windrose-auto",
+    "model": "datacern-auto",
     "messages": [{"role": "user", "content": "revenue by region, Q3"}],
 }

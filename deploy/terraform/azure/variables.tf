@@ -16,7 +16,7 @@ variable "location" {
 variable "name_prefix" {
   description = "Short lowercase prefix for resource names (letters/numbers only for globally-unique names like storage/ACR)."
   type        = string
-  default     = "windrose"
+  default     = "datacern"
 
   validation {
     condition     = can(regex("^[a-z][a-z0-9]{2,16}$", var.name_prefix))
@@ -295,9 +295,9 @@ variable "external_secrets_service_account" {
 }
 
 variable "workload_namespace" {
-  description = "Namespace the Windrose services run in."
+  description = "Namespace the Datacern services run in."
   type        = string
-  default     = "windrose"
+  default     = "datacern"
 }
 
 variable "blob_service_accounts" {
@@ -320,7 +320,7 @@ variable "blob_service_accounts" {
 variable "secrets" {
   description = <<-EOT
     Application secrets written to Key Vault for External Secrets to sync into the
-    `windrose-secrets` cluster Secret. Keys use the UPPER_SNAKE names from
+    `datacern-secrets` cluster Secret. Keys use the UPPER_SNAKE names from
     deploy/CONFIG.md (e.g. JWT_SIGNING_KEY_PEM, OPENAI_API_KEY, SMTP_PASSWORD).
     Endpoint-derived secrets (POSTGRES_HOST, REDIS_URL, KAFKA_BOOTSTRAP,
     OBJECTSTORE_*) are computed by Terraform and do NOT need to be provided here;

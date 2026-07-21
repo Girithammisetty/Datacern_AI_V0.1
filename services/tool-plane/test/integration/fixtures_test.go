@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/tool-plane/internal/domain"
-	"github.com/windrose-ai/tool-plane/internal/embed"
-	"github.com/windrose-ai/tool-plane/internal/store"
+	"github.com/datacern-ai/tool-plane/internal/domain"
+	"github.com/datacern-ai/tool-plane/internal/embed"
+	"github.com/datacern-ai/tool-plane/internal/store"
 )
 
 // caseAssignSchema is the BRD example input schema (URN-annotated case_id).
@@ -19,7 +19,7 @@ func caseAssignSchema() map[string]any {
 		"type":    "object", "additionalProperties": false,
 		"required": []any{"case_id", "assignee_id"},
 		"properties": map[string]any{
-			"case_id":     map[string]any{"type": "string", "x-windrose-urn": "wr:{tenant}:case:case/{value}"},
+			"case_id":     map[string]any{"type": "string", "x-datacern-urn": "wr:{tenant}:case:case/{value}"},
 			"assignee_id": map[string]any{"type": "string"},
 			"note":        map[string]any{"type": "string", "maxLength": float64(2000)},
 			"bulk_limit":  map[string]any{"type": "integer", "maximum": float64(1000)},
@@ -31,7 +31,7 @@ func caseGetSchema() map[string]any {
 	return map[string]any{
 		"type": "object", "additionalProperties": false, "required": []any{"case_id"},
 		"properties": map[string]any{
-			"case_id": map[string]any{"type": "string", "x-windrose-urn": "wr:{tenant}:case:case/{value}"},
+			"case_id": map[string]any{"type": "string", "x-datacern-urn": "wr:{tenant}:case:case/{value}"},
 		},
 	}
 }
@@ -95,7 +95,7 @@ func (h *harness) enableTool(t *testing.T, tenant uuid.UUID, toolID string, cons
 func (h *harness) registerBackend(t *testing.T, ownerService, url string) {
 	t.Helper()
 	b := &domain.MCPBackend{
-		Name: ownerService, InternalURL: url, SpiffeID: "spiffe://windrose/ns/prod/sa/" + ownerService,
+		Name: ownerService, InternalURL: url, SpiffeID: "spiffe://datacern/ns/prod/sa/" + ownerService,
 		Kind: "internal", Status: "active",
 	}
 	if err := h.store.CreateBackend(context.Background(), b); err != nil {

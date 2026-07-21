@@ -1,6 +1,6 @@
 # BRD 52 — Autonomous ML-Engineer Agent (train → evaluate → propose)
 
-**Deliverable type:** Core capability (agent-runtime + tool-plane + registrations) · **Publisher:** Windrose
+**Deliverable type:** Core capability (agent-runtime + tool-plane + registrations) · **Publisher:** Datacern
 **Initial version:** 1.0.0 · **Status:** authored, build in progress
 **Relationship to other BRDs:** extends BRD 14 (agent-runtime) and BRD 13 (tool-plane); consumes BRD 09 (pipeline-orchestrator), BRD 10 (experiment-service), BRD 16 (eval-service), BRD 04 (dataset-service). NOT a pack — packs may configure this agent via TenantAgentConfig like any other fixed agent (BRD 23 invariant: packs never mint agents).
 
@@ -16,7 +16,7 @@ four-eyes.** Autonomy for the labor, governance for the judgment.
 
 **Why.** Enterprises want agents that work against their real data end-to-end, but no
 regulated buyer will grant an agent raw database credentials or unsupervised model
-promotion. Windrose's architecture already splits this correctly: connections are
+promotion. Datacern's architecture already splits this correctly: connections are
 platform objects (credentials in Vault, never in the agent), every agent action is a
 tool-plane-governed, RBAC-checked, audited platform API call, and promotion already has
 a four-eyes gate. This BRD composes existing rails into the autonomous loop — zero new

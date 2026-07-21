@@ -84,7 +84,7 @@ export function HelpHome() {
             {guide ? (
               <>
                 <p className="mb-3 max-w-3xl text-sm text-muted-foreground">
-                  A role-by-role walkthrough of how your team works in Windrose.
+                  A role-by-role walkthrough of how your team works in Datacern.
                 </p>
                 <div className="mb-4 flex flex-wrap gap-1.5" data-testid="help-personas">
                   {guide.personas.map((p) => (

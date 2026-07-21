@@ -3,7 +3,7 @@ package store
 import (
 	"testing"
 
-	"github.com/windrose-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/domain"
 )
 
 func TestContainsAndDeref(t *testing.T) {

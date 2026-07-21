@@ -14,7 +14,7 @@ COPY services/ingestion-service/alembic.ini ./
 RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim-bookworm AS runtime
-RUN useradd --uid 10001 --no-create-home windrose
+RUN useradd --uid 10001 --no-create-home datacern
 WORKDIR /srv
 COPY --from=build /srv /srv
 ENV PATH="/srv/.venv/bin:$PATH" \

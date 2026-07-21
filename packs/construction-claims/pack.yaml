@@ -1,14 +1,14 @@
 # construction-claims capability pack — Core-neutral edition: construction
 # claim and change-order adjudication for the paying side of the contract
 # (owners/developers, general contractors, construction managers, sureties,
-# infrastructure agencies). Installable TODAY against Windrose Core's public
+# infrastructure agencies). Installable TODAY against Datacern Core's public
 # APIs via packctl; the manifest envelope follows BRD 23 (PKG-FR-001/003).
 # Components the current Core cannot materialize are declared under
 # `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: construction-claims
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted construction claim and change-order adjudication for owners,
   GCs, CMs, sureties, and infrastructure agencies: claim intake triage with

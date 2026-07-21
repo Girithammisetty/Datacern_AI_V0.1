@@ -26,7 +26,7 @@ What it does per pack (all idempotent — safe to re-run):
   7. merge every login into deploy/local/run/personas.json (the map ui-web's
      dev login reads) and restart ui-web so the logins are live.
 
-Run:  cd Windrose-ai/packs && ../deploy/e2e/.venv/bin/python install_packs_multitenant.py
+Run:  cd Datacern-ai/packs && ../deploy/e2e/.venv/bin/python install_packs_multitenant.py
       (add --no-restart-ui to leave the running UI untouched;
        add --only wr-aml to (re)do a single tenant)
 
@@ -83,35 +83,35 @@ def die(m):
 
 # ---- the tenant plan --------------------------------------------------------
 # (pack_dir, tenant_name, display_name, short)  — short is the login email
-# domain label: admin@<short>.windrose etc.
+# domain label: admin@<short>.datacern etc.
 PACKS = [
-    ("insurance-claims-payer", "wr-payer", "Windrose Payer Claims Co", "payer"),
-    ("care-management-medicare", "wr-caremgmt", "Windrose Care Management", "caremgmt"),
-    ("healthcare-provider-rcm", "wr-rcm", "Windrose Provider RCM", "rcm"),
-    ("payer-fwa-siu", "wr-fwa", "Windrose Payer FWA-SIU", "fwa"),
-    ("pharmacy-benefit-mgmt", "wr-pbm", "Windrose Pharmacy Benefits", "pbm"),
-    ("post-acute-care", "wr-pac", "Windrose Post-Acute Care", "pac"),
-    ("banking-aml", "wr-aml", "Windrose Banking AML", "aml"),
-    ("card-disputes", "wr-disputes", "Windrose Card Disputes", "disputes"),
-    ("pharmacovigilance", "wr-pv", "Windrose Pharmacovigilance", "pv"),
-    ("workers-comp-claims", "wr-wcomp", "Windrose Workers Comp", "wcomp"),
-    ("trade-compliance", "wr-trade", "Windrose Trade Compliance", "trade"),
-    ("trucking-claims", "wr-trucking", "Windrose Trucking Claims", "trucking"),
-    ("warranty-claims", "wr-warranty", "Windrose Warranty Claims", "warranty"),
-    ("mortgage-loss-mitigation", "wr-lossmit", "Windrose Loss Mitigation", "lossmit"),
-    ("credit-disputes", "wr-fcra", "Windrose Credit Disputes", "fcra"),
-    ("background-screening", "wr-screening", "Windrose Background Screening", "screening"),
-    ("trust-safety-appeals", "wr-appeals", "Windrose Trust & Safety", "appeals"),
-    ("device-complaints", "wr-mdr", "Windrose Device Vigilance", "mdr"),
-    ("underwriting-intake", "wr-uw", "Windrose Underwriting Intake", "uw"),
-    ("chargeback-representment", "wr-merchant", "Windrose Merchant Disputes", "merchant"),
-    ("seller-vetting", "wr-marketplace", "Windrose Marketplace Integrity", "marketplace"),
-    ("benefits-appeals", "wr-benefits", "Windrose Benefits Adjudication", "benefits"),
-    ("utility-inspections", "wr-utility", "Windrose Utility Inspections", "utility"),
-    ("construction-claims", "wr-construction", "Windrose Construction Claims", "construction"),
-    ("ap-invoice-audit", "wr-apaudit", "Windrose AP Audit", "apaudit"),
-    ("manufacturing-mrb", "wr-mrb", "Windrose Manufacturing Quality", "mrb"),
-    ("tax-notices", "wr-tax", "Windrose Tax Notices", "tax"),
+    ("insurance-claims-payer", "wr-payer", "Datacern Payer Claims Co", "payer"),
+    ("care-management-medicare", "wr-caremgmt", "Datacern Care Management", "caremgmt"),
+    ("healthcare-provider-rcm", "wr-rcm", "Datacern Provider RCM", "rcm"),
+    ("payer-fwa-siu", "wr-fwa", "Datacern Payer FWA-SIU", "fwa"),
+    ("pharmacy-benefit-mgmt", "wr-pbm", "Datacern Pharmacy Benefits", "pbm"),
+    ("post-acute-care", "wr-pac", "Datacern Post-Acute Care", "pac"),
+    ("banking-aml", "wr-aml", "Datacern Banking AML", "aml"),
+    ("card-disputes", "wr-disputes", "Datacern Card Disputes", "disputes"),
+    ("pharmacovigilance", "wr-pv", "Datacern Pharmacovigilance", "pv"),
+    ("workers-comp-claims", "wr-wcomp", "Datacern Workers Comp", "wcomp"),
+    ("trade-compliance", "wr-trade", "Datacern Trade Compliance", "trade"),
+    ("trucking-claims", "wr-trucking", "Datacern Trucking Claims", "trucking"),
+    ("warranty-claims", "wr-warranty", "Datacern Warranty Claims", "warranty"),
+    ("mortgage-loss-mitigation", "wr-lossmit", "Datacern Loss Mitigation", "lossmit"),
+    ("credit-disputes", "wr-fcra", "Datacern Credit Disputes", "fcra"),
+    ("background-screening", "wr-screening", "Datacern Background Screening", "screening"),
+    ("trust-safety-appeals", "wr-appeals", "Datacern Trust & Safety", "appeals"),
+    ("device-complaints", "wr-mdr", "Datacern Device Vigilance", "mdr"),
+    ("underwriting-intake", "wr-uw", "Datacern Underwriting Intake", "uw"),
+    ("chargeback-representment", "wr-merchant", "Datacern Merchant Disputes", "merchant"),
+    ("seller-vetting", "wr-marketplace", "Datacern Marketplace Integrity", "marketplace"),
+    ("benefits-appeals", "wr-benefits", "Datacern Benefits Adjudication", "benefits"),
+    ("utility-inspections", "wr-utility", "Datacern Utility Inspections", "utility"),
+    ("construction-claims", "wr-construction", "Datacern Construction Claims", "construction"),
+    ("ap-invoice-audit", "wr-apaudit", "Datacern AP Audit", "apaudit"),
+    ("manufacturing-mrb", "wr-mrb", "Datacern Manufacturing Quality", "mrb"),
+    ("tax-notices", "wr-tax", "Datacern Tax Notices", "tax"),
 ]
 # BRD 31: investigation-framework is a LIBRARY pack consumed via depends_on —
 # it has no surface of its own, so it is installed INTO its consumers' tenants
@@ -131,7 +131,7 @@ ADMIN_SCOPES = [
 ]
 
 RBAC_DSN = os.environ.get("RBAC_DATABASE_URL", "postgres://{u}:{pw}@{h}:{p}/rbac".format(
-    u=os.environ.get("PGUSER", "windrose"), pw=os.environ.get("PGPASSWORD", "windrose_dev"),
+    u=os.environ.get("PGUSER", "datacern"), pw=os.environ.get("PGPASSWORD", "datacern_dev"),
     h=os.environ.get("PGHOST", "localhost"), p=os.environ.get("PGPORT", "5432")))
 
 PERSONAS_JSON = os.path.join(LOCAL, "run", "personas.json")
@@ -300,7 +300,7 @@ def ensure_role_users(tid: str, ws: str, admin_tok: str, roles: list[dict],
     users = []
     for role in roles:
         rslug = slug(role["name"])
-        sub, email = f"user-{rslug}-{short}", f"{rslug}@{short}.windrose"
+        sub, email = f"user-{rslug}-{short}", f"{rslug}@{short}.datacern"
         gid = groups.get(role["name"])
         if not gid:
             warn(f"no permission group for role {role['name']!r} — skipping user")
@@ -341,7 +341,7 @@ def merge_personas(entries: dict) -> None:
 
 def restart_ui() -> None:
     """Relaunch ui-web with the merged personas map (dev login reads
-    WINDROSE_PERSONAS from process env at boot) — mirrors up.sh start_ui."""
+    DATACERN_PERSONAS from process env at boot) — mirrors up.sh start_ui."""
     say("restarting ui-web so the new tenant logins are live")
     script = f'''
 set -e
@@ -359,7 +359,7 @@ cd "{REPO}/services/ui-web"
 env AUTH_MODE=dev \
   JWT_ISSUER="$WR_ISS" JWT_AUDIENCE="$WR_AUD" \
   DEV_JWT_PRIVATE_JWK="$privjwk" DEV_JWT_PUBLIC_JWK="$pubjwk" \
-  WINDROSE_PERSONAS="$personas" \
+  DATACERN_PERSONAS="$personas" \
   BFF_URL="$BFF_URL/graphql" \
   REALTIME_HUB_URL="$REALTIME_URL" NEXT_PUBLIC_REALTIME_HUB_URL="$REALTIME_URL" \
   AGENT_RUNTIME_URL="$AGENT_RUNTIME_URL" \
@@ -419,8 +419,8 @@ def render_report(state: dict) -> None:
                   f"- workspace: `{row['workspace']}`",
                   f"- packs: {', '.join(row['packs'])}", "", "| login email | role |",
                   "|---|---|",
-                  f"| admin@{row['short']}.windrose | Tenant Admin (author) |",
-                  f"| approver@{row['short']}.windrose | Tenant Admin (four-eyes approver) |"]
+                  f"| admin@{row['short']}.datacern | Tenant Admin (author) |",
+                  f"| approver@{row['short']}.datacern | Tenant Admin (four-eyes approver) |"]
         lines += [f"| {u['email']} | {u['role']} |" for u in row["users"]]
         lines.append("")
     with open(REPORT_MD, "w") as f:
@@ -436,7 +436,7 @@ def onboard_tenant(pack_dir: str, tname: str, display: str,
     say(f"{display}  —  pack {pack_dir} -> tenant {tname}")
     admin_sub = f"user-admin-{short}"
     approver_sub = f"user-approver-{short}"
-    tid = ensure_tenant(tname, display, f"admin@{short}.windrose")
+    tid = ensure_tenant(tname, display, f"admin@{short}.datacern")
     ws = ensure_rbac_seeded(tid)
     bootstrap_admins(tid, [admin_sub, approver_sub])
     admin_tok = c.user_token(admin_sub, tid, ["*"], workspace_id=ws)
@@ -459,9 +459,9 @@ def onboard_tenant(pack_dir: str, tname: str, display: str,
     users = ensure_role_users(tid, ws, admin_tok, roles, short)
 
     entries = {
-        f"admin@{short}.windrose": {"sub": admin_sub, "tenantId": tid,
+        f"admin@{short}.datacern": {"sub": admin_sub, "tenantId": tid,
                                     "workspaceId": ws, "scopes": ADMIN_SCOPES},
-        f"approver@{short}.windrose": {"sub": approver_sub, "tenantId": tid,
+        f"approver@{short}.datacern": {"sub": approver_sub, "tenantId": tid,
                                        "workspaceId": ws, "scopes": ADMIN_SCOPES},
     }
     for u in users:
@@ -499,7 +499,7 @@ def main() -> int:
     print()
     say(f"{G}done{N} — {len(report_rows)} tenant(s); logins in MULTITENANT_LOGINS.md")
     for row in report_rows:
-        print(f"  {row['display']:34s} admin@{row['short']}.windrose "
+        print(f"  {row['display']:34s} admin@{row['short']}.datacern "
               f"+ {len(row['users'])} role user(s)")
     return 0
 

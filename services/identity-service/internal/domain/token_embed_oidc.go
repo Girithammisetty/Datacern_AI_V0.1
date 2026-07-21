@@ -22,7 +22,7 @@ type EmbedOIDCRequest struct {
 }
 
 // EmbedOIDCExchange implements POST /token/embed/oidc (task #84): verify the
-// user's OIDC ID token against the IdP, bind it to a real Windrose user WITHIN
+// user's OIDC ID token against the IdP, bind it to a real Datacern user WITHIN
 // the requested tenant (by email), and mint the same short-lived, workspace-
 // scoped embed token /token/embed produces — but authenticated by federation,
 // not a shared secret. The tenant's embed config still supplies the allowed
@@ -76,7 +76,7 @@ func (s *TokenService) EmbedOIDCExchange(ctx context.Context, req EmbedOIDCReque
 	// from another tenant's directory cannot embed here even with a valid token.
 	user, err := s.Store.GetUserByEmail(ctx, tenantID, ident.Email)
 	if err != nil {
-		return nil, EPermissionDenied("no windrose user is provisioned for this identity in the tenant")
+		return nil, EPermissionDenied("no datacern user is provisioned for this identity in the tenant")
 	}
 	if user.Status == UserDeactivated || user.DeletedAt != nil {
 		return nil, EPermissionDenied("user is deactivated")

@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/notification-service/internal/channels/email"
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/channels/email"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // fakeStore is a real in-memory implementation of ReportStore (not a mock
@@ -95,8 +95,8 @@ func TestActivities_SendReportEmail_RealDataEndToEnd(t *testing.T) {
 
 	sub := &domain.ReportSubscription{
 		ID: domain.NewID(), TenantID: uuid.New(), DashboardID: uuid.New(),
-		Name: "Weekly", Recipients: []string{"manager@demo.windrose"}, Cadence: domain.CadenceDaily,
-		SendHour: 8, Timezone: "UTC", Format: domain.ReportFormatHTML, Enabled: true, CreatedBy: "manager@demo.windrose",
+		Name: "Weekly", Recipients: []string{"manager@demo.datacern"}, Cadence: domain.CadenceDaily,
+		SendHour: 8, Timezone: "UTC", Format: domain.ReportFormatHTML, Enabled: true, CreatedBy: "manager@demo.datacern",
 	}
 	store := &fakeStore{sub: sub}
 	provider := &fakeEmailProvider{}
@@ -119,7 +119,7 @@ func TestActivities_SendReportEmail_RealDataEndToEnd(t *testing.T) {
 		t.Fatalf("expected 1 email sent, got %d", len(provider.sent))
 	}
 	msg := provider.sent[0]
-	if msg.To != "manager@demo.windrose" {
+	if msg.To != "manager@demo.datacern" {
 		t.Fatalf("unexpected recipient: %q", msg.To)
 	}
 	if !strings.Contains(msg.HTML, "West") || !strings.Contains(msg.HTML, "42") {

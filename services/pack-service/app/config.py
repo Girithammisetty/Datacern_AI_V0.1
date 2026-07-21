@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://pack:pack@localhost:5432/pack"
 
     # AuthN (MASTER-FR-010/011): static PEM in dev/tests, JWKS in prod.
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwt_public_key_pem: str | None = None
     jwks_url: str | None = None
     jwks_ttl_seconds: int = 300

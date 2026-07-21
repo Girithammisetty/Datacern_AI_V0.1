@@ -18,8 +18,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/windrose-ai/rbac-service/internal/projection"
-	"github.com/windrose-ai/rbac-service/internal/store"
+	"github.com/datacern-ai/rbac-service/internal/projection"
+	"github.com/datacern-ai/rbac-service/internal/store"
 )
 
 func env(key, def string) string {

@@ -3,7 +3,7 @@ package sqlsafe
 import (
 	"strings"
 
-	"github.com/windrose-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/domain"
 )
 
 // GuardConfig scopes the identifier-level tenant guard (QRY-FR-021, BR-2).

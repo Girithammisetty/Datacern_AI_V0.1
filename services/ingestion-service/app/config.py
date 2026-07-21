@@ -17,26 +17,26 @@ class Settings:
     # AuthN (MASTER-FR-010/011). PEM of the identity-service RS256 public key
     # (dev/tests); production verifies via cached JWKS refresh (real, py-common).
     jwt_public_key_pem: str | None = None
-    jwt_issuer: str = "https://identity.windrose.local"
-    jwt_audience: str = "windrose"
+    jwt_issuer: str = "https://identity.datacern.local"
+    jwt_audience: str = "datacern"
     jwks_url: str | None = None
     jwks_ttl_seconds: int = 300
 
     # Adapter selection: "memory" wires the in-memory/local test doubles (unit
-    # tier); "real" wires the shared windrose_common adapters against local infra
+    # tier); "real" wires the shared datacern_common adapters against local infra
     # (MinIO, Iceberg REST, Vault, Redpanda, OPA, Redis) — the runtime default.
     adapter_mode: str = "memory"
 
     # Real-adapter endpoints (deploy/docker-compose.dev.yml defaults)
     s3_endpoint_url: str = "http://localhost:9000"
-    s3_access_key: str = "windrose"
-    s3_secret_key: str = "windrose_dev"
+    s3_access_key: str = "datacern"
+    s3_secret_key: str = "datacern_dev"
     s3_region: str = "us-east-1"
-    uploads_bucket: str = "windrose-uploads"
+    uploads_bucket: str = "datacern-uploads"
     iceberg_catalog_uri: str = "http://localhost:8181"
-    iceberg_warehouse: str = "s3://windrose-warehouse/"
+    iceberg_warehouse: str = "s3://datacern-warehouse/"
     vault_addr: str = "http://localhost:8200"
-    vault_token: str = "windrose_dev_root"
+    vault_token: str = "datacern_dev_root"
 
     # Secrets backend selection (BYO Infra Hardening Phase 2,
     # docs/design/byo-infra-hardening.md): vault|aws|azure|gcp. Default "vault"
@@ -91,7 +91,7 @@ class Settings:
     # (TPL-FR-012). Mirrors pipeline-orchestrator's config exactly.
     spiffe_header: str = "x-client-spiffe-id"
     internal_allowed_spiffe: list[str] = field(
-        default_factory=lambda: ["spiffe://windrose/ns/tools/sa/mcp-gateway"]
+        default_factory=lambda: ["spiffe://datacern/ns/tools/sa/mcp-gateway"]
     )
 
     # Deploy-time action-catalog registration (RBC-FR-022).
@@ -108,8 +108,8 @@ class Settings:
             register_signing_kid=os.getenv("REGISTER_SIGNING_KID"),
             register_tenant_id=os.getenv("REGISTER_TENANT_ID"),
             database_url=os.getenv("DATABASE_URL", cls.database_url),
-            environment=os.getenv("WINDROSE_ENV", cls.environment),
-            data_dir=os.getenv("WINDROSE_DATA_DIR", cls.data_dir),
+            environment=os.getenv("DATACERN_ENV", cls.environment),
+            data_dir=os.getenv("DATACERN_DATA_DIR", cls.data_dir),
             jwt_public_key_pem=os.getenv("JWT_PUBLIC_KEY_PEM"),
             jwt_issuer=os.getenv("JWT_ISSUER", cls.jwt_issuer),
             jwt_audience=os.getenv("JWT_AUDIENCE", cls.jwt_audience),

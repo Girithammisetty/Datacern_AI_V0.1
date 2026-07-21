@@ -31,24 +31,24 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	gcevent "github.com/windrose-ai/go-common/event"
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/metricsx"
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/authjwt"
+	gcevent "github.com/datacern-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/metricsx"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/realtime-hub/internal/api"
-	"github.com/windrose-ai/realtime-hub/internal/authz"
-	"github.com/windrose-ai/realtime-hub/internal/events"
-	"github.com/windrose-ai/realtime-hub/internal/fanout"
-	"github.com/windrose-ai/realtime-hub/internal/metrics"
-	"github.com/windrose-ai/realtime-hub/internal/topics"
+	"github.com/datacern-ai/realtime-hub/internal/api"
+	"github.com/datacern-ai/realtime-hub/internal/authz"
+	"github.com/datacern-ai/realtime-hub/internal/events"
+	"github.com/datacern-ai/realtime-hub/internal/fanout"
+	"github.com/datacern-ai/realtime-hub/internal/metrics"
+	"github.com/datacern-ai/realtime-hub/internal/topics"
 )
 
 const (
-	issuer   = "windrose-test"
-	audience = "windrose"
+	issuer   = "datacern-test"
+	audience = "datacern"
 )
 
 var (

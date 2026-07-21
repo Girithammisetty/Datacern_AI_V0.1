@@ -7,14 +7,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/windrose-ai/audit-service/internal/authz"
-	"github.com/windrose-ai/audit-service/internal/chstore"
-	"github.com/windrose-ai/audit-service/internal/compliance"
-	"github.com/windrose-ai/audit-service/internal/meta"
-	"github.com/windrose-ai/audit-service/internal/pgstore"
-	"github.com/windrose-ai/audit-service/internal/worm"
-	"github.com/windrose-ai/go-common/metricsx"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/audit-service/internal/authz"
+	"github.com/datacern-ai/audit-service/internal/chstore"
+	"github.com/datacern-ai/audit-service/internal/compliance"
+	"github.com/datacern-ai/audit-service/internal/meta"
+	"github.com/datacern-ai/audit-service/internal/pgstore"
+	"github.com/datacern-ai/audit-service/internal/worm"
+	"github.com/datacern-ai/go-common/metricsx"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // chiRoutePattern resolves the matched chi route template for a bounded metrics

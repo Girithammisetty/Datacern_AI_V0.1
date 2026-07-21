@@ -56,7 +56,7 @@ class ArgoWorkflowExecutor:
             "workflow": {
                 "metadata": {"generateName": manifest["metadata"]["name"] + "-",
                              "namespace": ns,
-                             "labels": {"windrose.io/managed": "true"}},
+                             "labels": {"datacern.io/managed": "true"}},
                 "spec": {
                     "workflowTemplateRef": {"name": manifest["metadata"]["name"]},
                     "arguments": {"parameters": [

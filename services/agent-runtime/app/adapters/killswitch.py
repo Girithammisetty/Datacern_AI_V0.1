@@ -30,7 +30,7 @@ def lookup_keys(agent_key: str, version: int, tenant_id: str) -> list[str]:
 
 class RedisKillRegistry:
     def __init__(self, redis_url: str) -> None:
-        from windrose_common.redisx import build_redis
+        from datacern_common.redisx import build_redis
 
         self._redis = build_redis(redis_url)
 

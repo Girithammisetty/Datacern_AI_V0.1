@@ -1,14 +1,14 @@
 # warranty-claims capability pack — Core-neutral edition: OEM warranty-claims
 # adjudication for manufacturers paying dealer/service-network claims (auto
 # OEMs, heavy-equipment/ag OEMs, appliance/electronics manufacturers,
-# extended-warranty administrators). Installable TODAY against Windrose
+# extended-warranty administrators). Installable TODAY against Datacern
 # Core's public APIs via packctl; the manifest envelope follows BRD 23
 # (PKG-FR-001/003). Components the current Core cannot materialize are
 # declared under `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: warranty-claims
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted OEM warranty-claims adjudication for dealer/service-network
   claims: claim intake triage with payment-decision deadline awareness,

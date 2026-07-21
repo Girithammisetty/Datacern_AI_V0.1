@@ -35,5 +35,5 @@ async def readyz(request: Request) -> dict:
 
 @router.get("/metrics")
 async def metrics() -> Response:
-    from windrose_common.metricsx import REGISTRY
+    from datacern_common.metricsx import REGISTRY
     return Response(content=REGISTRY.render(), media_type="text/plain; version=0.0.4")

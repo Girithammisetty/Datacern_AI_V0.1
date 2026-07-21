@@ -1,6 +1,6 @@
 # identity-service
 
-Windrose platform root of trust (BRD 01): tenant lifecycle + compensable
+Datacern platform root of trust (BRD 01): tenant lifecycle + compensable
 provisioning, user directory + invitations, service accounts / API keys,
 agent principals + OBO token issuance, JWKS publication + key rotation.
 

@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 const reportCols = `id, tenant_id, workspace_id, dashboard_id, name, recipients, cadence, send_hour, send_weekday,

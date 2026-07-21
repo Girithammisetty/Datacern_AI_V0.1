@@ -5,7 +5,7 @@ validation (SEM-FR-002 / B3):
 - GET /internal/v1/datasets/{id}/profile  -> {schema, top_values}
 
 Guarded by require_internal (SPIFFE allowlist incl. semantic-service) with the
-tenant supplied via the x-windrose-tenant-id header.
+tenant supplied via the x-datacern-tenant-id header.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import pandas as pd
 
 from tests.conftest import SPIFFE_INGESTION, TENANT_A, TENANT_B, create_dataset
 
-SPIFFE_SEMANTIC = "spiffe://windrose/ns/data/sa/semantic-service"
+SPIFFE_SEMANTIC = "spiffe://datacern/ns/data/sa/semantic-service"
 
 DF = pd.DataFrame(
     {
@@ -47,7 +47,7 @@ async def _register_version(
 
 
 def _sem_headers(tenant=TENANT_A):
-    return {"x-client-spiffe-id": SPIFFE_SEMANTIC, "x-windrose-tenant-id": tenant}
+    return {"x-client-spiffe-id": SPIFFE_SEMANTIC, "x-datacern-tenant-id": tenant}
 
 
 class TestInternalDetail:
@@ -129,8 +129,8 @@ class TestInternalDetail:
         await _register_version(client, container, ds)
         resp = await client.get(
             f"/internal/v1/datasets/{ds['id']}",
-            headers={"x-client-spiffe-id": "spiffe://windrose/ns/x/sa/rogue",
-                     "x-windrose-tenant-id": TENANT_A},
+            headers={"x-client-spiffe-id": "spiffe://datacern/ns/x/sa/rogue",
+                     "x-datacern-tenant-id": TENANT_A},
         )
         assert resp.status_code == 403
 

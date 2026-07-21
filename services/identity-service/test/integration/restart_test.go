@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
-	"github.com/windrose-ai/identity-service/internal/keys"
-	pgstore "github.com/windrose-ai/identity-service/internal/store/postgres"
+	"github.com/datacern-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/keys"
+	pgstore "github.com/datacern-ai/identity-service/internal/store/postgres"
 )
 
 // TestF1_RestartTokenIssuance proves the F-1 fix: after a process restart in

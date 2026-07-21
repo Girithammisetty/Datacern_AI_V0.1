@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // TestAC13_QuietHoursDeferEmail proves an info email in the quiet window defers

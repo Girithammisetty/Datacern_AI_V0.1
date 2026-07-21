@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/domain"
 )
 
 func TestCrossedThresholds(t *testing.T) {

@@ -28,19 +28,19 @@ from tests.conftest import PRIVATE_PEM, PUBLIC_PEM, make_settings
 
 pytestmark = pytest.mark.integration
 
-REPO = "/Users/girithammisetty/Projects/Windrose-ai"
+REPO = "/Users/girithammisetty/Projects/practice/Windrose_AI_V0.1"
 AIGW_DIR = f"{REPO}/services/ai-gateway"
 UV = "/opt/homebrew/bin/uv"
 
 OLLAMA_TAGS = "http://localhost:11434/api/tags"
 CHAT_MODEL = "qwen2.5:0.5b"
-PG_SUPER = "postgresql://windrose:windrose_dev@localhost:5432/postgres"
+PG_SUPER = "postgresql://datacern:datacern_dev@localhost:5432/postgres"
 AIGW_DB = "ai_gateway"
 AIGW_PORT = 8399
 AIGW_URL = f"http://localhost:{AIGW_PORT}"
 
-ISSUER = "https://identity.windrose.local"
-AUDIENCE = "windrose"
+ISSUER = "https://identity.datacern.local"
+AUDIENCE = "datacern"
 TENANT = "11111111-1111-4111-8111-111111111111"
 
 
@@ -92,7 +92,7 @@ def _seed_deployment_and_key() -> str:
     now = dt.datetime.now(dt.UTC)
     vkey = f"nk-{secrets.token_urlsafe(32)}"
     key_hash = hashlib.sha256(vkey.encode()).hexdigest()
-    dsn = f"postgresql://windrose:windrose_dev@localhost:5432/{AIGW_DB}"
+    dsn = f"postgresql://datacern:datacern_dev@localhost:5432/{AIGW_DB}"
     with psycopg.connect(dsn, autocommit=True) as conn:
         for family in ("balanced", "frontier", "fast-small"):
             conn.execute(
@@ -134,8 +134,8 @@ def ai_gateway():
         **os.environ,
         "PATH": f"/opt/homebrew/bin:{os.environ.get('PATH', '')}",
         "AIG_USE_REAL_ADAPTERS": "true",
-        "AIG_DATABASE_URL": f"postgresql+asyncpg://windrose:windrose_dev@localhost:5432/{AIGW_DB}",
-        "AIG_MIGRATE_URL": f"postgresql+psycopg://windrose:windrose_dev@localhost:5432/{AIGW_DB}",
+        "AIG_DATABASE_URL": f"postgresql+asyncpg://datacern:datacern_dev@localhost:5432/{AIGW_DB}",
+        "AIG_MIGRATE_URL": f"postgresql+psycopg://datacern:datacern_dev@localhost:5432/{AIGW_DB}",
         "AIG_REDIS_URL": "redis://localhost:6379/0",
         "AIG_OLLAMA_BASE_URL": "http://localhost:11434/v1",
         "AIG_KAFKA_BOOTSTRAP_SERVERS": "localhost:9092",
@@ -190,7 +190,7 @@ def _eval_container(tmp_path, ai_gateway):
         ai_gateway_url=ai_gateway["url"],
         ai_gateway_virtual_key=ai_gateway["vkey"],
         judge_jwt_signing_key_pem=PRIVATE_PEM,
-        ai_gateway_model="windrose-auto",
+        ai_gateway_model="datacern-auto",
         judge_request_class="judge",
     )
     return build_container(settings, mode="memory")  # real judge client (no override)

@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "AiTokenUsageEvent",
-  "namespace": "com.windrose.ai.events",
+  "namespace": "com.datacern.ai.events",
   "doc": "ai.token_usage.v1 — one record per completed (or failed-after-provider-call) gateway request (AIG-FR-060). Envelope per MASTER-FR-031; this is the envelope payload contract owned by ai-gateway; usage-service contract-tests against it.",
   "fields": [
     {"name": "request_id", "type": "string"},

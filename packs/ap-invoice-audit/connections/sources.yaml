@@ -13,7 +13,7 @@
     host: erp-ap.internal
     port: 5432
     database: ap_subledger
-    username: windrose_read
+    username: datacern_read
     ssl_mode: require
 - name: "Coupa P2P suite (read)"
   connector_type: http_api
@@ -25,5 +25,5 @@
   config:
     host: ocr-capture.internal
     port: 22
-    username: windrose_read
+    username: datacern_read
     root_directory: /exports/invoices

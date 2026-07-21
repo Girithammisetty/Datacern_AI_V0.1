@@ -30,7 +30,7 @@ async def _training_template(c, ctx):
 async def test_run_lifecycle_events_on_real_kafka(app_sf, clock):
     if not kafka_up():
         pytest.skip(f"Redpanda unreachable at {KAFKA}")
-    from windrose_common.kafka import KafkaConfig, KafkaProducerClient
+    from datacern_common.kafka import KafkaConfig, KafkaProducerClient
 
     topic = f"pipeline.events.v1.it-{uuid.uuid4().hex[:8]}"
     settings = make_settings(events_topic=topic, default_min_seconds_between_runs=0)
@@ -81,7 +81,7 @@ async def test_run_lifecycle_events_on_real_kafka(app_sf, clock):
 async def test_labeled_dataset_from_real_disposition_kafka(app_sf, clock):
     if not kafka_up():
         pytest.skip(f"Redpanda unreachable at {KAFKA}")
-    from windrose_common.kafka import KafkaConfig, KafkaProducerClient
+    from datacern_common.kafka import KafkaConfig, KafkaProducerClient
 
     c = build_container(make_settings(), mode="sql", session_factory=app_sf, clock=clock)
     urn = f"wr:{TENANT_A}:dataset:dataset/kafka-claims"

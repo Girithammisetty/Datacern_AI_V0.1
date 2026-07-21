@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/api"
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/api"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 // F-2: X-Spiffe-Id is honored only when TrustSpiffeHeader is enabled. With it

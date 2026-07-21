@@ -3,8 +3,8 @@ package subscriptions
 import (
 	"testing"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/domain"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // TestAC11_FilterMatch proves a rule with attrs.severity=[high,critical] on

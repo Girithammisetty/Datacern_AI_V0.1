@@ -1,20 +1,20 @@
 # BRD 24 — `insurance-claims-payer` capability pack
 
-**Deliverable type:** Capability Pack (published via pack-service, BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
-**Inherits:** `00_MASTER_BRD.md`, `23_pack_service_BRD.md`. Architecture: `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6, §9; `../../WINDROSE_V3_AGENTIC_ARCHITECTURE.md` §5.
-**Product companion:** `../../WINDROSE_CLAIMS_PRODUCT_SPEC.md`.
+**Deliverable type:** Capability Pack (published via pack-service, BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
+**Inherits:** `00_MASTER_BRD.md`, `23_pack_service_BRD.md`. Architecture: `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6, §9; `../../DATACERN_V3_AGENTIC_ARCHITECTURE.md` §5.
+**Product companion:** `../../DATACERN_CLAIMS_PRODUCT_SPEC.md`.
 
 ---
 
 ## 1. Overview
 
-**Purpose.** `insurance-claims-payer` is the **first vertical solution** shipped on Windrose Core — a signed, versioned Capability Pack (BRD 23) that turns the horizontal platform into a *product*: Windrose Claims. The pack ships the ontology, semantic model, dashboards, case schemas, role catalog, connectors, agent recipes, guardrail policies, and eval sets required for a US health-insurance **payer** to deploy AI-assisted **prior-authorization**, **appeal analysis**, and **denial-rationale writing** in ≤ 90 days, additive to their existing Facets / HealthEdge / QNXT / Amisys / Guidewire stack.
+**Purpose.** `insurance-claims-payer` is the **first vertical solution** shipped on Datacern Core — a signed, versioned Capability Pack (BRD 23) that turns the horizontal platform into a *product*: Datacern Claims. The pack ships the ontology, semantic model, dashboards, case schemas, role catalog, connectors, agent recipes, guardrail policies, and eval sets required for a US health-insurance **payer** to deploy AI-assisted **prior-authorization**, **appeal analysis**, and **denial-rationale writing** in ≤ 90 days, additive to their existing Facets / HealthEdge / QNXT / Amisys / Guidewire stack.
 
-**Business value.** (a) **Time-to-value**: install-to-first-live-decision in ≤ 30 days vs. 6–18 months of bespoke build. (b) **Compliance by construction**: CMS-4201-F (interoperability + PA), CMS 2024 MA rule (human review of AI decisions), NAIC Model Bulletin, HIPAA/HITRUST, and EU AI Act Annex III (high-risk) satisfied via Windrose's proposal-mode + audit chain + explainability. (c) **Cost thesis anchored**: the vertical is a workload where a $180/hr clinical reviewer's time dominates every AI call cost — labor arbitrage yields >1000× ROI per decision even at frontier-model pricing, and Windrose's cost mechanisms (deterministic-first, cascade, SLM, distillation — BRD 12 §3.8) compound quarterly. (d) **The learning-loop moat**: every reviewer verdict becomes a governed label; 12 months of resolved cases produce a distilled SLM that no competitor can replicate.
+**Business value.** (a) **Time-to-value**: install-to-first-live-decision in ≤ 30 days vs. 6–18 months of bespoke build. (b) **Compliance by construction**: CMS-4201-F (interoperability + PA), CMS 2024 MA rule (human review of AI decisions), NAIC Model Bulletin, HIPAA/HITRUST, and EU AI Act Annex III (high-risk) satisfied via Datacern's proposal-mode + audit chain + explainability. (c) **Cost thesis anchored**: the vertical is a workload where a $180/hr clinical reviewer's time dominates every AI call cost — labor arbitrage yields >1000× ROI per decision even at frontier-model pricing, and Datacern's cost mechanisms (deterministic-first, cascade, SLM, distillation — BRD 12 §3.8) compound quarterly. (d) **The learning-loop moat**: every reviewer verdict becomes a governed label; 12 months of resolved cases produce a distilled SLM that no competitor can replicate.
 
 **In scope.** The three flagship agents (Prior-Auth, Appeal Analyst, Denial-Rationale), the payer ontology (Claim / Policy / Member / Provider / Denial / Appeal / PriorAuthRequest / Authorization / ClinicalGuideline), the semantic model and dashboards for the payer KPI catalog (denial rate, overturn rate, PA turnaround, cost per decision, reviewer NPS), case schemas for review workflows, role catalog for the payer org, read connectors (Facets/HealthEdge/QNXT, Guidewire, Epic FHIR, EDI 837/835/270/271/278, Snowflake/Databricks/Iceberg), write adapters (proposal-mode), regulatory guardrail policies, and golden eval sets.
 
-**Out of scope.** Autonomous denial decisions (agents never denial-decide, only draft rationale + score for human — see BR-1); actuarial pricing / underwriting agents (separate future pack `insurance-underwriting-payer`); provider-side RCM (future `insurance-claims-provider`); pharmacy-benefit management workflows (future `pbm-utilization`); Medicaid-specific state waivers (add-on packs); non-US healthcare (jurisdiction-specific packs); replacement of the payer's core admin system (Windrose is additive).
+**Out of scope.** Autonomous denial decisions (agents never denial-decide, only draft rationale + score for human — see BR-1); actuarial pricing / underwriting agents (separate future pack `insurance-underwriting-payer`); provider-side RCM (future `insurance-claims-provider`); pharmacy-benefit management workflows (future `pbm-utilization`); Medicaid-specific state waivers (add-on packs); non-US healthcare (jurisdiction-specific packs); replacement of the payer's core admin system (Datacern is additive).
 
 ## 2. Actors & user stories
 
@@ -43,8 +43,8 @@ Personas: **PA Nurse Reviewer (PA-N)**, **Medical Director / MD Reviewer (MD)**,
 pack_manifest: 1
 name: insurance-claims-payer
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
-license: { spdx_id: "Commercial", url: "https://windrose.ai/licenses/claims-payer" }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
+license: { spdx_id: "Commercial", url: "https://datacern.ai/licenses/claims-payer" }
 description: "AI-assisted prior-auth, appeal analysis, and denial-rationale writing for US health payers."
 categories: [insurance, health, payer, claims, prior-auth, appeals, denials]
 regulatory: [cms_4201_f, cms_2024_ma_ai_review, naic_ai_bulletin, hipaa, hitrust_csf, eu_ai_act_annex_iii]
@@ -95,8 +95,8 @@ components:
 | `Claim` | claim_id, member_id, provider_id, service_dates, place_of_service, cpt_codes[], icd10_codes[], billed_amount, allowed_amount, paid_amount, status (open/adjudicated/denied/appealed) | EDI 837 / core admin |
 | `PriorAuthRequest` | par_id, member_id, provider_id, requested_service, cpt_codes[], icd10_codes[], urgency (standard/urgent/expedited), submitted_at, status (pending/approved/denied/deferred) | EDI 278 / core admin |
 | `Authorization` | auth_id, par_id, approved_service_span, quantity, effective_span, conditions | Core admin |
-| `Denial` | denial_id, claim_id or par_id, denial_reason_code, denial_reason_text, decision_by (human/ai_assisted), decision_at | Core admin + Windrose |
-| `Appeal` | appeal_id, denial_id, level (1/2/external), submitted_by (member/provider), submitted_at, status (pending/upheld/overturned/withdrawn), verdict_by, verdict_at | Core admin + Windrose |
+| `Denial` | denial_id, claim_id or par_id, denial_reason_code, denial_reason_text, decision_by (human/ai_assisted), decision_at | Core admin + Datacern |
+| `Appeal` | appeal_id, denial_id, level (1/2/external), submitted_by (member/provider), submitted_at, status (pending/upheld/overturned/withdrawn), verdict_by, verdict_at | Core admin + Datacern |
 | `ClinicalGuideline` | guideline_id, source (interqual/mcg/plan_policy/cms_ncd/lcd), version, section_ref, text | Guideline vendor + payer policy library |
 | `MemberCommunication` | comm_id, member_id, kind (denial_notice/appeal_response/eob), sent_at, delivery, content_ref | Correspondence system |
 
@@ -187,7 +187,7 @@ components:
 - **INS-FR-080 (Must)** `guardrails/hipaa.rego` — every agent tool call and every LLM prompt passes through PHI-scoped guardrails: (a) all `phi:true` ontology fields are masked at the ai-gateway boundary (BRD 12 §AIG-FR-050 Presidio + custom HIPAA identifier detectors: SSN, MRN, member_id, DOB, address, phone); (b) LLM egress logs never carry unmasked PHI (verified in the audit sample); (c) memory-service entries derived from cases carry the masked-only versions.
 - **INS-FR-081 (Must)** `guardrails/cms_2024_human_review.rego` — CMS Advance-Notice + MA rule (2024) requires a qualified human to review AI-assisted adverse determinations. Enforcement: every `denial.*.write` adapter call must be preceded by a case-service resolution where `resolver_role ∈ {md_reviewer, appeal_analyst}` and `resolver_id ≠ agent_principal`. Adapter middleware verifies this on every write; failure → 403 `INS_CMS_HUMAN_REVIEW_REQUIRED` and the write is refused.
 - **INS-FR-082 (Must)** `guardrails/naic_ai_disclosure.rego` — NAIC Model Bulletin transparency: (a) any member-facing artifact produced with AI assistance carries the pack-configured disclosure text (integrates with UI-FR-031 AI label + UI-FR-032 provenance badge); (b) internal-facing artifacts carry the `provenance` chain; (c) tenant admin can export a per-jurisdiction disclosure report on demand.
-- **INS-FR-083 (Should)** EU AI Act Annex III (insurance = high-risk system) documentation kit: the pack ships a `docs/eu_ai_act/` folder covering the Article 11 technical documentation, Article 13 transparency requirements, and Article 14 human oversight design — pre-filled with Windrose Core's controls + this pack's specifics. Deployable in EU cells for insurers with EU exposure.
+- **INS-FR-083 (Should)** EU AI Act Annex III (insurance = high-risk system) documentation kit: the pack ships a `docs/eu_ai_act/` folder covering the Article 11 technical documentation, Article 13 transparency requirements, and Article 14 human oversight design — pre-filled with Datacern Core's controls + this pack's specifics. Deployable in EU cells for insurers with EU exposure.
 
 ### Roles & case schemas
 
@@ -299,9 +299,9 @@ insurance-claims-payer-1.0.0.tar
 
 ## 8. Dependencies
 
-- **Windrose services:** all core services + BRD 23 pack-service (installer), BRD 12 ai-gateway (agent LLM calls), BRD 14 agent-runtime (recipes), BRD 08 case-service (review queues), BRD 06 semantic-service (measures), BRD 07 chart-service (dashboards), BRD 17 usage-service (ROI panels), BRD 16 eval-service (golden sets + agent promotion gate), BRD 15 memory-service (similar-overturns RAG), BRD 13 tool-plane (MCP), BRD 02 rbac-service (role seeds), BRD 20 realtime-hub (case updates), BRD 21 bff-graphql (dashboard queries + display labels), BRD 22 ui-web (case triage screens).
+- **Datacern services:** all core services + BRD 23 pack-service (installer), BRD 12 ai-gateway (agent LLM calls), BRD 14 agent-runtime (recipes), BRD 08 case-service (review queues), BRD 06 semantic-service (measures), BRD 07 chart-service (dashboards), BRD 17 usage-service (ROI panels), BRD 16 eval-service (golden sets + agent promotion gate), BRD 15 memory-service (similar-overturns RAG), BRD 13 tool-plane (MCP), BRD 02 rbac-service (role seeds), BRD 20 realtime-hub (case updates), BRD 21 bff-graphql (dashboard queries + display labels), BRD 22 ui-web (case triage screens).
 - **External systems (customer's):** Facets / HealthEdge / QNXT / Guidewire / core admin of record; EDI clearinghouse (Change/Optum/Availity); Epic/Cerner FHIR endpoint; guideline vendor (InterQual, MCG); optional: UpToDate / DynaMed license; customer's data warehouse (Snowflake / Databricks / BigQuery / Iceberg).
-- **Regulatory + legal:** Windrose ships template Business Associate Agreement (BAA) and Data Processing Agreement (DPA); HITRUST CSF certification (Windrose Core, inherited); SOC 2 Type II (Windrose Core, inherited); pack-specific docs for CMS PA rule and NAIC bulletin filing (informational, not filing-service).
+- **Regulatory + legal:** Datacern ships template Business Associate Agreement (BAA) and Data Processing Agreement (DPA); HITRUST CSF certification (Datacern Core, inherited); SOC 2 Type II (Datacern Core, inherited); pack-specific docs for CMS PA rule and NAIC bulletin filing (informational, not filing-service).
 
 ## 9. NFRs (deltas from master)
 

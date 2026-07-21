@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	"github.com/windrose-ai/go-common/httpx"
+	"github.com/datacern-ai/go-common/httpx"
 )
 
 // RegGate tracks action-catalog registration state for /readyz gating

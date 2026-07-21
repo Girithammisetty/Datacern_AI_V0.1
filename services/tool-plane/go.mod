@@ -1,4 +1,4 @@
-module github.com/windrose-ai/tool-plane
+module github.com/datacern-ai/tool-plane
 
 go 1.26.5
 
@@ -12,7 +12,7 @@ require (
 	github.com/redis/go-redis/v9 v9.21.0
 	github.com/segmentio/kafka-go v0.4.51
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
-	github.com/windrose-ai/go-common v0.0.0
+	github.com/datacern-ai/go-common v0.0.0
 )
 
 require (
@@ -84,4 +84,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/windrose-ai/go-common => ../../libs/go-common
+replace github.com/datacern-ai/go-common => ../../libs/go-common

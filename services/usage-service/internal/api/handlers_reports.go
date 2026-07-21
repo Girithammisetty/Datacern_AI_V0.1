@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
-	"github.com/windrose-ai/usage-service/internal/store"
+	"github.com/datacern-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/store"
 )
 
 func parseDate(s string) (time.Time, bool) {

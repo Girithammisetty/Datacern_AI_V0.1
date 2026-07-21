@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/windrose-ai/chart-service/internal/authz"
-	"github.com/windrose-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/chart-service/internal/authz"
+	"github.com/datacern-ai/chart-service/internal/domain"
 )
 
 // traceMiddleware assigns a trace id and sets X-Trace-Id (MASTER-FR-028).

@@ -1,7 +1,7 @@
 [project]
 name = "eval-service"
 version = "0.1.0"
-description = "Windrose eval-service: agent quality flywheel — golden datasets, scorers, eval runs, CI gate, canary, SLOs"
+description = "Datacern eval-service: agent quality flywheel — golden datasets, scorers, eval runs, CI gate, canary, SLOs"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -18,11 +18,11 @@ dependencies = [
     "jsonschema>=4.22",
     "aiokafka>=0.11",
     "redis>=5.0",
-    "windrose-common",
+    "datacern-common",
 ]
 
 [tool.uv.sources]
-windrose-common = { path = "../../libs/py-common", editable = true }
+datacern-common = { path = "../../libs/py-common", editable = true }
 
 [dependency-groups]
 dev = [

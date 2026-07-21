@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// URN is a parsed Windrose resource name (MASTER-FR-013):
+// URN is a parsed Datacern resource name (MASTER-FR-013):
 // wr:<tenant_id>:<service>:<resource_type>/<resource_id>
 type URN struct {
 	TenantID     string

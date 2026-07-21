@@ -20,7 +20,7 @@ def _key(tenant_id: str) -> str:
 
 class RedisPendingQueue:
     def __init__(self, redis_url: str = "redis://localhost:6379/0"):
-        from windrose_common.redisx import build_redis
+        from datacern_common.redisx import build_redis
 
         self._redis = build_redis(redis_url)
 

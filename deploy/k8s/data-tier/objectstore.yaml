@@ -6,7 +6,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: minio
-  namespace: windrose
+  namespace: datacern
 spec:
   selector: { app: minio }
   ports:
@@ -17,7 +17,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: minio
-  namespace: windrose
+  namespace: datacern
 spec:
   serviceName: minio
   replicas: 1
@@ -32,8 +32,8 @@ spec:
           image: minio/minio:RELEASE.2025-04-08T15-41-24Z
           args: ["server", "/data", "--console-address", ":9001"]
           env:
-            - { name: MINIO_ROOT_USER, value: windrose }
-            - { name: MINIO_ROOT_PASSWORD, value: windrose_dev }
+            - { name: MINIO_ROOT_USER, value: datacern }
+            - { name: MINIO_ROOT_PASSWORD, value: datacern_dev }
           ports:
             - containerPort: 9000
             - containerPort: 9001
@@ -61,7 +61,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: minio-createbuckets
-  namespace: windrose
+  namespace: datacern
 spec:
   backoffLimit: 20
   template:
@@ -74,16 +74,16 @@ spec:
             - /bin/sh
             - -c
             - >
-              until mc alias set local http://minio:9000 windrose windrose_dev; do sleep 2; done &&
-              mc mb -p local/windrose-datasets local/windrose-warehouse local/windrose-profiles
-              local/windrose-uploads local/windrose-ml &&
+              until mc alias set local http://minio:9000 datacern datacern_dev; do sleep 2; done &&
+              mc mb -p local/datacern-datasets local/datacern-warehouse local/datacern-profiles
+              local/datacern-uploads local/datacern-ml &&
               echo 'buckets ready'
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: iceberg-rest
-  namespace: windrose
+  namespace: datacern
 spec:
   selector: { app: iceberg-rest }
   ports:
@@ -93,7 +93,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: iceberg-rest
-  namespace: windrose
+  namespace: datacern
 spec:
   serviceName: iceberg-rest
   replicas: 1
@@ -107,7 +107,7 @@ spec:
         - name: iceberg-rest
           image: apache/iceberg-rest-fixture:1.9.2
           env:
-            - { name: CATALOG_WAREHOUSE, value: "s3://windrose-warehouse/" }
+            - { name: CATALOG_WAREHOUSE, value: "s3://datacern-warehouse/" }
             - { name: CATALOG_IO__IMPL, value: org.apache.iceberg.aws.s3.S3FileIO }
             - { name: CATALOG_CATALOG__IMPL, value: org.apache.iceberg.jdbc.JdbcCatalog }
             - { name: CATALOG_URI, value: "jdbc:sqlite:/persist/iceberg_catalog.db" }
@@ -115,8 +115,8 @@ spec:
             - { name: CATALOG_S3_ENDPOINT, value: http://minio:9000 }
             - { name: CATALOG_S3_PATH__STYLE__ACCESS, value: "true" }
             - { name: AWS_REGION, value: us-east-1 }
-            - { name: AWS_ACCESS_KEY_ID, value: windrose }
-            - { name: AWS_SECRET_ACCESS_KEY, value: windrose_dev }
+            - { name: AWS_ACCESS_KEY_ID, value: datacern }
+            - { name: AWS_SECRET_ACCESS_KEY, value: datacern_dev }
           ports:
             - containerPort: 8181
           volumeMounts:

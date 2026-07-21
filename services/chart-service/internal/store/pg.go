@@ -19,9 +19,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/windrose-ai/chart-service/internal/domain"
-	"github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/go-common/outbox"
+	"github.com/datacern-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/go-common/outbox"
 )
 
 // PG is the Postgres-backed store.

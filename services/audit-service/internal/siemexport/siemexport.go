@@ -22,8 +22,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/audit-service/internal/domain"
-	gcevent "github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/audit-service/internal/domain"
+	gcevent "github.com/datacern-ai/go-common/event"
 )
 
 // Topic is the stable, versioned external SIEM-export Kafka topic. Additive
@@ -107,7 +107,7 @@ func exportEventID(sourceEventID uuid.UUID) uuid.UUID {
 }
 
 // Envelope wraps rec + its derived Event into the platform's standard
-// gcevent.Envelope (matching the convention every other Windrose service
+// gcevent.Envelope (matching the convention every other Datacern service
 // publishes with — MASTER-FR-031). tenant_id, actor, resource_urn,
 // occurred_at and trace_id are preserved at the envelope's top level so a
 // consumer gets accurate attribution without unpacking the payload.

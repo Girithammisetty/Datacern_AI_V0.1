@@ -13,7 +13,7 @@
     host: erp-ap.internal
     port: 5432
     database: ap_subledger
-    username: windrose_writeback
+    username: datacern_writeback
     ssl_mode: require
 - name: "Recovery credit-memo posting"
   connector_type: postgres
@@ -21,7 +21,7 @@
     host: erp-ap.internal
     port: 5432
     database: ap_subledger
-    username: windrose_writeback
+    username: datacern_writeback
     ssl_mode: require
 - name: "Vendor-portal invoice-disposition write-back"
   connector_type: http_api

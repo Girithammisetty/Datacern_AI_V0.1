@@ -1,6 +1,6 @@
 # BRD 43 — `underwriting-intake` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32/33). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending (Core-neutral via packctl); pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Commercial insurance underwriting submission intake and triage AI: clearance-first duplicate blocking (first-in broker holds the market), appetite-fit and completeness triage, broker needed-by deadline awareness with renewal-defense prioritization, E&S specialty referral on documented admitted-market declination, and declination hygiene with risk-based reasons. Sells to commercial P&C carriers, MGAs/MGUs, wholesale brokers, and E&S markets.
 
-**Why this vertical.** Commercial-lines intake desks drown in broker submissions where speed to first touch is a leading driver of quote-to-bind hit ratio, yet every decision is governed: clearance disputes are broker-relations landmines, declinations must carry documented risk-based reasons (some states require them for certain lines), E&S referral rests on a documented admitted-market declination, and AI-assisted underwriting now sits squarely under the NAIC AI model bulletin. Evidence-driven, deadline-clocked, human-approved triage is the exact governed decision shape of the Windrose Core, proven by BRD 24/30/32.
+**Why this vertical.** Commercial-lines intake desks drown in broker submissions where speed to first touch is a leading driver of quote-to-bind hit ratio, yet every decision is governed: clearance disputes are broker-relations landmines, declinations must carry documented risk-based reasons (some states require them for certain lines), E&S referral rests on a documented admitted-market declination, and AI-assisted underwriting now sits squarely under the NAIC AI model bulletin. Evidence-driven, deadline-clocked, human-approved triage is the exact governed decision shape of the Datacern Core, proven by BRD 24/30/32.
 
 **Business value.** Hit-ratio lift (deadline-ranked queues, renewal-defense expedite), underwriter capacity protection (only cleared, in-appetite, workable files get routed), declination-hygiene and fair-underwriting exam readiness (every decline carries stated reasons + provenance), broker-relationship protection (clearance conflicts resolved on received-order evidence), and cyber-controls discipline (no appetite call without the attestations).
 
@@ -100,7 +100,7 @@ Authored materialization: 3 datasets (submissions 26 / accounts 30 / insureds 12
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): agency-management/broker-portal credentials, clearance system of record, loss-run retrieval services, cat-model exposure feeds.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): agency-management/broker-portal credentials, clearance system of record, loss-run retrieval services, cat-model exposure feeds.
 
 ## 7. NFRs (deltas)
 

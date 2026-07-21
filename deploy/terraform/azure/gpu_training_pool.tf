@@ -20,7 +20,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "gpu_training" {
 
   # Only pods tolerating this taint (the SLM training Job) land on GPU nodes.
   node_taints = ["nvidia.com/gpu=present:NoSchedule"]
-  node_labels = { "windrose.ai/workload" = "slm-training" }
+  node_labels = { "datacern.ai/workload" = "slm-training" }
 
   tags = local.common_tags
 

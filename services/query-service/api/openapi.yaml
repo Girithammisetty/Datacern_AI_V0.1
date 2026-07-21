@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: query-service
   description: >
-    Windrose SQL execution broker (BRD 05): saved queries with typed
+    Datacern SQL execution broker (BRD 05): saved queries with typed
     variables and safe substitution, AST statement safety, engine routing
     (DuckDB/Trino/warehouse), dry-run + cost ceilings, streamed results,
     per-tenant concurrency governance, query history.

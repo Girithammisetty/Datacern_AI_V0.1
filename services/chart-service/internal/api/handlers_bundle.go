@@ -7,10 +7,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/chart-service/internal/authz"
-	"github.com/windrose-ai/chart-service/internal/domain"
-	"github.com/windrose-ai/chart-service/internal/events"
-	"github.com/windrose-ai/go-common/event"
+	"github.com/datacern-ai/chart-service/internal/authz"
+	"github.com/datacern-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/chart-service/internal/events"
+	"github.com/datacern-ai/go-common/event"
 )
 
 // bundle is the portable dashboard export shape (CHART-FR-005 / AC-14).

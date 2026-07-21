@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/domain"
 )
 
 // InsertRaw persists raw meter records idempotently (USG-FR-011). The unique

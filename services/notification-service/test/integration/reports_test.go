@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // TestAC15_ReportSubscriptionCRUDAndRLS proves the report_subscriptions
@@ -27,9 +27,9 @@ func TestAC15_ReportSubscriptionCRUDAndRLS(t *testing.T) {
 	weekday := 1
 	sub := &domain.ReportSubscription{
 		ID: domain.NewID(), TenantID: tenantA, WorkspaceID: workspaceID, DashboardID: dashboardID,
-		Name: "Weekly claims summary", Recipients: []string{"manager@demo.windrose"},
+		Name: "Weekly claims summary", Recipients: []string{"manager@demo.datacern"},
 		Cadence: domain.CadenceWeekly, SendHour: 8, SendWeekday: &weekday, Timezone: "UTC",
-		Format: domain.ReportFormatHTML, Enabled: true, CreatedBy: "manager@demo.windrose",
+		Format: domain.ReportFormatHTML, Enabled: true, CreatedBy: "manager@demo.datacern",
 	}
 	sub.CreatedAt = time.Now().UTC()
 	sub.UpdatedAt = sub.CreatedAt

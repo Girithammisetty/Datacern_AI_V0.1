@@ -43,7 +43,7 @@ audited.
     order: 2,
     related: ["admin-users-rbac", "admin-overview"],
     body: `
-Windrose's isolation model has three layers:
+Datacern's isolation model has three layers:
 
 - **Tenant** — the hard security wall. All data is row-level isolated by tenant;
   nothing crosses it.
@@ -168,7 +168,7 @@ provider, and each tenant's users authenticate against that tenant's IdP.
     order: 6,
     related: ["admin-observability", "admin-overview"],
     body: `
-Windrose is **bring-your-own-infra** friendly. Secrets, observability, and cloud
+Datacern is **bring-your-own-infra** friendly. Secrets, observability, and cloud
 targets are configuration, not code.
 
 ## Secrets backend
@@ -248,13 +248,13 @@ You govern the AI, not just the people. Two controls matter most.
   {
     slug: "admin-embedding",
     title: "Embedded UI (white-label)",
-    summary: "Embed a Windrose surface in your own app, per-user and per-tenant.",
+    summary: "Embed a Datacern surface in your own app, per-user and per-tenant.",
     area: "admin",
     audience: "admin",
     order: 9,
     related: ["admin-sso", "admin-overview"],
     body: `
-You can **embed** a Windrose surface (e.g. a dashboard) inside your own
+You can **embed** a Datacern surface (e.g. a dashboard) inside your own
 application, white-labeled and scoped to a tenant.
 
 ## Set it up

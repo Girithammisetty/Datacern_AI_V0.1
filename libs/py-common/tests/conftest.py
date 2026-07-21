@@ -1,4 +1,4 @@
-"""Integration fixtures for windrose-common.
+"""Integration fixtures for datacern-common.
 
 Every test hits a REAL local dependency from deploy/docker-compose.dev.yml. Each
 fixture pings its endpoint first and skips with a clear message when unreachable

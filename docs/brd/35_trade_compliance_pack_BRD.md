@@ -1,6 +1,6 @@
 # BRD 35 — `trade-compliance` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending; pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Customs and trade-compliance decisioning AI for the importer/broker side: HS classification review with GRI-ordered reasoning under the reasonable-care standard (19 USC 1484), denied-party screening adjudication (OFAC SDN, BIS Entity List, 50% rule), export/dual-use license-determination escalation, and origin/transshipment verification — with deadline-runway awareness on every open item. Sells to importers, customs brokers, freight forwarders, and in-house trade-compliance teams.
 
-**Why this vertical.** Every US entry carries strict legal duties the importer cannot delegate — reasonable care in classification/valuation/origin, five-year recordkeeping, and strict-liability-flavored sanctions exposure where releasing one shipment to a blocked party is a reportable violation. Volumes are high, screening false positives dominate analyst time, and each determination is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Windrose Core, and the alert-adjudication pattern is already proven by BRD 30 (banking-aml) and BRD 32 (card-disputes).
+**Why this vertical.** Every US entry carries strict legal duties the importer cannot delegate — reasonable care in classification/valuation/origin, five-year recordkeeping, and strict-liability-flavored sanctions exposure where releasing one shipment to a blocked party is a reportable violation. Volumes are high, screening false positives dominate analyst time, and each determination is documented, disputable, and evidence-driven — the exact governed human-in-the-loop decision shape of the Datacern Core, and the alert-adjudication pattern is already proven by BRD 30 (banking-aml) and BRD 32 (card-disputes).
 
 **Business value.** Screening-analyst throughput (evidence-first false-positive clearing), zero unresolved-match releases, duty-exposure reduction (tariff-engineering and misdeclared-origin catches with prior-disclosure timing preserved), penalty mitigation (documented reasonable care + prompt disclosure assessment), and audit-ready decision files (every disposition carries findings + provenance for a CBP focused assessment or OFAC program review).
 
@@ -100,7 +100,7 @@ Authored materialization: 3 datasets (review items 26 / shipments 30 / trading p
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): broker ABI/ACE feeds, TMS/ERP systems, denied-party list vendor credentials.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): broker ABI/ACE feeds, TMS/ERP systems, denied-party list vendor credentials.
 
 ## 7. NFRs (deltas)
 

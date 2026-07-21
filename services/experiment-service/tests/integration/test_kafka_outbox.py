@@ -16,7 +16,7 @@ pytestmark = pytest.mark.integration
 
 async def test_outbox_relay_to_real_kafka(engine):
     require_port(9092, "Redpanda/Kafka")
-    from windrose_common.kafka import KafkaProducerClient
+    from datacern_common.kafka import KafkaProducerClient
 
     from app.events.bus import InMemoryDedupStore
     from app.events.envelope import make_envelope
@@ -37,14 +37,14 @@ async def test_outbox_relay_to_real_kafka(engine):
         await uow.commit()
 
     # 2) the real Kafka producer + consumer round-trip via the relay
-    from windrose_common.kafka import KafkaConfig, KafkaConsumer
+    from datacern_common.kafka import KafkaConfig, KafkaConsumer
 
     producer = KafkaProducerClient(KafkaConfig(bootstrap_servers=KAFKA))
     await producer.start()
     dispatcher_producer = KafkaProducerClient(KafkaConfig(bootstrap_servers=KAFKA))
     await dispatcher_producer.start()
 
-    from windrose_common.kafka import KafkaEventBus
+    from datacern_common.kafka import KafkaEventBus
 
     bus = KafkaEventBus(dispatcher_producer)
     dispatcher = OutboxDispatcher(session_factory, bus)

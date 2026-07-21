@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/windrose-ai/realtime-hub/internal/authz"
-	"github.com/windrose-ai/realtime-hub/internal/fanout"
-	"github.com/windrose-ai/realtime-hub/internal/topics"
+	"github.com/datacern-ai/realtime-hub/internal/authz"
+	"github.com/datacern-ai/realtime-hub/internal/fanout"
+	"github.com/datacern-ai/realtime-hub/internal/topics"
 )
 
 // subscribeOne validates a topic's grammar (RTH-FR-003), authorizes it per-topic

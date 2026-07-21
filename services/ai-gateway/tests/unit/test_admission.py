@@ -11,7 +11,7 @@ from tests.conftest import (
 )
 
 STREAM_BODY = {
-    "model": "windrose-auto",
+    "model": "datacern-auto",
     "stream": True,
     "messages": [{"role": "user", "content": "hi"}],
 }
@@ -62,7 +62,7 @@ async def test_rpm_cap(clock):
     async with client:
         await seed_default_deployments(container)
         _, secret = await mint_key(container)
-        body = {"model": "windrose-auto",
+        body = {"model": "datacern-auto",
                 "messages": [{"role": "user", "content": "x"}]}
         for _ in range(2):
             assert (await client.post("/v1/chat/completions", json=body,
@@ -83,10 +83,10 @@ async def test_tpm_cap(clock):
     async with client:
         await seed_default_deployments(container)
         _, secret = await mint_key(container)
-        body = {"model": "windrose-auto",
+        body = {"model": "datacern-auto",
                 "messages": [{"role": "user", "content": "w" * 400}]}
         r = await client.post("/v1/chat/completions", json=body,
                               headers=dp_headers(secret))
         assert r.status_code == 429
         span = container.tracer.spans_named("chat")[-1]
-        assert span.attributes["windrose.rejected_stage"] == "admission"
+        assert span.attributes["datacern.rejected_stage"] == "admission"

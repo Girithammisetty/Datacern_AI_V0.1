@@ -1,7 +1,7 @@
 """Profile document generation (BRD §4.4, schema_version 1).
 
 This is the reference profiler implementation used by the in-process
-ProfilerRunner fake; the containerized `windrose/profiler` image ships the same
+ProfilerRunner fake; the containerized `datacern/profiler` image ships the same
 logic. Deterministic thresholds are pinned to profiler_version.
 """
 

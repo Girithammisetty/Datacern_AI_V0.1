@@ -2,7 +2,7 @@
 
 - External requests: RS256 JWT (alg=none impossible by construction).
 - Internal requests: SPIFFE identity header injected by the mesh sidecar after mTLS.
-- Authorization: real OPA (windrose_common) reading the Redis permissions projection;
+- Authorization: real OPA (datacern_common) reading the Redis permissions projection;
   a local scope check backs the unit/dev tier.
 """
 
@@ -126,18 +126,18 @@ class LocalScopeAuthz:
 
 
 class OpaAuthzClient:
-    """Real OPA authorization via windrose_common (MASTER-FR-012)."""
+    """Real OPA authorization via datacern_common (MASTER-FR-012)."""
 
     def __init__(self, opa_url="http://localhost:8281", *,
                  redis_url="redis://localhost:6379/0"):
-        from windrose_common.opaclient import OpaClient
-        from windrose_common.redisx import build_redis
+        from datacern_common.opaclient import OpaClient
+        from datacern_common.redisx import build_redis
 
         self._redis = build_redis(redis_url)
         self._client = OpaClient(opa_url)
 
     async def allow(self, principal: Principal, action: str, resource_urn):
-        from windrose_common.projection import load_projection
+        from datacern_common.projection import load_projection
 
         subject = {"id": principal.effective_user, "typ": principal.typ, "scopes": principal.scopes,
                    "obo_sub": principal.obo_sub or ""}

@@ -1,6 +1,6 @@
 # BRD 34 — `workers-comp-claims` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack #3 (post-BRD-24-31 wave). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending (Core-neutral via packctl); pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Workers' compensation claims adjudication AI for the payer side: FNOL triage with statutory compensability-clock awareness (state accept/deny decision windows), AOE/COE compensability grounding, SIU fraud red-flag escalation, medical bill review against state fee schedules, reserve adequacy and return-to-work tracking. Sells to WC carriers, third-party administrators (TPAs), and self-insured employers.
 
-**Why this vertical.** Workers' comp is state-law-driven with hard statutory decision deadlines (accept/deny windows commonly 14-30 days, penalties and waived defenses on lapse), heavy medical-cost leakage (fee-schedule variance, provider clusters), and a well-defined fraud typology (Monday-morning claims, post-layoff filings) — while every determination is a documented, disputable, evidence-driven human decision. That is exactly the governed human-in-the-loop decision shape of the Windrose Core, and the adjudication pattern is already proven by BRD 24 (insurance-claims-payer) and BRD 32 (card-disputes).
+**Why this vertical.** Workers' comp is state-law-driven with hard statutory decision deadlines (accept/deny windows commonly 14-30 days, penalties and waived defenses on lapse), heavy medical-cost leakage (fee-schedule variance, provider clusters), and a well-defined fraud typology (Monday-morning claims, post-layoff filings) — while every determination is a documented, disputable, evidence-driven human decision. That is exactly the governed human-in-the-loop decision shape of the Datacern Core, and the adjudication pattern is already proven by BRD 24 (insurance-claims-payer) and BRD 32 (card-disputes).
 
 **Business value.** Deadline-breach elimination (compensability clock watch), adjuster throughput (FNOL triage pre-routing), medical-spend control (fee-schedule variance + provider-cluster bill review), fraud loss reduction (SIU red-flag escalation with benefits-continue discipline), reserve adequacy (documented rationale, fast-riser flags), and audit-ready decision files (every denial carries its AOE/COE findings + provenance).
 
@@ -100,7 +100,7 @@ Materialization: 3 datasets (claims 26 / medical bills 30 / employers 12 — see
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): claims administration system of record, state EDI credentials, bill-review platform, ISO ClaimSearch.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): claims administration system of record, state EDI credentials, bill-review platform, ISO ClaimSearch.
 
 ## 7. NFRs (deltas)
 

@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/domain"
 )
 
 // buildChain constructs a valid chain of n records for (tenant, date).

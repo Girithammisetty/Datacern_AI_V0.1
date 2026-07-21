@@ -1,7 +1,7 @@
 # BRD 07 — chart-service (Go)
 
 **Date:** 2026-07-09 · **Status:** Approved for build · **Phase:** 2
-**Inherits:** `00_MASTER_BRD.md` (all MASTER-FR requirements apply). Architecture: `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6 (chart-service row), §5 (Viz domain).
+**Inherits:** `00_MASTER_BRD.md` (all MASTER-FR requirements apply). Architecture: `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6 (chart-service row), §5 (Viz domain).
 
 ---
 

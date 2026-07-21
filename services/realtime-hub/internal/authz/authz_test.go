@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/windrose-ai/realtime-hub/internal/topics"
+	"github.com/datacern-ai/realtime-hub/internal/topics"
 )
 
 // Static is a unit-test double: it allows every topic except those whose Raw

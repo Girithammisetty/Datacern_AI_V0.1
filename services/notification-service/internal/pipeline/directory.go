@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // UserInfo is the recipient contact info resolved for delivery.
@@ -25,7 +25,7 @@ type UserInfo struct {
 //   - a nil error with a NON-EMPTY UserInfo.Email means a resolved recipient.
 //   - a nil error with an EMPTY UserInfo.Email means a genuine directory miss
 //     ("no email on file"): the caller skips the email channel and counts it —
-//     it must NOT invent an address (a fabricated `<id>@windrose.local` silently
+//     it must NOT invent an address (a fabricated `<id>@datacern.local` silently
 //     mis-delivers or bounces).
 type UserDirectory interface {
 	Lookup(ctx context.Context, tenant, userID string) (UserInfo, error)

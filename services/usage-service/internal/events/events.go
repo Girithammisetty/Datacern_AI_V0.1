@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/domain"
 )
 
 // EmitTopic is usage-service's own event topic (MASTER-FR-030): budget,

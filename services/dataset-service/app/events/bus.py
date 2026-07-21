@@ -29,14 +29,14 @@ class InMemoryEventBus:
 
 
 class KafkaEventBus:
-    """Real Kafka (Redpanda) event bus via the shared ``windrose_common``
+    """Real Kafka (Redpanda) event bus via the shared ``datacern_common``
     idempotent producer; publishes the master envelope keyed by tenant_id
     (MASTER-FR-030/031). The outbox dispatcher drives it from committed rows.
     Runtime event bus."""
 
     def __init__(self, bootstrap_servers: str = "localhost:9092"):
-        from windrose_common.kafka import KafkaConfig, KafkaProducerClient
-        from windrose_common.kafka import KafkaEventBus as _Bus
+        from datacern_common.kafka import KafkaConfig, KafkaProducerClient
+        from datacern_common.kafka import KafkaEventBus as _Bus
 
         self._client = KafkaProducerClient(KafkaConfig(bootstrap_servers=bootstrap_servers))
         self._bus = _Bus(self._client)
@@ -70,13 +70,13 @@ class InMemoryDedupStore:
 
 class RedisDedupStore:
     """Real Redis consumer dedup (24h TTL, MASTER-FR-032) via the shared
-    ``windrose_common`` store. ``mark_processed`` runs after handler effects
+    ``datacern_common`` store. ``mark_processed`` runs after handler effects
     commit so redelivery re-runs on a mid-handler failure (the handler is
     idempotent — exactly-once effect). Runtime dedup store."""
 
     def __init__(self, redis_url: str = "redis://localhost:6379/0"):
-        from windrose_common.redisx import RedisDedupStore as _Dedup
-        from windrose_common.redisx import build_redis
+        from datacern_common.redisx import RedisDedupStore as _Dedup
+        from datacern_common.redisx import build_redis
 
         self._redis = build_redis(redis_url)
         self._store = _Dedup(self._redis)

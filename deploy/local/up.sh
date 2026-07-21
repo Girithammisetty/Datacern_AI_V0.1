@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Windrose `make up` — provision the WHOLE platform locally and open it in a
+# datacern `make up` — provision the WHOLE platform locally and open it in a
 # browser for hands-on end-user testing.
 #
 #   Preflight (docker+ollama+ports) -> infra up & healthy -> per-service DBs ->
@@ -30,7 +30,7 @@ for a in "$@"; do case "$a" in
   --core) CORE=1;;
   --skip-build) SKIP_BUILD=1;;
   --skip-seed) SKIP_SEED=1;;
-  --no-retrain) export WINDROSE_SEED_RETRAIN=0;;
+  --no-retrain) export DATACERN_SEED_RETRAIN=0;;
   --platform-only) PLATFORM_ONLY=1;;
 esac; done
 
@@ -63,7 +63,7 @@ wait_ready() { local name="$1" base="$2" i code
   done
   warn "$name did not become ready; tail log:"; tail -20 "$LOG_DIR/${name}.log" 2>/dev/null; return 1; }
 
-psql_q() { PGPASSWORD=windrose_dev psql -h localhost -U windrose "$@"; }
+psql_q() { PGPASSWORD=datacern_dev psql -h localhost -U datacern "$@"; }
 
 build_go() { # dir binname subpath
   [ "$SKIP_BUILD" = 1 ] && [ -x "$BIN_DIR/$2" ] && { ok "reuse $2"; return; }
@@ -79,7 +79,7 @@ boot() { local name="$1"; shift
   track_pid "$pid"; echo "$pid" > "$PID_DIR/${name}.pid"; }
 
 kill_stale() {
-  say "freeing ports / killing any stale windrose processes"
+  say "freeing ports / killing any stale datacern processes"
   if [ -f "$PID_DIR/all.pids" ]; then
     while read -r p; do [ -n "$p" ] && kill "$p" 2>/dev/null; done < "$PID_DIR/all.pids"
   fi
@@ -139,9 +139,9 @@ ok "infra reachable"
 # admin-cli password grant works over the local HTTP gateway; otherwise tenant
 # provisioning fails at CreateKeycloakRealm with "HTTPS required" (dev-only).
 for i in $(seq 1 40); do curl -s -m2 -o /dev/null http://localhost:8180/realms/master && break; sleep 2; done
-if docker exec windrose-dev-keycloak-1 /opt/keycloak/bin/kcadm.sh config credentials \
+if docker exec datacern-dev-keycloak-1 /opt/keycloak/bin/kcadm.sh config credentials \
      --server http://localhost:8080 --realm master --user admin --password admin >/dev/null 2>&1; then
-  docker exec windrose-dev-keycloak-1 /opt/keycloak/bin/kcadm.sh update realms/master \
+  docker exec datacern-dev-keycloak-1 /opt/keycloak/bin/kcadm.sh update realms/master \
      -s sslRequired=NONE >/dev/null 2>&1 && ok "keycloak master-realm sslRequired=NONE (dev)" \
      || warn "keycloak sslRequired update failed (real-IdP invites may 403)"
 else
@@ -167,8 +167,8 @@ say "${BLD}PHASE 1b${NC}  harness IdP: JWKS server (RS256, real JWKS every servi
 pkill -f 'http.server 8300' 2>/dev/null; sleep 0.3
 python3 "$SPAWN" "$LOG_DIR/jwks.log" bash -c "cd '$E2E/jwks' && exec '$PY' -m http.server '$WR_JWKS_PORT' --bind 127.0.0.1" &
 disown $! 2>/dev/null || true; track_pid $!
-wait_http "$WR_JWKS_URL" 10 || die "JWKS server did not start"
-ok "JWKS serving harness public key at $WR_JWKS_URL"
+wait_http "http://127.0.0.1:${WR_JWKS_PORT}/jwks.json" 10 || die "JWKS server did not start"
+ok "harness JWKS file server up on :${WR_JWKS_PORT} (services verify real tokens against identity's own JWKS at \$WR_JWKS_URL once it boots)"
 
 # ============================================================ PHASE 2 services
 # Reuse the e2e harness boot functions verbatim (money-path + retrain tail),
@@ -262,7 +262,7 @@ start_ui() {
     AUTH_MODE=dev \
     JWT_ISSUER="$WR_ISS" JWT_AUDIENCE="$WR_AUD" \
     DEV_JWT_PRIVATE_JWK="$privjwk" DEV_JWT_PUBLIC_JWK="$pubjwk" \
-    WINDROSE_PERSONAS="$personas" \
+    DATACERN_PERSONAS="$personas" \
     BFF_URL="${BFF_URL}/graphql" \
     REALTIME_HUB_URL="$REALTIME_URL" NEXT_PUBLIC_REALTIME_HUB_URL="$REALTIME_URL" \
     AGENT_RUNTIME_URL="$AGENT_RUNTIME_URL" \
@@ -300,17 +300,17 @@ RAM_MB=$(ps -Ao rss,command | grep -E 'e2e/run/bin/|uvicorn app.main|next-server
          | grep -v grep | awk '{s+=$1} END{printf "%d", s/1024}')
 echo
 echo "${GRN}${BLD}========================================================================${NC}"
-echo "${GRN}${BLD}  Windrose is UP — open it in your browser${NC}"
+echo "${GRN}${BLD}  datacern is UP — open it in your browser${NC}"
 echo "${GRN}${BLD}========================================================================${NC}"
 echo
 echo "  ${BLD}UI${NC}            ${BLU}$UI_URL${NC}"
 echo "  ${BLD}GraphQL BFF${NC}   $BFF_URL/graphql"
 echo
 echo "  ${BLD}Log in as any persona (password: ${GRN}demo${NC}${BLD}):${NC}"
-echo "     adjuster@demo.windrose       — triage the claims queue, approve a proposal"
-echo "     manager@demo.windrose        — oversee cases + dashboards"
-echo "     datascientist@demo.windrose  — datasets, experiments, promoted model"
-echo "     admin@demo.windrose          — everything"
+echo "     adjuster@demo.datacern       — triage the claims queue, approve a proposal"
+echo "     manager@demo.datacern        — oversee cases + dashboards"
+echo "     datascientist@demo.datacern  — datasets, experiments, promoted model"
+echo "     admin@demo.datacern          — everything"
 echo
 if [ "$PLATFORM_ONLY" = 0 ]; then
   echo "  ${BLD}What to try:${NC}"
@@ -319,14 +319,14 @@ if [ "$PLATFORM_ONLY" = 0 ]; then
   echo "     -> the correction feeds the learning loop (retrain -> promoted model)"
 else
   echo "  ${BLD}Platform-only boot${NC} — no vertical demo data seeded (--platform-only)."
-  echo "     Log in as admin@demo.windrose and use Data > Upload + the semantic-model"
+  echo "     Log in as admin@demo.datacern and use Data > Upload + the semantic-model"
   echo "     and chart builders to onboard a use case by hand."
 fi
 echo
 echo "  ${BLD}For the curious (infra consoles):${NC}"
 echo "     Temporal UI   http://localhost:8233"
 echo "     MLflow        $MLFLOW_URL"
-echo "     MinIO console http://localhost:9001   (windrose / windrose_dev)"
+echo "     MinIO console http://localhost:9001   (datacern / datacern_dev)"
 echo "     Keycloak      http://localhost:8180"
 echo
 if [ "${#SKIPPED[@]}" -gt 0 ]; then

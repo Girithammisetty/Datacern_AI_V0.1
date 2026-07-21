@@ -69,7 +69,7 @@ type Checker interface {
 // OPAClient calls a local OPA sidecar's data API (real integration).
 type OPAClient struct {
 	BaseURL string // e.g. http://localhost:8281
-	Path    string // data document (default windrose/tool_plane/decision)
+	Path    string // data document (default datacern/tool_plane/decision)
 	client  *http.Client
 }
 
@@ -77,7 +77,7 @@ type OPAClient struct {
 func NewOPAClient(baseURL string) *OPAClient {
 	return &OPAClient{
 		BaseURL: baseURL,
-		Path:    "windrose/tool_plane/decision",
+		Path:    "datacern/tool_plane/decision",
 		client:  &http.Client{Timeout: 3 * time.Second},
 	}
 }

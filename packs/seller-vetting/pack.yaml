@@ -1,14 +1,14 @@
 # seller-vetting capability pack — Core-neutral edition: marketplace seller
 # vetting and counterfeit/IP-enforcement adjudication for e-commerce
 # marketplaces, app stores, resale platforms, and B2B marketplaces.
-# Installable TODAY against Windrose Core's public APIs via packctl; the
+# Installable TODAY against Datacern Core's public APIs via packctl; the
 # manifest envelope follows BRD 23 (PKG-FR-001/003). Components the current
 # Core cannot materialize are declared under `deferred` — recorded in the
 # install ledger, never faked.
 pack_manifest: 1
 name: seller-vetting
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted marketplace seller vetting and counterfeit/IP-enforcement
   workflow: onboarding KYB verification with INFORM Consumers Act / EU DSA

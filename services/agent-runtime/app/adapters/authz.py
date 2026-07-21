@@ -1,11 +1,11 @@
 """OPA authorization adapter (ART-FR-044, AC-12): real OPA sidecar via the shared
-windrose_common client. Approver eligibility = the decision actor must hold the
+datacern_common client. Approver eligibility = the decision actor must hold the
 underlying action's permission on every affected URN."""
 
 from __future__ import annotations
 
-from windrose_common.opaclient import OpaClient
-from windrose_common.redisx import RedisProjection, build_redis
+from datacern_common.opaclient import OpaClient
+from datacern_common.redisx import RedisProjection, build_redis
 
 
 class OpaAuthz:

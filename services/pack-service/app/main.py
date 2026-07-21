@@ -48,8 +48,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Observability: RED metrics + tracing (env-gated, no-op unless enabled).
     try:
-        from windrose_common.metricsx import RedMiddleware, instrument_app
-        from windrose_common.otelx import configure_tracing
+        from datacern_common.metricsx import RedMiddleware, instrument_app
+        from datacern_common.otelx import configure_tracing
 
         configure_tracing("pack-service")
         app.add_middleware(AuthMiddleware)

@@ -52,7 +52,7 @@ make test-race         # -race on the enforcement pipeline
 | OLTP + tenant isolation | PostgreSQL + **RLS** (non-superuser role in tests) | `internal/store` (pgx), `migrations/000002_rls` |
 | Semantic embeddings | **Ollama `nomic-embed-text`** (768-dim), real `/v1/embeddings` | `internal/embed/ollama.go` |
 | Vector search | **pgvector** ivfflat cosine | `store/catalog.go` `SearchByEmbedding` |
-| Authorization | **OPA sidecar** (`windrose/tool_plane/decision`) | `internal/authz/opa.go`, `policy/tool_plane.rego` |
+| Authorization | **OPA sidecar** (`datacern/tool_plane/decision`) | `internal/authz/opa.go`, `policy/tool_plane.rego` |
 | Rate limiting | **Redis** atomic token bucket (Lua) | `internal/enforce/ratelimit.go` |
 | Kill switch | **Redis** set + pub/sub fan-out, Postgres-durable | `internal/enforce/killswitch.go` |
 | OBO grant intersection | **Redis** rbac `permissions_flat` projection | `internal/enforce/grants.go` |

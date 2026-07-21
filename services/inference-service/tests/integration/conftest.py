@@ -24,7 +24,7 @@ APP_PASSWORD = "rt-secret"
 
 MLFLOW_URI = "http://localhost:5500"
 S3_ENDPOINT = "http://localhost:9000"
-DATASETS_BUCKET = "windrose-datasets"
+DATASETS_BUCKET = "datacern-datasets"
 
 TABLES = [
     "inference_jobs", "scoring_schedules", "job_queue", "input_datasets",
@@ -120,7 +120,7 @@ async def real_container(engine, real_settings):
 
 
 def _s3():
-    from windrose_common.objectstore import S3Config, build_s3_client
+    from datacern_common.objectstore import S3Config, build_s3_client
 
     return build_s3_client(S3Config.for_minio(DATASETS_BUCKET, endpoint_url=S3_ENDPOINT))
 
@@ -129,8 +129,8 @@ def register_real_model(name: str) -> int:
     """Train a tiny real sklearn model, log it to the running MLflow server with a
     signature, register it and promote it to Production. Returns the version."""
     os.environ["MLFLOW_S3_ENDPOINT_URL"] = S3_ENDPOINT
-    os.environ["AWS_ACCESS_KEY_ID"] = "windrose"
-    os.environ["AWS_SECRET_ACCESS_KEY"] = "windrose_dev"
+    os.environ["AWS_ACCESS_KEY_ID"] = "datacern"
+    os.environ["AWS_SECRET_ACCESS_KEY"] = "datacern_dev"
 
     import mlflow
     import mlflow.sklearn

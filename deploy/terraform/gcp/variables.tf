@@ -1,4 +1,4 @@
-# variables.tf — every knob for the Windrose GCP stack.
+# variables.tf — every knob for the Datacern GCP stack.
 #
 # Anything credential-shaped defaults to empty and is filled in LATER via
 # terraform.tfvars / TF_VAR_* / CI. Nothing sensitive is hardcoded.
@@ -21,7 +21,7 @@ variable "region" {
 variable "name_prefix" {
   description = "Prefix for all resource names and the Secret Manager secret. Keep short (<= 20 chars), lowercase, RFC1035."
   type        = string
-  default     = "windrose"
+  default     = "datacern"
 
   validation {
     condition     = can(regex("^[a-z][a-z0-9-]{1,19}$", var.name_prefix))
@@ -173,7 +173,7 @@ variable "cloudsql_deletion_protection" {
 variable "postgres_admin_user" {
   description = "Admin/DDL role name written to POSTGRES_ADMIN_USER. Migrations use this to create per-service roles."
   type        = string
-  default     = "windrose_admin"
+  default     = "datacern_admin"
 }
 
 variable "databases" {
@@ -254,7 +254,7 @@ variable "kafka_memory_bytes" {
 variable "pubsub_topics" {
   description = "Topic names created when kafka_backend = 'pubsub'."
   type        = list(string)
-  default     = ["windrose-events", "windrose-dlq"]
+  default     = ["datacern-events", "datacern-dlq"]
 }
 
 ########################################
@@ -286,7 +286,7 @@ variable "create_registry" {
 variable "registry_repo_id" {
   description = "Artifact Registry repository ID (docker format)."
   type        = string
-  default     = "windrose"
+  default     = "datacern"
 }
 
 ########################################
@@ -294,9 +294,9 @@ variable "registry_repo_id" {
 ########################################
 
 variable "k8s_namespace" {
-  description = "Namespace the Helm chart deploys Windrose services into."
+  description = "Namespace the Helm chart deploys Datacern services into."
   type        = string
-  default     = "windrose"
+  default     = "datacern"
 }
 
 variable "external_secrets_namespace" {
@@ -328,14 +328,14 @@ variable "gcs_workload_ksas" {
 # Secrets payload (filled in LATER)
 ########################################
 
-# The full set of keys expected in the cluster Secret `windrose-secrets`
+# The full set of keys expected in the cluster Secret `datacern-secrets`
 # (see deploy/CONFIG.md). Infra-derived keys (POSTGRES_HOST, REDIS_URL,
 # KAFKA_BOOTSTRAP, OBJECTSTORE_*, POSTGRES_ADMIN_*) are injected automatically
 # by secretmanager.tf and DO NOT need to be provided here. Everything else
 # (JWT keys, Keycloak/SMTP/LLM/ClickHouse/Vault creds, per-DB app passwords)
 # is supplied here later. Anything you set here overrides the derived value.
 variable "secrets" {
-  description = "Extra key/value pairs merged into the windrose-secrets payload. Fill in LATER; defaults empty so nothing is committed."
+  description = "Extra key/value pairs merged into the datacern-secrets payload. Fill in LATER; defaults empty so nothing is committed."
   type        = map(string)
   default     = {}
   sensitive   = true

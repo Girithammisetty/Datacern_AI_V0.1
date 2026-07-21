@@ -97,7 +97,7 @@ async def test_session_hook_requires_spiffe(client):
 
 
 async def test_session_hook_idempotent_204(client):
-    headers = {"x-client-spiffe-id": "spiffe://windrose/ns/ai/sa/agent-runtime"}
+    headers = {"x-client-spiffe-id": "spiffe://datacern/ns/ai/sa/agent-runtime"}
     r1 = await client.delete(
         f"/internal/v1/sessions/sess-1/memory?tenant={TENANT_A}", headers=headers)
     assert r1.status_code == 204

@@ -1,7 +1,7 @@
 {
   "wr-payer": {
     "tenant_name": "wr-payer",
-    "display": "Windrose Payer Claims Co",
+    "display": "Datacern Payer Claims Co",
     "short": "payer",
     "tenant_id": "019f6460-7827-7724-8d90-db30d401436d",
     "workspace": "019f6460-7c59-7979-8097-04b58e68a9fb",
@@ -10,7 +10,7 @@
     ],
     "users": [
       {
-        "email": "pa-nurse-reviewer@payer.windrose",
+        "email": "pa-nurse-reviewer@payer.datacern",
         "sub": "user-pa-nurse-reviewer-payer",
         "role": "PA Nurse Reviewer",
         "scopes": [
@@ -37,7 +37,7 @@
         ]
       },
       {
-        "email": "medical-director@payer.windrose",
+        "email": "medical-director@payer.datacern",
         "sub": "user-medical-director-payer",
         "role": "Medical Director",
         "scopes": [
@@ -70,7 +70,7 @@
         ]
       },
       {
-        "email": "appeals-analyst@payer.windrose",
+        "email": "appeals-analyst@payer.datacern",
         "sub": "user-appeals-analyst-payer",
         "role": "Appeals Analyst",
         "scopes": [
@@ -99,7 +99,7 @@
         ]
       },
       {
-        "email": "payment-integrity-analyst@payer.windrose",
+        "email": "payment-integrity-analyst@payer.datacern",
         "sub": "user-payment-integrity-analyst-payer",
         "role": "Payment Integrity Analyst",
         "scopes": [
@@ -131,7 +131,7 @@
         ]
       },
       {
-        "email": "compliance-officer@payer.windrose",
+        "email": "compliance-officer@payer.datacern",
         "sub": "user-compliance-officer-payer",
         "role": "Compliance Officer",
         "scopes": [
@@ -153,7 +153,7 @@
         ]
       },
       {
-        "email": "member-services@payer.windrose",
+        "email": "member-services@payer.datacern",
         "sub": "user-member-services-payer",
         "role": "Member Services",
         "scopes": [
@@ -172,7 +172,7 @@
   },
   "wr-caremgmt": {
     "tenant_name": "wr-caremgmt",
-    "display": "Windrose Care Management",
+    "display": "Datacern Care Management",
     "short": "caremgmt",
     "tenant_id": "019f6461-9373-7f2a-a671-65e33d71affa",
     "workspace": "019f6461-97a8-73b1-9dd4-2f8ac484d19d",
@@ -181,7 +181,7 @@
     ],
     "users": [
       {
-        "email": "care-manager-rn@caremgmt.windrose",
+        "email": "care-manager-rn@caremgmt.datacern",
         "sub": "user-care-manager-rn-caremgmt",
         "role": "Care Manager RN",
         "scopes": [
@@ -210,7 +210,7 @@
         ]
       },
       {
-        "email": "care-manager-lpn@caremgmt.windrose",
+        "email": "care-manager-lpn@caremgmt.datacern",
         "sub": "user-care-manager-lpn-caremgmt",
         "role": "Care Manager LPN",
         "scopes": [
@@ -236,7 +236,7 @@
         ]
       },
       {
-        "email": "clinician-md-reviewer@caremgmt.windrose",
+        "email": "clinician-md-reviewer@caremgmt.datacern",
         "sub": "user-clinician-md-reviewer-caremgmt",
         "role": "Clinician MD Reviewer",
         "scopes": [
@@ -269,7 +269,7 @@
         ]
       },
       {
-        "email": "director-of-care-coordination@caremgmt.windrose",
+        "email": "director-of-care-coordination@caremgmt.datacern",
         "sub": "user-director-of-care-coordination-caremgmt",
         "role": "Director of Care Coordination",
         "scopes": [
@@ -330,7 +330,7 @@
         ]
       },
       {
-        "email": "practice-cfo@caremgmt.windrose",
+        "email": "practice-cfo@caremgmt.datacern",
         "sub": "user-practice-cfo-caremgmt",
         "role": "Practice CFO",
         "scopes": [
@@ -369,7 +369,7 @@
         ]
       },
       {
-        "email": "compliance-officer@caremgmt.windrose",
+        "email": "compliance-officer@caremgmt.datacern",
         "sub": "user-compliance-officer-caremgmt",
         "role": "Compliance Officer",
         "scopes": [
@@ -396,7 +396,7 @@
   },
   "wr-rcm": {
     "tenant_name": "wr-rcm",
-    "display": "Windrose Provider RCM",
+    "display": "Datacern Provider RCM",
     "short": "rcm",
     "tenant_id": "019f6461-bb9c-779d-b209-36c68926d6d2",
     "workspace": "019f6461-bfd8-7bcb-8905-2086370efe10",
@@ -405,7 +405,7 @@
     ],
     "users": [
       {
-        "email": "biller@rcm.windrose",
+        "email": "biller@rcm.datacern",
         "sub": "user-biller-rcm",
         "role": "Biller",
         "scopes": [
@@ -432,7 +432,7 @@
         ]
       },
       {
-        "email": "medical-coder@rcm.windrose",
+        "email": "medical-coder@rcm.datacern",
         "sub": "user-medical-coder-rcm",
         "role": "Medical Coder",
         "scopes": [
@@ -457,7 +457,7 @@
         ]
       },
       {
-        "email": "denials-specialist@rcm.windrose",
+        "email": "denials-specialist@rcm.datacern",
         "sub": "user-denials-specialist-rcm",
         "role": "Denials Specialist",
         "scopes": [
@@ -488,7 +488,7 @@
         ]
       },
       {
-        "email": "a-r-manager@rcm.windrose",
+        "email": "a-r-manager@rcm.datacern",
         "sub": "user-a-r-manager-rcm",
         "role": "A/R Manager",
         "scopes": [
@@ -533,7 +533,7 @@
         ]
       },
       {
-        "email": "revenue-integrity-analyst@rcm.windrose",
+        "email": "revenue-integrity-analyst@rcm.datacern",
         "sub": "user-revenue-integrity-analyst-rcm",
         "role": "Revenue Integrity Analyst",
         "scopes": [
@@ -581,7 +581,7 @@
         ]
       },
       {
-        "email": "revenue-cycle-director@rcm.windrose",
+        "email": "revenue-cycle-director@rcm.datacern",
         "sub": "user-revenue-cycle-director-rcm",
         "role": "Revenue Cycle Director",
         "scopes": [
@@ -620,7 +620,7 @@
   },
   "wr-fwa": {
     "tenant_name": "wr-fwa",
-    "display": "Windrose Payer FWA-SIU",
+    "display": "Datacern Payer FWA-SIU",
     "short": "fwa",
     "tenant_id": "019f6461-e3f8-75c4-b773-9123836c8033",
     "workspace": "019f6461-e821-7cd9-ac57-d34ea4b8751d",
@@ -630,7 +630,7 @@
     ],
     "users": [
       {
-        "email": "investigator@fwa.windrose",
+        "email": "investigator@fwa.datacern",
         "sub": "user-investigator-fwa",
         "role": "Investigator",
         "scopes": [
@@ -658,7 +658,7 @@
         ]
       },
       {
-        "email": "investigation-supervisor@fwa.windrose",
+        "email": "investigation-supervisor@fwa.datacern",
         "sub": "user-investigation-supervisor-fwa",
         "role": "Investigation Supervisor",
         "scopes": [
@@ -695,7 +695,7 @@
         ]
       },
       {
-        "email": "evidence-custodian@fwa.windrose",
+        "email": "evidence-custodian@fwa.datacern",
         "sub": "user-evidence-custodian-fwa",
         "role": "Evidence Custodian",
         "scopes": [
@@ -714,7 +714,7 @@
         ]
       },
       {
-        "email": "investigation-quality-reviewer@fwa.windrose",
+        "email": "investigation-quality-reviewer@fwa.datacern",
         "sub": "user-investigation-quality-reviewer-fwa",
         "role": "Investigation Quality Reviewer",
         "scopes": [
@@ -737,7 +737,7 @@
         ]
       },
       {
-        "email": "siu-investigator@fwa.windrose",
+        "email": "siu-investigator@fwa.datacern",
         "sub": "user-siu-investigator-fwa",
         "role": "SIU Investigator",
         "scopes": [
@@ -771,7 +771,7 @@
         ]
       },
       {
-        "email": "siu-supervisor@fwa.windrose",
+        "email": "siu-supervisor@fwa.datacern",
         "sub": "user-siu-supervisor-fwa",
         "role": "SIU Supervisor",
         "scopes": [
@@ -817,7 +817,7 @@
         ]
       },
       {
-        "email": "siu-director@fwa.windrose",
+        "email": "siu-director@fwa.datacern",
         "sub": "user-siu-director-fwa",
         "role": "SIU Director",
         "scopes": [
@@ -854,7 +854,7 @@
         ]
       },
       {
-        "email": "payment-integrity-analyst@fwa.windrose",
+        "email": "payment-integrity-analyst@fwa.datacern",
         "sub": "user-payment-integrity-analyst-fwa",
         "role": "Payment Integrity Analyst",
         "scopes": [
@@ -906,7 +906,7 @@
         ]
       },
       {
-        "email": "compliance-auditor@fwa.windrose",
+        "email": "compliance-auditor@fwa.datacern",
         "sub": "user-compliance-auditor-fwa",
         "role": "Compliance Auditor",
         "scopes": [
@@ -942,7 +942,7 @@
   },
   "wr-pbm": {
     "tenant_name": "wr-pbm",
-    "display": "Windrose Pharmacy Benefits",
+    "display": "Datacern Pharmacy Benefits",
     "short": "pbm",
     "tenant_id": "019f6462-14dc-7249-8e1f-faa5e562b126",
     "workspace": "019f6462-1925-7d0f-8046-a3694911b658",
@@ -951,7 +951,7 @@
     ],
     "users": [
       {
-        "email": "pa-pharmacist@pbm.windrose",
+        "email": "pa-pharmacist@pbm.datacern",
         "sub": "user-pa-pharmacist-pbm",
         "role": "PA Pharmacist",
         "scopes": [
@@ -978,7 +978,7 @@
         ]
       },
       {
-        "email": "formulary-manager@pbm.windrose",
+        "email": "formulary-manager@pbm.datacern",
         "sub": "user-formulary-manager-pbm",
         "role": "Formulary Manager",
         "scopes": [
@@ -1011,7 +1011,7 @@
         ]
       },
       {
-        "email": "rebate-analyst@pbm.windrose",
+        "email": "rebate-analyst@pbm.datacern",
         "sub": "user-rebate-analyst-pbm",
         "role": "Rebate Analyst",
         "scopes": [
@@ -1040,7 +1040,7 @@
         ]
       },
       {
-        "email": "clinical-director@pbm.windrose",
+        "email": "clinical-director@pbm.datacern",
         "sub": "user-clinical-director-pbm",
         "role": "Clinical Director",
         "scopes": [
@@ -1079,7 +1079,7 @@
         ]
       },
       {
-        "email": "pbm-compliance-officer@pbm.windrose",
+        "email": "pbm-compliance-officer@pbm.datacern",
         "sub": "user-pbm-compliance-officer-pbm",
         "role": "PBM Compliance Officer",
         "scopes": [
@@ -1104,7 +1104,7 @@
   },
   "wr-pac": {
     "tenant_name": "wr-pac",
-    "display": "Windrose Post-Acute Care",
+    "display": "Datacern Post-Acute Care",
     "short": "pac",
     "tenant_id": "019f6462-43af-7c19-83f8-feb3d4eee63e",
     "workspace": "019f6462-47e5-79db-b828-8871ff03bcb0",
@@ -1113,7 +1113,7 @@
     ],
     "users": [
       {
-        "email": "hha-clinical-nurse@pac.windrose",
+        "email": "hha-clinical-nurse@pac.datacern",
         "sub": "user-hha-clinical-nurse-pac",
         "role": "HHA Clinical Nurse",
         "scopes": [
@@ -1140,7 +1140,7 @@
         ]
       },
       {
-        "email": "snf-mds-coordinator@pac.windrose",
+        "email": "snf-mds-coordinator@pac.datacern",
         "sub": "user-snf-mds-coordinator-pac",
         "role": "SNF MDS Coordinator",
         "scopes": [
@@ -1168,7 +1168,7 @@
         ]
       },
       {
-        "email": "intake-coordinator@pac.windrose",
+        "email": "intake-coordinator@pac.datacern",
         "sub": "user-intake-coordinator-pac",
         "role": "Intake Coordinator",
         "scopes": [
@@ -1197,7 +1197,7 @@
         ]
       },
       {
-        "email": "post-acute-care-manager@pac.windrose",
+        "email": "post-acute-care-manager@pac.datacern",
         "sub": "user-post-acute-care-manager-pac",
         "role": "Post-Acute Care Manager",
         "scopes": [
@@ -1249,7 +1249,7 @@
         ]
       },
       {
-        "email": "pac-compliance-officer@pac.windrose",
+        "email": "pac-compliance-officer@pac.datacern",
         "sub": "user-pac-compliance-officer-pac",
         "role": "PAC Compliance Officer",
         "scopes": [
@@ -1277,7 +1277,7 @@
   },
   "wr-aml": {
     "tenant_name": "wr-aml",
-    "display": "Windrose Banking AML",
+    "display": "Datacern Banking AML",
     "short": "aml",
     "tenant_id": "019f6462-6b63-7a87-a307-5fda2e2e2ac1",
     "workspace": "019f6462-7388-7b52-a1bd-882b060c29cd",
@@ -1287,7 +1287,7 @@
     ],
     "users": [
       {
-        "email": "investigator@aml.windrose",
+        "email": "investigator@aml.datacern",
         "sub": "user-investigator-aml",
         "role": "Investigator",
         "scopes": [
@@ -1315,7 +1315,7 @@
         ]
       },
       {
-        "email": "investigation-supervisor@aml.windrose",
+        "email": "investigation-supervisor@aml.datacern",
         "sub": "user-investigation-supervisor-aml",
         "role": "Investigation Supervisor",
         "scopes": [
@@ -1352,7 +1352,7 @@
         ]
       },
       {
-        "email": "evidence-custodian@aml.windrose",
+        "email": "evidence-custodian@aml.datacern",
         "sub": "user-evidence-custodian-aml",
         "role": "Evidence Custodian",
         "scopes": [
@@ -1371,7 +1371,7 @@
         ]
       },
       {
-        "email": "investigation-quality-reviewer@aml.windrose",
+        "email": "investigation-quality-reviewer@aml.datacern",
         "sub": "user-investigation-quality-reviewer-aml",
         "role": "Investigation Quality Reviewer",
         "scopes": [
@@ -1394,7 +1394,7 @@
         ]
       },
       {
-        "email": "aml-analyst-l1@aml.windrose",
+        "email": "aml-analyst-l1@aml.datacern",
         "sub": "user-aml-analyst-l1-aml",
         "role": "AML Analyst L1",
         "scopes": [
@@ -1424,7 +1424,7 @@
         ]
       },
       {
-        "email": "aml-investigator-l2@aml.windrose",
+        "email": "aml-investigator-l2@aml.datacern",
         "sub": "user-aml-investigator-l2-aml",
         "role": "AML Investigator L2",
         "scopes": [
@@ -1467,7 +1467,7 @@
         ]
       },
       {
-        "email": "mlro@aml.windrose",
+        "email": "mlro@aml.datacern",
         "sub": "user-mlro-aml",
         "role": "MLRO",
         "scopes": [
@@ -1512,7 +1512,7 @@
         ]
       },
       {
-        "email": "sanctions-analyst@aml.windrose",
+        "email": "sanctions-analyst@aml.datacern",
         "sub": "user-sanctions-analyst-aml",
         "role": "Sanctions Analyst",
         "scopes": [
@@ -1546,7 +1546,7 @@
         ]
       },
       {
-        "email": "model-risk-validator@aml.windrose",
+        "email": "model-risk-validator@aml.datacern",
         "sub": "user-model-risk-validator-aml",
         "role": "Model Risk Validator",
         "scopes": [
@@ -1589,7 +1589,7 @@
   },
   "wr-disputes": {
     "tenant_name": "wr-disputes",
-    "display": "Windrose Card Disputes",
+    "display": "Datacern Card Disputes",
     "short": "disputes",
     "tenant_id": "019f6a51-9089-7acd-a7ae-db015c85d0c0",
     "workspace": "019f6a51-94ea-717a-912e-8c21357a50b7",
@@ -1598,7 +1598,7 @@
     ],
     "users": [
       {
-        "email": "dispute-intake-analyst@disputes.windrose",
+        "email": "dispute-intake-analyst@disputes.datacern",
         "sub": "user-dispute-intake-analyst-disputes",
         "role": "Dispute Intake Analyst",
         "scopes": [
@@ -1628,7 +1628,7 @@
         ]
       },
       {
-        "email": "fraud-investigator@disputes.windrose",
+        "email": "fraud-investigator@disputes.datacern",
         "sub": "user-fraud-investigator-disputes",
         "role": "Fraud Investigator",
         "scopes": [
@@ -1671,7 +1671,7 @@
         ]
       },
       {
-        "email": "chargeback-specialist@disputes.windrose",
+        "email": "chargeback-specialist@disputes.datacern",
         "sub": "user-chargeback-specialist-disputes",
         "role": "Chargeback Specialist",
         "scopes": [
@@ -1705,7 +1705,7 @@
         ]
       },
       {
-        "email": "dispute-operations-manager@disputes.windrose",
+        "email": "dispute-operations-manager@disputes.datacern",
         "sub": "user-dispute-operations-manager-disputes",
         "role": "Dispute Operations Manager",
         "scopes": [
@@ -1750,7 +1750,7 @@
         ]
       },
       {
-        "email": "dispute-compliance-auditor@disputes.windrose",
+        "email": "dispute-compliance-auditor@disputes.datacern",
         "sub": "user-dispute-compliance-auditor-disputes",
         "role": "Dispute Compliance Auditor",
         "scopes": [
@@ -1796,7 +1796,7 @@
   },
   "wr-pv": {
     "tenant_name": "wr-pv",
-    "display": "Windrose Pharmacovigilance",
+    "display": "Datacern Pharmacovigilance",
     "short": "pv",
     "tenant_id": "019f6a51-e8f1-790c-97a4-28c234c5e652",
     "workspace": "019f6a51-ed51-77c8-a331-a7ddd5f1b751",
@@ -1805,7 +1805,7 @@
     ],
     "users": [
       {
-        "email": "pv-intake-specialist@pv.windrose",
+        "email": "pv-intake-specialist@pv.datacern",
         "sub": "user-pv-intake-specialist-pv",
         "role": "PV Intake Specialist",
         "scopes": [
@@ -1835,7 +1835,7 @@
         ]
       },
       {
-        "email": "pv-medical-reviewer@pv.windrose",
+        "email": "pv-medical-reviewer@pv.datacern",
         "sub": "user-pv-medical-reviewer-pv",
         "role": "PV Medical Reviewer",
         "scopes": [
@@ -1878,7 +1878,7 @@
         ]
       },
       {
-        "email": "pv-safety-officer@pv.windrose",
+        "email": "pv-safety-officer@pv.datacern",
         "sub": "user-pv-safety-officer-pv",
         "role": "PV Safety Officer",
         "scopes": [
@@ -1923,7 +1923,7 @@
         ]
       },
       {
-        "email": "pv-signal-analyst@pv.windrose",
+        "email": "pv-signal-analyst@pv.datacern",
         "sub": "user-pv-signal-analyst-pv",
         "role": "PV Signal Analyst",
         "scopes": [
@@ -1963,7 +1963,7 @@
         ]
       },
       {
-        "email": "pv-quality-auditor@pv.windrose",
+        "email": "pv-quality-auditor@pv.datacern",
         "sub": "user-pv-quality-auditor-pv",
         "role": "PV Quality Auditor",
         "scopes": [
@@ -2009,7 +2009,7 @@
   },
   "wr-wcomp": {
     "tenant_name": "wr-wcomp",
-    "display": "Windrose Workers Comp",
+    "display": "Datacern Workers Comp",
     "short": "wcomp",
     "tenant_id": "019f6a73-b6ea-7d88-ae23-8da115f46580",
     "workspace": "019f6a73-bb44-79bc-bd20-2a166dba063e",
@@ -2018,7 +2018,7 @@
     ],
     "users": [
       {
-        "email": "wc-claims-adjuster@wcomp.windrose",
+        "email": "wc-claims-adjuster@wcomp.datacern",
         "sub": "user-wc-claims-adjuster-wcomp",
         "role": "WC Claims Adjuster",
         "scopes": [
@@ -2048,7 +2048,7 @@
         ]
       },
       {
-        "email": "wc-nurse-case-manager@wcomp.windrose",
+        "email": "wc-nurse-case-manager@wcomp.datacern",
         "sub": "user-wc-nurse-case-manager-wcomp",
         "role": "WC Nurse Case Manager",
         "scopes": [
@@ -2091,7 +2091,7 @@
         ]
       },
       {
-        "email": "wc-medical-bill-reviewer@wcomp.windrose",
+        "email": "wc-medical-bill-reviewer@wcomp.datacern",
         "sub": "user-wc-medical-bill-reviewer-wcomp",
         "role": "WC Medical Bill Reviewer",
         "scopes": [
@@ -2125,7 +2125,7 @@
         ]
       },
       {
-        "email": "wc-claims-manager@wcomp.windrose",
+        "email": "wc-claims-manager@wcomp.datacern",
         "sub": "user-wc-claims-manager-wcomp",
         "role": "WC Claims Manager",
         "scopes": [
@@ -2170,7 +2170,7 @@
         ]
       },
       {
-        "email": "wc-compliance-auditor@wcomp.windrose",
+        "email": "wc-compliance-auditor@wcomp.datacern",
         "sub": "user-wc-compliance-auditor-wcomp",
         "role": "WC Compliance Auditor",
         "scopes": [
@@ -2216,7 +2216,7 @@
   },
   "wr-trucking": {
     "tenant_name": "wr-trucking",
-    "display": "Windrose Trucking Claims",
+    "display": "Datacern Trucking Claims",
     "short": "trucking",
     "tenant_id": "019f6a74-0870-7937-8d9a-8d43fca3b661",
     "workspace": "019f6a74-0cb8-72f5-b6d9-3def85626d0f",
@@ -2225,7 +2225,7 @@
     ],
     "users": [
       {
-        "email": "claims-analyst@trucking.windrose",
+        "email": "claims-analyst@trucking.datacern",
         "sub": "user-claims-analyst-trucking",
         "role": "Claims Analyst",
         "scopes": [
@@ -2255,7 +2255,7 @@
         ]
       },
       {
-        "email": "carrier-compliance-analyst@trucking.windrose",
+        "email": "carrier-compliance-analyst@trucking.datacern",
         "sub": "user-carrier-compliance-analyst-trucking",
         "role": "Carrier Compliance Analyst",
         "scopes": [
@@ -2298,7 +2298,7 @@
         ]
       },
       {
-        "email": "safety-review-specialist@trucking.windrose",
+        "email": "safety-review-specialist@trucking.datacern",
         "sub": "user-safety-review-specialist-trucking",
         "role": "Safety Review Specialist",
         "scopes": [
@@ -2332,7 +2332,7 @@
         ]
       },
       {
-        "email": "claims-safety-manager@trucking.windrose",
+        "email": "claims-safety-manager@trucking.datacern",
         "sub": "user-claims-safety-manager-trucking",
         "role": "Claims & Safety Manager",
         "scopes": [
@@ -2377,7 +2377,7 @@
         ]
       },
       {
-        "email": "fleet-compliance-auditor@trucking.windrose",
+        "email": "fleet-compliance-auditor@trucking.datacern",
         "sub": "user-fleet-compliance-auditor-trucking",
         "role": "Fleet Compliance Auditor",
         "scopes": [
@@ -2423,7 +2423,7 @@
   },
   "wr-warranty": {
     "tenant_name": "wr-warranty",
-    "display": "Windrose Warranty Claims",
+    "display": "Datacern Warranty Claims",
     "short": "warranty",
     "tenant_id": "019f6a74-32cc-7700-b9bf-d102bf802e29",
     "workspace": "019f6a74-3720-7766-98eb-ec1beef2974c",
@@ -2432,7 +2432,7 @@
     ],
     "users": [
       {
-        "email": "warranty-claims-analyst@warranty.windrose",
+        "email": "warranty-claims-analyst@warranty.datacern",
         "sub": "user-warranty-claims-analyst-warranty",
         "role": "Warranty Claims Analyst",
         "scopes": [
@@ -2462,7 +2462,7 @@
         ]
       },
       {
-        "email": "technical-assessor@warranty.windrose",
+        "email": "technical-assessor@warranty.datacern",
         "sub": "user-technical-assessor-warranty",
         "role": "Technical Assessor",
         "scopes": [
@@ -2505,7 +2505,7 @@
         ]
       },
       {
-        "email": "supplier-recovery-specialist@warranty.windrose",
+        "email": "supplier-recovery-specialist@warranty.datacern",
         "sub": "user-supplier-recovery-specialist-warranty",
         "role": "Supplier Recovery Specialist",
         "scopes": [
@@ -2539,7 +2539,7 @@
         ]
       },
       {
-        "email": "warranty-operations-manager@warranty.windrose",
+        "email": "warranty-operations-manager@warranty.datacern",
         "sub": "user-warranty-operations-manager-warranty",
         "role": "Warranty Operations Manager",
         "scopes": [
@@ -2584,7 +2584,7 @@
         ]
       },
       {
-        "email": "warranty-audit-lead@warranty.windrose",
+        "email": "warranty-audit-lead@warranty.datacern",
         "sub": "user-warranty-audit-lead-warranty",
         "role": "Warranty Audit Lead",
         "scopes": [
@@ -2630,7 +2630,7 @@
   },
   "wr-lossmit": {
     "tenant_name": "wr-lossmit",
-    "display": "Windrose Loss Mitigation",
+    "display": "Datacern Loss Mitigation",
     "short": "lossmit",
     "tenant_id": "019f6a74-6849-7728-9207-35be40748365",
     "workspace": "019f6a74-6c80-7e77-a754-362f18fb335b",
@@ -2639,7 +2639,7 @@
     ],
     "users": [
       {
-        "email": "loss-mitigation-specialist@lossmit.windrose",
+        "email": "loss-mitigation-specialist@lossmit.datacern",
         "sub": "user-loss-mitigation-specialist-lossmit",
         "role": "Loss Mitigation Specialist",
         "scopes": [
@@ -2669,7 +2669,7 @@
         ]
       },
       {
-        "email": "underwriting-reviewer@lossmit.windrose",
+        "email": "underwriting-reviewer@lossmit.datacern",
         "sub": "user-underwriting-reviewer-lossmit",
         "role": "Underwriting Reviewer",
         "scopes": [
@@ -2712,7 +2712,7 @@
         ]
       },
       {
-        "email": "spoc-coordinator@lossmit.windrose",
+        "email": "spoc-coordinator@lossmit.datacern",
         "sub": "user-spoc-coordinator-lossmit",
         "role": "SPOC Coordinator",
         "scopes": [
@@ -2746,7 +2746,7 @@
         ]
       },
       {
-        "email": "loss-mitigation-manager@lossmit.windrose",
+        "email": "loss-mitigation-manager@lossmit.datacern",
         "sub": "user-loss-mitigation-manager-lossmit",
         "role": "Loss Mitigation Manager",
         "scopes": [
@@ -2791,7 +2791,7 @@
         ]
       },
       {
-        "email": "servicing-compliance-auditor@lossmit.windrose",
+        "email": "servicing-compliance-auditor@lossmit.datacern",
         "sub": "user-servicing-compliance-auditor-lossmit",
         "role": "Servicing Compliance Auditor",
         "scopes": [
@@ -2837,7 +2837,7 @@
   },
   "wr-fcra": {
     "tenant_name": "wr-fcra",
-    "display": "Windrose Credit Disputes",
+    "display": "Datacern Credit Disputes",
     "short": "fcra",
     "tenant_id": "019f6a74-98d8-787b-a76d-6bac9ef7c30f",
     "workspace": "019f6a74-9943-7a0e-aff9-ae0e076fcdb0",
@@ -2846,7 +2846,7 @@
     ],
     "users": [
       {
-        "email": "dispute-investigator@fcra.windrose",
+        "email": "dispute-investigator@fcra.datacern",
         "sub": "user-dispute-investigator-fcra",
         "role": "Dispute Investigator",
         "scopes": [
@@ -2876,7 +2876,7 @@
         ]
       },
       {
-        "email": "furnisher-data-analyst@fcra.windrose",
+        "email": "furnisher-data-analyst@fcra.datacern",
         "sub": "user-furnisher-data-analyst-fcra",
         "role": "Furnisher Data Analyst",
         "scopes": [
@@ -2919,7 +2919,7 @@
         ]
       },
       {
-        "email": "identity-theft-specialist@fcra.windrose",
+        "email": "identity-theft-specialist@fcra.datacern",
         "sub": "user-identity-theft-specialist-fcra",
         "role": "Identity Theft Specialist",
         "scopes": [
@@ -2953,7 +2953,7 @@
         ]
       },
       {
-        "email": "dispute-operations-manager@fcra.windrose",
+        "email": "dispute-operations-manager@fcra.datacern",
         "sub": "user-dispute-operations-manager-fcra",
         "role": "Dispute Operations Manager",
         "scopes": [
@@ -2998,7 +2998,7 @@
         ]
       },
       {
-        "email": "fcra-compliance-auditor@fcra.windrose",
+        "email": "fcra-compliance-auditor@fcra.datacern",
         "sub": "user-fcra-compliance-auditor-fcra",
         "role": "FCRA Compliance Auditor",
         "scopes": [
@@ -3044,7 +3044,7 @@
   },
   "wr-screening": {
     "tenant_name": "wr-screening",
-    "display": "Windrose Background Screening",
+    "display": "Datacern Background Screening",
     "short": "screening",
     "tenant_id": "019f6a74-c5c0-71ad-be3d-a6e11f590680",
     "workspace": "019f6a74-c9f7-7b89-9147-d2549697f353",
@@ -3053,7 +3053,7 @@
     ],
     "users": [
       {
-        "email": "screening-adjudicator@screening.windrose",
+        "email": "screening-adjudicator@screening.datacern",
         "sub": "user-screening-adjudicator-screening",
         "role": "Screening Adjudicator",
         "scopes": [
@@ -3083,7 +3083,7 @@
         ]
       },
       {
-        "email": "identity-resolution-specialist@screening.windrose",
+        "email": "identity-resolution-specialist@screening.datacern",
         "sub": "user-identity-resolution-specialist-screening",
         "role": "Identity Resolution Specialist",
         "scopes": [
@@ -3126,7 +3126,7 @@
         ]
       },
       {
-        "email": "adverse-action-coordinator@screening.windrose",
+        "email": "adverse-action-coordinator@screening.datacern",
         "sub": "user-adverse-action-coordinator-screening",
         "role": "Adverse Action Coordinator",
         "scopes": [
@@ -3160,7 +3160,7 @@
         ]
       },
       {
-        "email": "screening-operations-manager@screening.windrose",
+        "email": "screening-operations-manager@screening.datacern",
         "sub": "user-screening-operations-manager-screening",
         "role": "Screening Operations Manager",
         "scopes": [
@@ -3205,7 +3205,7 @@
         ]
       },
       {
-        "email": "fcra-compliance-auditor@screening.windrose",
+        "email": "fcra-compliance-auditor@screening.datacern",
         "sub": "user-fcra-compliance-auditor-screening",
         "role": "FCRA Compliance Auditor",
         "scopes": [
@@ -3251,7 +3251,7 @@
   },
   "wr-trade": {
     "tenant_name": "wr-trade",
-    "display": "Windrose Trade Compliance",
+    "display": "Datacern Trade Compliance",
     "short": "trade",
     "tenant_id": "019f6a73-e0af-7d6d-b381-1a26863a6a2e",
     "workspace": "019f6a73-e0f9-7b4e-9c9a-a7b5404d9446",
@@ -3260,7 +3260,7 @@
     ],
     "users": [
       {
-        "email": "classification-analyst@trade.windrose",
+        "email": "classification-analyst@trade.datacern",
         "sub": "user-classification-analyst-trade",
         "role": "Classification Analyst",
         "scopes": [
@@ -3290,7 +3290,7 @@
         ]
       },
       {
-        "email": "screening-analyst@trade.windrose",
+        "email": "screening-analyst@trade.datacern",
         "sub": "user-screening-analyst-trade",
         "role": "Screening Analyst",
         "scopes": [
@@ -3333,7 +3333,7 @@
         ]
       },
       {
-        "email": "licensing-specialist@trade.windrose",
+        "email": "licensing-specialist@trade.datacern",
         "sub": "user-licensing-specialist-trade",
         "role": "Licensing Specialist",
         "scopes": [
@@ -3367,7 +3367,7 @@
         ]
       },
       {
-        "email": "trade-compliance-manager@trade.windrose",
+        "email": "trade-compliance-manager@trade.datacern",
         "sub": "user-trade-compliance-manager-trade",
         "role": "Trade Compliance Manager",
         "scopes": [
@@ -3412,7 +3412,7 @@
         ]
       },
       {
-        "email": "trade-audit-lead@trade.windrose",
+        "email": "trade-audit-lead@trade.datacern",
         "sub": "user-trade-audit-lead-trade",
         "role": "Trade Audit Lead",
         "scopes": [
@@ -3458,7 +3458,7 @@
   },
   "wr-appeals": {
     "tenant_name": "wr-appeals",
-    "display": "Windrose Trust & Safety",
+    "display": "Datacern Trust & Safety",
     "short": "appeals",
     "tenant_id": "019f6a74-f27f-72f1-9489-932d4d188e80",
     "workspace": "019f6a74-f6ce-7b1b-8194-07c91989d7dd",
@@ -3467,7 +3467,7 @@
     ],
     "users": [
       {
-        "email": "appeals-reviewer@appeals.windrose",
+        "email": "appeals-reviewer@appeals.datacern",
         "sub": "user-appeals-reviewer-appeals",
         "role": "Appeals Reviewer",
         "scopes": [
@@ -3497,7 +3497,7 @@
         ]
       },
       {
-        "email": "senior-policy-reviewer@appeals.windrose",
+        "email": "senior-policy-reviewer@appeals.datacern",
         "sub": "user-senior-policy-reviewer-appeals",
         "role": "Senior Policy Reviewer",
         "scopes": [
@@ -3540,7 +3540,7 @@
         ]
       },
       {
-        "email": "escalations-specialist@appeals.windrose",
+        "email": "escalations-specialist@appeals.datacern",
         "sub": "user-escalations-specialist-appeals",
         "role": "Escalations Specialist",
         "scopes": [
@@ -3574,7 +3574,7 @@
         ]
       },
       {
-        "email": "appeals-operations-manager@appeals.windrose",
+        "email": "appeals-operations-manager@appeals.datacern",
         "sub": "user-appeals-operations-manager-appeals",
         "role": "Appeals Operations Manager",
         "scopes": [
@@ -3619,7 +3619,7 @@
         ]
       },
       {
-        "email": "transparency-audit-lead@appeals.windrose",
+        "email": "transparency-audit-lead@appeals.datacern",
         "sub": "user-transparency-audit-lead-appeals",
         "role": "Transparency & Audit Lead",
         "scopes": [
@@ -3665,7 +3665,7 @@
   },
   "wr-mdr": {
     "tenant_name": "wr-mdr",
-    "display": "Windrose Device Vigilance",
+    "display": "Datacern Device Vigilance",
     "short": "mdr",
     "tenant_id": "019f6a75-0a20-7e92-8c4f-36c3f4f88c44",
     "workspace": "019f6a75-0e71-75d0-892f-52b82da9d36a",
@@ -3674,7 +3674,7 @@
     ],
     "users": [
       {
-        "email": "complaint-intake-coordinator@mdr.windrose",
+        "email": "complaint-intake-coordinator@mdr.datacern",
         "sub": "user-complaint-intake-coordinator-mdr",
         "role": "Complaint Intake Coordinator",
         "scopes": [
@@ -3704,7 +3704,7 @@
         ]
       },
       {
-        "email": "complaint-investigator@mdr.windrose",
+        "email": "complaint-investigator@mdr.datacern",
         "sub": "user-complaint-investigator-mdr",
         "role": "Complaint Investigator",
         "scopes": [
@@ -3747,7 +3747,7 @@
         ]
       },
       {
-        "email": "mdr-reportability-analyst@mdr.windrose",
+        "email": "mdr-reportability-analyst@mdr.datacern",
         "sub": "user-mdr-reportability-analyst-mdr",
         "role": "MDR Reportability Analyst",
         "scopes": [
@@ -3781,7 +3781,7 @@
         ]
       },
       {
-        "email": "quality-regulatory-manager@mdr.windrose",
+        "email": "quality-regulatory-manager@mdr.datacern",
         "sub": "user-quality-regulatory-manager-mdr",
         "role": "Quality & Regulatory Manager",
         "scopes": [
@@ -3826,7 +3826,7 @@
         ]
       },
       {
-        "email": "quality-systems-auditor@mdr.windrose",
+        "email": "quality-systems-auditor@mdr.datacern",
         "sub": "user-quality-systems-auditor-mdr",
         "role": "Quality Systems Auditor",
         "scopes": [
@@ -3872,7 +3872,7 @@
   },
   "wr-uw": {
     "tenant_name": "wr-uw",
-    "display": "Windrose Underwriting Intake",
+    "display": "Datacern Underwriting Intake",
     "short": "uw",
     "tenant_id": "019f6a75-5d07-7d56-b83a-fc2b75598d32",
     "workspace": "019f6a75-613f-71a5-9296-8769e73f14c6",
@@ -3881,7 +3881,7 @@
     ],
     "users": [
       {
-        "email": "submission-intake-analyst@uw.windrose",
+        "email": "submission-intake-analyst@uw.datacern",
         "sub": "user-submission-intake-analyst-uw",
         "role": "Submission Intake Analyst",
         "scopes": [
@@ -3911,7 +3911,7 @@
         ]
       },
       {
-        "email": "appetite-clearance-specialist@uw.windrose",
+        "email": "appetite-clearance-specialist@uw.datacern",
         "sub": "user-appetite-clearance-specialist-uw",
         "role": "Appetite & Clearance Specialist",
         "scopes": [
@@ -3954,7 +3954,7 @@
         ]
       },
       {
-        "email": "underwriting-assistant@uw.windrose",
+        "email": "underwriting-assistant@uw.datacern",
         "sub": "user-underwriting-assistant-uw",
         "role": "Underwriting Assistant",
         "scopes": [
@@ -3988,7 +3988,7 @@
         ]
       },
       {
-        "email": "underwriting-operations-manager@uw.windrose",
+        "email": "underwriting-operations-manager@uw.datacern",
         "sub": "user-underwriting-operations-manager-uw",
         "role": "Underwriting Operations Manager",
         "scopes": [
@@ -4033,7 +4033,7 @@
         ]
       },
       {
-        "email": "underwriting-audit-lead@uw.windrose",
+        "email": "underwriting-audit-lead@uw.datacern",
         "sub": "user-underwriting-audit-lead-uw",
         "role": "Underwriting Audit Lead",
         "scopes": [
@@ -4079,7 +4079,7 @@
   },
   "wr-merchant": {
     "tenant_name": "wr-merchant",
-    "display": "Windrose Merchant Disputes",
+    "display": "Datacern Merchant Disputes",
     "short": "merchant",
     "tenant_id": "019f6a75-b029-79f6-bfe9-337494ef122a",
     "workspace": "019f6a75-b487-7a9e-9bb9-bbabac27e7ed",
@@ -4088,7 +4088,7 @@
     ],
     "users": [
       {
-        "email": "dispute-response-analyst@merchant.windrose",
+        "email": "dispute-response-analyst@merchant.datacern",
         "sub": "user-dispute-response-analyst-merchant",
         "role": "Dispute Response Analyst",
         "scopes": [
@@ -4118,7 +4118,7 @@
         ]
       },
       {
-        "email": "evidence-specialist@merchant.windrose",
+        "email": "evidence-specialist@merchant.datacern",
         "sub": "user-evidence-specialist-merchant",
         "role": "Evidence Specialist",
         "scopes": [
@@ -4152,7 +4152,7 @@
         ]
       },
       {
-        "email": "pre-arbitration-lead@merchant.windrose",
+        "email": "pre-arbitration-lead@merchant.datacern",
         "sub": "user-pre-arbitration-lead-merchant",
         "role": "Pre-Arbitration Lead",
         "scopes": [
@@ -4195,7 +4195,7 @@
         ]
       },
       {
-        "email": "dispute-program-manager@merchant.windrose",
+        "email": "dispute-program-manager@merchant.datacern",
         "sub": "user-dispute-program-manager-merchant",
         "role": "Dispute Program Manager",
         "scopes": [
@@ -4240,7 +4240,7 @@
         ]
       },
       {
-        "email": "payments-compliance-auditor@merchant.windrose",
+        "email": "payments-compliance-auditor@merchant.datacern",
         "sub": "user-payments-compliance-auditor-merchant",
         "role": "Payments Compliance Auditor",
         "scopes": [
@@ -4286,7 +4286,7 @@
   },
   "wr-marketplace": {
     "tenant_name": "wr-marketplace",
-    "display": "Windrose Marketplace Integrity",
+    "display": "Datacern Marketplace Integrity",
     "short": "marketplace",
     "tenant_id": "019f6a76-03c6-7c8e-9ba5-b6d939688877",
     "workspace": "019f6a76-041c-73f3-9e60-08df10523dc0",
@@ -4295,7 +4295,7 @@
     ],
     "users": [
       {
-        "email": "vetting-analyst@marketplace.windrose",
+        "email": "vetting-analyst@marketplace.datacern",
         "sub": "user-vetting-analyst-marketplace",
         "role": "Vetting Analyst",
         "scopes": [
@@ -4325,7 +4325,7 @@
         ]
       },
       {
-        "email": "marketplace-integrity-investigator@marketplace.windrose",
+        "email": "marketplace-integrity-investigator@marketplace.datacern",
         "sub": "user-marketplace-integrity-investigator-marketplace",
         "role": "Marketplace Integrity Investigator",
         "scopes": [
@@ -4368,7 +4368,7 @@
         ]
       },
       {
-        "email": "ip-claims-reviewer@marketplace.windrose",
+        "email": "ip-claims-reviewer@marketplace.datacern",
         "sub": "user-ip-claims-reviewer-marketplace",
         "role": "IP Claims Reviewer",
         "scopes": [
@@ -4402,7 +4402,7 @@
         ]
       },
       {
-        "email": "marketplace-trust-manager@marketplace.windrose",
+        "email": "marketplace-trust-manager@marketplace.datacern",
         "sub": "user-marketplace-trust-manager-marketplace",
         "role": "Marketplace Trust Manager",
         "scopes": [
@@ -4447,7 +4447,7 @@
         ]
       },
       {
-        "email": "marketplace-compliance-auditor@marketplace.windrose",
+        "email": "marketplace-compliance-auditor@marketplace.datacern",
         "sub": "user-marketplace-compliance-auditor-marketplace",
         "role": "Marketplace Compliance Auditor",
         "scopes": [
@@ -4493,7 +4493,7 @@
   },
   "wr-benefits": {
     "tenant_name": "wr-benefits",
-    "display": "Windrose Benefits Adjudication",
+    "display": "Datacern Benefits Adjudication",
     "short": "benefits",
     "tenant_id": "019f6a76-530d-7301-a968-51a719fb802d",
     "workspace": "019f6a76-5759-78c2-b225-860d97a63d6a",
@@ -4502,7 +4502,7 @@
     ],
     "users": [
       {
-        "email": "eligibility-examiner@benefits.windrose",
+        "email": "eligibility-examiner@benefits.datacern",
         "sub": "user-eligibility-examiner-benefits",
         "role": "Eligibility Examiner",
         "scopes": [
@@ -4532,7 +4532,7 @@
         ]
       },
       {
-        "email": "appeals-hearing-preparer@benefits.windrose",
+        "email": "appeals-hearing-preparer@benefits.datacern",
         "sub": "user-appeals-hearing-preparer-benefits",
         "role": "Appeals Hearing Preparer",
         "scopes": [
@@ -4575,7 +4575,7 @@
         ]
       },
       {
-        "email": "overpayment-analyst@benefits.windrose",
+        "email": "overpayment-analyst@benefits.datacern",
         "sub": "user-overpayment-analyst-benefits",
         "role": "Overpayment Analyst",
         "scopes": [
@@ -4609,7 +4609,7 @@
         ]
       },
       {
-        "email": "program-integrity-manager@benefits.windrose",
+        "email": "program-integrity-manager@benefits.datacern",
         "sub": "user-program-integrity-manager-benefits",
         "role": "Program Integrity Manager",
         "scopes": [
@@ -4654,7 +4654,7 @@
         ]
       },
       {
-        "email": "program-audit-lead@benefits.windrose",
+        "email": "program-audit-lead@benefits.datacern",
         "sub": "user-program-audit-lead-benefits",
         "role": "Program Audit Lead",
         "scopes": [
@@ -4700,7 +4700,7 @@
   },
   "wr-utility": {
     "tenant_name": "wr-utility",
-    "display": "Windrose Utility Inspections",
+    "display": "Datacern Utility Inspections",
     "short": "utility",
     "tenant_id": "019f6a76-a5cc-76ed-8ca8-16f06be4e3ce",
     "workspace": "019f6a76-aa06-7651-a05d-9fb19f6f1d05",
@@ -4709,7 +4709,7 @@
     ],
     "users": [
       {
-        "email": "inspection-triage-analyst@utility.windrose",
+        "email": "inspection-triage-analyst@utility.datacern",
         "sub": "user-inspection-triage-analyst-utility",
         "role": "Inspection Triage Analyst",
         "scopes": [
@@ -4739,7 +4739,7 @@
         ]
       },
       {
-        "email": "field-verification-engineer@utility.windrose",
+        "email": "field-verification-engineer@utility.datacern",
         "sub": "user-field-verification-engineer-utility",
         "role": "Field Verification Engineer",
         "scopes": [
@@ -4782,7 +4782,7 @@
         ]
       },
       {
-        "email": "vegetation-program-specialist@utility.windrose",
+        "email": "vegetation-program-specialist@utility.datacern",
         "sub": "user-vegetation-program-specialist-utility",
         "role": "Vegetation Program Specialist",
         "scopes": [
@@ -4816,7 +4816,7 @@
         ]
       },
       {
-        "email": "asset-risk-manager@utility.windrose",
+        "email": "asset-risk-manager@utility.datacern",
         "sub": "user-asset-risk-manager-utility",
         "role": "Asset Risk Manager",
         "scopes": [
@@ -4861,7 +4861,7 @@
         ]
       },
       {
-        "email": "regulatory-compliance-auditor@utility.windrose",
+        "email": "regulatory-compliance-auditor@utility.datacern",
         "sub": "user-regulatory-compliance-auditor-utility",
         "role": "Regulatory Compliance Auditor",
         "scopes": [
@@ -4907,7 +4907,7 @@
   },
   "wr-construction": {
     "tenant_name": "wr-construction",
-    "display": "Windrose Construction Claims",
+    "display": "Datacern Construction Claims",
     "short": "construction",
     "tenant_id": "019f6a76-f8ae-724d-bca7-44f2931b869d",
     "workspace": "019f6a76-fcdc-7cc9-ae30-842dcc2fa42d",
@@ -4916,7 +4916,7 @@
     ],
     "users": [
       {
-        "email": "claims-analyst@construction.windrose",
+        "email": "claims-analyst@construction.datacern",
         "sub": "user-claims-analyst-construction",
         "role": "Claims Analyst",
         "scopes": [
@@ -4946,7 +4946,7 @@
         ]
       },
       {
-        "email": "scheduling-delay-specialist@construction.windrose",
+        "email": "scheduling-delay-specialist@construction.datacern",
         "sub": "user-scheduling-delay-specialist-construction",
         "role": "Scheduling & Delay Specialist",
         "scopes": [
@@ -4989,7 +4989,7 @@
         ]
       },
       {
-        "email": "contract-administrator@construction.windrose",
+        "email": "contract-administrator@construction.datacern",
         "sub": "user-contract-administrator-construction",
         "role": "Contract Administrator",
         "scopes": [
@@ -5023,7 +5023,7 @@
         ]
       },
       {
-        "email": "claims-review-board-manager@construction.windrose",
+        "email": "claims-review-board-manager@construction.datacern",
         "sub": "user-claims-review-board-manager-construction",
         "role": "Claims Review Board Manager",
         "scopes": [
@@ -5068,7 +5068,7 @@
         ]
       },
       {
-        "email": "project-controls-auditor@construction.windrose",
+        "email": "project-controls-auditor@construction.datacern",
         "sub": "user-project-controls-auditor-construction",
         "role": "Project Controls Auditor",
         "scopes": [
@@ -5114,7 +5114,7 @@
   },
   "wr-apaudit": {
     "tenant_name": "wr-apaudit",
-    "display": "Windrose AP Audit",
+    "display": "Datacern AP Audit",
     "short": "apaudit",
     "tenant_id": "019f6a77-4bc9-7b8d-a363-570dc178db9d",
     "workspace": "019f6a77-5015-74f1-a0b6-a923a85392e4",
@@ -5123,7 +5123,7 @@
     ],
     "users": [
       {
-        "email": "ap-exception-analyst@apaudit.windrose",
+        "email": "ap-exception-analyst@apaudit.datacern",
         "sub": "user-ap-exception-analyst-apaudit",
         "role": "AP Exception Analyst",
         "scopes": [
@@ -5153,7 +5153,7 @@
         ]
       },
       {
-        "email": "recovery-audit-analyst@apaudit.windrose",
+        "email": "recovery-audit-analyst@apaudit.datacern",
         "sub": "user-recovery-audit-analyst-apaudit",
         "role": "Recovery Audit Analyst",
         "scopes": [
@@ -5196,7 +5196,7 @@
         ]
       },
       {
-        "email": "vendor-master-specialist@apaudit.windrose",
+        "email": "vendor-master-specialist@apaudit.datacern",
         "sub": "user-vendor-master-specialist-apaudit",
         "role": "Vendor Master Specialist",
         "scopes": [
@@ -5230,7 +5230,7 @@
         ]
       },
       {
-        "email": "ap-controls-manager@apaudit.windrose",
+        "email": "ap-controls-manager@apaudit.datacern",
         "sub": "user-ap-controls-manager-apaudit",
         "role": "AP Controls Manager",
         "scopes": [
@@ -5275,7 +5275,7 @@
         ]
       },
       {
-        "email": "internal-controls-auditor@apaudit.windrose",
+        "email": "internal-controls-auditor@apaudit.datacern",
         "sub": "user-internal-controls-auditor-apaudit",
         "role": "Internal Controls Auditor",
         "scopes": [
@@ -5321,7 +5321,7 @@
   },
   "wr-mrb": {
     "tenant_name": "wr-mrb",
-    "display": "Windrose Manufacturing Quality",
+    "display": "Datacern Manufacturing Quality",
     "short": "mrb",
     "tenant_id": "019f6a77-9eba-71a1-a490-b8a9a58863bb",
     "workspace": "019f6a77-a307-7576-916e-0b46e3c7cf11",
@@ -5330,7 +5330,7 @@
     ],
     "users": [
       {
-        "email": "quality-engineer@mrb.windrose",
+        "email": "quality-engineer@mrb.datacern",
         "sub": "user-quality-engineer-mrb",
         "role": "Quality Engineer",
         "scopes": [
@@ -5360,7 +5360,7 @@
         ]
       },
       {
-        "email": "mrb-engineering-reviewer@mrb.windrose",
+        "email": "mrb-engineering-reviewer@mrb.datacern",
         "sub": "user-mrb-engineering-reviewer-mrb",
         "role": "MRB Engineering Reviewer",
         "scopes": [
@@ -5403,7 +5403,7 @@
         ]
       },
       {
-        "email": "supplier-quality-engineer@mrb.windrose",
+        "email": "supplier-quality-engineer@mrb.datacern",
         "sub": "user-supplier-quality-engineer-mrb",
         "role": "Supplier Quality Engineer",
         "scopes": [
@@ -5437,7 +5437,7 @@
         ]
       },
       {
-        "email": "quality-manager@mrb.windrose",
+        "email": "quality-manager@mrb.datacern",
         "sub": "user-quality-manager-mrb",
         "role": "Quality Manager",
         "scopes": [
@@ -5482,7 +5482,7 @@
         ]
       },
       {
-        "email": "quality-systems-auditor@mrb.windrose",
+        "email": "quality-systems-auditor@mrb.datacern",
         "sub": "user-quality-systems-auditor-mrb",
         "role": "Quality Systems Auditor",
         "scopes": [
@@ -5528,7 +5528,7 @@
   },
   "wr-tax": {
     "tenant_name": "wr-tax",
-    "display": "Windrose Tax Notices",
+    "display": "Datacern Tax Notices",
     "short": "tax",
     "tenant_id": "019f6a77-f193-75c8-8af7-e27aa7bc5024",
     "workspace": "019f6a77-f5ca-74f5-903a-3c4d99408ce3",
@@ -5537,7 +5537,7 @@
     ],
     "users": [
       {
-        "email": "tax-notice-analyst@tax.windrose",
+        "email": "tax-notice-analyst@tax.datacern",
         "sub": "user-tax-notice-analyst-tax",
         "role": "Tax Notice Analyst",
         "scopes": [
@@ -5567,7 +5567,7 @@
         ]
       },
       {
-        "email": "controversy-abatement-lead@tax.windrose",
+        "email": "controversy-abatement-lead@tax.datacern",
         "sub": "user-controversy-abatement-lead-tax",
         "role": "Controversy & Abatement Lead",
         "scopes": [
@@ -5610,7 +5610,7 @@
         ]
       },
       {
-        "email": "sales-tax-specialist@tax.windrose",
+        "email": "sales-tax-specialist@tax.datacern",
         "sub": "user-sales-tax-specialist-tax",
         "role": "Sales Tax Specialist",
         "scopes": [
@@ -5644,7 +5644,7 @@
         ]
       },
       {
-        "email": "tax-compliance-manager@tax.windrose",
+        "email": "tax-compliance-manager@tax.datacern",
         "sub": "user-tax-compliance-manager-tax",
         "role": "Tax Compliance Manager",
         "scopes": [
@@ -5689,13 +5689,325 @@
         ]
       },
       {
-        "email": "tax-governance-auditor@tax.windrose",
+        "email": "tax-governance-auditor@tax.datacern",
         "sub": "user-tax-governance-auditor-tax",
         "role": "Tax Governance Auditor",
         "scopes": [
           "case.case.read",
           "case.case.list",
           "case.disposition.read",
+          "experiment.experiment.read",
+          "experiment.experiment.list",
+          "experiment.run.read",
+          "experiment.run.list",
+          "experiment.model.read",
+          "experiment.model.list",
+          "experiment.promotion.read",
+          "pipeline.template.read",
+          "pipeline.template.list",
+          "pipeline.run.read",
+          "pipeline.run.list",
+          "pipeline.component.read",
+          "pipeline.component.list",
+          "pipeline.algorithm.read",
+          "pipeline.algorithm.list",
+          "eval.run.read",
+          "eval.trends.read",
+          "dataset.dataset.read",
+          "dataset.dataset.list",
+          "dataset.profile.read",
+          "dataset.profile.execute",
+          "dataset.lineage.read",
+          "semantic.model.read",
+          "semantic.model.list",
+          "semantic.measure.read",
+          "chart.dashboard.read",
+          "chart.chart.read",
+          "audit.log.read",
+          "audit.log.list",
+          "usage.report.read",
+          "usage.report.list",
+          "usage.report.export",
+          "notification.inbox.read"
+        ]
+      }
+    ]
+  },
+  "wr-demo-banking-aml": {
+    "tenant_name": "wr-demo-banking-aml",
+    "display": "Banking Aml Demo",
+    "short": "bankingaml",
+    "tenant_id": "019f8221-6499-734f-9a03-087a5be057f5",
+    "workspace": "019f8221-68df-7ef4-8a32-99b3ec0fe5a5",
+    "packs": [
+      "investigation-framework",
+      "banking-aml"
+    ],
+    "users": [
+      {
+        "email": "investigator@bankingaml.datacern",
+        "sub": "user-investigator-bankingaml",
+        "role": "Investigator",
+        "scopes": [
+          "case.case.read",
+          "case.case.list",
+          "case.case.update",
+          "case.disposition.read",
+          "case.disposition.create",
+          "ai.proposal.read",
+          "ai.proposal.list",
+          "ai.agent_session.read",
+          "ai.agent_session.create",
+          "ai.agent_session.execute",
+          "memory.memory.read",
+          "chart.dashboard.read",
+          "chart.chart.read",
+          "semantic.model.read",
+          "semantic.compile.execute",
+          "query.query.read",
+          "query.execution.read",
+          "query.execution.execute",
+          "dataset.dataset.read",
+          "dataset.lineage.read",
+          "notification.inbox.read"
+        ]
+      },
+      {
+        "email": "investigation-supervisor@bankingaml.datacern",
+        "sub": "user-investigation-supervisor-bankingaml",
+        "role": "Investigation Supervisor",
+        "scopes": [
+          "case.case.read",
+          "case.case.list",
+          "case.case.update",
+          "case.case.assign",
+          "case.case.execute",
+          "case.disposition.read",
+          "case.disposition.create",
+          "case.disposition.update",
+          "case.disposition.approve",
+          "case.bulk.execute",
+          "case.bulk.approve",
+          "ai.proposal.read",
+          "ai.proposal.list",
+          "ai.proposal.approve",
+          "ai.agent_session.read",
+          "ai.agent_session.create",
+          "ai.agent_session.execute",
+          "memory.memory.read",
+          "chart.dashboard.read",
+          "chart.dashboard.list",
+          "chart.chart.read",
+          "semantic.model.read",
+          "semantic.compile.execute",
+          "query.query.read",
+          "query.execution.read",
+          "query.execution.execute",
+          "dataset.dataset.read",
+          "dataset.lineage.read",
+          "usage.report.read",
+          "notification.inbox.read"
+        ]
+      },
+      {
+        "email": "evidence-custodian@bankingaml.datacern",
+        "sub": "user-evidence-custodian-bankingaml",
+        "role": "Evidence Custodian",
+        "scopes": [
+          "case.case.read",
+          "case.case.list",
+          "case.disposition.read",
+          "dataset.dataset.read",
+          "dataset.dataset.list",
+          "dataset.lineage.read",
+          "dataset.profile.read",
+          "audit.log.read",
+          "audit.log.list",
+          "audit.log.export",
+          "query.execution.read",
+          "notification.inbox.read"
+        ]
+      },
+      {
+        "email": "investigation-quality-reviewer@bankingaml.datacern",
+        "sub": "user-investigation-quality-reviewer-bankingaml",
+        "role": "Investigation Quality Reviewer",
+        "scopes": [
+          "case.case.read",
+          "case.case.list",
+          "case.disposition.read",
+          "ai.proposal.read",
+          "ai.proposal.list",
+          "eval.run.read",
+          "eval.trends.read",
+          "experiment.model.read",
+          "experiment.model.list",
+          "experiment.promotion.read",
+          "experiment.promotion.approve",
+          "chart.dashboard.read",
+          "semantic.model.read",
+          "audit.log.read",
+          "audit.log.list",
+          "notification.inbox.read"
+        ]
+      },
+      {
+        "email": "aml-analyst-l1@bankingaml.datacern",
+        "sub": "user-aml-analyst-l1-bankingaml",
+        "role": "AML Analyst L1",
+        "scopes": [
+          "case.case.read",
+          "case.case.list",
+          "case.case.update",
+          "case.disposition.read",
+          "case.disposition.create",
+          "ai.proposal.read",
+          "ai.proposal.list",
+          "ai.proposal.approve",
+          "ai.agent_session.read",
+          "ai.agent_session.list",
+          "ai.agent_session.create",
+          "ai.agent_session.execute",
+          "memory.memory.read",
+          "chart.dashboard.read",
+          "chart.dashboard.list",
+          "chart.chart.read",
+          "semantic.model.read",
+          "semantic.compile.execute",
+          "query.query.read",
+          "query.execution.read",
+          "query.execution.execute",
+          "dataset.dataset.read",
+          "notification.inbox.read"
+        ]
+      },
+      {
+        "email": "aml-investigator-l2@bankingaml.datacern",
+        "sub": "user-aml-investigator-l2-bankingaml",
+        "role": "AML Investigator L2",
+        "scopes": [
+          "case.case.read",
+          "case.case.list",
+          "case.case.update",
+          "case.case.assign",
+          "case.case.execute",
+          "case.disposition.read",
+          "case.disposition.create",
+          "case.disposition.update",
+          "ai.proposal.read",
+          "ai.proposal.list",
+          "ai.proposal.approve",
+          "ai.agent_session.read",
+          "ai.agent_session.list",
+          "ai.agent_session.create",
+          "ai.agent_session.execute",
+          "memory.memory.read",
+          "chart.dashboard.read",
+          "chart.dashboard.list",
+          "chart.chart.read",
+          "chart.chart.list",
+          "semantic.model.read",
+          "semantic.model.list",
+          "semantic.measure.read",
+          "semantic.compile.execute",
+          "query.query.read",
+          "query.query.list",
+          "query.query.create",
+          "query.query.execute",
+          "query.execution.read",
+          "query.execution.execute",
+          "query.execution.export",
+          "dataset.dataset.read",
+          "dataset.dataset.list",
+          "dataset.profile.read",
+          "dataset.lineage.read",
+          "notification.inbox.read"
+        ]
+      },
+      {
+        "email": "mlro@bankingaml.datacern",
+        "sub": "user-mlro-bankingaml",
+        "role": "MLRO",
+        "scopes": [
+          "case.case.read",
+          "case.case.list",
+          "case.case.update",
+          "case.case.assign",
+          "case.disposition.read",
+          "case.disposition.create",
+          "case.disposition.update",
+          "case.disposition.approve",
+          "case.bulk.execute",
+          "case.bulk.approve",
+          "ai.proposal.read",
+          "ai.proposal.list",
+          "ai.proposal.approve",
+          "ai.agent_session.read",
+          "ai.agent_session.list",
+          "ai.agent_session.create",
+          "ai.agent_session.execute",
+          "memory.memory.read",
+          "chart.dashboard.read",
+          "chart.dashboard.list",
+          "chart.dashboard.export",
+          "chart.chart.read",
+          "semantic.model.read",
+          "semantic.compile.execute",
+          "query.query.read",
+          "query.execution.read",
+          "query.execution.execute",
+          "query.execution.export",
+          "dataset.dataset.read",
+          "dataset.lineage.read",
+          "usage.report.read",
+          "usage.report.list",
+          "audit.log.read",
+          "audit.log.list",
+          "audit.log.export",
+          "experiment.promotion.read",
+          "experiment.promotion.approve",
+          "notification.inbox.read"
+        ]
+      },
+      {
+        "email": "sanctions-analyst@bankingaml.datacern",
+        "sub": "user-sanctions-analyst-bankingaml",
+        "role": "Sanctions Analyst",
+        "scopes": [
+          "case.case.read",
+          "case.case.list",
+          "case.case.update",
+          "case.disposition.read",
+          "case.disposition.create",
+          "ai.proposal.read",
+          "ai.proposal.list",
+          "ai.proposal.approve",
+          "ai.agent_session.read",
+          "ai.agent_session.list",
+          "ai.agent_session.create",
+          "ai.agent_session.execute",
+          "memory.memory.read",
+          "chart.dashboard.read",
+          "chart.dashboard.list",
+          "chart.chart.read",
+          "semantic.model.read",
+          "semantic.compile.execute",
+          "query.query.read",
+          "query.execution.read",
+          "query.execution.execute",
+          "dataset.dataset.read",
+          "ingestion.connection.read",
+          "ingestion.connection.list",
+          "ingestion.ingestion.read",
+          "ingestion.ingestion.list",
+          "notification.inbox.read"
+        ]
+      },
+      {
+        "email": "model-risk-validator@bankingaml.datacern",
+        "sub": "user-model-risk-validator-bankingaml",
+        "role": "Model Risk Validator",
+        "scopes": [
           "experiment.experiment.read",
           "experiment.experiment.list",
           "experiment.run.read",

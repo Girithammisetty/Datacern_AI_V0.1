@@ -7,8 +7,8 @@ package events
 import (
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/domain"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // Topic is notification-service's own event topic (MASTER-FR-030).

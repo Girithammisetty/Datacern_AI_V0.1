@@ -1,7 +1,7 @@
 # BRD 53 — Persona Agents, Tenant Custom Agents & the Guardrail Envelope
 
 **Deliverable type:** Core capability (agent-runtime + rbac + tool-plane + ai-gateway + ui-web)
-**Publisher:** Windrose · **Initial version:** 1.0.0 · **Status:** authored; increment 1 in build
+**Publisher:** Datacern · **Initial version:** 1.0.0 · **Status:** authored; increment 1 in build
 **Extends:** BRD 14 (agent-runtime), BRD 13 (tool-plane), BRD 02 (rbac), BRD 12 (ai-gateway), BRD 52 (ml-engineer agent — the risk-tiered-autonomy precedent).
 
 ---

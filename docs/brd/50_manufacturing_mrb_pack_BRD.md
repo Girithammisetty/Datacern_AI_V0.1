@@ -1,6 +1,6 @@
 # BRD 50 — `manufacturing-mrb` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post BRD-32). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending (Core-neutral via packctl; pack-service-tier components declared `deferred` in the manifest).
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Nonconformance disposition and Material Review Board (MRB) adjudication AI for regulated discrete manufacturers: NC intake triage with disposition-deadline awareness, MRB authority-limit discipline (use-as-is on a critical characteristic routes to customer/design-authority approval), supplier quality watch (repeat-SCAR suppliers, suspect certs), containment and suspect-lot traceability, and escape/customer-notification assessment. Sells to aerospace & defense suppliers (AS9100), medical-device manufacturers (ISO 13485 / 21 CFR 820.90), automotive tiers (IATF 16949), and contract manufacturers spanning all three.
 
-**Why this vertical.** Every nonconformance in a regulated plant must be identified, segregated, evaluated, and dispositioned by authorized personnel with documented justification — and dispositions outside delegated MRB authority (a use-as-is on a critical characteristic without customer concurrence) are major audit findings regardless of engineering merit. Volumes are steady, evidence is row-level (lots, serial numbers, certs, inspection results), authority limits are hard rules, and certification-body auditors sample the record trail — the exact governed human-in-the-loop decision shape of the Windrose Core, with the adjudication pattern already proven by BRD 30/32.
+**Why this vertical.** Every nonconformance in a regulated plant must be identified, segregated, evaluated, and dispositioned by authorized personnel with documented justification — and dispositions outside delegated MRB authority (a use-as-is on a critical characteristic without customer concurrence) are major audit findings regardless of engineering merit. Volumes are steady, evidence is row-level (lots, serial numbers, certs, inspection results), authority limits are hard rules, and certification-body auditors sample the record trail — the exact governed human-in-the-loop decision shape of the Datacern Core, with the adjudication pattern already proven by BRD 30/32.
 
 **Business value.** Disposition-deadline breach elimination, MRB cycle-time reduction (triage pre-routing + evidence assembly), concession discipline (use-as-is share watched by spec class, authority-limit routing built into the copilot), supplier quality lift (repeat-SCAR escalation instead of lot-by-lot whack-a-mole), escape-cost reduction (containment sweeps + notification assessment on customer returns), and audit-ready decision files (every closure carries its justification + provenance).
 
@@ -98,7 +98,7 @@ Authored materialization: 3 datasets (nonconformances 26 / lots 30 / suppliers 1
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): QMS/ERP/MES of record, CMM result feeds, PLM characteristic data, supplier-portal credentials.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): QMS/ERP/MES of record, CMM result feeds, PLM characteristic data, supplier-portal credentials.
 
 ## 7. NFRs (deltas)
 

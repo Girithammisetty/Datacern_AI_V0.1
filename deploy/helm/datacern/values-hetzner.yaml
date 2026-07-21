@@ -1,0 +1,83 @@
+# Hetzner (k3s) overrides for dev/staging. Cloud-specific only — everything else
+# comes from values.yaml.
+#
+# Unlike the hyperscaler values, there is NO cloud secret manager, NO managed
+# Postgres, and NO native object store. So this profile self-hosts the data tier
+# IN-CLUSTER (the same components you already run in deploy/docker-compose.dev.yml:
+# Postgres, Redpanda/Kafka, MinIO, ClickHouse, OpenSearch, Redis, OPA, Ollama)
+# and points every endpoint at its ClusterIP DNS name. Deploy that infra first
+# (see deploy/terraform/hetzner/README.md), then this chart on top.
+
+global:
+  # GHCR images (values.yaml default). Override global.imageTag at deploy time.
+  registry: ghcr.io/datacern-ai
+  # Private GHCR packages: no cloud workload identity on Hetzner, so pods pull
+  # via a docker-registry secret. Create it with create-ghcr-pull-secret.sh
+  # (in deploy/k8s/data-tier), which makes the `ghcr-pull` secret below.
+  imagePullSecrets:
+    - name: ghcr-pull
+
+# No Workload Identity on Hetzner — a plain KSA is fine.
+serviceAccount:
+  create: true
+  annotations: {}
+
+# k3s ships Traefik as the built-in ingress controller.
+ingress:
+  className: traefik
+  annotations: {}
+  # host: datacern.<your-domain>    # point an A record at any agent node IP
+
+# Real block storage via the hcloud-csi driver (installed post-apply). Backs the
+# Postgres/ClickHouse/OpenSearch/MinIO PVCs.
+storageClass: hcloud-volumes
+
+# No External Secrets Operator here — create the `datacern-secrets` Secret
+# directly (keys per deploy/CONFIG.md):
+#   kubectl create secret generic datacern-secrets \
+#     --from-literal=POSTGRES_HOST=postgres --from-literal=POSTGRES_PORT=5432 \
+#     --from-literal=POSTGRES_USER=datacern --from-literal=POSTGRES_PASSWORD=... \
+#     --from-literal=KAFKA_BOOTSTRAP=redpanda:9092 --from-literal=REDIS_URL=redis://redis:6379/0 \
+#     ...   # see deploy/CONFIG.md for the full key list
+externalSecrets:
+  enabled: false
+
+secrets:
+  create: false
+  name: datacern-secrets
+
+config:
+  datacern_ENV: staging
+
+  # Auth: verifiers fetch JWKS live from identity-service (its dev LocalSigner
+  # self-generates the keypair each boot). No static JWT secret — see
+  # deploy/k8s/data-tier/create-secrets.sh.
+  JWKS_URL: http://identity-service:8301/api/v1/.well-known/jwks.json
+
+  # Object store = in-cluster MinIO (S3-compatible). The warehouse bucket lives
+  # in MinIO; services reach it via the S3 endpoint below.
+  ICEBERG_WAREHOUSE: s3://datacern-warehouse/
+  AWS_S3_ENDPOINT: http://minio:9000
+  AWS_REGION: us-east-1
+  OBJECTSTORE_REGION_HINT: eu-central
+
+  # Data/infra endpoints resolve to in-cluster services (deploy those first).
+  # Non-secret hosts can live here; credentials stay in datacern-secrets.
+  OPA_URL: http://opa:8281
+  ICEBERG_CATALOG_URI: http://iceberg-rest:8181
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  TEMPORAL_HOST: temporal:7233
+  OPENSEARCH_URL: http://opensearch:9200
+  OLLAMA_BASE_URL: http://ollama:11434
+
+  # query-service "default_large" engine -> in-cluster Trino coordinator.
+  TRINO_ENDPOINT: http://trino:8080
+
+  # CPU-only Ollama for dev/staging — pull a small model to keep RAM modest:
+  #   kubectl exec deploy/ollama -- ollama pull llama3.2:3b
+  # (7B-Q4 also fits ~6-8GB; latency on CPU is tolerable for staging.)
+
+  # Observability stays opt-in (unset = clean no-op). Point at an in-cluster
+  # collector or a vendor OTLP endpoint to receive traces:
+  # datacern_OTEL_ENABLED: "true"
+  # OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector.observability.svc:4317

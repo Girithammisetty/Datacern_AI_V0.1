@@ -4,7 +4,7 @@
 locals {
   common_labels = merge(
     {
-      app         = "windrose"
+      app         = "datacern"
       environment = var.environment
       managed-by  = "terraform"
     },

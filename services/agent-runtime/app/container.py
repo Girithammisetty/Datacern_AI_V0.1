@@ -156,7 +156,7 @@ def build_container(
             from app.adapters.sessionproj import InMemorySessionProjection
             session_proj = InMemorySessionProjection()
 
-    # LLM (ai-gateway). REAL default; the X-Windrose-JWT is a self-signed service
+    # LLM (ai-gateway). REAL default; the X-Datacern-JWT is a self-signed service
     # token (identity-service in prod); the virtual key is minted per run.
     if llm is None:
         if real:
@@ -385,7 +385,7 @@ def build_container(
 
 
 def _build_verifier(settings: Settings):
-    from windrose_common.authjwt import JwksCache, JwtVerifier
+    from datacern_common.authjwt import JwksCache, JwtVerifier
     if settings.jwt_public_key_pem:
         return JwtVerifier(issuer=settings.jwt_issuer, audience=settings.jwt_audience,
                            public_key_pem=settings.jwt_public_key_pem)

@@ -207,7 +207,7 @@ async def test_real_chat_completion_full_pipeline_and_kafka_metering(
     _, secret = await mint_key(container)
 
     body = {
-        "model": "windrose-auto",
+        "model": "datacern-auto",
         "messages": [{"role": "user", "content": "Reply with a short greeting."}],
         "max_tokens": 64,
     }
@@ -218,7 +218,7 @@ async def test_real_chat_completion_full_pipeline_and_kafka_metering(
     assert content.strip(), "expected real model output, got empty content"
     assert out["usage"]["completion_tokens"] > 0
     assert out["usage"]["prompt_tokens"] > 0
-    assert r.headers["x-windrose-deployment"]
+    assert r.headers["x-datacern-deployment"]
 
     # real Redis ledger: reservation (taken at the alias price) is released and
     # the request settles on the ledger. Local Ollama is priced at $0/$0 (the
@@ -232,7 +232,7 @@ async def test_real_chat_completion_full_pipeline_and_kafka_metering(
 
     # real Redpanda: the metering envelope landed on ai.token_usage.v1, carrying
     # the cost-detail attribution (provider + concrete model + price provenance).
-    request_id = r.headers["x-windrose-request-id"]
+    request_id = r.headers["x-datacern-request-id"]
     env = await _consume_usage_event(request_id)
     assert env is not None, "no ai.token_usage.v1 event found on real Redpanda"
     assert env["tenant_id"] == TENANT_A
@@ -307,7 +307,7 @@ async def test_real_embeddings_returns_nomic_vector(_require_embed, client, cont
 
     r = await client.post(
         "/v1/embeddings",
-        json={"model": "windrose-auto", "input": ["revenue by region for Q3"]},
+        json={"model": "datacern-auto", "input": ["revenue by region for Q3"]},
         headers=dp_headers(secret),
     )
     assert r.status_code == 200, r.text
@@ -327,7 +327,7 @@ async def test_real_streaming_yields_real_tokens(client, container):
     _, secret = await mint_key(container)
 
     body = {
-        "model": "windrose-auto",
+        "model": "datacern-auto",
         "messages": [{"role": "user", "content": "Count from one to five."}],
         "max_tokens": 64,
         "stream": True,
@@ -365,9 +365,9 @@ async def test_real_opa_authorization_decision(redis_client):
     allow (tenant-scoped action in the projection) and a deny (unknown action)."""
     if not _reachable(f"{OPA_URL}/health"):
         pytest.skip("OPA unreachable at localhost:8281 — skipping OPA test")
-    from windrose_common.opaclient import OpaClient
+    from datacern_common.opaclient import OpaClient
 
-    opa = OpaClient(OPA_URL)  # posts input.projection to windrose/authz_input
+    opa = OpaClient(OPA_URL)  # posts input.projection to datacern/authz_input
 
     allow_projection = {
         "action_known": True,

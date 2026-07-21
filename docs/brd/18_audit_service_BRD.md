@@ -1,7 +1,7 @@
 # BRD 18 — audit-service
 
 **Service:** audit-service · **Language:** Go · **Phase:** 1 · **Status:** Approved for build
-**Inherits:** `00_MASTER_BRD.md` (all MASTER-FR requirements). Architecture: `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6, §1.2 (7y WORM retention), `../../WINDROSE_V3_AGENTIC_ARCHITECTURE.md` §5.13 (EU AI Act evidence trail).
+**Inherits:** `00_MASTER_BRD.md` (all MASTER-FR requirements). Architecture: `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6, §1.2 (7y WORM retention), `../../DATACERN_V3_AGENTIC_ARCHITECTURE.md` §5.13 (EU AI Act evidence trail).
 
 ---
 

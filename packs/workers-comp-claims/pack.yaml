@@ -1,13 +1,13 @@
 # workers-comp-claims capability pack — Core-neutral edition: workers'
 # compensation claims adjudication for US carriers, TPAs, and self-insured
-# employers. Installable TODAY against Windrose Core's public APIs via
+# employers. Installable TODAY against Datacern Core's public APIs via
 # packctl; the manifest envelope follows BRD 23 (PKG-FR-001/003).
 # Components the current Core cannot materialize are declared under
 # `deferred` — recorded in the install ledger, never faked.
 pack_manifest: 1
 name: workers-comp-claims
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted workers' compensation claims adjudication for carriers, TPAs,
   and self-insured employers: FNOL triage with statutory

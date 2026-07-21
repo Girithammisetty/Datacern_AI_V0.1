@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/usage-service/internal/domain"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/usage-service/internal/domain"
 )
 
 // RawStore persists raw meter records idempotently and evaluates budgets in the

@@ -1,12 +1,12 @@
 # secretmanager.tf — the single Secret Manager secret that External Secrets
-# syncs into the cluster Secret `windrose-secrets`.
+# syncs into the cluster Secret `datacern-secrets`.
 #
 # The payload is a JSON object. Infra endpoints are derived from the resources
 # created here; everything else comes from var.secrets (filled in LATER). Keys in
 # var.secrets OVERRIDE derived keys, so an operator can pin any value explicitly.
 #
 # The ExternalSecret in values-gcp.yaml should use dataFrom.extract against this
-# secret so each JSON key becomes a key in the windrose-secrets K8s Secret.
+# secret so each JSON key becomes a key in the datacern-secrets K8s Secret.
 
 locals {
   # Endpoints derived from the managed infra.
@@ -39,8 +39,8 @@ locals {
   secret_payload = merge(local.derived_secrets, var.secrets)
 }
 
-resource "google_secret_manager_secret" "windrose" {
-  secret_id = "${var.name_prefix}-windrose-secrets"
+resource "google_secret_manager_secret" "datacern" {
+  secret_id = "${var.name_prefix}-datacern-secrets"
 
   labels = local.common_labels
 
@@ -49,7 +49,7 @@ resource "google_secret_manager_secret" "windrose" {
   }
 }
 
-resource "google_secret_manager_secret_version" "windrose" {
-  secret      = google_secret_manager_secret.windrose.id
+resource "google_secret_manager_secret_version" "datacern" {
+  secret      = google_secret_manager_secret.datacern.id
   secret_data = jsonencode(local.secret_payload)
 }

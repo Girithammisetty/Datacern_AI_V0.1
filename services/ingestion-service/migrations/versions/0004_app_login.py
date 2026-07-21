@@ -2,7 +2,7 @@
 remediation, cross-tenant RLS-bypass).
 
 0001 already ENABLEd + FORCEd row-level security on every tenant table, but the
-shipped runtime DSN connected as ``windrose``, the dev cluster's SUPERUSER
+shipped runtime DSN connected as ``datacern``, the dev cluster's SUPERUSER
 (BYPASSRLS), which silently bypasses FORCE RLS — so tenant isolation was
 effectively OFF: a buggy or compromised query could read another tenant's
 connections/ingestions/uploads.

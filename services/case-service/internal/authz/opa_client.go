@@ -5,14 +5,14 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 // OPAClient is the real runtime authorizer (MASTER-FR-012). Each decision (1)
 // loads the caller's permissions_flat projection slice from Redis (the
 // rbac-service key scheme) and (2) POSTs it as input to the local OPA sidecar,
-// which evaluates the windrose.authz_input Rego bundle. It never calls
+// which evaluates the datacern.authz_input Rego bundle. It never calls
 // rbac-service synchronously in the request path.
 type OPAClient struct {
 	client *opaclient.Client

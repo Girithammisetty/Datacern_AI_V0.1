@@ -3,7 +3,7 @@
 Session scope lives ONLY in Redis (no embeddings, no pgvector). Keys:
 ``mem:sess:{tenant}:{session_id}`` — a hash of entry_id -> JSON value, with a
 TTL of session lifetime + 1h. ``RedisSessionStore`` is the real runtime adapter
-over the shared ``windrose_common`` connection; ``InMemorySessionStore`` is the
+over the shared ``datacern_common`` connection; ``InMemorySessionStore`` is the
 unit-tier double.
 """
 
@@ -18,7 +18,7 @@ def _key(tenant_id: str, session_id: str) -> str:
 
 class RedisSessionStore:
     def __init__(self, redis_url: str = "redis://localhost:6379/0", *, ttl_seconds: int = 32400):
-        from windrose_common.redisx import build_redis
+        from datacern_common.redisx import build_redis
 
         self._redis = build_redis(redis_url)
         self._ttl = ttl_seconds

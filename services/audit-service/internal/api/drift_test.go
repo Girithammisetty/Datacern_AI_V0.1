@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/windrose-ai/audit-service/internal/authz"
+	"github.com/datacern-ai/audit-service/internal/authz"
 )
 
 // canonicalVerbs is rbac's canonical action-verb set (MASTER-FR-016). Every

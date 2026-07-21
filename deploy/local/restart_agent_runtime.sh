@@ -4,7 +4,7 @@
 # footgun: this always re-seeds a fresh ai-gateway virtual key and passes it
 # straight to the new process, rather than reusing whatever secret happened
 # to be sitting in a shell/env from a previous boot. See
-# project_windrose docs / KEY_INVALID incident (2026-07-17) for the failure
+# project_datacern docs / KEY_INVALID incident (2026-07-17) for the failure
 # mode this replaces (a manually-restarted process holding a virtual-key
 # secret whose hash no longer matches any row in ai_gateway.virtual_keys).
 #

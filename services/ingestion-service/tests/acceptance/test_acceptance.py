@@ -505,14 +505,14 @@ async def test_ac11_webhook_hmac_and_event_id_dedup(client, auth_a, container) -
     body = json.dumps({"event_id": "evt-1", "value": 42}).encode()
 
     # invalid signature -> 401, nothing buffered / counted
-    bad = await client.post(url, content=body, headers={"X-Windrose-Signature": "0" * 64})
+    bad = await client.post(url, content=body, headers={"X-Datacern-Signature": "0" * 64})
     assert bad.status_code == 401
     assert bad.json()["error"]["code"] == "SIGNATURE_INVALID"
     job = (await client.get(f"/api/v1/ingestions/{data['id']}", headers=auth_a)).json()["data"]
     assert job["rows_appended"] == 0
 
     def sign(payload: bytes) -> dict[str, str]:
-        return {"X-Windrose-Signature": hmac_mod.new(secret, payload, hashlib.sha256).hexdigest()}
+        return {"X-Datacern-Signature": hmac_mod.new(secret, payload, hashlib.sha256).hexdigest()}
 
     ok = await client.post(url, content=body, headers=sign(body))
     assert ok.status_code == 202
@@ -612,5 +612,5 @@ async def test_ac14_concurrent_same_idempotency_key_single_job(client, auth_a) -
 
 # sanity: the JWT plumbing used across these tests is RS256 with iss/aud pinned
 def test_token_configuration_sane() -> None:
-    assert ISSUER.startswith("https://") and AUDIENCE == "windrose"
+    assert ISSUER.startswith("https://") and AUDIENCE == "datacern"
     assert TENANT_A != TENANT_B

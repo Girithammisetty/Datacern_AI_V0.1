@@ -13,14 +13,14 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/identity-service/internal/adapters/denylist"
-	"github.com/windrose-ai/identity-service/internal/adapters/keycloak"
-	"github.com/windrose-ai/identity-service/internal/adapters/terraform"
-	"github.com/windrose-ai/identity-service/internal/api"
-	"github.com/windrose-ai/identity-service/internal/authz"
-	"github.com/windrose-ai/identity-service/internal/domain"
-	"github.com/windrose-ai/identity-service/internal/keys"
-	"github.com/windrose-ai/identity-service/internal/store/memory"
+	"github.com/datacern-ai/identity-service/internal/adapters/denylist"
+	"github.com/datacern-ai/identity-service/internal/adapters/keycloak"
+	"github.com/datacern-ai/identity-service/internal/adapters/terraform"
+	"github.com/datacern-ai/identity-service/internal/api"
+	"github.com/datacern-ai/identity-service/internal/authz"
+	"github.com/datacern-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/identity-service/internal/store/memory"
 )
 
 type fakeClock struct {
@@ -40,7 +40,7 @@ func (c *fakeClock) Advance(d time.Duration) {
 	c.t = c.t.Add(d)
 }
 
-const testSpiffeAgentRuntime = "spiffe://windrose.ai/ns/platform/sa/agent-runtime"
+const testSpiffeAgentRuntime = "spiffe://datacern.ai/ns/platform/sa/agent-runtime"
 
 type fixture struct {
 	t      *testing.T

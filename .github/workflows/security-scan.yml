@@ -1,4 +1,4 @@
-# Windrose security scanning — SAST (semgrep, gosec, bandit), dependency CVEs
+# Datacern security scanning — SAST (semgrep, gosec, bandit), dependency CVEs
 # (trivy) and secrets (gitleaks) on every PR and a weekly full sweep. This is
 # the automated rung of the platform's independent-validation ladder; findings
 # gate merges at HIGH severity and land as SARIF in the GitHub Security tab.

@@ -56,7 +56,7 @@ func ValidateEmbedOrigins(origins []string) error {
 
 // TenantEmbedConfig is a tenant's embedded-UI configuration (IDN-FR-043): the
 // hashed embed secret its backend presents to POST /token/embed, and the
-// origins allowed to frame Windrose surfaces (bound into embed tokens as the
+// origins allowed to frame Datacern surfaces (bound into embed tokens as the
 // frame_ancestors claim).
 type TenantEmbedConfig struct {
 	TenantID       uuid.UUID

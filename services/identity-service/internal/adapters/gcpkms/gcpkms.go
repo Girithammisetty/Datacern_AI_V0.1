@@ -53,7 +53,7 @@ type Signer struct {
 }
 
 // New builds a Signer against a real Cloud KMS key ring (keyRing must already
-// exist — Cloud KMS key rings can't be deleted, so Windrose doesn't create
+// exist — Cloud KMS key rings can't be deleted, so Datacern doesn't create
 // one per boot). Uses application-default credentials unless opts override.
 func New(ctx context.Context, keyRing string, opts ...option.ClientOption) (*Signer, error) {
 	c, err := kms.NewKeyManagementClient(ctx, opts...)

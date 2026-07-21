@@ -1,14 +1,14 @@
 # BRD 03 — ingestion-service
 
 **Service:** ingestion-service · **Language:** Python (FastAPI) · **Phase:** 1
-**Inherits:** `00_MASTER_BRD.md` (all MASTER-FR apply) · **Architecture:** `../../WINDROSE_PLATFORM_ARCHITECTURE.md` §6, §9
+**Inherits:** `00_MASTER_BRD.md` (all MASTER-FR apply) · **Architecture:** `../../DATACERN_PLATFORM_ARCHITECTURE.md` §6, §9
 **V1 sources mined:** `ido/app/models/{connection,datasource,ingestion}.rb`, `ido/db/seeds/files/datasources.json`, `ido/app/poros/{batch_ingestion_creator,ingestion_creator}.rb`, `ido/config/settings.yml`
 
 ---
 
 ## 1. Overview
 
-**Purpose.** ingestion-service owns how external data enters Windrose: source **connections** (databases, cloud storage, SFTP/FTP, HTTP APIs), **ingestion jobs** (file upload, query pull, scheduled/incremental, webhook push), and the streaming path that lands data in the **Iceberg bronze layer**. It replaces the connection/ingestion half of the V1 `ido` Rails service.
+**Purpose.** ingestion-service owns how external data enters Datacern: source **connections** (databases, cloud storage, SFTP/FTP, HTTP APIs), **ingestion jobs** (file upload, query pull, scheduled/incremental, webhook push), and the streaming path that lands data in the **Iceberg bronze layer**. It replaces the connection/ingestion half of the V1 `ido` Rails service.
 
 **Business value.** Every downstream capability (profiling, training, dashboards, triage) starts with ingested data. V1 failures — in-memory file buffering (OOM at ~2GB), unauthenticated lambda callbacks, cron-less "batch versions", opaque errors — directly block customer onboarding. The rebuild must ingest a 10GB file without exceeding a 512MB memory envelope, resume interrupted uploads, and report progress in real time.
 
@@ -159,10 +159,10 @@ Example — create connection (secrets split out explicitly):
 ```json
 POST /api/v1/connections
 {"name":"Prod Warehouse","connector_type":"postgres","traffic_direction":"incoming",
- "config":{"host":"db.acme.internal","port":5432,"database":"sales","username":"windrose_ro","ssl_mode":"require"},
+ "config":{"host":"db.acme.internal","port":5432,"database":"sales","username":"datacern_ro","ssl_mode":"require"},
  "secrets":{"password":"s3cr3t"}}
 → 201 {"data":{"id":"018f6b…","name":"Prod Warehouse","connector_type":"postgres",
-       "config":{"host":"db.acme.internal","port":5432,"database":"sales","username":"windrose_ro","ssl_mode":"require"},
+       "config":{"host":"db.acme.internal","port":5432,"database":"sales","username":"datacern_ro","ssl_mode":"require"},
        "secret_set":true,"last_test_status":"ok","last_tested_at":"2026-07-09T10:12:03Z"}}
 ```
 

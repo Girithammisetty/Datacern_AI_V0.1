@@ -72,7 +72,7 @@ func (m *TokenMinter) MintOBO(tenantID, workspaceID uuid.UUID, userID string) (s
 		"agent_id":      m.AgentID,
 		"agent_version": m.AgentVersion,
 		"obo_sub":       userID,
-		// windrose_authz.rego's agent_obo path requires scope_ok: the
+		// datacern_authz.rego's agent_obo path requires scope_ok: the
 		// INTERSECTION of the agent's own scopes and the impersonated user's
 		// real grants (BR-6) — an agent_obo token with no scopes can never
 		// pass, regardless of what the user holds. This automation calls

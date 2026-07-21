@@ -1,9 +1,9 @@
-# Windrose — Azure infrastructure (Terraform)
+# Datacern — Azure infrastructure (Terraform)
 
 Production-grade, runnable Terraform that provisions the **managed** infrastructure
-for the Windrose platform on Microsoft Azure and stages every credential in **Azure
+for the Datacern platform on Microsoft Azure and stages every credential in **Azure
 Key Vault** so the Helm chart's External-Secrets reference (`values-azure.yaml`) can
-sync them into the in-cluster `windrose-secrets` Secret.
+sync them into the in-cluster `datacern-secrets` Secret.
 
 Nothing here is hardcoded: cloud auth comes from the environment (OIDC / `az login`),
 and application secrets are variables / generated values / Key-Vault entries you fill
@@ -72,7 +72,7 @@ terraform validate
 Key Vault forbids `_` in secret names, so each `UPPER_SNAKE` env key is stored
 **hyphenated + lowercased** (`POSTGRES_HOST` → `postgres-host`). The mapping is emitted
 as the `key_vault_secret_name_map` output; the Helm `values-azure.yaml` ExternalSecret
-`remoteRef.key`s must use the hyphenated names while the resulting `windrose-secrets`
+`remoteRef.key`s must use the hyphenated names while the resulting `datacern-secrets`
 keys stay `UPPER_SNAKE`.
 
 ## Workload Identity wiring (outputs → serviceAccount annotations)
@@ -83,7 +83,7 @@ Annotate the ServiceAccounts so pods federate to the managed identities:
 # External Secrets Operator SA (namespace: external-secrets)
 azure.workload.identity/client-id: <output external_secrets_identity_client_id>
 
-# Blob-using service SAs (namespace: windrose)
+# Blob-using service SAs (namespace: datacern)
 azure.workload.identity/client-id: <output blob_identity_client_id>
 ```
 
@@ -99,9 +99,9 @@ federated credential for your repo, then set the CI secrets
 
 ```bash
 # Example with a user-assigned identity used by the CD workflow:
-az identity create -g <rg> -n windrose-gha
+az identity create -g <rg> -n datacern-gha
 az identity federated-credential create \
-  --identity-name windrose-gha -g <rg> \
+  --identity-name datacern-gha -g <rg> \
   --name github-main \
   --issuer https://token.actions.githubusercontent.com \
   --subject repo:<org>/<repo>:ref:refs/heads/main \

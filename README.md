@@ -1,4 +1,4 @@
-# Windrose
+# Datacern
 
 Multi-tenant, multi-cloud, **agentic-AI-native** ML platform for governed
 insurance-claims decisioning. Built as ~23 independently-deployable services
@@ -67,7 +67,7 @@ single source of truth for the CI build/test matrix and the Helm chart.
 ## Repository layout
 
 ```
-Windrose_AI_V0.1/
+Datacern_AI_V0.1/
   services/       one directory per service (see the tables above)
   libs/           shared libraries (go-common, py-common)
   packs/          capability packs (vertical bundles) + packctl (materializer CLI)

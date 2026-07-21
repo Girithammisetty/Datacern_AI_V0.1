@@ -1,6 +1,6 @@
-# Windrose on Hetzner Cloud (k3s) — dev / staging
+# Datacern on Hetzner Cloud (k3s) — dev / staging
 
-The cheapest way to run the full Windrose stack on a real Kubernetes cluster.
+The cheapest way to run the full Datacern stack on a real Kubernetes cluster.
 Profile: **dev/staging, CPU-only, cost-first.** A single k3s control plane +
 a 3-node agent pool on Hetzner Cloud, with the data tier self-hosted in-cluster.
 
@@ -65,7 +65,7 @@ immediately and you can skip the CSI step above.
 
 ---
 
-## Then: deploy Windrose (either option)
+## Then: deploy Datacern (either option)
 
 1. **Data tier in-cluster.** The stateful deps (Postgres, Redpanda, MinIO,
    Iceberg REST, OpenSearch, ClickHouse, OPA, Keycloak, Temporal, MLflow, Ollama,
@@ -73,7 +73,7 @@ immediately and you can skip the CSI step above.
    ```bash
    # one manual pre-step (OPA policy bundle), then:
    kubectl apply -k deploy/k8s/data-tier
-   kubectl -n windrose exec deploy/ollama -- ollama pull llama3.2:3b
+   kubectl -n datacern exec deploy/ollama -- ollama pull llama3.2:3b
    ```
    **Optional add-ons** (kept out of the kustomization so `apply -k` stays lean):
    Vault (dev-mode BYO-secrets backend) and Mailpit (SMTP capture, UI on `:8025`):
@@ -82,18 +82,18 @@ immediately and you can skip the CSI step above.
    ```
 
 2. **Secrets.** No cloud secret manager here — `create-secrets.sh` builds
-   `windrose-secrets` from `deploy/CONFIG.md`'s key contract, pointed at the data
+   `datacern-secrets` from `deploy/CONFIG.md`'s key contract, pointed at the data
    tier (idempotent; values overridable via env):
    ```bash
    cd deploy/k8s/data-tier && ./create-secrets.sh
    # if you deployed the optional add-ons, wire them in:
-   VAULT_ADDR=http://vault:8200 VAULT_TOKEN=windrose_dev_root \
+   VAULT_ADDR=http://vault:8200 VAULT_TOKEN=datacern_dev_root \
      SMTP_HOST=mailpit SMTP_PORT=1025 ./create-secrets.sh
    ```
    Auth is dynamic — `values-hetzner.yaml` sets `JWKS_URL` to identity-service's
    live endpoint, so no JWT signing secret is needed for dev.
 
-3. **GHCR pull secret.** Windrose's GHCR packages are private and Hetzner has no
+3. **GHCR pull secret.** Datacern's GHCR packages are private and Hetzner has no
    cloud workload identity, so pods authenticate with a docker-registry secret
    (`values-hetzner.yaml` references it as `global.imagePullSecrets: [ghcr-pull]`):
    ```bash
@@ -103,8 +103,8 @@ immediately and you can skip the CSI step above.
 
 4. **App chart.**
    ```bash
-   helm upgrade --install windrose deploy/helm/windrose \
-     -f deploy/helm/windrose/values-hetzner.yaml \
+   helm upgrade --install datacern deploy/helm/datacern \
+     -f deploy/helm/datacern/values-hetzner.yaml \
      --set global.imageTag=<sha>
    ```
 

@@ -37,7 +37,7 @@ function hrefFor(type?: string, path?: string): string | null {
 }
 
 /**
- * Renders any Windrose URN as a typed deep link with an icon + copy action
+ * Renders any Datacern URN as a typed deep link with an icon + copy action
  * (UI-FR-019). Unknown types render as inert text with copy.
  */
 export function UrnLink({ urn, label, className }: { urn: string; label?: string; className?: string }) {

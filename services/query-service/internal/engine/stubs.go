@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 
-	"github.com/windrose-ai/query-service/internal/domain"
+	"github.com/datacern-ai/query-service/internal/domain"
 )
 
 // Warehouse is the per-cloud warehouse adapter (Athena/BigQuery/Synapse per

@@ -1,8 +1,8 @@
 # Per-service database bootstrap. The shared Postgres (core-postgres.yaml) boots
-# with only the `windrose` database; every service connects to its OWN database
+# with only the `datacern` database; every service connects to its OWN database
 # (identity, case_svc, ...) as a per-service NON-superuser NOBYPASSRLS login role.
 # This Job creates those databases so the services' migrations (which run as the
-# `windrose` superuser and self-create their app role + RLS) have a database to
+# `datacern` superuser and self-create their app role + RLS) have a database to
 # migrate into — exactly what deploy/local/up.sh does for the local platform.
 #
 # Login roles: every service EXCEPT `semantic` self-creates its login role inside
@@ -16,7 +16,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: postgres-createdbs
-  namespace: windrose
+  namespace: datacern
 spec:
   backoffLimit: 20
   template:
@@ -26,21 +26,21 @@ spec:
         - name: createdbs
           image: postgres:16-alpine
           env:
-            - { name: PGPASSWORD, value: windrose_dev }
+            - { name: PGPASSWORD, value: datacern_dev }
           command:
             - sh
             - -c
             - |
               set -eu
-              until pg_isready -h postgres -U windrose; do echo "waiting for postgres..."; sleep 2; done
-              PSQL="psql -h postgres -U windrose -v ON_ERROR_STOP=1"
+              until pg_isready -h postgres -U datacern; do echo "waiting for postgres..."; sleep 2; done
+              PSQL="psql -h postgres -U datacern -v ON_ERROR_STOP=1"
               # 1) per-service databases (mirrors deploy/local/up.sh + audit)
               for db in identity rbac tool_plane case_svc realtimehub dataset \
                         ingestion ai_gateway agent_runtime memory pipeline \
                         experiment inference query semantic eval chart usage \
                         notification pack audit; do
                 $PSQL -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" \
-                  | grep -q 1 || createdb -h postgres -U windrose "$db"
+                  | grep -q 1 || createdb -h postgres -U datacern "$db"
                 echo "db ready: $db"
               done
               # 2) pgvector extension where embeddings/vector columns are used

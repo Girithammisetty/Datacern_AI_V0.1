@@ -1,6 +1,6 @@
 # BRD 31 — `investigation-framework` capability pack (LIBRARY pack)
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Pack class:** **LIBRARY** — reusable investigation primitives consumed by vertical packs via `depends_on`. **This pack ships zero user-facing value on its own.** Installing it into a workspace without a consuming vertical pack produces a warning and no visible surface.
 **Horizon:** 2 (ships alongside BRDs 27 + 30 as their shared base; retrofitted into any future investigation-heavy pack).
 **Inherits:** `00_MASTER_BRD.md`, `23_pack_service_BRD.md` (uses `depends_on` mechanism per §PKG-FR-001..007).
@@ -10,14 +10,14 @@
 
 ## 1. Overview
 
-**Purpose.** `investigation-framework` is Windrose's **first library pack** — a signed, versioned bundle of reusable investigation primitives that vertical packs specialize. It ships the canonical 3-specialist agent pattern (Pattern Detector → Network Graph Investigator → Risk Scorer), the graph-navigation and chain-of-custody MCP tool set, shared case schemas for the investigate-plan-validate-execute lifecycle, and the guardrails that every investigation-heavy vertical needs (chain-of-custody, tipping-off-lite, evidence provenance, two-signature referral). Vertical packs (payer FWA, banking AML, banking fraud, capital-markets surveillance, cybersecurity IR, quality investigations) plug their typology-specific rules, models, and vocabulary into these abstract components — never rewriting the primitives themselves.
+**Purpose.** `investigation-framework` is Datacern's **first library pack** — a signed, versioned bundle of reusable investigation primitives that vertical packs specialize. It ships the canonical 3-specialist agent pattern (Pattern Detector → Network Graph Investigator → Risk Scorer), the graph-navigation and chain-of-custody MCP tool set, shared case schemas for the investigate-plan-validate-execute lifecycle, and the guardrails that every investigation-heavy vertical needs (chain-of-custody, tipping-off-lite, evidence provenance, two-signature referral). Vertical packs (payer FWA, banking AML, banking fraud, capital-markets surveillance, cybersecurity IR, quality investigations) plug their typology-specific rules, models, and vocabulary into these abstract components — never rewriting the primitives themselves.
 
 **Why this exists.** Before this pack, BRD 27 (payer FWA) and BRD 30 (banking AML) each independently defined a "case builder + evidence gatherer + risk scorer" pattern with roughly-similar but subtly-different implementations. Future verticals would repeat the pattern again. That's not the pack thesis — that's copy-paste with veneer. Extracting the shared primitives into a library pack:
 
 1. **Proves the pack model works for composition** — packs depending on packs (BRD 23 §PKG-FR-001..007 `depends_on` was designed for this).
 2. **Prevents divergence** — every consumer pack gets the same chain-of-custody guarantees, the same graph navigation tools, the same two-signature enforcement.
 3. **Reduces per-vertical build time** — new investigation packs are ~40% smaller (mostly typology + connectors + regulatory guardrails, not investigation mechanics).
-4. **Enables the ecosystem** — SIs and ISVs publishing packs can build on the same investigation base Windrose ships, so third-party investigation-heavy packs interoperate cleanly.
+4. **Enables the ecosystem** — SIs and ISVs publishing packs can build on the same investigation base Datacern ships, so third-party investigation-heavy packs interoperate cleanly.
 
 **Business value.** Indirect — the pack has no end-user surface. Value accrues through consumer packs. Concretely: every quarter of production investigation data across consumer packs feeds a shared distillation candidate stream (with strict workspace + pack scoping — no cross-tenant leakage) that improves the abstract confidence-calibration + network-anomaly baseline models.
 
@@ -27,14 +27,14 @@
 
 ## 2. Actors & user stories
 
-**Personas (all indirect — they interact with consumer packs, never with this framework directly):** Investigator (any tier), Investigation Supervisor, Compliance Officer, Legal Counsel, Data Steward, Tenant Admin, Windrose Platform Engineer (the persona who installs the framework as a dependency).
+**Personas (all indirect — they interact with consumer packs, never with this framework directly):** Investigator (any tier), Investigation Supervisor, Compliance Officer, Legal Counsel, Data Steward, Tenant Admin, Datacern Platform Engineer (the persona who installs the framework as a dependency).
 
-- **US-1** As a Windrose Platform Engineer installing `banking-aml@1.0.0`, `investigation-framework@1.0.0` installs first (via BRD 23 `?with_dependencies=true`); the consumer pack's specialized agents extend framework agents without duplicating the underlying LangGraph structure.
+- **US-1** As a Datacern Platform Engineer installing `banking-aml@1.0.0`, `investigation-framework@1.0.0` installs first (via BRD 23 `?with_dependencies=true`); the consumer pack's specialized agents extend framework agents without duplicating the underlying LangGraph structure.
 - **US-2** As an SI author writing a new `capital-markets-mar` pack, I `depends_on: investigation-framework ^1.0.0` and inherit chain-of-custody + graph tools + case schemas; I only ship MAR-specific typologies + connectors.
 - **US-3** As an Investigator (in a consumer pack), I open a case; the network graph tool works identically whether I'm in banking-aml or payer-fwa-siu — same UX primitive, different data.
 - **US-4** As a Compliance Officer, the two-signature referral guardrail enforces dual approval on every vertical's external-referral write; if a consumer pack tries to override, it fails install.
 - **US-5** As a Data Steward, when the framework version updates to `1.1.0` and adds a new graph tool, all consumer packs get it automatically on next install; no per-pack redraft.
-- **US-6** As a Windrose Platform Engineer during install validation, the framework refuses to install into a workspace with zero consumer packs present (warns operator: "installing library pack alone provides no user-facing value").
+- **US-6** As a Datacern Platform Engineer during install validation, the framework refuses to install into a workspace with zero consumer packs present (warns operator: "installing library pack alone provides no user-facing value").
 
 ## 3. Functional requirements
 
@@ -46,8 +46,8 @@ Standard pack.yaml v1 per BRD 23. Distinguishing fields:
 pack_manifest: 1
 name: investigation-framework
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
-license: { spdx_id: "Commercial", url: "https://windrose.ai/licenses/framework" }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
+license: { spdx_id: "Commercial", url: "https://datacern.ai/licenses/framework" }
 description: "Reusable investigation primitives (agents, tools, case schemas, guardrails) consumed by vertical packs via depends_on. LIBRARY pack — installs no end-user surface."
 pack_class: library                      # NEW field — distinguishes library from vertical solution pack
 categories: [investigation, framework, library, base-pack]
@@ -275,7 +275,7 @@ Consumed: no cross-service events (framework is passive infrastructure).
 
 ## 7. Dependencies
 
-Windrose Core (all BRDs 01–23). External: none directly; consumer packs bring the external data.
+Datacern Core (all BRDs 01–23). External: none directly; consumer packs bring the external data.
 
 **Reverse dependencies (consumers):**
 - BRD 27 `payer-fwa-siu@1.1.0+` (updated to declare `depends_on: investigation-framework ^1.0.0`)

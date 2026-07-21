@@ -46,10 +46,10 @@ func TestDefaultRuntimeDSNIsNonOwner(t *testing.T) {
 	if !strings.Contains(cfg.DatabaseURL, "chart_app") {
 		t.Errorf("runtime DATABASE_URL must use the non-owner chart_app role, got %q", cfg.DatabaseURL)
 	}
-	if strings.Contains(cfg.DatabaseURL, "windrose:") || strings.Contains(cfg.DatabaseURL, "postgres:postgres") {
+	if strings.Contains(cfg.DatabaseURL, "datacern:") || strings.Contains(cfg.DatabaseURL, "postgres:postgres") {
 		t.Errorf("runtime DATABASE_URL must not be a superuser/owner role, got %q", cfg.DatabaseURL)
 	}
-	if !strings.Contains(cfg.MigrateDatabaseURL, "windrose") {
+	if !strings.Contains(cfg.MigrateDatabaseURL, "datacern") {
 		t.Errorf("migrate DSN should be the owner role, got %q", cfg.MigrateDatabaseURL)
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/windrose-ai/chart-service/internal/domain"
+	"github.com/datacern-ai/chart-service/internal/domain"
 )
 
 // Resolver orchestrates the compile → execute → shape pipeline (CHART-FR-020).

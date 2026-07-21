@@ -14,7 +14,7 @@ def _url() -> str:
     # Migrations create the app role + FORCE RLS, so they must run under a
     # privileged role. INGESTION_MIGRATE_URL (default = DATABASE_URL) lets the
     # runtime DSN point at the NON-superuser ingestion_app role while migrations
-    # still connect as windrose.
+    # still connect as datacern.
     url = (
         config.get_main_option("sqlalchemy.url")
         or os.environ.get("INGESTION_MIGRATE_URL", "")

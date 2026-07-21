@@ -3,8 +3,8 @@
 - `/api/v1/*` admin plane: platform JWT in `Authorization: Bearer` (or an
   allowed SPIFFE identity for the service key-mint path, AIG-FR-032).
 - `/v1/*` data plane: virtual key in `Authorization: Bearer nk-…` + platform
-  JWT in `X-Windrose-JWT` (AIG-FR-001). Tenant identity comes exclusively from
-  the JWT (AIG-FR-002); any `x-windrose-tenant-id` header is ignored."""
+  JWT in `X-Datacern-JWT` (AIG-FR-001). Tenant identity comes exclusively from
+  the JWT (AIG-FR-002); any `x-datacern-tenant-id` header is ignored."""
 
 from __future__ import annotations
 
@@ -55,9 +55,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         key_service = request.app.state.key_service
         request.state.virtual_key = await key_service.authenticate(secret)
 
-        jwt_token = request.headers.get("x-windrose-jwt", "")
+        jwt_token = request.headers.get("x-datacern-jwt", "")
         if not jwt_token:
-            raise Unauthenticated("missing X-Windrose-JWT")
+            raise Unauthenticated("missing X-Datacern-JWT")
         verifier = request.app.state.token_verifier
         principal = await verifier.verify(jwt_token)
         if principal.tenant_id != request.state.virtual_key.tenant_id:

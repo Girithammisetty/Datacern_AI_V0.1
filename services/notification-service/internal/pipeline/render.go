@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	"github.com/windrose-ai/notification-service/internal/templates"
+	gcevent "github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/notification-service/internal/templates"
 )
 
 // templateData builds the whitelisted variable map for a template from an event
@@ -24,7 +24,7 @@ func templateData(env gcevent.Envelope) map[string]any {
 		if dl, ok := env.Payload["deep_link"].(string); ok && dl != "" {
 			data["DeepLink"] = dl
 		} else {
-			data["DeepLink"] = "https://app.windrose.local/" + strings.TrimPrefix(env.ResourceURN, "wr:")
+			data["DeepLink"] = "https://app.datacern.local/" + strings.TrimPrefix(env.ResourceURN, "wr:")
 		}
 	}
 	return data

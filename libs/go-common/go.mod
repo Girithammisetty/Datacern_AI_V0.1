@@ -1,4 +1,4 @@
-module github.com/windrose-ai/go-common
+module github.com/datacern-ai/go-common
 
 go 1.26.5
 

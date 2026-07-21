@@ -1,6 +1,6 @@
 # pipeline-orchestrator
 
-The RETRAIN half of the Windrose learning loop: it owns the definition, validation,
+The RETRAIN half of the Datacern learning loop: it owns the definition, validation,
 compilation, and execution lifecycle of ML pipelines, and turns human triage
 corrections into trained models. Consolidates V1 `pipeline-manager` + `pipeline-service`
 into one service (BRD 09).

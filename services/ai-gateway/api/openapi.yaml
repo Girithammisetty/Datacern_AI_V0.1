@@ -3,7 +3,7 @@ info:
   title: ai-gateway
   version: 0.1.0
   description: >
-    Windrose ai-gateway — the single choke point for every LLM/embedding call.
+    Datacern ai-gateway — the single choke point for every LLM/embedding call.
     OpenAI-compatible data plane (/v1/*) + admin plane (/api/v1/admin/*).
     Spec: docs/brd/12_ai_gateway_BRD.md inheriting 00_MASTER_BRD.md.
     Errors use the envelope {error: {code, message, details?, trace_id}}
@@ -18,14 +18,14 @@ paths:
       summary: Proxy chat completion (stream or not)
       description: >
         Auth: virtual key in Authorization Bearer (nk-…) + platform RS256 JWT
-        in X-Windrose-JWT (AIG-FR-001). Headers: x-windrose-request-class
-        (chat|sql-gen|judge|embed, default chat), x-windrose-workspace-id,
-        x-windrose-agent-id/-version, x-windrose-tool, x-windrose-feature,
-        x-windrose-escalate + x-windrose-prior-request-id, x-windrose-min-rung.
-        x-windrose-tenant-id is IGNORED; tenant comes from the JWT (AIG-FR-002).
-        Response headers: x-windrose-rung, x-windrose-cache (hit|miss|skip),
-        x-windrose-deployment, x-windrose-degraded (budget),
-        x-windrose-guardrail-flags, x-windrose-request-id.
+        in X-Datacern-JWT (AIG-FR-001). Headers: x-datacern-request-class
+        (chat|sql-gen|judge|embed, default chat), x-datacern-workspace-id,
+        x-datacern-agent-id/-version, x-datacern-tool, x-datacern-feature,
+        x-datacern-escalate + x-datacern-prior-request-id, x-datacern-min-rung.
+        x-datacern-tenant-id is IGNORED; tenant comes from the JWT (AIG-FR-002).
+        Response headers: x-datacern-rung, x-datacern-cache (hit|miss|skip),
+        x-datacern-deployment, x-datacern-degraded (budget),
+        x-datacern-guardrail-flags, x-datacern-request-id.
       requestBody:
         required: true
         content:
@@ -189,7 +189,7 @@ components:
     bearerJwt:
       type: http
       scheme: bearer
-      description: RS256 platform JWT (admin) / virtual key nk-… (data plane, + X-Windrose-JWT header)
+      description: RS256 platform JWT (admin) / virtual key nk-… (data plane, + X-Datacern-JWT header)
   schemas:
     ChatCompletionRequest:
       type: object
@@ -197,8 +197,8 @@ components:
       properties:
         model:
           type: string
-          description: '"windrose-auto" delegates rung selection to the ladder; a concrete model_alias is capped by the key''s max_rung'
-          default: windrose-auto
+          description: '"datacern-auto" delegates rung selection to the ladder; a concrete model_alias is capped by the key''s max_rung'
+          default: datacern-auto
         messages: {type: array, items: {type: object}}
         stream: {type: boolean, default: false}
         stream_options: {type: object}

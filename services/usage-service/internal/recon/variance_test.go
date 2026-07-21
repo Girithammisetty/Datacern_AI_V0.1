@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/windrose-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/domain"
 )
 
 func TestComputeLLMThreshold(t *testing.T) {

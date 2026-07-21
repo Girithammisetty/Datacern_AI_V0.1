@@ -18,10 +18,10 @@ async def receive_events(
     path_token: str,
     request: Request,
     container: ContainerDep,
-    x_windrose_signature: Annotated[str | None, Header(alias="X-Windrose-Signature")] = None,
+    x_datacern_signature: Annotated[str | None, Header(alias="X-Datacern-Signature")] = None,
 ) -> JSONResponse:
     body = await request.body()  # capped at 1MB by the service (ING-FR-024)
     result: dict[str, Any] = await WebhookService(container).receive(
-        path_token, body, x_windrose_signature
+        path_token, body, x_datacern_signature
     )
     return JSONResponse(status_code=202, content={"data": result})

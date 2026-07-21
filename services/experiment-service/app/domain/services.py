@@ -159,7 +159,7 @@ class ExperimentService(_Base):
         try:
             mlflow_experiment_id = await self.deps.mlflow.create_experiment(
                 f"{ctx.tenant_id}/{workspace_id}/{name}",
-                tags={"windrose_tenant": ctx.tenant_id, "windrose_workspace": workspace_id},
+                tags={"datacern_tenant": ctx.tenant_id, "datacern_workspace": workspace_id},
             )
         except DependencyUnavailable:
             raise
@@ -321,7 +321,7 @@ class RunService(_Base):
 
     async def _ensure_experiment_from_mlflow(self, ctx: CallCtx, mlflow_run_id: str):
         """Resolve (creating if needed) the local experiment for a run by reading
-        the run's experiment + windrose tags from MLflow. Returns None when the run
+        the run's experiment + datacern tags from MLflow. Returns None when the run
         is unknown to MLflow or is tagged for a different tenant (never cross the
         RLS wall) — the caller then parks/retries as before."""
         mlrun = await self.deps.mlflow.get_run(mlflow_run_id)
@@ -330,11 +330,11 @@ class RunService(_Base):
         if not mlflow_experiment_id:
             return None
         tags = {t["key"]: t["value"] for t in mlrun.get("data", {}).get("tags", [])}
-        run_tenant = tags.get("windrose.tenant_id")
+        run_tenant = tags.get("datacern.tenant_id")
         if run_tenant is not None and run_tenant != ctx.tenant_id:
             return None
         return await MirrorService(self.deps)._ensure_mirror_experiment(
-            ctx, mlflow_experiment_id, tags, tags.get("windrose.workspace_id"))
+            ctx, mlflow_experiment_id, tags, tags.get("datacern.workspace_id"))
 
     async def transition_status(self, ctx: CallCtx, event_type: str, payload: dict) -> Run | None:
         """Run status transitions come from pipeline events (EXP-FR-003)."""
@@ -677,8 +677,8 @@ class MirrorService(_Base):
         trainings had no local version to promote. This closes the gap by
         pulling the full lineage (version -> run -> experiment) from MLflow and
         materialising the local experiment + run + registered model + version.
-        Tenant/workspace come from the run's ``windrose.*`` tags (source of
-        truth); a run whose ``windrose.tenant_id`` does not match ``ctx`` is
+        Tenant/workspace come from the run's ``datacern.*`` tags (source of
+        truth); a run whose ``datacern.tenant_id`` does not match ``ctx`` is
         skipped so the mirror never crosses the RLS wall."""
         mv = await self.deps.mlflow.get_model_version(mlflow_name, str(mlflow_version))
         mlflow_run_id = mv.get("run_id")
@@ -690,13 +690,13 @@ class MirrorService(_Base):
         if not experiment_id:
             return False
         tags = {t["key"]: t["value"] for t in mlrun.get("data", {}).get("tags", [])}
-        if tags.get("windrose.tenant_id") != ctx.tenant_id:
+        if tags.get("datacern.tenant_id") != ctx.tenant_id:
             return False  # not this tenant's run — never mirror across the RLS wall
         if info.get("status") != "FINISHED":
             return False  # only a finished run carries a registrable model (EXP-FR-031)
 
         exp = await self._ensure_mirror_experiment(
-            ctx, experiment_id, tags, tags.get("windrose.workspace_id"))
+            ctx, experiment_id, tags, tags.get("datacern.workspace_id"))
         if exp is None:
             return False
 
@@ -714,7 +714,7 @@ class MirrorService(_Base):
                         return False
 
         flavor = ("mlflow.xgboost"
-                  if "xgb" in (tags.get("windrose.algorithm") or "").lower()
+                  if "xgb" in (tags.get("datacern.algorithm") or "").lower()
                   else "mlflow.sklearn")
         await RegistryService(self.deps).register(ctx, exp.id, run.id, {
             "model_name": mlflow_name, "flavor": flavor,
@@ -730,7 +730,7 @@ class MirrorService(_Base):
         hangs off. Agent-launched trainings land in the shared orchestrator
         MLflow experiment, which was never created through experiment-service,
         so the mirror synthesizes a lightweight container. Workspace comes from
-        the run's ``windrose.workspace_id`` tag (falling back to an existing
+        the run's ``datacern.workspace_id`` tag (falling back to an existing
         tenant experiment's workspace); without one the model cannot be placed
         and the mirror skips it."""
         async with self.uow(ctx.tenant_id) as uow:
@@ -746,10 +746,10 @@ class MirrorService(_Base):
                            ctx.tenant_id, mlflow_experiment_id)
             return None
 
-        template_id = tags.get("windrose.template_id") or mlflow_experiment_id
+        template_id = tags.get("datacern.template_id") or mlflow_experiment_id
         base = f"wr:{ctx.tenant_id}:pipeline:template/{template_id}"
         try:
-            model_type = model_type_code(tags.get("windrose.family") or "classification")
+            model_type = model_type_code(tags.get("datacern.family") or "classification")
         except ValidationFailed:
             model_type = model_type_code("classification")
         try:
@@ -765,7 +765,7 @@ class MirrorService(_Base):
             feature_engineering_pipeline_urn=f"{base}#feature",
             training_pipeline_urn=f"{base}#training",
             description="Auto-mirrored from an MLflow training run (registry mirror).",
-            tags={"windrose_mirror": "true"}, created_by="registry-mirror",
+            tags={"datacern_mirror": "true"}, created_by="registry-mirror",
             created_at=now, updated_at=now)
         async with self.uow(ctx.tenant_id) as uow:
             existing = await uow.experiments.get_by_mlflow_id(mlflow_experiment_id)
@@ -1096,7 +1096,7 @@ def _as_uuid(value: str) -> str:
     try:
         return str(uuid.UUID(value))
     except (ValueError, AttributeError):
-        return str(uuid.uuid5(uuid.NAMESPACE_URL, f"windrose-actor:{value}"))
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, f"datacern-actor:{value}"))
 
 
 def _model_payload(ctx: CallCtx, model: RegisteredModel) -> dict:

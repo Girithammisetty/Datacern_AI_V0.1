@@ -1,6 +1,6 @@
 # payer-fwa-siu capability pack (BRD 27) — Core-neutral edition.
 # Post-payment Fraud/Waste/Abuse detection + Special Investigations Unit
-# workflow for US health payers. Installable TODAY against Windrose Core's
+# workflow for US health payers. Installable TODAY against Datacern Core's
 # public APIs via packctl; the manifest envelope follows BRD 23 so this bundle
 # is forward-compatible with pack-service. Components the current Core cannot
 # materialize are declared under `deferred` with the exact FWA-FR requirement
@@ -8,7 +8,7 @@
 pack_manifest: 1
 name: payer-fwa-siu
 version: 1.0.0
-publisher: { id: pub-windrose, name: "Windrose Inc." }
+publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   Payer-side FWA detection and SIU investigation workflow (BRD 27):
   claim-line FWA scoring seeds (upcoding, unbundling per NCCI, phantom

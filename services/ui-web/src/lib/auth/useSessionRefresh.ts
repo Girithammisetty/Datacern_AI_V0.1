@@ -1,7 +1,7 @@
 "use client";
 import { useEffect } from "react";
 
-/** The Windrose session JWT is short-lived (5 min, MASTER-FR-010). Poll
+/** The Datacern session JWT is short-lived (5 min, MASTER-FR-010). Poll
  * /api/auth/refresh well inside that window so a real-OIDC session renews
  * silently instead of the user hitting a raw "session expired" error mid-
  * task. A no-op (cheap, harmless) for dev-login sessions, which have no

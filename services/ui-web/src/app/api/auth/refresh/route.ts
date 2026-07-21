@@ -1,5 +1,5 @@
 /**
- * Silent session refresh for real OIDC logins (BYO-P4 follow-up). The Windrose
+ * Silent session refresh for real OIDC logins (BYO-P4 follow-up). The Datacern
  * session JWT is intentionally short-lived (5 min, MASTER-FR-010) — without
  * this, a real-SSO user gets bounced to a raw "session expired" error every
  * 5 minutes of active use. The client polls this route in the background

@@ -24,7 +24,7 @@ func URNTenant(urn string) string {
 	return parts[1]
 }
 
-// IsURN reports whether s looks like a windrose URN.
+// IsURN reports whether s looks like a datacern URN.
 func IsURN(s string) bool {
 	return strings.HasPrefix(s, "wr:") && strings.Count(s, ":") >= 3
 }

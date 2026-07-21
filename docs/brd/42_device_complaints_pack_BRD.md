@@ -1,6 +1,6 @@
 # BRD 42 — `device-complaints` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave 2. Reference pattern: BRD 24/30/32. Sibling: BRD 33 (`pharmacovigilance`) — this is the medical-device counterpart: complaint handling + MDR reportability instead of ICSR processing.
 **Status:** v1.0.0 authored, install pending; pack-service-tier components declared `deferred` in the manifest.
 
@@ -16,7 +16,7 @@
 
 **In scope.** Complaint intake triage copilot (validity → duplicate check → harm/event classification → MDR reportability → disposition proposal), MDR-clock tracking, CAPA trend escalation, returned-device follow-up workflow, complaint-quality KPI semantic model + dashboards, device-problem network analytics, Part 803/820 + EU MDR vigilance grounding, device-fleet anomaly + reportability-scoring pipelines.
 
-**Out of scope.** eQMS replacement (the eQMS remains the system of record — Windrose is the governed decisioning layer); eMDR/EUDAMED submission transport (deferred write adapters); recall execution logistics; drug-side adverse events (see `pharmacovigilance`, BRD 33); clinical-trial device deficiency reporting; servicing/repair operations.
+**Out of scope.** eQMS replacement (the eQMS remains the system of record — Datacern is the governed decisioning layer); eMDR/EUDAMED submission transport (deferred write adapters); recall execution logistics; drug-side adverse events (see `pharmacovigilance`, BRD 33); clinical-trial device deficiency reporting; servicing/repair operations.
 
 ## 2. Actors & user stories
 
@@ -100,7 +100,7 @@ Authored materialization: 3 datasets (complaints 26 / devices 30 / products 10 �
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): tenant eQMS/complaint system of record, FDA ESG credentials (eMDR), EUDAMED access, field-service and distributor feeds.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): tenant eQMS/complaint system of record, FDA ESG credentials (eMDR), EUDAMED access, field-service and distributor feeds.
 
 ## 7. NFRs (deltas)
 

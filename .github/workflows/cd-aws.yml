@@ -1,5 +1,5 @@
 # =============================================================================
-# Windrose — Continuous Deployment to AWS (EKS + Helm)
+# Datacern — Continuous Deployment to AWS (EKS + Helm)
 #
 # Keyless: authenticates to AWS via GitHub OIDC (no long-lived cloud keys).
 #
@@ -11,8 +11,8 @@
 #     EKS_CLUSTER                 EKS cluster name (Terraform output cluster_name)
 #     REGISTRY                    image registry, e.g. ghcr.io/acme or <acct>.dkr.ecr.<region>.amazonaws.com
 #     IMAGE_TAG                   default image tag (commit SHA); overridable via dispatch input
-#     WINDROSE_SECRET_NAME        Secrets Manager path (Terraform output windrose_secret_name),
-#                                 e.g. windrose/windrose-secrets
+#     DATACERN_SECRET_NAME        Secrets Manager path (Terraform output datacern_secret_name),
+#                                 e.g. datacern/datacern-secrets
 #     EXTERNAL_SECRETS_ROLE_ARN   IRSA role for ESO (Terraform output external_secrets_role_arn)
 #     WORKLOAD_S3_ROLE_ARN        IRSA role for S3 workloads (Terraform output workload_s3_role_arn)
 #   Optional infra-endpoint variables (else read from the synced Secret / TF output):
@@ -46,10 +46,10 @@ permissions:
 env:
   ESO_VERSION: "0.9.20"
   ESO_NAMESPACE: external-secrets
-  WINDROSE_NAMESPACE: windrose
-  HELM_RELEASE: windrose
-  CHART_PATH: deploy/helm/windrose
-  VALUES_FILE: deploy/helm/windrose/values-aws.yaml
+  DATACERN_NAMESPACE: datacern
+  HELM_RELEASE: datacern
+  CHART_PATH: deploy/helm/datacern
+  VALUES_FILE: deploy/helm/datacern/values-aws.yaml
 
 jobs:
   deploy:
@@ -131,19 +131,19 @@ jobs:
           # this is a harmless idempotent no-op override pointing at the same backend.
 
       - name: Ensure workload namespace
-        run: kubectl create namespace "${WINDROSE_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+        run: kubectl create namespace "${DATACERN_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Helm upgrade Windrose
+      - name: Helm upgrade Datacern
         run: |
           set -euo pipefail
           helm upgrade --install "${HELM_RELEASE}" "${CHART_PATH}" \
-            --namespace "${WINDROSE_NAMESPACE}" --create-namespace \
+            --namespace "${DATACERN_NAMESPACE}" --create-namespace \
             -f "${VALUES_FILE}" \
             --set global.image.registry="${{ vars.REGISTRY }}" \
             --set global.imageTag="${{ steps.vars.outputs.image_tag }}" \
             --set global.aws.region="${{ vars.AWS_REGION }}" \
             --set externalSecrets.secretStoreRef.name=aws-secrets-manager \
-            --set externalSecrets.remoteRefKey="${{ vars.WINDROSE_SECRET_NAME }}" \
+            --set externalSecrets.remoteRefKey="${{ vars.DATACERN_SECRET_NAME }}" \
             --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${{ vars.WORKLOAD_S3_ROLE_ARN }}" \
             --set-string infra.postgres.host="${{ vars.RDS_ENDPOINT }}" \
             --set-string infra.redis.host="${{ vars.REDIS_ENDPOINT }}" \
@@ -153,8 +153,8 @@ jobs:
       - name: Wait for rollout
         run: |
           set -euo pipefail
-          kubectl -n "${WINDROSE_NAMESPACE}" rollout status deploy \
+          kubectl -n "${DATACERN_NAMESPACE}" rollout status deploy \
             --selector "app.kubernetes.io/instance=${HELM_RELEASE}" \
             --timeout=10m || true
           echo "Deployed workloads:"
-          kubectl -n "${WINDROSE_NAMESPACE}" get deploy,sts,po -o wide
+          kubectl -n "${DATACERN_NAMESPACE}" get deploy,sts,po -o wide

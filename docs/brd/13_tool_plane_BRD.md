@@ -1,7 +1,7 @@
 # BRD 13 — tool-plane (tool-registry + MCP gateway)
 
 **Service:** tool-plane — two deployables sharing one DB/bounded context: `tool-registry` (catalog + admin) and `mcp-gateway` (per-call enforcement + MCP hosting/federation) · **Language:** Go (gateway hot path) + Go (registry); Python permitted for the embedding worker · **Phase:** 2
-**Inherits:** `00_MASTER_BRD.md`. Architecture refs: `WINDROSE_PLATFORM_ARCHITECTURE.md` §8.2, §8.6, §10; `WINDROSE_V3_AGENTIC_ARCHITECTURE.md` §5.3.
+**Inherits:** `00_MASTER_BRD.md`. Architecture refs: `DATACERN_PLATFORM_ARCHITECTURE.md` §8.2, §8.6, §10; `DATACERN_V3_AGENTIC_ARCHITECTURE.md` §5.3.
 
 ---
 
@@ -50,7 +50,7 @@ Personas: **Domain Service Team** (tool owner), **Platform Operator**, **Tenant 
  "input_schema": {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
    "additionalProperties": false, "required": ["case_id", "assignee_id"],
    "properties": {
-     "case_id": {"type": "string", "x-windrose-urn": "wr:{tenant}:case:case/{value}"},
+     "case_id": {"type": "string", "x-datacern-urn": "wr:{tenant}:case:case/{value}"},
      "assignee_id": {"type": "string"},
      "note": {"type": "string", "maxLength": 2000}}},
  "output_schema": {"type": "object", "properties": {"case_id": {"type": "string"}, "assignee_id": {"type": "string"}, "assigned_at": {"type": "string", "format": "date-time"}}},
@@ -72,7 +72,7 @@ Personas: **Domain Service Team** (tool owner), **Platform Operator**, **Tenant 
 ### Enforcement pipeline (per invocation, strict order)
 - **TPL-FR-030 (Must)** (1) **AuthN:** verify platform JWT (`typ=agent_obo|agent_autonomous`), extract `{agent_id, agent_version, obo_sub?, tenant_id, scopes}`.
 - **TPL-FR-031 (Must)** (2) **Kill/enablement gate:** tool version not killed/retired; tenant enablement on; agent's pinned toolset includes tool@version-range.
-- **TPL-FR-032 (Must)** (3) **OPA check:** input `{subject: agent principal, obo_sub, tenant, action: tool.invoke, resource: tool URN, tier, args}` → OPA sidecar evaluates: agent toolset scope ∩ OBO user grant on affected resource URNs (args declare URN-bearing fields via schema annotation `x-windrose-urn`) ∩ tenant tier policy ∩ **argument constraints** (tenant matrix + tool-declared bounds). p99 ≤ 10ms (MASTER-FR-012). Deny → 404-shaped MCP error for cross-tenant resources (MASTER-FR-003), `PERMISSION_DENIED` otherwise; both audited.
+- **TPL-FR-032 (Must)** (3) **OPA check:** input `{subject: agent principal, obo_sub, tenant, action: tool.invoke, resource: tool URN, tier, args}` → OPA sidecar evaluates: agent toolset scope ∩ OBO user grant on affected resource URNs (args declare URN-bearing fields via schema annotation `x-datacern-urn`) ∩ tenant tier policy ∩ **argument constraints** (tenant matrix + tool-declared bounds). p99 ≤ 10ms (MASTER-FR-012). Deny → 404-shaped MCP error for cross-tenant resources (MASTER-FR-003), `PERMISSION_DENIED` otherwise; both audited.
 - **TPL-FR-033 (Must)** (4) **Rate limit:** token buckets at (tenant × tool) and (agent_principal × tool), defaults from cost weight (weight 1 → 120/min, weight 10 → 6/min; overridable per tenant). Exceeded → `RATE_LIMITED` + retry-after.
 - **TPL-FR-034 (Must)** (5) **Schema validation:** args validated against `input_schema` (fail → `VALIDATION_FAILED` with per-field details, audited, backend never called). Unknown fields rejected (`additionalProperties: false` enforced at publish).
 - **TPL-FR-035 (Must)** (6) **Tier gate:** `read`/`write-direct`(where permitted) → invoke backend. `write-proposal`/`admin` from an agent → **do not invoke**; return structured `PROPOSAL_REQUIRED {tool_id, version, validated_args, affected_urns, side_effects}` for the runtime's proposal flow (BRD 14). A proposal-execution call (runtime presents `proposal_execution` claim referencing an approved proposal id, verified via signed grant from agent-runtime) passes this gate and invokes.
@@ -232,16 +232,16 @@ POST /api/v1/kill-switches
 - **BR-9** Concurrency: kill-switch check happens both at step 2 and immediately before backend dispatch (a kill landing mid-pipeline still blocks).
 - **BR-10** `tools/list` result size cap 100 tools; callers with larger scopes must use discovery search (protects agent context windows).
 - **BR-11** Argument constraints language: JSON per-field bounds (`max`, `maxLength`, `enum_subset`, `maxItems`) compiled into OPA data — no free-form Rego from tenants.
-- **BR-12** Cross-tenant URN in args (any `x-windrose-urn` field whose tenant segment ≠ caller tenant) → 404-shaped denial + `security.cross_tenant_denied` audit (MASTER-FR-003).
+- **BR-12** Cross-tenant URN in args (any `x-datacern-urn` field whose tenant segment ≠ caller tenant) → 404-shaped denial + `security.cross_tenant_denied` audit (MASTER-FR-003).
 - **BR-13** Registry writes are strongly consistent; gateway caches (schemas, enablement, kill state) are Redis-invalidated with ≤ 5s propagation SLO; correctness-critical state (kill, revocation) uses pub/sub push, enablement may lag up to 5s.
 - **BR-14** Manifest identity binding: a manifest's `owner_service` must equal the SPIFFE identity of the registering workload; mismatch → 403 and a security audit event (prevents one service registering tools that impersonate another's domain).
 - **BR-15** Semantic description quality gate: publish rejects descriptions < 40 chars or lacking a usage sentence ("Use when …") — discovery quality depends on it; lint messages are actionable.
-- **BR-16** Eval mode (`x-windrose-eval: true`, claim-verified as eval-service/runtime replay): `read` tools invoke normally against fixture-backed facades; `write-proposal`/`write-direct`/`admin` calls short-circuit to a stub result `{status:"stubbed"}` before step 6 and are audited with `decision: stubbed` — eval can never mutate tenant data through this plane.
+- **BR-16** Eval mode (`x-datacern-eval: true`, claim-verified as eval-service/runtime replay): `read` tools invoke normally against fixture-backed facades; `write-proposal`/`write-direct`/`admin` calls short-circuit to a stub result `{status:"stubbed"}` before step 6 and are audited with `decision: stubbed` — eval can never mutate tenant data through this plane.
 - **BR-17** Gateway statelessness: no per-session server state is required for correctness (MCP session ids passthrough); any replica can serve any call — horizontal scaling and zero-downtime deploys depend on this invariant (tested by mid-session replica kill).
 
 ## 8. Dependencies
 
-- **Upstream callers:** agent-runtime (all agent tool calls + proposal executions), eval-service (replaying tool calls in eval sandbox mode — invokes with `x-windrose-eval: true` which routes `read` tools normally and stubs write tiers).
+- **Upstream callers:** agent-runtime (all agent tool calls + proposal executions), eval-service (replaying tool calls in eval sandbox mode — invokes with `x-datacern-eval: true` which routes `read` tools normally and stubs write tiers).
 - **Backends:** every domain service MCP facade (contract: MCP pinned spec + registered manifest); external BYO endpoints via egress proxy.
 - **Infra:** Postgres, Redis (rate limits, caches, kill pub/sub), Kafka, OPA sidecar (+ rbac `permissions_flat` Redis projection), Vault (BYO creds), ai-gateway (`embed` class for discovery embeddings), SPIFFE/SPIRE mesh.
 - **Downstream consumers:** audit-service (`ai.tool_invoked.v1`), agent-registry (toolset validation), usage-service (cost-weight usage aggregates via `tool.events`/usage query).
@@ -275,7 +275,7 @@ POST /api/v1/kill-switches
 - **AC-14** Given a `tools/list` request from an agent with a 12-tool pinned toolset in tenant A, Then exactly the intersection (pinned ∩ enabled ∩ published/deprecated ∩ not killed) is returned.
 - **AC-15** Given a manifest registration where the SPIFFE identity does not match `owner_service`, When submitted, Then 403 with a security audit event, and the catalog is unchanged (BR-14).
 - **AC-16** Given a gateway replica is terminated mid-`tools/call` sequence from one client session, When the client retries against surviving replicas, Then calls succeed with no session-affinity requirement (BR-17 statelessness chaos test).
-- **AC-17** Given an eval-mode invocation (`x-windrose-eval: true`, claim-verified) of a `write-proposal` tool, Then the result is `{status:"stubbed"}`, the backend receives nothing, and the audit event records `decision: stubbed`.
+- **AC-17** Given an eval-mode invocation (`x-datacern-eval: true`, claim-verified) of a `write-proposal` tool, Then the result is `{status:"stubbed"}`, the backend receives nothing, and the audit event records `decision: stubbed`.
 
 ## 11. Out of scope / future
 

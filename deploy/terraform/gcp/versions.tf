@@ -27,7 +27,7 @@ terraform {
   # LATER (or pass `-backend-config` in CI). Do not commit bucket names here.
   #
   # backend "gcs" {
-  #   bucket = "REPLACE_ME-windrose-tfstate"
-  #   prefix = "windrose/gcp"
+  #   bucket = "REPLACE_ME-datacern-tfstate"
+  #   prefix = "datacern/gcp"
   # }
 }

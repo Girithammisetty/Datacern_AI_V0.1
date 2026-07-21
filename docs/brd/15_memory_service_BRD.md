@@ -1,7 +1,7 @@
 # BRD 15 — memory-service
 
 **Service:** memory-service · **Language:** Python 3.12 (FastAPI + async workers) · **Phase:** 4 (session+user scopes land with Phase 4 agents; workspace/tenant scopes + full RAG corpora Phase 5)
-**Inherits:** `00_MASTER_BRD.md`. Architecture refs: `WINDROSE_PLATFORM_ARCHITECTURE.md` §8.7, §9.1, §10.3; `WINDROSE_V3_AGENTIC_ARCHITECTURE.md` §5.7.
+**Inherits:** `00_MASTER_BRD.md`. Architecture refs: `DATACERN_PLATFORM_ARCHITECTURE.md` §8.7, §9.1, §10.3; `DATACERN_V3_AGENTIC_ARCHITECTURE.md` §5.7.
 
 ---
 

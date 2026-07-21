@@ -5,7 +5,7 @@
 
 subscription_id = "00000000-0000-0000-0000-000000000000"
 location        = "eastus"
-name_prefix     = "windrose"
+name_prefix     = "datacern"
 environment     = "prod"
 
 tags = {

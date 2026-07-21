@@ -11,4 +11,4 @@ import _ "embed"
 var ToolPlaneRego string
 
 // ToolPlaneModuleID is the OPA policy id used when uploading via the REST API.
-const ToolPlaneModuleID = "windrose_tool_plane"
+const ToolPlaneModuleID = "datacern_tool_plane"

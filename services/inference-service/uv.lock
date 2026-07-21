@@ -1219,7 +1219,7 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn", extra = ["standard"] },
-    { name = "windrose-common" },
+    { name = "datacern-common" },
 ]
 
 [package.dev-dependencies]
@@ -1248,7 +1248,7 @@ requires-dist = [
     { name = "scikit-learn", specifier = ">=1.4" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
-    { name = "windrose-common", editable = "../../libs/py-common" },
+    { name = "datacern-common", editable = "../../libs/py-common" },
 ]
 
 [package.metadata.requires-dev]
@@ -3235,7 +3235,7 @@ wheels = [
 ]
 
 [[package]]
-name = "windrose-common"
+name = "datacern-common"
 version = "0.1.0"
 source = { editable = "../../libs/py-common" }
 dependencies = [

@@ -121,7 +121,7 @@ async def test_ac13_postgres_also_down_fails_closed(engine, clock, container,
 
 
 CACHE_BODY = {
-    "model": "windrose-auto",
+    "model": "datacern-auto",
     "temperature": 0.0,
     "messages": [{"role": "user", "content": (
         "aggregate the quarterly revenue by sales region including growth "
@@ -139,7 +139,7 @@ async def test_pgvector_semantic_cache_hit_and_isolation(client, container):
     r1 = await client.post("/v1/chat/completions", json=CACHE_BODY,
                            headers=dp_headers(secret_a, TENANT_A))
     assert r1.status_code == 200, r1.text
-    assert r1.headers["x-windrose-cache"] == "miss"
+    assert r1.headers["x-datacern-cache"] == "miss"
 
     similar = {**CACHE_BODY, "messages": [{
         "role": "user",
@@ -147,12 +147,12 @@ async def test_pgvector_semantic_cache_hit_and_isolation(client, container):
     }]}
     r2 = await client.post("/v1/chat/completions", json=similar,
                            headers=dp_headers(secret_a, TENANT_A))
-    assert r2.headers["x-windrose-cache"] == "hit"
+    assert r2.headers["x-datacern-cache"] == "hit"
 
     # tenant B, identical prompt → miss (RLS isolates the semantic tier)
     r3 = await client.post("/v1/chat/completions", json=CACHE_BODY,
                            headers=dp_headers(secret_b, TENANT_B))
-    assert r3.headers["x-windrose-cache"] == "miss"
+    assert r3.headers["x-datacern-cache"] == "miss"
 
 
 async def test_outbox_dispatcher_publishes_usage_events(client, container):
@@ -162,7 +162,7 @@ async def test_outbox_dispatcher_publishes_usage_events(client, container):
 
     r = await client.post("/v1/chat/completions", json=CHAT_BODY,
                           headers=dp_headers(secret))
-    request_id = r.headers["x-windrose-request-id"]
+    request_id = r.headers["x-datacern-request-id"]
     assert container.bus.on_topic("ai.token_usage.v1") == []  # not yet dispatched
     published = await container.outbox_dispatcher.run_once()
     assert published >= 1

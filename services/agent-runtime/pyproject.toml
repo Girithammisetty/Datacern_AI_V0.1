@@ -1,7 +1,7 @@
 [project]
 name = "agent-runtime"
 version = "0.1.0"
-description = "Windrose agent-runtime + agent-registry: LangGraph-in-Temporal agent execution, the proposal/HITL framework, and the signed proposal-execution grant issuer (BRD 14)."
+description = "Datacern agent-runtime + agent-registry: LangGraph-in-Temporal agent execution, the proposal/HITL framework, and the signed proposal-execution grant issuer (BRD 14)."
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -22,7 +22,7 @@ dependencies = [
     # Pure-python PDF text extraction for case-evidence grounding (agent reads
     # the actual text of attached claim documents; no native deps / OCR).
     "pypdf>=4.2",
-    "windrose-common",
+    "datacern-common",
 ]
 
 [project.optional-dependencies]
@@ -34,7 +34,7 @@ dependencies = [
 slm-modal = ["modal>=0.64"]
 
 [tool.uv.sources]
-windrose-common = { path = "../../libs/py-common", editable = true }
+datacern-common = { path = "../../libs/py-common", editable = true }
 
 [dependency-groups]
 dev = [

@@ -1,6 +1,6 @@
 # BRD 51 — `tax-notices` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32 pattern). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending (packctl, Core-neutral); pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Corporate tax notice and exemption-certificate resolution AI: notice intake triage with jurisdictional-deadline awareness (response windows forfeit appeal rights when missed), penalty-abatement workflow (first-time abatement / reasonable cause), economic-nexus questionnaire handling post-Wayfair, exemption/resale certificate audit remediation, information-mismatch (CP2000-style) response, and duplicate-notice reconciliation. Sells to corporate tax departments, tax-compliance BPOs and firms, multi-state retailers and SaaS sellers (sales tax), and payroll providers.
 
-**Why this vertical.** Every mid-size multi-state business drowns in agency mail: IRS, ~46 state DORs, and thousands of local jurisdictions issue assessments, penalty notices, mismatches, and questionnaires — each with a hard response window whose expiry converts a contestable proposal into a final liability. Post-Wayfair economic nexus multiplied the registration surface; exemption-certificate hygiene decides sales-tax audits; penalties are winnable (FTA/reasonable cause) while interest is not. Every determination is documented, deadline-bound, and evidence-driven — the exact governed human-in-the-loop decision shape of the Windrose Core, proven by the BRD 30/32 adjudication packs.
+**Why this vertical.** Every mid-size multi-state business drowns in agency mail: IRS, ~46 state DORs, and thousands of local jurisdictions issue assessments, penalty notices, mismatches, and questionnaires — each with a hard response window whose expiry converts a contestable proposal into a final liability. Post-Wayfair economic nexus multiplied the registration surface; exemption-certificate hygiene decides sales-tax audits; penalties are winnable (FTA/reasonable cause) while interest is not. Every determination is documented, deadline-bound, and evidence-driven — the exact governed human-in-the-loop decision shape of the Datacern Core, proven by the BRD 30/32 adjudication packs.
 
 **Business value.** Deadline-breach elimination (no forfeited appeal rights), penalty-dollar recovery (abatement rate lift on FTA/reasonable-cause candidates), avoided double payment (duplicate reconciliation), systemic root-cause fixes (rate-feed lags, cert hygiene, registration gaps stop recurring), analyst throughput, and audit-ready decision files (every response carries its facts + provenance).
 
@@ -99,7 +99,7 @@ Authored materialization: 3 datasets (notices 26 / accounts 30 / entities 12 —
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): agency correspondence channels (IRS e-Services, state DOR portals), ERP tax engine of record, certificate-management system, payroll provider feeds.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): agency correspondence channels (IRS e-Services, state DOR portals), ERP tax engine of record, certificate-management system, payroll provider feeds.
 
 ## 7. NFRs (deltas)
 

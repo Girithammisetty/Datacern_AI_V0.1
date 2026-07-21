@@ -28,20 +28,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 
-	gcevent "github.com/windrose-ai/go-common/event"
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/redisx"
+	gcevent "github.com/datacern-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/usage-service/internal/api"
-	"github.com/windrose-ai/usage-service/internal/authz"
-	"github.com/windrose-ai/usage-service/internal/events"
-	"github.com/windrose-ai/usage-service/internal/ingest"
-	"github.com/windrose-ai/usage-service/internal/jobs"
-	"github.com/windrose-ai/usage-service/internal/store"
+	"github.com/datacern-ai/usage-service/internal/api"
+	"github.com/datacern-ai/usage-service/internal/authz"
+	"github.com/datacern-ai/usage-service/internal/events"
+	"github.com/datacern-ai/usage-service/internal/ingest"
+	"github.com/datacern-ai/usage-service/internal/jobs"
+	"github.com/datacern-ai/usage-service/internal/store"
 )
 
 const (
-	pgAdmin  = "postgres://windrose:windrose_dev@localhost:5432/%s?sslmode=disable"
+	pgAdmin  = "postgres://datacern:datacern_dev@localhost:5432/%s?sslmode=disable"
 	redisAddr = "localhost:6379"
 	opaURL    = "http://localhost:8281"
 )
@@ -99,7 +99,7 @@ func setup() error {
 
 	// --- Real Postgres: fresh DB, migrate as owner, connect as non-owner role.
 	dbName := "usage_it"
-	admin, err := pgxpool.New(dialCtx, fmt.Sprintf(pgAdmin, "windrose"))
+	admin, err := pgxpool.New(dialCtx, fmt.Sprintf(pgAdmin, "datacern"))
 	if err != nil {
 		cancel()
 		return fmt.Errorf("pg admin connect: %w", err)
@@ -177,7 +177,7 @@ func setup() error {
 	srv := &api.Server{
 		Store:    st,
 		Authz:    authz.AllowAll{},
-		Verifier: api.NewVerifierStatic(&key.PublicKey, "windrose-test", "windrose"),
+		Verifier: api.NewVerifierStatic(&key.PublicKey, "datacern-test", "datacern"),
 		Ready:    func(ctx context.Context) error { return st.Ping(ctx) },
 	}
 	httpSrv := httptest.NewServer(srv.Router())
@@ -324,7 +324,7 @@ func (h *harness) token(t *testing.T, tenant uuid.UUID, typ, sub string, scopes 
 	t.Helper()
 	claims := jwt.MapClaims{
 		"sub": sub, "tenant_id": tenant.String(), "typ": typ,
-		"iss": "windrose-test", "aud": "windrose",
+		"iss": "datacern-test", "aud": "datacern",
 		"exp": time.Now().Add(5 * time.Minute).Unix(),
 	}
 	if len(scopes) > 0 {

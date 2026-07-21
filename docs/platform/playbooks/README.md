@@ -1,6 +1,6 @@
-# Windrose AI — Agent Playbooks (all packs)
+# Datacern AI — Agent Playbooks (all packs)
 
-How to use the nine Windrose agents in each vertical pack. Every playbook is grounded in that pack's real manifest — its own semantic models, dashboards, dispositions, roles, and agent instructions. Structure is identical across all: problem → team → nine-agent map → agent-by-agent → operating cycle → governance/eval → honest live-vs-deferred.
+How to use the nine Datacern agents in each vertical pack. Every playbook is grounded in that pack's real manifest — its own semantic models, dashboards, dispositions, roles, and agent instructions. Structure is identical across all: problem → team → nine-agent map → agent-by-agent → operating cycle → governance/eval → honest live-vs-deferred.
 
 ## Enhanced editions (hand-authored, richer domain detail)
 

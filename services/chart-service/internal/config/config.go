@@ -9,12 +9,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/windrose-ai/chart-service/internal/authz"
-	"github.com/windrose-ai/chart-service/internal/cache"
-	"github.com/windrose-ai/chart-service/internal/resolve"
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/go-common/kafka"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/chart-service/internal/authz"
+	"github.com/datacern-ai/chart-service/internal/cache"
+	"github.com/datacern-ai/chart-service/internal/resolve"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 func env(key, def string) string {
@@ -56,7 +56,7 @@ type Config struct {
 func Load() Config {
 	return Config{
 		ListenAddr:         env("LISTEN_ADDR", ":8087"),
-		MigrateDatabaseURL: env("MIGRATE_DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/chart?sslmode=disable"),
+		MigrateDatabaseURL: env("MIGRATE_DATABASE_URL", "postgres://datacern:datacern_dev@localhost:5432/chart?sslmode=disable"),
 		DatabaseURL:        env("DATABASE_URL", "postgres://chart_app:chart_app@localhost:5432/chart?sslmode=disable"),
 		RedisAddr:          env("REDIS_ADDR", "localhost:6379"),
 		OPAURL:             env("OPA_URL", "http://localhost:8281"),

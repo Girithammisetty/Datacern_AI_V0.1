@@ -1,4 +1,4 @@
-"""Shared config, JWKS + token minting for the Windrose e2e journey.
+"""Shared config, JWKS + token minting for the datacern e2e journey.
 
 The harness plays the role of the platform IdP (Keycloak in prod): it holds one
 RSA private key, mints real RS256 platform JWTs, and publishes the matching
@@ -20,8 +20,8 @@ import jwt as pyjwt
 from cryptography.hazmat.primitives import serialization
 
 # ---- issuer / audience (identity-service hardcodes these; everyone matches) ----
-ISS = "https://identity.windrose.ai"
-AUD = "windrose"
+ISS = "https://identity.datacern.ai"
+AUD = "datacern"
 KID = "e2e-harness-key-1"
 NIL_TENANT = "00000000-0000-0000-0000-000000000000"
 
@@ -52,15 +52,15 @@ EXPERIMENT = _u("EXPERIMENT_URL", "http://localhost:8314")
 INFERENCE = _u("INFERENCE_URL", "http://localhost:8316")
 
 # ---- infra ----
-PG = _u("E2E_PG", "postgres://windrose:windrose_dev@localhost:5432")
+PG = _u("E2E_PG", "postgres://datacern:datacern_dev@localhost:5432")
 REDIS_ADDR = _u("E2E_REDIS", "localhost:6379")
 KAFKA = _u("E2E_KAFKA", "localhost:9092")
 SCHEMA_REGISTRY = _u("E2E_SCHEMA_REGISTRY", "http://localhost:8081")
 OPA = _u("E2E_OPA", "http://localhost:8281")
 OLLAMA = _u("E2E_OLLAMA", "http://localhost:11434")
 S3_ENDPOINT = _u("E2E_S3", "http://localhost:9000")
-S3_KEY = "windrose"
-S3_SECRET = "windrose_dev"
+S3_KEY = "datacern"
+S3_SECRET = "datacern_dev"
 ICEBERG = _u("E2E_ICEBERG", "http://localhost:8181")
 OPENSEARCH = _u("E2E_OPENSEARCH", "http://localhost:9200")
 VAULT = _u("E2E_VAULT", "http://localhost:8200")
@@ -155,12 +155,12 @@ def args_digest(args: dict) -> str:
 
 def proposal_grant(sub: str, tenant_id: str, tool_id: str, args_digest_hex: str,
                    proposal_id: str, tier: str = "write-proposal", ttl: int = 120,
-                   issuer: str = "windrose-agent-runtime") -> str:
+                   issuer: str = "datacern-agent-runtime") -> str:
     """Mint the RS256-signed proposal-execution grant tool-plane verifies
     (TPL-FR-035). Signed with the SAME harness key + kid agent-runtime uses
     (AR_GRANT_PRIVATE_KEY_PEM=idp_private.pem, AR_GRANT_KID=e2e-harness-key-1) and
     the agent-runtime issuer, so tool-plane's grant verifier (PROPOSAL_JWKS_URL =
-    agent-runtime JWKS, PROPOSAL_ISSUER = windrose-agent-runtime) accepts it. This
+    agent-runtime JWKS, PROPOSAL_ISSUER = datacern-agent-runtime) accepts it. This
     is exactly the grant agent-runtime issues after a human approves a proposal;
     the harness mints it to drive the full federated write deterministically."""
     now = int(time.time())

@@ -1,6 +1,6 @@
 # BRD 45 — `seller-vetting` capability pack
 
-**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Windrose · **Initial version:** 1.0.0
+**Deliverable type:** Capability Pack (BRD 23) · **Publisher:** Datacern · **Initial version:** 1.0.0
 **Horizon:** 3 pack wave (post-BRD-32). Reference pattern: BRD 24/30/32.
 **Status:** v1.0.0 authored, install pending; pack-service-tier components declared `deferred` in the manifest.
 
@@ -10,7 +10,7 @@
 
 **Purpose.** Marketplace seller vetting and counterfeit/IP-enforcement adjudication AI: onboarding KYB verification with INFORM Consumers Act / EU DSA trader-traceability awareness, counterfeit takedown triage grounded in test-buy and signal-stack evidence, DMCA/trademark claim adjudication that weighs first-sale and claim-abuse defenses, linked-account ring detection, and reinstatement plan-of-action review. Sells to e-commerce marketplaces, app stores, resale platforms, and B2B marketplaces.
 
-**Why this vertical.** Marketplaces carry statutory seller-verification duties (INFORM Consumers Act in the US, DSA trader traceability in the EU) with suspension mandates for non-compliance, plus DMCA safe-harbor clocks and brand-partner SLAs on takedown response; counterfeit and ban-evasion rings scale industrially while false brand claims knock out lawful resellers. Every determination is documented, appealable, and evidence-driven — evidence cuts BOTH ways (enforce vs. protect the seller), the exact governed human-in-the-loop decision shape of the Windrose Core, proven by the BRD 30/32 adjudication packs.
+**Why this vertical.** Marketplaces carry statutory seller-verification duties (INFORM Consumers Act in the US, DSA trader traceability in the EU) with suspension mandates for non-compliance, plus DMCA safe-harbor clocks and brand-partner SLAs on takedown response; counterfeit and ban-evasion rings scale industrially while false brand claims knock out lawful resellers. Every determination is documented, appealable, and evidence-driven — evidence cuts BOTH ways (enforce vs. protect the seller), the exact governed human-in-the-loop decision shape of the Datacern Core, proven by the BRD 30/32 adjudication packs.
 
 **Business value.** Verification-deadline compliance (INFORM/DSA clocks), takedown-response SLA adherence, counterfeit GMV removed faster (signal-stack ranking + test-buy corroboration), lawful-reseller protection (claim-evidence burden + claimant accuracy tracking), ring-resurrection loss reduction, and appeal-ready decision files (every action carries its evidence + provenance).
 
@@ -100,7 +100,7 @@ Authored materialization: 3 datasets (reviews 26 / listings 30 / sellers 12 — 
 
 ## 6. Dependencies
 
-Windrose Core (BRDs 01–23), unmodified. External (deferred connectors): marketplace catalog/seller APIs, brand-registry intake, KYB data providers, device-fingerprint platform, test-buy logistics.
+Datacern Core (BRDs 01–23), unmodified. External (deferred connectors): marketplace catalog/seller APIs, brand-registry intake, KYB data providers, device-fingerprint platform, test-buy logistics.
 
 ## 7. NFRs (deltas)
 

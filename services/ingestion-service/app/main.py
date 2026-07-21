@@ -84,7 +84,7 @@ def create_app(container: Container | None = None, settings: Settings | None = N
     app = FastAPI(
         title="ingestion-service",
         version="0.1.0",
-        description="Windrose ingestion-service (BRD 03): connections, ingestion jobs, "
+        description="Datacern ingestion-service (BRD 03): connections, ingestion jobs, "
         "resumable uploads, schedules, webhook push.",
         lifespan=lifespan,
     )
@@ -94,8 +94,8 @@ def create_app(container: Container | None = None, settings: Settings | None = N
     # Observability (MASTER-FR-050): tracing only. This service keeps its own
     # hand-rolled http_requests_total exposition below, so we deliberately do
     # NOT add RedMiddleware (avoids a duplicate metric-name clash).
-    from windrose_common.metricsx import instrument_app
-    from windrose_common.otelx import configure_tracing
+    from datacern_common.metricsx import instrument_app
+    from datacern_common.otelx import configure_tracing
 
     configure_tracing("ingestion-service")
     instrument_app(app, "ingestion-service")

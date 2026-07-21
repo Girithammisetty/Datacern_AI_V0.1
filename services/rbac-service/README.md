@@ -1,6 +1,6 @@
 # rbac-service
 
-Windrose's authorization data plane (BRD 02). Owns workspaces, groups,
+datacern's authorization data plane (BRD 02). Owns workspaces, groups,
 memberships, roles, the platform action catalog and content grants, and
 **materializes flattened permissions into Redis** (`permissions_flat`) so every
 other service authorizes locally via its OPA sidecar in O(1) — rbac-service is
@@ -15,7 +15,7 @@ docker run -d -p 6379:6379 redis:7
 
 export DATABASE_URL="postgres://rbac:rbac@localhost:5432/rbac?sslmode=disable"
 export REDIS_ADDR="localhost:6379"
-export AUTH_JWKS_URL="https://identity.local/realms/windrose/protocol/openid-connect/certs"  # or AUTH_PUBLIC_KEY_PEM for dev
+export AUTH_JWKS_URL="https://identity.local/realms/datacern/protocol/openid-connect/certs"  # or AUTH_PUBLIC_KEY_PEM for dev
 export KAFKA_BROKERS="localhost:9092"   # optional; in-memory publisher without it
 make run
 ```
@@ -94,7 +94,7 @@ projection semantics cannot diverge by construction. Fallback volume is
 drift (AC-12).
 
 **Decision paths** (RBC-FR-044): `internal/authz/decide.go` is the reference
-implementation of the OPA data contract; `policy/windrose_authz.rego` mirrors
+implementation of the OPA data contract; `policy/datacern_authz.rego` mirrors
 it and is tested for parity through the OPA Go SDK with the same case table.
 Both fail closed on an **unknown principal `typ`** (explicit default-deny in
 the Go switch; no `user_path` in Rego) so they cannot diverge. OBO agents
@@ -141,7 +141,7 @@ body-supplied tenant for authorization (MASTER-FR-002).
 | RBC-FR-041 flattening algorithm | Done | `projection/flatten.go` | `TestFlatten_*` (exhaustive table-driven) |
 | RBC-FR-042 outbox dirty-marking, worker, pub/sub, ≤5s, staleness SLI | Done | `opctx.go`, `projection/worker.go` | `TestAC01`, `TestAC04`, `TestIntegration_InvalidationPubSub` |
 | RBC-FR-043 full rebuild + weekly verification | Done | `cmd/rebuild`, `/admin/projection/{rebuild,verify}` | `TestIntegration_ProjectionRebuild`, `TestAC12` |
-| RBC-FR-044 OPA decision contract + policy bundle | Done | `authz/decide.go`, `policy/windrose_authz.rego` | `TestDecide_*`, `TestPolicy_*` (parity) |
+| RBC-FR-044 OPA decision contract + policy bundle | Done | `authz/decide.go`, `policy/datacern_authz.rego` | `TestDecide_*`, `TestPolicy_*` (parity) |
 | RBC-FR-045 cold-start fallback + warm + alert metric | Done | `authz/checker.go` | `TestAC08_RedisFlushFallback` |
 | RBC-FR-046 explain chain | Done | `authz/explain.go` | `TestIntegration_ExplainFullChain`, `TestAC07` |
 | RBC-FR-047 TTL 24h + refresh-on-read | Done | `RedisWriter` TTL, `RedisReader.OnNearExpiry` | `TestIntegration_ProjectionRecomputeEndToEnd` (TTL assert) |
@@ -179,7 +179,7 @@ consumer DLQ publish through `events.GoCommonPublisher`, backed by the shared
 `go-common/kafka` producer (Redpanda, envelope keyed by `tenant_id`, subject
 registered in Schema Registry). The **decision path** is exercised end-to-end
 against the real OPA container: `libs/go-common/opaclient` reads a user's
-`permissions_flat` slice from Redis and evaluates the `windrose.authz_input`
+`permissions_flat` slice from Redis and evaluates the `datacern.authz_input`
 Rego bundle, and `TestOPAContainerParityWithGoDecide`
 (`internal/integration/opa_parity_test.go`) proves — over a case matrix — that
 the OPA container and rbac's Go `Decide` return identical allow/deny+reason

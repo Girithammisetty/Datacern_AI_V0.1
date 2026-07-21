@@ -61,7 +61,7 @@ module "eks" {
         desired_size = var.node_desired_size
 
         labels = {
-          "windrose.io/nodegroup" = "default"
+          "datacern.io/nodegroup" = "default"
         }
       }
     },
@@ -76,8 +76,8 @@ module "eks" {
         desired_size = 0
 
         labels = {
-          "windrose.io/nodegroup" = "gpu-training"
-          "windrose.ai/workload"  = "slm-training"
+          "datacern.io/nodegroup" = "gpu-training"
+          "datacern.ai/workload"  = "slm-training"
         }
         taints = {
           gpu = {

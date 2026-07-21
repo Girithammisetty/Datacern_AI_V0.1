@@ -26,7 +26,7 @@ Authorization decisions (rbac-service); per-workspace membership (rbac-service);
 
 | Actor | Description |
 |---|---|
-| Platform Admin | Windrose operator; manages tenants, versions, cells |
+| Platform Admin | Datacern operator; manages tenants, versions, cells |
 | Tenant Owner | Customer admin named at tenant creation (`owner_email`) |
 | Tenant User | Human user within a tenant |
 | Service (workload) | Platform service authenticating via SPIFFE mTLS |

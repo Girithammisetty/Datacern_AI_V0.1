@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@/components/ui/primitives";
 import { t } from "@/lib/i18n/messages";
-import { WindroseLogo } from "@/components/brand/WindroseLogo";
+import { DatacernLogo } from "@/components/brand/DatacernLogo";
 import Link from "next/link";
 
 /**
@@ -25,10 +25,10 @@ export default function LoginPage() {
  * emails — the default is a real, provisioned persona (was a dead @acme.com
  * address that failed sign-in). */
 const DEMO_PERSONAS = [
-  { label: "Analyst", email: "adjuster@demo.windrose" },
-  { label: "Manager", email: "manager@demo.windrose" },
-  { label: "Data scientist", email: "datascientist@demo.windrose" },
-  { label: "Admin", email: "admin@demo.windrose" },
+  { label: "Analyst", email: "adjuster@demo.datacern" },
+  { label: "Manager", email: "manager@demo.datacern" },
+  { label: "Data scientist", email: "datascientist@demo.datacern" },
+  { label: "Admin", email: "admin@demo.datacern" },
 ];
 
 /** SSO is offered when the deployment is wired to an OIDC IdP (BYO-P4). Gated
@@ -71,7 +71,7 @@ function LoginForm() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="mb-1 flex items-center gap-2.5">
-            <WindroseLogo className="size-9" />
+            <DatacernLogo className="size-9" />
             <CardTitle className="text-2xl">{t("app.name")}</CardTitle>
           </div>
           <CardDescription>{t("app.tagline")}</CardDescription>
@@ -143,7 +143,7 @@ function LoginForm() {
             <p className="text-center text-xs text-muted-foreground">
               New here?{" "}
               <Link href="/welcome" className="underline underline-offset-2 hover:text-foreground">
-                See what Windrose AI does
+                See what Datacern AI does
               </Link>
             </p>
           </div>

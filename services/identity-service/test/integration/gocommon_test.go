@@ -23,15 +23,15 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/authjwt"
 
-	"github.com/windrose-ai/identity-service/internal/adapters/denylist"
-	"github.com/windrose-ai/identity-service/internal/adapters/vault"
-	"github.com/windrose-ai/identity-service/internal/domain"
-	"github.com/windrose-ai/identity-service/internal/keys"
-	"github.com/windrose-ai/identity-service/internal/store/memory"
+	"github.com/datacern-ai/identity-service/internal/adapters/denylist"
+	"github.com/datacern-ai/identity-service/internal/adapters/vault"
+	"github.com/datacern-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/identity-service/internal/store/memory"
 
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 func vaultAddr() string {
@@ -45,7 +45,7 @@ func vaultToken() string {
 	if t := os.Getenv("VAULT_TOKEN"); t != "" {
 		return t
 	}
-	return "windrose_dev_root"
+	return "datacern_dev_root"
 }
 
 func redisAddr() string {
@@ -147,7 +147,7 @@ func TestVaultSignedToken_VerifiesViaGoCommonJWKS(t *testing.T) {
 	}))
 	defer jwksSrv.Close()
 
-	v := authjwt.NewJWKS(jwksSrv.URL, "https://identity.windrose.ai", "windrose")
+	v := authjwt.NewJWKS(jwksSrv.URL, "https://identity.datacern.ai", "datacern")
 	claims, err := v.Verify(ctx, tok)
 	if err != nil {
 		t.Fatalf("go-common verify of Vault-signed token failed: %v", err)

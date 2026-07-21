@@ -30,15 +30,15 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 
-	"github.com/windrose-ai/chart-service/internal/api"
-	"github.com/windrose-ai/chart-service/internal/authz"
-	"github.com/windrose-ai/chart-service/internal/cache"
-	"github.com/windrose-ai/chart-service/internal/events"
-	"github.com/windrose-ai/chart-service/internal/export"
-	"github.com/windrose-ai/chart-service/internal/resolve"
-	"github.com/windrose-ai/chart-service/internal/store"
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/chart-service/internal/api"
+	"github.com/datacern-ai/chart-service/internal/authz"
+	"github.com/datacern-ai/chart-service/internal/cache"
+	"github.com/datacern-ai/chart-service/internal/events"
+	"github.com/datacern-ai/chart-service/internal/export"
+	"github.com/datacern-ai/chart-service/internal/resolve"
+	"github.com/datacern-ai/chart-service/internal/store"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 type harness struct {
@@ -139,7 +139,7 @@ func TestMain(m *testing.M) {
 	pg := store.NewPG(pool)
 	server := &api.Server{
 		Store: pg, Cache: resultCache, Authz: authz.AllowAll{}, Resolver: resolver,
-		Verifier:   authjwt.NewStatic(&key.PublicKey, "windrose-test", "windrose"),
+		Verifier:   authjwt.NewStatic(&key.PublicKey, "datacern-test", "datacern"),
 		Exports:    export.NewFSStore(os.TempDir()+"/chart-exports", "http://test", []byte("it-secret")),
 		PreviewSem: make(chan struct{}, 5),
 	}
@@ -225,7 +225,7 @@ func (h *harness) token(t *testing.T, tenant uuid.UUID) string {
 	t.Helper()
 	claims := jwt.MapClaims{
 		"sub": "user-1", "tenant_id": tenant.String(), "typ": "user",
-		"iss": "windrose-test", "aud": "windrose", "exp": time.Now().Add(5 * time.Minute).Unix(),
+		"iss": "datacern-test", "aud": "datacern", "exp": time.Now().Add(5 * time.Minute).Unix(),
 	}
 	s, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(h.key)
 	if err != nil {

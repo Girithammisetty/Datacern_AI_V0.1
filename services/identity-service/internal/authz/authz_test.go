@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/go-common/opaclient"
-	"github.com/windrose-ai/go-common/redisx"
+	"github.com/datacern-ai/go-common/opaclient"
+	"github.com/datacern-ai/go-common/redisx"
 
-	"github.com/windrose-ai/identity-service/internal/authz"
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/authz"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 // TestOPAAuthorizerSuperAdminShortCircuit: a platform.admin token authorizes

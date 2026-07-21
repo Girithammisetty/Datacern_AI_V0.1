@@ -1,4 +1,4 @@
-module github.com/windrose-ai/query-service
+module github.com/datacern-ai/query-service
 
 go 1.26.5
 
@@ -13,11 +13,11 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
-	github.com/windrose-ai/go-common v0.0.0
+	github.com/datacern-ai/go-common v0.0.0
 	google.golang.org/protobuf v1.36.11
 )
 
-replace github.com/windrose-ai/go-common => ../../libs/go-common
+replace github.com/datacern-ai/go-common => ../../libs/go-common
 
 require (
 	dario.cat/mergo v1.0.2 // indirect

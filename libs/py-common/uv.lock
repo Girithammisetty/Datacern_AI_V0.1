@@ -2049,7 +2049,7 @@ wheels = [
 ]
 
 [[package]]
-name = "windrose-common"
+name = "datacern-common"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

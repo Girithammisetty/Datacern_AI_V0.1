@@ -4,10 +4,10 @@ import (
 	"context"
 	"os"
 
-	gckafka "github.com/windrose-ai/go-common/kafka"
-	gcevent "github.com/windrose-ai/go-common/event"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	gcevent "github.com/datacern-ai/go-common/event"
 
-	"github.com/windrose-ai/identity-service/internal/domain"
+	"github.com/datacern-ai/identity-service/internal/domain"
 )
 
 // Topic is identity-service's event topic (MASTER-FR-030).

@@ -17,17 +17,17 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/windrose-ai/go-common/authjwt"
-	"github.com/windrose-ai/go-common/otelx"
-	"github.com/windrose-ai/go-common/redisx"
-	"github.com/windrose-ai/tool-plane/internal/api"
-	"github.com/windrose-ai/tool-plane/internal/authz"
-	"github.com/windrose-ai/tool-plane/internal/enforce"
-	"github.com/windrose-ai/tool-plane/internal/events"
-	"github.com/windrose-ai/tool-plane/internal/mcp"
-	"github.com/windrose-ai/tool-plane/internal/register"
-	"github.com/windrose-ai/tool-plane/internal/store"
-	"github.com/windrose-ai/tool-plane/policy"
+	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/otelx"
+	"github.com/datacern-ai/go-common/redisx"
+	"github.com/datacern-ai/tool-plane/internal/api"
+	"github.com/datacern-ai/tool-plane/internal/authz"
+	"github.com/datacern-ai/tool-plane/internal/enforce"
+	"github.com/datacern-ai/tool-plane/internal/events"
+	"github.com/datacern-ai/tool-plane/internal/mcp"
+	"github.com/datacern-ai/tool-plane/internal/register"
+	"github.com/datacern-ai/tool-plane/internal/store"
+	"github.com/datacern-ai/tool-plane/policy"
 )
 
 func env(k, d string) string {
@@ -42,7 +42,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Distributed tracing (no-op unless WINDROSE_OTEL_ENABLED / an OTLP endpoint
+	// Distributed tracing (no-op unless datacern_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "mcp-gateway")
 	defer func() { _ = otelShutdown(context.Background()) }()
@@ -57,7 +57,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	dbURL := env("DATABASE_URL", "postgres://windrose:windrose_dev@localhost:5432/tool_plane?sslmode=disable")
+	dbURL := env("DATABASE_URL", "postgres://datacern:datacern_dev@localhost:5432/tool_plane?sslmode=disable")
 	// The registry applies migrations; the gateway retries a lightweight apply so
 	// it is safe to start either first. Migrations run under a privileged role
 	// (MIGRATE_DATABASE_URL, default = DATABASE_URL); the runtime pool connects as
@@ -110,7 +110,7 @@ func main() {
 	// verified, human-approved grant.
 	proposals := authz.NewProposalVerifierJWKS(
 		env("PROPOSAL_JWKS_URL", "http://agent-runtime/api/v1/.well-known/jwks.json"),
-		env("PROPOSAL_ISSUER", "windrose-agent-runtime"))
+		env("PROPOSAL_ISSUER", "datacern-agent-runtime"))
 
 	pipeline := &enforce.Pipeline{
 		Catalog:    api.NewCatalogResolver(st),

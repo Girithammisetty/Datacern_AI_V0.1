@@ -2,7 +2,7 @@
 -- runtime as usage_app — a NOSUPERUSER NOBYPASSRLS role that is NOT the schema
 -- owner — so Postgres RLS actually binds it (superusers/owners with BYPASSRLS
 -- would silently defeat tenant isolation). Migrations run as the owner
--- (windrose/postgres) which creates this role and grants it CRUD; the default
+-- (datacern/postgres) which creates this role and grants it CRUD; the default
 -- DATABASE_URL in cmd/server points at usage_app, never at the owner.
 DO $$
 BEGIN

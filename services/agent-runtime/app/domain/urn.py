@@ -1,4 +1,4 @@
-"""Windrose resource URNs (MASTER-FR-013): wr:<tenant>:<service>:<type>/<id>."""
+"""Datacern resource URNs (MASTER-FR-013): wr:<tenant>:<service>:<type>/<id>."""
 
 from __future__ import annotations
 

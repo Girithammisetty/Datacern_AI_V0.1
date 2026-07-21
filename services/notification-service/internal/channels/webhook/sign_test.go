@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/windrose-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/domain"
 )
 
 // TestAC04_SignatureVerifyAndReplay proves a consumer can verify the
-// X-Windrose-Signature with HMAC-SHA256 over timestamp.body and that a stale
+// X-Datacern-Signature with HMAC-SHA256 over timestamp.body and that a stale
 // timestamp (>300s) fails (AC-4).
 func TestAC04_SignatureVerifyAndReplay(t *testing.T) {
 	secret := "sekret"

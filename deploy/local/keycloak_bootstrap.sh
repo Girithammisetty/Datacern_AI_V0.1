@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Bootstrap the running local Keycloak (:8180) as a REAL OIDC IdP for Windrose
-# (BYO-P4 real OIDC login). Idempotent: creates the `windrose` realm, a public
-# `windrose-web` client (authorization code + PKCE S256, redirect to ui-web's
-# callback), and a test user whose email matches a seeded Windrose user so the
+# Bootstrap the running local Keycloak (:8180) as a REAL OIDC IdP for Datacern
+# (BYO-P4 real OIDC login). Idempotent: creates the `datacern` realm, a public
+# `datacern-web` client (authorization code + PKCE S256, redirect to ui-web's
+# callback), and a test user whose email matches a seeded Datacern user so the
 # /token/oidc login resolves it. Keycloak is a standards-compliant OIDC provider
 # — it's the local stand-in for a customer's Okta/Auth0/Entra tenant.
 #
@@ -12,12 +12,12 @@ set -uo pipefail
 KC="${KEYCLOAK_URL:-http://localhost:8180}"
 ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
-REALM="${OIDC_REALM:-windrose}"
-CLIENT_ID="${OIDC_CLIENT_ID:-windrose-web}"
+REALM="${OIDC_REALM:-datacern}"
+CLIENT_ID="${OIDC_CLIENT_ID:-datacern-web}"
 REDIRECT="${OIDC_REDIRECT:-http://localhost:3000/api/auth/callback}"
 POST_LOGOUT_REDIRECT="${OIDC_POST_LOGOUT_REDIRECT:-http://localhost:3000/login}"
 WEB_ORIGIN="${OIDC_WEB_ORIGIN:-http://localhost:3000}"
-USER_EMAIL="${1:-datascientist@demo.windrose}"
+USER_EMAIL="${1:-datascientist@demo.datacern}"
 USER_PASS="${2:-Passw0rd!}"
 
 GRN=$'\e[32m'; YLW=$'\e[33m'; BLU=$'\e[36m'; RED=$'\e[31m'; NC=$'\e[0m'
@@ -61,7 +61,7 @@ else
   curl -s -m10 "${AUTH[@]}" -X POST "$KC/admin/realms/$REALM/clients" -d "$CLIENT_BODY" >/dev/null && ok "client created" || die "client create failed"
 fi
 
-# --- test user (email == a seeded Windrose user) -----------------------------
+# --- test user (email == a seeded Datacern user) -----------------------------
 uid="$(curl -s -m10 "${AUTH[@]}" "$KC/admin/realms/$REALM/users?email=$USER_EMAIL&exact=true" \
   | python3 -c 'import sys,json; a=json.load(sys.stdin); print(a[0]["id"] if a else "")')"
 if [ -z "$uid" ]; then

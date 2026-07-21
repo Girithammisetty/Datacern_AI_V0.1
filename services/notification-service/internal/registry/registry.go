@@ -6,7 +6,7 @@
 // PR-reviewed change; unmapped events are ignored by the pipeline.
 package registry
 
-import "github.com/windrose-ai/go-common/event"
+import "github.com/datacern-ai/go-common/event"
 
 // AudienceRole is a derived-audience group resolved via the rbac projection
 // (NOTIF-FR-013) rather than a literal payload principal.

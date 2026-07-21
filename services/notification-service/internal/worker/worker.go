@@ -13,13 +13,13 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/windrose-ai/notification-service/internal/channels/email"
-	"github.com/windrose-ai/notification-service/internal/channels/webhook"
-	"github.com/windrose-ai/notification-service/internal/domain"
-	"github.com/windrose-ai/notification-service/internal/events"
-	"github.com/windrose-ai/notification-service/internal/pipeline"
-	"github.com/windrose-ai/notification-service/internal/store"
-	"github.com/windrose-ai/notification-service/internal/templates"
+	"github.com/datacern-ai/notification-service/internal/channels/email"
+	"github.com/datacern-ai/notification-service/internal/channels/webhook"
+	"github.com/datacern-ai/notification-service/internal/domain"
+	"github.com/datacern-ai/notification-service/internal/events"
+	"github.com/datacern-ai/notification-service/internal/pipeline"
+	"github.com/datacern-ai/notification-service/internal/store"
+	"github.com/datacern-ai/notification-service/internal/templates"
 )
 
 // Worker runs the durable sweepers.
@@ -102,7 +102,7 @@ func (w *Worker) flushDigests(ctx context.Context) error {
 func (w *Worker) sendDigest(ctx context.Context, b *domain.DigestBuffer) {
 	data := map[string]any{"Count": len(b.Items), "Items": b.Items}
 	key := "digest." + b.EventClass
-	subject, text, html := "Your Windrose digest", "", ""
+	subject, text, html := "Your Datacern digest", "", ""
 	if t, err := w.Store.ResolveTemplate(ctx, b.TenantID, key, domain.ChannelEmail, "en"); err == nil && t != nil {
 		if r, rerr := templates.Render(t.SubjectTpl, t.BodyHTMLTpl, t.BodyTextTpl, data); rerr == nil {
 			subject, text, html = r.Subject, r.Text, r.HTML

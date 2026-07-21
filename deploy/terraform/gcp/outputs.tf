@@ -86,13 +86,13 @@ output "gcs_buckets" {
 ########################################
 
 output "secret_id" {
-  description = "Secret Manager secret id backing windrose-secrets (reference from the ExternalSecret remoteRef)."
-  value       = google_secret_manager_secret.windrose.secret_id
+  description = "Secret Manager secret id backing datacern-secrets (reference from the ExternalSecret remoteRef)."
+  value       = google_secret_manager_secret.datacern.secret_id
 }
 
 output "secret_resource_name" {
   description = "Fully-qualified Secret Manager resource name."
-  value       = google_secret_manager_secret.windrose.name
+  value       = google_secret_manager_secret.datacern.name
 }
 
 ########################################
