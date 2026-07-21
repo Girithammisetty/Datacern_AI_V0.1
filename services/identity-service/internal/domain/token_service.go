@@ -32,6 +32,10 @@ type TokenService struct {
 	IdpBuild func(TenantIdpConfig) IdentityProvider
 	idpMu    sync.Mutex
 	idpCache map[uuid.UUID]cachedIdp
+
+	// Workspaces resolves a tenant's default workspace for interactive OIDC
+	// logins (see WorkspaceResolver). Optional — nil is a no-op.
+	Workspaces WorkspaceResolver
 }
 
 type cachedIdp struct {

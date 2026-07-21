@@ -233,6 +233,12 @@ func main() {
 		Store: store, Issuer: issuer, Verifier: issuer, Denylist: deny,
 		Limiter: domain.NewSlidingWindowLimiter(domain.OBORateLimit, domain.OBORateWindow), Clock: clock,
 	}
+	// Real-OIDC login default-workspace resolution (see WorkspaceResolver) —
+	// same RBAC_URL gate as the last-admin checker above; a missing RBAC_URL
+	// just leaves OIDC sessions unscoped, as before this was added.
+	if rbacURL != "" {
+		tokens.Workspaces = &rbacclient.WorkspaceResolver{BaseURL: rbacURL, Issuer: issuer, Log: log}
+	}
 
 	// BYO-P4 per-tenant IdP: build an OIDC provider from a tenant's stored config
 	// (tenant_idp_configs). Injected so the domain layer stays free of the OIDC

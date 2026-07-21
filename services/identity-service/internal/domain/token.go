@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -74,6 +75,15 @@ type TokenIssuer interface {
 	Issue(claims Claims) (token string, expiresIn int, err error)
 	// IssueWithTTL signs claims with an explicit lifetime (embed tokens are short).
 	IssueWithTTL(claims Claims, ttl time.Duration) (token string, expiresIn int, err error)
+}
+
+// WorkspaceResolver looks up a tenant's default workspace so an interactive
+// login (real OIDC — dev-login gets this from a seeded persona instead) can
+// set the session's workspace_id claim without a hardcoded config. Optional:
+// a nil resolver (or a lookup error) leaves workspace_id unset, matching
+// prior behavior — a missing default workspace must never block sign-in.
+type WorkspaceResolver interface {
+	DefaultWorkspaceID(ctx context.Context, tenantID uuid.UUID) (string, error)
 }
 
 // TokenVerifier verifies inbound platform JWTs. Implementations MUST accept

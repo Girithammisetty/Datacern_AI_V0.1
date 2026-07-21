@@ -115,12 +115,27 @@ func (s *TokenService) OIDCLogin(ctx context.Context, req OIDCLoginRequest, trac
 		scopes = []string{"platform.admin", "super_admin", "operator", "ai.platform.admin"}
 		platformAdmin = true
 	}
+
+	// Land the session in the tenant's default workspace, same as a dev-login
+	// session gets from its seeded persona config — without this, real-OIDC
+	// users get an unscoped session and workspace-scoped pages (Dashboards,
+	// etc.) render empty even though the tenant/nav resolve fine otherwise. A
+	// lookup failure must never block sign-in, so it degrades to the prior
+	// unscoped behavior rather than failing the login.
+	workspaceID := ""
+	if s.Workspaces != nil {
+		if ws, err := s.Workspaces.DefaultWorkspaceID(ctx, tenant.ID); err == nil {
+			workspaceID = ws
+		}
+	}
+
 	tok, expiresIn, err := s.Issuer.Issue(Claims{
 		Subject:       user.ID.String(),
 		TenantID:      tenant.ID,
 		Typ:           TypUser,
 		Scopes:        scopes,
 		PlatformAdmin: platformAdmin,
+		WorkspaceID:   workspaceID,
 	})
 	if err != nil {
 		return nil, err
