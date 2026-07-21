@@ -96,10 +96,24 @@ services:
       echo 'buckets ready'"
 
   # --- Real Iceberg REST catalog (backed by MinIO) ---
+  # One-shot init: the icebergdata named volume is created root-owned by
+  # Docker on first use (and on every `make reset` recreate), but the
+  # apache/iceberg-rest-fixture image runs as uid 1000 (iceberg) — without
+  # this, the container crash-loops on "Permission denied" opening the
+  # persisted sqlite catalog file. Recurring gotcha (hit multiple times
+  # before this was made permanent); see project_windrose_iceberg_persistence
+  # memory. Gated via service_completed_successfully so it always runs
+  # before iceberg-rest, exits 0, and costs nothing on subsequent `up`s.
+  iceberg-rest-init:
+    image: alpine:3.20
+    volumes: ["icebergdata:/persist"]
+    command: ["sh", "-c", "chown -R 1000:1000 /persist"]
+
   iceberg-rest:
     image: apache/iceberg-rest-fixture:1.9.2
     depends_on:
       minio: { condition: service_healthy }
+      iceberg-rest-init: { condition: service_completed_successfully }
     environment:
       CATALOG_WAREHOUSE: s3://windrose-warehouse/
       CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
