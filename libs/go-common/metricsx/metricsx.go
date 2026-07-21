@@ -68,6 +68,20 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
+// Flush makes statusRecorder satisfy http.Flusher when the wrapped writer
+// does. Embedding http.ResponseWriter only promotes the interface's own
+// methods (Header/Write/WriteHeader) — Flush is not part of that interface,
+// so a handler's `w.(http.Flusher)` type assertion fails on every request
+// that goes through this middleware without this passthrough, breaking any
+// SSE/streaming endpoint (realtime-hub's handleSSE included) with a
+// misleading "streaming unsupported" error even though the real underlying
+// writer supports it fine.
+func (s *statusRecorder) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // routeOf resolves a low-cardinality route label. It prefers a chi route
 // pattern when the caller supplies one; otherwise it falls back to the method
 // only path bucket "other" to avoid unbounded label cardinality from raw paths.
