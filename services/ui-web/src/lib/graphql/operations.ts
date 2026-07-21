@@ -147,6 +147,8 @@ import type {
   PackInstallPlan,
   PackUninstallResult,
   PackCompleteResult,
+  PackDrift,
+  PackTransition,
   DatasetColumn,
   SemanticModelSummary,
   SemanticModelVersion,
@@ -598,6 +600,38 @@ export const COMPLETE_PACK_INSTALL = /* GraphQL */ `
   }
 `;
 export interface CompletePackInstallResult { completePackInstall: PackCompleteResult }
+
+export const PACK_DRIFT = /* GraphQL */ `
+  query PackDrift($installId: ID!) {
+    packDrift(installId: $installId) {
+      id pack version workspaceId superseded drifted inSync summary
+    }
+  }
+`;
+export interface PackDriftResult { packDrift: PackDrift | null }
+
+const TRANSITION_FIELDS = `
+  id pack operation fromVersion toVersion dryRun status supersedes
+  diff { added removed retained }
+`;
+
+export const UPGRADE_PACK = /* GraphQL */ `
+  mutation UpgradePack($installId: ID!, $dryRun: Boolean!, $idempotencyKey: String) {
+    upgradePack(installId: $installId, dryRun: $dryRun, idempotencyKey: $idempotencyKey) {
+      ${TRANSITION_FIELDS}
+    }
+  }
+`;
+export interface UpgradePackResult { upgradePack: PackTransition }
+
+export const ROLLBACK_PACK = /* GraphQL */ `
+  mutation RollbackPack($installId: ID!, $toInstallId: ID, $dryRun: Boolean!, $idempotencyKey: String) {
+    rollbackPack(installId: $installId, toInstallId: $toInstallId, dryRun: $dryRun, idempotencyKey: $idempotencyKey) {
+      ${TRANSITION_FIELDS}
+    }
+  }
+`;
+export interface RollbackPackResult { rollbackPack: PackTransition }
 
 export const DELETE_CONNECTION = /* GraphQL */ `
   mutation DeleteConnection($id: ID!) {

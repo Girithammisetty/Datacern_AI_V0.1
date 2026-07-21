@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/utils";
 
@@ -101,5 +101,54 @@ describe("PacksPage (BRD 23 capability packs)", () => {
     const row = await screen.findByTestId("pack-install-row");
     expect(within(row).getByText("card-disputes")).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: /Uninstall/i })).toBeInTheDocument();
+  });
+
+  const installedRow = {
+    packInstalls: [{ id: "i-1", pack: "card-disputes", version: "1.0.0", workspaceId: "ws",
+      status: "installed", summary: { created: 10 }, createdBy: "u", createdAt: null }],
+  };
+
+  it("checks drift and shows the summary", async () => {
+    handler = (doc: string) => {
+      if (doc.includes("query PackInstalls")) return installedRow;
+      if (doc.includes("query PackDrift")) return { packDrift: {
+        id: "i-1", pack: "card-disputes", version: "1.0.0", workspaceId: "ws",
+        superseded: false, drifted: 2, inSync: false,
+        summary: { objects: 9, modified: 1, missing: 1, unverified: 0 }, objects: [] } };
+      return base(doc);
+    };
+    const user = userEvent.setup();
+    renderWithProviders(<PacksPage />);
+    const row = await screen.findByTestId("pack-install-row");
+    await user.click(within(row).getByRole("button", { name: /Check drift/i }));
+    const res = await within(row).findByTestId("pack-drift-result");
+    expect(within(res).getByText(/2 objects drifted/)).toBeInTheDocument();
+  });
+
+  it("previews an upgrade diff, then executes only on confirm", async () => {
+    const calls: any[] = [];
+    handler = (doc: string, vars: any) => {
+      if (doc.includes("query PackInstalls")) return installedRow;
+      if (doc.includes("mutation UpgradePack")) {
+        calls.push(vars);
+        return { upgradePack: {
+          id: vars.dryRun ? null : "i-2", pack: "card-disputes", operation: "upgrade",
+          fromVersion: "1.0.0", toVersion: "1.1.0", dryRun: vars.dryRun,
+          status: vars.dryRun ? null : "installed", supersedes: vars.dryRun ? null : "i-1",
+          diff: { added: 3, removed: 1, retained: 7 } } };
+      }
+      return base(doc);
+    };
+    const user = userEvent.setup();
+    renderWithProviders(<PacksPage />);
+    const row = await screen.findByTestId("pack-install-row");
+    await user.click(within(row).getByRole("button", { name: /^Upgrade$/i }));
+    const preview = await within(row).findByTestId("pack-transition-preview");
+    expect(within(preview).getByText(/1\.0\.0 → 1\.1\.0/)).toBeInTheDocument();
+    expect(within(preview).getByText(/3 added · 1 removed · 7 unchanged/)).toBeInTheDocument();
+    expect(calls[0].dryRun).toBe(true);           // preview did NOT execute
+    await user.click(within(preview).getByRole("button", { name: /Confirm upgrade/i }));
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1].dryRun).toBe(false);          // confirm executed
   });
 });

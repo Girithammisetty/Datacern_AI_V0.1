@@ -1752,6 +1752,34 @@ export interface PackCompleteResult {
   status: string;
   dashboards: PackLedgerRow[];
 }
+export interface PackDrift {
+  id: string;
+  pack: string;
+  version: string;
+  workspaceId: string;
+  superseded: boolean;
+  drifted: number;
+  inSync: boolean;
+  summary: Record<string, number>;
+  objects: Record<string, unknown>[];
+}
+export interface PackTransitionDiff {
+  added: number;
+  removed: number;
+  retained: number;
+}
+export interface PackTransition {
+  id: string | null;
+  pack: string;
+  operation: string;
+  fromVersion: string | null;
+  toVersion: string | null;
+  dryRun: boolean;
+  status: string | null;
+  supersedes: string | null;
+  summary: Record<string, unknown> | null;
+  diff: PackTransitionDiff;
+}
 
 export interface CreateWritebackInput {
   connectionId: string;

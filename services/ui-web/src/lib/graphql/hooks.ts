@@ -579,6 +579,44 @@ export function useCompletePackInstall(workspaceId: string) {
   });
 }
 
+/** On-demand drift check (read-only) for one install. */
+export function usePackDrift() {
+  return useMutation({
+    mutationFn: (installId: string) =>
+      graphqlRequest<ops.PackDriftResult>(ops.PACK_DRIFT, { installId }).then((r) => r.packDrift),
+  });
+}
+
+/** Upgrade an install to the pack's current version. dryRun previews the diff
+ * with no side effects; a real upgrade supersedes it and refreshes the list. */
+export function useUpgradePack(workspaceId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { installId: string; dryRun: boolean }) =>
+      graphqlRequest<ops.UpgradePackResult>(ops.UPGRADE_PACK, {
+        ...vars, idempotencyKey: vars.dryRun ? null : crypto.randomUUID(),
+      }).then((r) => r.upgradePack),
+    onSuccess: (t) => {
+      if (!t.dryRun) client.invalidateQueries({ queryKey: qk.packInstalls(workspaceId) });
+    },
+  });
+}
+
+/** Roll an install back to a prior version (dryRun previews the diff). */
+export function useRollbackPack(workspaceId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { installId: string; dryRun: boolean; toInstallId?: string }) =>
+      graphqlRequest<ops.RollbackPackResult>(ops.ROLLBACK_PACK, {
+        installId: vars.installId, toInstallId: vars.toInstallId ?? null, dryRun: vars.dryRun,
+        idempotencyKey: vars.dryRun ? null : crypto.randomUUID(),
+      }).then((r) => r.rollbackPack),
+    onSuccess: (t) => {
+      if (!t.dryRun) client.invalidateQueries({ queryKey: qk.packInstalls(workspaceId) });
+    },
+  });
+}
+
 /** Batch-run a decision table over a worklist. propose=false previews (dry-run,
  * no side effect); propose=true mints one governed proposal per matched case. */
 export function useBatchEvaluateDecisionModel() {

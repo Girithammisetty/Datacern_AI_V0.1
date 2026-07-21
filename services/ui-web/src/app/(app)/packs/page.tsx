@@ -7,13 +7,15 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
   usePacks, usePack, usePackInstalls, usePlanPackInstall, useInstallPack, useUninstallPack,
-  useCompletePackInstall,
+  useCompletePackInstall, usePackDrift, useUpgradePack, useRollbackPack,
 } from "@/lib/graphql/hooks";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { FEATURE_GATES } from "@/lib/authz/registry";
 import { useSession } from "@/lib/session/SessionContext";
 import { GraphQLRequestError } from "@/lib/graphql/client";
-import type { Pack, PackInstall, PackPlanOp, PackLedgerRow } from "@/lib/graphql/types";
+import type {
+  Pack, PackInstall, PackPlanOp, PackLedgerRow, PackDrift, PackTransition,
+} from "@/lib/graphql/types";
 
 /**
  * Capability packs (BRD 23). Browse the catalog of vertical solutions and
@@ -84,10 +86,32 @@ function InstalledRow({ install, workspaceId, canInstall }:
   { install: PackInstall; workspaceId: string; canInstall: boolean }) {
   const uninstall = useUninstallPack(workspaceId);
   const complete = useCompletePackInstall(workspaceId);
+  const drift = usePackDrift();
+  const upgrade = useUpgradePack(workspaceId);
+  const rollback = useRollbackPack(workspaceId);
   const [result, setResult] = useState<{ reversed: number; tombstoned: number } | null>(null);
+  const [driftResult, setDriftResult] = useState<PackDrift | null>(null);
+  // A previewed (dry-run) upgrade/rollback awaiting confirmation.
+  const [pending, setPending] = useState<{ op: "upgrade" | "rollback"; preview: PackTransition } | null>(null);
   const s = install.summary ?? {};
   const awaiting = install.status === "awaiting_approval";
   const completeErr = complete.error instanceof GraphQLRequestError ? complete.error : null;
+  const opErr = [drift.error, upgrade.error, rollback.error]
+    .find((e) => e instanceof GraphQLRequestError) as GraphQLRequestError | undefined;
+  const busy = drift.isPending || upgrade.isPending || rollback.isPending;
+
+  function preview(op: "upgrade" | "rollback") {
+    setDriftResult(null);
+    const hook = op === "upgrade" ? upgrade : rollback;
+    hook.mutate({ installId: install.id, dryRun: true },
+      { onSuccess: (t) => setPending({ op, preview: t }) });
+  }
+  function confirmPending() {
+    if (!pending) return;
+    const hook = pending.op === "upgrade" ? upgrade : rollback;
+    hook.mutate({ installId: install.id, dryRun: false },
+      { onSuccess: () => setPending(null) });
+  }
 
   return (
     <div className="rounded-lg border p-3" data-testid="pack-install-row">
@@ -109,6 +133,20 @@ function InstalledRow({ install, workspaceId, canInstall }:
               {complete.isPending ? "Completing…" : "Complete install"}
             </Button>
           )}
+          {install.status !== "uninstalled" && (
+            <Button size="sm" variant="outline" disabled={busy}
+              onClick={() => { setPending(null); drift.mutate(install.id, { onSuccess: (d) => setDriftResult(d) }); }}>
+              {drift.isPending ? "Checking…" : "Check drift"}
+            </Button>
+          )}
+          {canInstall && install.status !== "uninstalled" && (
+            <Button size="sm" variant="outline" disabled={busy}
+              onClick={() => preview("upgrade")}>Upgrade</Button>
+          )}
+          {canInstall && install.status !== "uninstalled" && (
+            <Button size="sm" variant="outline" disabled={busy}
+              onClick={() => preview("rollback")}>Rollback</Button>
+          )}
           {canInstall && install.status !== "uninstalled" && (
             <Button size="sm" variant="outline" disabled={uninstall.isPending}
               onClick={() => uninstall.mutate(install.id, { onSuccess: (r) => setResult(r) })}>
@@ -117,6 +155,35 @@ function InstalledRow({ install, workspaceId, canInstall }:
           )}
         </div>
       </div>
+
+      {driftResult && (
+        <p className="mt-2 text-xs text-muted-foreground" data-testid="pack-drift-result">
+          {driftResult.inSync
+            ? `In sync — all ${driftResult.summary.objects ?? 0} objects match the pack.`
+            : `${driftResult.drifted} object${driftResult.drifted === 1 ? "" : "s"} drifted `
+              + `(${driftResult.summary.modified ?? 0} modified · ${driftResult.summary.missing ?? 0} missing`
+              + `${driftResult.summary.unverified ? ` · ${driftResult.summary.unverified} unverified` : ""}).`}
+        </p>
+      )}
+
+      {pending && (
+        <div className="mt-2 rounded-md border bg-muted/40 p-2 text-xs" data-testid="pack-transition-preview">
+          <div className="font-medium capitalize">
+            {pending.op} preview: {pending.preview.fromVersion ?? "?"} → {pending.preview.toVersion ?? "?"}
+          </div>
+          <div className="mt-1 text-muted-foreground">
+            {pending.preview.diff.added} added · {pending.preview.diff.removed} removed · {pending.preview.diff.retained} unchanged
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <Button size="sm" disabled={busy} onClick={confirmPending}>
+              {busy ? "Applying…" : `Confirm ${pending.op}`}
+            </Button>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => setPending(null)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {opErr && <p role="alert" className="mt-2 text-xs text-destructive">{opErr.message}</p>}
 
       {awaiting && (
         <p className="mt-2 text-xs text-muted-foreground" data-testid="pack-awaiting">
