@@ -1,6 +1,6 @@
 SERVICES := $(wildcard services/*)
 
-.PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up up-clean down \
+.PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up up-platform down reset \
         demo-list demo-load demo-clean demo-clean-all
 
 # Capstone: provision the WHOLE platform locally and open it in a browser for
@@ -14,14 +14,23 @@ SERVICES := $(wildcard services/*)
 up:
 	deploy/local/up.sh $(ARGS)
 
-# Boot the platform with NO vertical demo data (tenant + personas only), so you
-# start from a clean slate and load exactly the pack you want with `demo-load`.
-up-clean:
+# Boot the platform with NO vertical demo data seeded THIS boot (tenant +
+# personas only), then load exactly the pack you want with `demo-load`.
+# NOTE: this does not remove data already in the DBs — use `make reset` for that.
+up-platform:
 	deploy/local/up.sh --platform-only $(ARGS)
 
 # Stop every native service. `make down ARGS=--infra` also stops Docker infra.
 down:
 	deploy/local/down.sh $(ARGS)
+
+# TRUE clean slate: delete ALL persistent data (drops the Docker data volumes
+# that survive `make down`) so the next `make up` starts genuinely empty. Wipes
+# every tenant/case/dataset/model/dashboard/audit record. Prompts unless FORCE=1.
+#   make reset            # confirm, then wipe
+#   make reset FORCE=1    # no prompt
+reset:
+	FORCE=$(FORCE) deploy/local/reset.sh
 
 # ---- Demo pack control -----------------------------------------------------
 # Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway
