@@ -18,6 +18,10 @@ services:
 
   redis:
     image: redis:7-alpine
+    # Persist to disk (AOF) so derived projections + dedup state survive a restart
+    # instead of cold-starting empty (the "403 after restart" class of failure).
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
     ports: ["6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -248,6 +252,10 @@ services:
     mem_limit: 2560m
     volumes:
       - ./clickhouse/config.d:/etc/clickhouse-server/config.d:ro
+      # Persist the append-only audit trail (7-year WORM store). Without this the
+      # /var/lib/clickhouse data dir was ephemeral and the compliance audit log
+      # was silently lost on every container recreate — the OpenSearch bug's twin.
+      - clickhousedata:/var/lib/clickhouse
     ports: ["8123:8123", "9010:9000"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping || exit 1"]
@@ -282,3 +290,5 @@ volumes:
   icebergdata: {}
   redpandadata: {}
   opensearchdata: {}
+  clickhousedata: {}
+  redisdata: {}

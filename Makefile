@@ -1,6 +1,6 @@
 SERVICES := $(wildcard services/*)
 
-.PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up up-platform down reset \
+.PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up up-platform down reset doctor \
         demo-list demo-load demo-clean demo-clean-all
 
 # Capstone: provision the WHOLE platform locally and open it in a browser for
@@ -31,6 +31,13 @@ down:
 #   make reset FORCE=1    # no prompt
 reset:
 	FORCE=$(FORCE) deploy/local/reset.sh
+
+# Health doctor: detect the "fragile after a restart" failure class (lost data
+# volumes / unbuilt projections) before it bites, per active tenant.
+#   make doctor           # check only (read-only)
+#   make doctor HEAL=1    # check, then rebuild any missing projections
+doctor:
+	HEAL=$(HEAL) deploy/local/doctor.sh
 
 # ---- Demo pack control -----------------------------------------------------
 # Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway
