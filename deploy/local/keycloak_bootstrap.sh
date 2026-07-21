@@ -15,6 +15,7 @@ ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 REALM="${OIDC_REALM:-windrose}"
 CLIENT_ID="${OIDC_CLIENT_ID:-windrose-web}"
 REDIRECT="${OIDC_REDIRECT:-http://localhost:3000/api/auth/callback}"
+POST_LOGOUT_REDIRECT="${OIDC_POST_LOGOUT_REDIRECT:-http://localhost:3000/login}"
 WEB_ORIGIN="${OIDC_WEB_ORIGIN:-http://localhost:3000}"
 USER_EMAIL="${1:-datascientist@demo.windrose}"
 USER_PASS="${2:-Passw0rd!}"
@@ -47,7 +48,11 @@ curl -s -m10 "${AUTH[@]}" -X PUT "$KC/admin/realms/$REALM" \
 # --- client (public, authorization code + PKCE S256) -------------------------
 existing="$(curl -s -m10 "${AUTH[@]}" "$KC/admin/realms/$REALM/clients?clientId=$CLIENT_ID" \
   | python3 -c 'import sys,json; a=json.load(sys.stdin); print(a[0]["id"] if a else "")')"
-CLIENT_BODY="{\"clientId\":\"$CLIENT_ID\",\"enabled\":true,\"publicClient\":true,\"protocol\":\"openid-connect\",\"standardFlowEnabled\":true,\"directAccessGrantsEnabled\":true,\"redirectUris\":[\"$REDIRECT\"],\"webOrigins\":[\"$WEB_ORIGIN\"],\"attributes\":{\"pkce.code.challenge.method\":\"S256\"}}"
+# post.logout.redirect.uris registers where RP-initiated (single) logout may
+# send the browser back to — without it Keycloak rejects post_logout_redirect_uri
+# and "Sign out" can't complete the round trip that actually ends the IdP's own
+# SSO session (see /api/auth/logout).
+CLIENT_BODY="{\"clientId\":\"$CLIENT_ID\",\"enabled\":true,\"publicClient\":true,\"protocol\":\"openid-connect\",\"standardFlowEnabled\":true,\"directAccessGrantsEnabled\":true,\"redirectUris\":[\"$REDIRECT\",\"$POST_LOGOUT_REDIRECT\"],\"webOrigins\":[\"$WEB_ORIGIN\"],\"attributes\":{\"pkce.code.challenge.method\":\"S256\",\"post.logout.redirect.uris\":\"$POST_LOGOUT_REDIRECT\"}}"
 if [ -n "$existing" ]; then
   say "updating client '$CLIENT_ID'"
   curl -s -m10 "${AUTH[@]}" -X PUT "$KC/admin/realms/$REALM/clients/$existing" -d "$CLIENT_BODY" >/dev/null && ok "client updated"

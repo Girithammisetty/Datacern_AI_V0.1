@@ -35,6 +35,10 @@ export interface OidcMetadata {
   token_endpoint: string;
   jwks_uri: string;
   issuer: string;
+  /** RP-initiated (single) logout endpoint — standard OIDC discovery field,
+   * absent from a handful of non-compliant IdPs, so callers must treat it as
+   * optional and fall back to a local-only logout. */
+  end_session_endpoint?: string;
 }
 
 /** Fetch the IdP's discovery document. Cached per issuer for the process. */

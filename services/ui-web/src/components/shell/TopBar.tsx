@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Bot, LogOut, Bell, Search, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -51,13 +50,13 @@ function NotificationBell() {
 }
 
 export function TopBar() {
-  const router = useRouter();
   const toggleCopilot = useCopilot((s) => s.toggle);
 
-  async function signOut() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.replace("/login");
-    router.refresh();
+  function signOut() {
+    // A real navigation (not fetch) — completing IdP single logout means the
+    // browser must actually follow the redirect chain out to the IdP's own
+    // origin and back, which a background fetch can't do.
+    window.location.href = "/api/auth/logout";
   }
 
   return (

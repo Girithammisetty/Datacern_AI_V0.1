@@ -7,7 +7,7 @@
  * wr_session cookie and land the user in the app — a real end-to-end SSO login.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth/session";
+import { SESSION_COOKIE, OIDC_REFRESH_COOKIE, OIDC_ID_TOKEN_COOKIE } from "@/lib/auth/session";
 import { oidcConfig, discover } from "@/lib/auth/oidc";
 
 export const runtime = "nodejs";
@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
 
   // Exchange the code for tokens (PKCE — public client, no secret).
   let idToken: string;
+  let refreshToken: string | undefined;
   try {
     const body = new URLSearchParams({
       grant_type: "authorization_code",
@@ -56,9 +57,10 @@ export async function GET(req: NextRequest) {
       cache: "no-store",
     });
     if (!tokenRes.ok) return fail(req, "token_exchange_failed");
-    const tokens = (await tokenRes.json()) as { id_token?: string };
+    const tokens = (await tokenRes.json()) as { id_token?: string; refresh_token?: string };
     if (!tokens.id_token) return fail(req, "no_id_token");
     idToken = tokens.id_token;
+    refreshToken = tokens.refresh_token;
   } catch {
     return fail(req, "token_exchange_error");
   }
@@ -88,6 +90,29 @@ export async function GET(req: NextRequest) {
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 60 * 60 * 8,
+  });
+  // The IdP refresh_token (if issued) lets /api/auth/refresh silently re-mint
+  // the short-lived (5-min, MASTER-FR-010) Windrose session without a full
+  // SSO round-trip. Scoped to /api/auth so it's never sent on ordinary
+  // page/API requests, only the refresh call itself.
+  if (refreshToken) {
+    res.cookies.set(OIDC_REFRESH_COOKIE, refreshToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/api/auth",
+      maxAge: 60 * 60 * 12,
+    });
+  }
+  // Kept only so /api/auth/logout can pass it as id_token_hint on RP-
+  // initiated logout — presence of this cookie is also how logout tells an
+  // OIDC session apart from a dev-login one.
+  res.cookies.set(OIDC_ID_TOKEN_COOKIE, idToken, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/api/auth",
+    maxAge: 60 * 60 * 12,
   });
   // One-time PKCE cookies are spent.
   res.cookies.delete("oidc_verifier");

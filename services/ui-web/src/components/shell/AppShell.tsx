@@ -12,6 +12,7 @@ import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { cap } from "@/lib/authz/registry";
 import { RouteGuard } from "@/components/authz/RouteGuard";
 import { setLabelOverrides } from "@/lib/i18n/messages";
+import { useSessionRefresh } from "@/lib/auth/useSessionRefresh";
 
 /** Load this tenant's UI label overrides (BRD 23 inc3) into the i18n overlay
  * once at bootstrap, so a capability pack's white-label vocabulary ("Cases" ->
@@ -41,6 +42,8 @@ function todayRange(): { from: string; to: string } {
 }
 
 function ShellInner({ children, session }: { children: React.ReactNode; session: SessionInfo }) {
+  useSessionRefresh();
+
   // Task #78: these were tenant/user-wide "any proposal of mine" / "any usage
   // event" subscriptions, but realtime-hub's topic grammar only routes to a
   // single resource (run-status:<urn>, proposal:<id>) — there is no broadcast
