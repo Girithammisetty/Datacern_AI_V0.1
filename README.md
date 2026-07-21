@@ -1,7 +1,6 @@
 # Windrose
 
-Multi-tenant, multi-cloud, **agentic-AI-native** ML platform for governed
-insurance-claims decisioning. Built as ~23 independently-deployable services
+Multi-tenant, multi-cloud, **agentic-AI-native** ML platform for governed decisioning. Built as ~23 independently-deployable services
 behind one GraphQL BFF and one web app, with a governance fabric (RLS tenancy,
 RBAC/OPA, four-eyes proposals, immutable audit) woven through every plane.
 
