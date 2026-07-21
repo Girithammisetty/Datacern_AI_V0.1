@@ -138,7 +138,7 @@ All agents proposal-mode. Attempting `mode: autonomous` on any SAR-filing / CTR-
 - **NYDFS Part 504** — transaction monitoring + sanctions filtering system certification; annual senior-officer attestation.
 - **FinCEN AML/CFT National Priorities (2021+)** — corruption, cybercrime, terrorism financing, fraud, TBML, drug trafficking, human trafficking, PF (proliferation financing).
 - **Cross-tenant learning forbidden** — competitive-sensitivity + regulator-sensitivity; workspace-scoped only.
-- **Model risk (SR 11-7 for banks under Fed supervision)** — model-inventory, validation, monitoring, retirement documentation preserved for every deployed agent version.
+- **Model risk (SR 26-2, Fed/OCC/FDIC, rescinded-and-replaced SR 11-7 on 2026-04-17)** — model-inventory, validation, monitoring, retirement documentation preserved for every deployed agent version. SR 26-2 is principles-based, not legally binding (a deliberate change from SR 11-7), and EXPLICITLY EXCLUDES generative/agentic AI models from its current scope pending a separate forthcoming RFI — this pack's AI-assisted alert-triage agent is exactly that kind of model, so its specific model-risk treatment is an open regulatory question today, not a settled one. Documentation practice below is retained as prudent practice and because BR-4's recordkeeping requirement is independent of which model-risk letter is in force — not because it's mandated by a specific current rule for agentic AI.
 
 ### 3.7 Roles & case schemas (AML-FR-120)
 
@@ -191,11 +191,11 @@ Consumed: `dataset.schema_changed` on connector-owned datasets → surface broke
 - **BR-1** No autonomous SAR filing. No autonomous CTR filing. No autonomous customer off-boarding. No autonomous OFAC freeze action. Every write is proposal-mode with human approval. Attempted `mode: autonomous` → publish fails `AML_AUTONOMOUS_FILING_FORBIDDEN`. Cross-checks BR-2 tipping-off + BR-4 audit chain.
 - **BR-2** **Tipping-off is a hard, permanent guardrail.** No SAR filing existence, SAR-in-progress indicator, or SAR reference field EVER surfaces to a customer-facing UI, customer letter, downstream write to a system the customer or counterparty accesses, or any external adapter that isn't SAR-authorized. Every write path checks the tipping-off guardrail before emit. Violation is a criminal offense per 31 USC 5318(g)(2)(A)(i).
 - **BR-3** SAR confidentiality extends to related-party workflows: if Customer B is a counterparty in a SAR filed on Customer A, the fact of the SAR is not disclosed to Customer B; adverse-media surfaces on B do NOT mention the A-SAR link.
-- **BR-4** Every AI-assisted alert disposition + SAR narrative + risk rating retained per BSA 5-year recordkeeping + FFIEC exam-manual expectations. Signed provenance chain: data version → model version → prompt hash → tool trace → reviewer identity → timestamp. RAC/SR-11-7-analog defensibility.
+- **BR-4** Every AI-assisted alert disposition + SAR narrative + risk rating retained per BSA 5-year recordkeeping + FFIEC exam-manual expectations. Signed provenance chain: data version → model version → prompt hash → tool trace → reviewer identity → timestamp. This recordkeeping obligation is independent of BR-8/model-risk-guidance status (verified 2026-07-20).
 - **BR-5** Cross-tenant learning is FORBIDDEN — banks compete + share regulator supervision context. Workspace-scoped only. Same stricter isolation as BRD 27 (payer FWA).
 - **BR-6** Sanctions screening uses whitelisted OFAC + EU + UN + HMT lists refreshed ≤ 5 min after publisher update; expiry / removal events handled — a customer previously matched who is removed from list surfaces as `sanctions_match_review_removal` case for reviewer confirmation of unblock.
 - **BR-7** OFAC 50% Rule inference resolves ownership chains up to 5 hops depth; deeper chains flagged for L3 manual review (regulator expectation for defensibility).
-- **BR-8** SR 11-7 model risk applies to Fed-supervised bank tenants: every deployed agent version has model-inventory documentation, validation report, ongoing-monitoring config, and defined retirement criteria. Pack ships the model-risk template; MRM team completes.
+- **BR-8** SR 26-2 model risk guidance (superseded SR 11-7 on 2026-04-17) applies to Fed-supervised bank tenants: every deployed agent version has model-inventory documentation, validation report, ongoing-monitoring config, and defined retirement criteria. Pack ships the model-risk template; MRM team completes. **Open item, not resolved by this pack:** SR 26-2 explicitly excludes generative/agentic AI models from its current scope pending a separate RFI — the tenant's MRM/compliance function must independently determine how it wants to treat the alert-triage agent until that guidance publishes; this pack does not (and cannot) resolve that on the tenant's behalf.
 - **BR-9** NYDFS Part 504 annual senior-officer attestation ships as an assisted-drafting flow — BSAO signs; audit chain preserved for regulator review.
 - **BR-10** FinCEN AML/CFT National Priorities update annually; pack ships priorities as configurable typology weights (typologies aligned to Priorities upweighted in alert-triage scoring). Update via pack point release.
 - **BR-11** Currency transaction aggregation crosses account + branch + related-parties per Reg 1010.313; pure rules; agent orchestrates lookup + proposal.
@@ -206,10 +206,10 @@ Consumed: `dataset.schema_changed` on connector-owned datasets → surface broke
 
 ## 7. Dependencies
 
-- **Windrose services:** all Core BRDs 01–23 + BRD 17 usage-service + BRD 16 eval-service (with model-risk gating: SR 11-7 aware) + BRD 15 memory-service.
+- **Windrose services:** all Core BRDs 01–23 + BRD 17 usage-service + BRD 16 eval-service (with model-risk gating: SR 26-2 aware) + BRD 15 memory-service.
 - **External systems (customer's):** core banking + AML platform (§3.5); sanctions data providers (customer's subscription); adverse media (customer's subscription); FinCEN BSA e-filing (customer's BSA-E user credential); OFAC feed direct from Treasury.
-- **Regulatory:** Windrose ships FFIEC BSA/AML Examination Manual crosswalk + SR 11-7 model-risk-management templates + NYDFS Part 504 attestation template.
-- **Compliance:** SOC 2 Type II + HITRUST (inherited from Core) + optional FFIEC Cybersecurity Assessment Tool crosswalk for bank tenants + SR 11-7 model-risk documentation package.
+- **Regulatory:** Windrose ships FFIEC BSA/AML Examination Manual crosswalk + SR 26-2 model-risk-management templates (supersedes SR 11-7, 2026-04-17) + NYDFS Part 504 attestation template.
+- **Compliance:** SOC 2 Type II + HITRUST (inherited from Core) + optional FFIEC Cybersecurity Assessment Tool crosswalk for bank tenants + SR 26-2 model-risk documentation package.
 
 ## 8. NFRs (deltas from master)
 

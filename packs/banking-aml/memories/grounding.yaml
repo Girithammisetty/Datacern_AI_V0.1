@@ -3,24 +3,48 @@
 # an alert (AML-FR-110 regulatory guardrail content carried as factual
 # grounding until guardrail-service policies ship). Every record is factual
 # regulatory or typology reference material.
+#
+# VERIFIED 2026-07-20 against primary/authoritative sources (not just
+# training-knowledge recall) — every citation below was checked against the
+# regulation text itself or FinCEN's own guidance, not a secondary summary.
+# One imprecision was found and fixed (CTR aggregation window, below); one
+# plausible-sounding but WRONG lead was checked and rejected (a $25,000
+# no-suspect SAR threshold some secondary sources cite — the primary bank
+# SAR rule, 31 CFR 1020.320, has a flat $5,000 threshold with no
+# suspect-identified/not-identified split; that $25,000 figure is real but
+# belongs to a different report/filer type, not the bank SAR rule this pack
+# is about, so it is deliberately NOT included here). See
+# docs/brd/banking_aml_regulatory_verification.md for the full source list.
 - content: >-
-    FinCEN SAR filing clock: a SAR must be filed within 30 calendar days of
-    the initial detection of facts constituting a basis for filing (60 days
-    if no suspect is identified). The dollar threshold for SAR filing on
-    suspicious activity involving a known suspect is $5,000 aggregate. For
-    continuing suspicious activity, file a continuing-activity SAR every 120
-    days (90-day review period plus the 30-day filing window).
+    FinCEN SAR filing clock (31 CFR 1020.320(b)(3)): a SAR must be filed no
+    later than 30 calendar days after the date of initial detection of facts
+    that may constitute a basis for filing. If no suspect was identified as
+    of that date, the bank may delay filing for an additional 30 calendar
+    days to identify one — but in no case may filing be delayed more than 60
+    calendar days total after initial detection. The $5,000 aggregate dollar
+    threshold (31 CFR 1020.320(a)(2)) applies the same way regardless of
+    whether a suspect has been identified. For continuing suspicious
+    activity, FinCEN's 2020 guidance recommends (not mandates) filing a
+    continuing-activity SAR every 120 calendar days after the previous
+    related SAR (a 90-day review period plus the 30-day filing window).
   tags: [fincen, sar, deadlines, bsa]
   confidence: 0.98
+  source: https://www.law.cornell.edu/cfr/text/31/1020.320
 - content: >-
-    CTR (Currency Transaction Report): required for cash transactions
-    exceeding $10,000, aggregated over a 24-hour period across all accounts
-    and branches for the same person (31 CFR 1010.313 related-party
-    aggregation). Filing deadline is 15 days. A CTR is a routine report, not
-    an accusation — a lawful cash-intensive business exceeding $10K in cash
-    is a CTR filing, not automatically a SAR.
+    CTR (Currency Transaction Report, 31 CFR 1010.310): required for currency
+    transactions exceeding $10,000. Multiple transactions are aggregated —
+    and a CTR required — when the institution knows or has reason to know
+    they are by or on behalf of the same person and their cash-in or cash-out
+    totals exceed $10,000 in ONE BUSINESS DAY (31 CFR 1010.313 related-party
+    aggregation; deposits made at night, on a weekend, or on a holiday are
+    treated as received the next business day for this purpose — this is a
+    business-day window, not a rolling 24-hour clock). Filing deadline is 15
+    calendar days (31 CFR 1010.306(a)(1)). A CTR is a routine report, not an
+    accusation — a lawful cash-intensive business exceeding $10K in cash is a
+    CTR filing, not automatically a SAR.
   tags: [ctr, fincen, cash, thresholds]
   confidence: 0.98
+  source: https://www.ecfr.gov/current/title-31/subtitle-B/chapter-X/part-1010/subpart-C
 - content: >-
     Structuring is breaking cash transactions into amounts below the $10,000
     CTR threshold to evade reporting — a federal crime under 31 USC 5324
@@ -33,6 +57,7 @@
     even for them.
   tags: [structuring, typology, ctr-evasion]
   confidence: 0.95
+  source: https://www.law.cornell.edu/uscode/text/31/5324
 - content: >-
     Layering is the second stage of money laundering: rapidly moving funds
     through chains of accounts and entities (often shell/holding companies
@@ -63,6 +88,7 @@
     resolves to 5 hops; deeper chains go to L3 manual review).
   tags: [ofac, sanctions, blocking, fifty_percent_rule]
   confidence: 0.95
+  source: https://ofac.treasury.gov/faqs/topic/1521
 - content: >-
     Sanctions name-match adjudication: a fuzzy name-match score alone is not
     a true hit. Weigh distinguishing evidence — date of birth, address,
@@ -83,17 +109,34 @@
     counterparty in a SAR on Customer A, B is never told of the A-SAR link.
   tags: [sar_confidentiality, tipping_off, bsa]
   confidence: 0.98
+  source: https://www.fincen.gov/disclosure-prohibited
 - content: >-
-    SR 11-7 model risk management (Fed-supervised banks): every model used in
-    BSA/AML decisioning — including AI alert-triage and scoring models —
-    requires model-inventory documentation, independent validation, ongoing
-    performance monitoring, and defined retirement criteria. Every
-    AI-assisted disposition must preserve a provenance chain (data version,
-    model version, prompt hash, reviewer identity, timestamp) to satisfy
-    FFIEC BSA/AML Examination Manual expectations and BSA 5-year
-    recordkeeping.
-  tags: [sr_11_7, model_risk, ffiec, governance]
+    Model risk management guidance CHANGED RECENTLY (verified 2026-07-20) —
+    do not cite SR 11-7 as current. On 2026-04-17 the Fed/OCC/FDIC jointly
+    RESCINDED SR 11-7 (2011) and SR 21-8, replacing them with SR 26-2. Two
+    material changes vs. the old regime this pack was originally written
+    against: (1) SR 26-2 is explicitly principles-based and NOT legally
+    binding — a deliberate departure from SR 11-7, which examiners had
+    treated as having the force of law (supervisory action can still follow
+    from unsafe practices, just not from SR 26-2 itself as a rule); (2) SR
+    26-2 EXPLICITLY EXCLUDES generative and agentic AI models from its
+    current scope, calling them "novel and rapidly evolving," with a
+    separate RFI on AI model risk management announced as forthcoming but
+    not yet published. That second point matters directly for this pack:
+    the AI-assisted alert-triage agent IS an agentic AI model, and its
+    specific model-risk treatment is presently an open regulatory question,
+    not a settled one — flag this to the tenant's compliance/legal function
+    as an area to monitor, don't present it as resolved. Independent of
+    that open question, keep preserving a provenance chain (data version,
+    model version, prompt hash, reviewer identity, timestamp) on every
+    AI-assisted disposition: this is good practice supervisors still expect
+    under general safety-and-soundness review, and it is separately, and
+    unambiguously, required to satisfy the FFIEC BSA/AML Examination
+    Manual's expectations and BSA 5-year recordkeeping — recordkeeping
+    doesn't depend on which model-risk letter is currently in force.
+  tags: [model_risk, sr_26_2, sr_11_7_superseded, ffiec, governance, agentic_ai_open_question]
   confidence: 0.95
+  source: https://www.federalreserve.gov/supervisionreg/srletters/SR2602.htm
 - content: >-
     Peer-group anomaly typology: compare a customer's transaction pattern to
     its declared business type (SIC code) and geographic peer group. A

@@ -4,7 +4,7 @@
 # Separation of duties per BRD 30: L1 triages and proposes, L2 investigates
 # and assigns, the MLRO alone approves dispositions that convert to SARs
 # (BR-1), the Sanctions Analyst owns near-match adjudication, and the Model
-# Risk Validator (BR-8, SR 11-7) reviews models without any case-write power.
+# Risk Validator (BR-8, SR 26-2 — supersedes SR 11-7, 2026-04-17) reviews models without any case-write power.
 - name: "AML Analyst L1"
   actions:
     - case.case.read
