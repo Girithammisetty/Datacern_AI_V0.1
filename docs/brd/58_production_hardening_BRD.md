@@ -113,4 +113,17 @@ GraphQL schema-snapshot + event-envelope conformance as CI gates; a load/soak ta
 ---
 
 ## Implementation & Test log (landed increments)
-_Appended as increments land. See BRD 59 for feature expansion (5B)._
+
+### SEC-1 — non-superuser RLS boot check — DONE
+`libs/go-common/dbcheck` (`AssertNonSuperuser` + pure `decide`/`strict`); wired into
+the 4 flagged services (case-service, query-service, tool-plane gateway+registry)
+right after pool creation. Default = **warn** (local dev on the superuser DSN keeps
+booting); `DB_REQUIRE_NONSUPERUSER=true` = **hard refuse** (set in prod Helm
+`values.yaml config:` next to `REQUIRE_REAL_ADAPTERS`). Local note added in
+`deploy/e2e/config.env`.
+**Test:** `go test ./dbcheck/` green (decision matrix: app-role→ok, superuser/bypass
+→refuse-when-strict / warn-when-lax; env-gate). All 4 services `go build` clean.
+Live boot-refusal against a superuser DSN with the flag on = deferred to the WS3
+cloud bring-up (needs the app-role DSN).
+
+_See BRD 59 for feature expansion (5B)._

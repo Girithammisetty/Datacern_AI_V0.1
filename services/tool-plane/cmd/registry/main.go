@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datacern-ai/go-common/authjwt"
+	"github.com/datacern-ai/go-common/dbcheck"
 	"github.com/datacern-ai/go-common/otelx"
 	"github.com/datacern-ai/go-common/redisx"
 	"github.com/datacern-ai/tool-plane/internal/api"
@@ -84,6 +85,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+	// SEC-1 (BRD 58): fail closed if the runtime role can bypass RLS.
+	if err := dbcheck.AssertNonSuperuser(ctx, pool); err != nil {
+		slog.Error("refusing to start", "err", err)
+		os.Exit(1)
+	}
 	st := store.NewPG(pool)
 
 	rc := redisx.NewFromEnv(env("REDIS_ADDR", "localhost:6379"), os.Getenv)

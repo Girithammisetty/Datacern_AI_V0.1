@@ -26,6 +26,7 @@ import (
 	"github.com/datacern-ai/query-service/internal/results"
 	"github.com/datacern-ai/query-service/internal/store"
 
+	"github.com/datacern-ai/go-common/dbcheck"
 	"github.com/datacern-ai/go-common/otelx"
 )
 
@@ -86,6 +87,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+	// SEC-1 (BRD 58): fail closed if the runtime role can bypass RLS.
+	if err := dbcheck.AssertNonSuperuser(ctx, pool); err != nil {
+		slog.Error("refusing to start", "err", err)
+		os.Exit(1)
+	}
 	st := store.NewPG(pool)
 
 	resultsRoot := env("RESULTS_ROOT", "/var/lib/query-service")

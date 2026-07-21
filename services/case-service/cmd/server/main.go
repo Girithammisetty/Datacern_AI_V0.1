@@ -21,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/datacern-ai/go-common/dbcheck"
 	gcevent "github.com/datacern-ai/go-common/event"
 	gckafka "github.com/datacern-ai/go-common/kafka"
 	"github.com/datacern-ai/go-common/otelx"
@@ -94,6 +95,15 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+
+	// SEC-1 (BRD 58): refuse to start if the runtime role can bypass RLS — a
+	// single wrong DATABASE_URL must fail closed, not silently disable tenant
+	// isolation. Opt out locally with DB_REQUIRE_NONSUPERUSER=false.
+	if err := dbcheck.AssertNonSuperuser(ctx, pool); err != nil {
+		slog.Error("refusing to start", "err", err)
+		os.Exit(1)
+	}
+
 	st := store.NewPG(pool)
 
 	// Real OpenSearch adapter (CASE-FR-040): list/search/facets + projection.
