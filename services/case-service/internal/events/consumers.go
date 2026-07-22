@@ -79,3 +79,21 @@ func systemOp(tenant uuid.UUID) domain.Op {
 }
 
 var _ = json.Marshal
+
+// TriggerApplier is the slice of internal/triggers used by the ingestion
+// consumer (realtime-decisioning INC-1).
+type TriggerApplier interface {
+	ApplyIngestionCompleted(ctx context.Context, tenant uuid.UUID, payload map[string]any) error
+}
+
+// IngestionTriggerHandler consumes ingestion.completed and applies the
+// tenant's enabled case triggers. Idempotent: consumer dedup (event_id) plus
+// per-case DedupKey(dataset_urn, row_pk) inside CreateCases.
+func IngestionTriggerHandler(a TriggerApplier) func(ctx context.Context, env gcevent.Envelope) error {
+	return func(ctx context.Context, env gcevent.Envelope) error {
+		if env.EventType != "ingestion.completed" {
+			return nil
+		}
+		return a.ApplyIngestionCompleted(ctx, env.TenantID, env.Payload)
+	}
+}

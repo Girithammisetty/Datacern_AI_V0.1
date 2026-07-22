@@ -13,6 +13,7 @@ import type {
   CaseOperation,
   Disposition,
   CaseField,
+  CaseTrigger,
   CaseSchema,
   LabelOverride,
   CaseSlaPolicy,
@@ -1600,6 +1601,49 @@ export const UPDATE_DISPOSITION = /* GraphQL */ `
 `;
 export interface UpdateDispositionResult {
   updateDisposition: Disposition;
+}
+
+const CASE_TRIGGER_FIELDS = /* GraphQL */ `
+  id workspaceId name enabled datasetUrn datasetName
+  conditions { col op value }
+  rowPkField severity dueHours projectionFields maxCasesPerEvent
+  createdById createdAt updatedAt
+`;
+
+export const CASE_TRIGGERS = /* GraphQL */ `
+  query CaseTriggers {
+    caseTriggers { ${CASE_TRIGGER_FIELDS} }
+  }
+`;
+export interface CaseTriggersResult {
+  caseTriggers: CaseTrigger[];
+}
+
+export const CREATE_CASE_TRIGGER = /* GraphQL */ `
+  mutation CreateCaseTrigger($input: CreateCaseTriggerInput!, $idempotencyKey: String) {
+    createCaseTrigger(input: $input, idempotencyKey: $idempotencyKey) { ${CASE_TRIGGER_FIELDS} }
+  }
+`;
+export interface CreateCaseTriggerResult {
+  createCaseTrigger: CaseTrigger;
+}
+
+export const UPDATE_CASE_TRIGGER = /* GraphQL */ `
+  mutation UpdateCaseTrigger($input: UpdateCaseTriggerInput!) {
+    updateCaseTrigger(input: $input) { ${CASE_TRIGGER_FIELDS} }
+  }
+`;
+export interface UpdateCaseTriggerResult {
+  updateCaseTrigger: CaseTrigger;
+}
+
+export const DELETE_CASE_TRIGGER = /* GraphQL */ `
+  mutation DeleteCaseTrigger($id: ID!) {
+    deleteCaseTrigger(id: $id)
+  }
+`;
+export interface DeleteCaseTriggerResult {
+  deleteCaseTrigger: boolean;
 }
 
 const CASE_FIELD_FIELDS = /* GraphQL */ `

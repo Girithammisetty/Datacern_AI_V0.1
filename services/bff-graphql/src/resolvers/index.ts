@@ -14,7 +14,7 @@ import { budgetScopeString } from "../clients/usage.js";
 import {
   mapUser, mapDataset, mapProfile, mapCase, mapDashboard, mapChart,
   // Tier 4b: case ops (lifecycle, comments/timeline, export, catalog, SLA).
-  mapCaseComment, mapCaseActivity, mapCaseOperation, mapDisposition, mapCaseField, mapCaseSlaPolicy,
+  mapCaseComment, mapCaseActivity, mapCaseOperation, mapDisposition, mapCaseField, mapCaseTrigger, mapCaseSlaPolicy,
   mapCaseSchema,
   mapChartType, mapChartShapedData,
   mapProposal, mapAgentRun, mapAgentKillSwitch, mapToolKillSwitch, mapExperiment, mapRun, mapModel,
@@ -337,6 +337,37 @@ function chartDataResult(entry: ChartDataDTO | undefined) {
     artifact: entry.artifact ?? null,
     meta: entry.meta ?? null,
   };
+}
+
+
+/** Shared shape of create/update case-trigger inputs (realtime INC-1). */
+interface CaseTriggerInputShape {
+  name?: string;
+  enabled?: boolean;
+  datasetUrn?: string;
+  datasetName?: string;
+  conditions?: { col: string; op: string; value: string }[];
+  rowPkField?: string;
+  severity?: string;
+  dueHours?: number;
+  projectionFields?: string[];
+  maxCasesPerEvent?: number;
+}
+
+/** Only forward explicitly-provided fields (partial-patch semantics). */
+function triggerBody(i: CaseTriggerInputShape) {
+  const b: Record<string, unknown> = {};
+  if (i.name !== undefined) b.name = i.name;
+  if (i.enabled !== undefined) b.enabled = i.enabled;
+  if (i.datasetUrn !== undefined) b.dataset_urn = i.datasetUrn;
+  if (i.datasetName !== undefined) b.dataset_name = i.datasetName;
+  if (i.conditions !== undefined) b.conditions = i.conditions;
+  if (i.rowPkField !== undefined) b.row_pk_field = i.rowPkField;
+  if (i.severity !== undefined) b.severity = i.severity;
+  if (i.dueHours !== undefined) b.due_hours = i.dueHours;
+  if (i.projectionFields !== undefined) b.projection_fields = i.projectionFields;
+  if (i.maxCasesPerEvent !== undefined) b.max_cases_per_event = i.maxCasesPerEvent;
+  return b;
 }
 
 export const resolvers = {
@@ -1074,6 +1105,11 @@ export const resolvers = {
     caseFields: async (_p: unknown, a: { queryUrn?: string }, ctx: GraphQLContext) => {
       const rows = await ctx.clients.case.caseFields(a.queryUrn);
       return rows.map((d) => mapCaseField(ctx, d));
+    },
+
+    caseTriggers: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const rows = await ctx.clients.case.caseTriggers();
+      return rows.map((d) => mapCaseTrigger(ctx, d));
     },
 
     // ---- inc17: typed case-schema registry (governed case-TYPE editor) -------
@@ -2358,6 +2394,27 @@ export const resolvers = {
           active: a.input.active,
         })
         .then((d) => mapDisposition(ctx, d)),
+
+    createCaseTrigger: (
+      _p: unknown,
+      a: { input: CaseTriggerInputShape; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.case
+        .createCaseTrigger(triggerBody(a.input), a.idempotencyKey)
+        .then((d) => mapCaseTrigger(ctx, d)),
+
+    updateCaseTrigger: (
+      _p: unknown,
+      a: { input: CaseTriggerInputShape & { id: string } },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.case
+        .updateCaseTrigger(a.input.id, triggerBody(a.input))
+        .then((d) => mapCaseTrigger(ctx, d)),
+
+    deleteCaseTrigger: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.case.deleteCaseTrigger(a.id).then(() => true),
 
     createCaseField: (
       _p: unknown,

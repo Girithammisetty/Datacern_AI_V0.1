@@ -117,6 +117,33 @@ export interface DispositionDTO {
 /** A custom case-field config (case-service, CASE-FR-022). The service
  * serializes `purpose` as int16 (0=create, 1=update, 2=both) even though the
  * CREATE request takes the string form — the BFF mapper converts back. */
+export interface CaseTriggerCondDTO {
+  col: string;
+  op: string; // eq|neq|contains|gt|gte|lt|lte
+  value: string;
+}
+
+/** An event-rule case trigger (case-service /case-triggers, realtime INC-1):
+ * when an ingestion completes into the matching dataset, rows passing the
+ * conditions are materialized as cases (dedup by dataset_urn+row_pk). */
+export interface CaseTriggerDTO {
+  id: string;
+  workspace_id?: string;
+  name: string;
+  enabled: boolean;
+  dataset_urn?: string;
+  dataset_name?: string;
+  conditions: CaseTriggerCondDTO[];
+  row_pk_field?: string;
+  severity: string;
+  due_hours: number;
+  projection_fields: string[];
+  max_cases_per_event: number;
+  created_by_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface CaseFieldDTO {
   id: string;
   workspace_id?: string;
@@ -423,6 +450,40 @@ export class CaseClient {
       { body },
     );
     return unwrap<DispositionDTO>(r);
+  }
+
+  // ---- event-rule case triggers (realtime-decisioning INC-1) -----------------
+
+  /** GET /case-triggers (case.trigger.read). */
+  async caseTriggers(): Promise<CaseTriggerDTO[]> {
+    const r = await this.http.get<{ data: CaseTriggerDTO[] }>("/api/v1/case-triggers");
+    return r.data ?? [];
+  }
+
+  /** POST /case-triggers (201; case.trigger.create). */
+  async createCaseTrigger(
+    body: Partial<CaseTriggerDTO>,
+    idempotencyKey?: string,
+  ): Promise<CaseTriggerDTO> {
+    const r = await this.http.post<{ data: CaseTriggerDTO } | CaseTriggerDTO>(
+      "/api/v1/case-triggers",
+      { body, idempotencyKey },
+    );
+    return unwrap<CaseTriggerDTO>(r);
+  }
+
+  /** PATCH /case-triggers/{id} (case.trigger.update). Partial patch. */
+  async updateCaseTrigger(id: string, body: Partial<CaseTriggerDTO>): Promise<CaseTriggerDTO> {
+    const r = await this.http.patch<{ data: CaseTriggerDTO } | CaseTriggerDTO>(
+      `/api/v1/case-triggers/${encodeURIComponent(id)}`,
+      { body },
+    );
+    return unwrap<CaseTriggerDTO>(r);
+  }
+
+  /** DELETE /case-triggers/{id} (204; case.trigger.delete). */
+  async deleteCaseTrigger(id: string): Promise<void> {
+    await this.http.delete<void>(`/api/v1/case-triggers/${encodeURIComponent(id)}`);
   }
 
   // ---- Tier 4b: custom case-fields -------------------------------------------

@@ -69,6 +69,7 @@ start_case() {
     JWKS_URL="$WR_JWKS_URL" JWT_ISSUER="$WR_ISS" JWT_AUDIENCE="$WR_AUD" \
     SNAPSHOT_ROOT="${E2E_DIR}/run/case-snapshots" \
     QUERY_SERVICE_URL="$QUERY_URL" \
+    DATASET_URL="$DATASET_URL" \
     MINIO_ENDPOINT="${S3_ENDPOINT#http://}" MINIO_ACCESS_KEY=datacern MINIO_SECRET_KEY=datacern_dev \
     MINIO_USE_SSL=false CASE_EVIDENCE_BUCKET=datacern-case-evidence \
     RBAC_URL="$RBAC_URL" REGISTER_SIGNING_KEY_PEM="$reg_key" \

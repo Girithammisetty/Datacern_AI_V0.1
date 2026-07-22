@@ -77,6 +77,12 @@ const (
 	ActionEvidenceRead   = "case.evidence.read"
 	ActionEvidenceCreate = "case.evidence.create"
 	ActionEvidenceDelete = "case.evidence.delete"
+	// Event-rule case triggers (realtime-decisioning INC-1): tenant-authored
+	// "ingestion completes into dataset X → open cases" rules.
+	ActionTriggerRead   = "case.trigger.read"
+	ActionTriggerCreate = "case.trigger.create"
+	ActionTriggerUpdate = "case.trigger.update"
+	ActionTriggerDelete = "case.trigger.delete"
 )
 
 // Manifest is case-service's action catalog slice (RBC-FR-022): the exact set
@@ -94,6 +100,7 @@ func Manifest() []ActionManifestEntry {
 		ActionFieldRead, ActionFieldManage, ActionAdminReindex, ActionSLAManage,
 		ActionSchemaRead, ActionSchemaCreate, ActionSchemaDelete,
 		ActionEvidenceRead, ActionEvidenceCreate, ActionEvidenceDelete,
+		ActionTriggerRead, ActionTriggerCreate, ActionTriggerUpdate, ActionTriggerDelete,
 	} {
 		if seen[a] {
 			continue

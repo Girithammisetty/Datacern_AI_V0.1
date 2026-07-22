@@ -36,10 +36,20 @@ def test_string_eq_and_contains_are_case_insensitive():
 
 
 def test_gt_on_a_non_numeric_column_falls_through_to_contains():
-    # matches the old pandas fall-through: gt/gte/lt/lte on a string column
-    # became a substring match, not a numeric comparison.
+    # gt/gte/lt/lte on a string column with a NON-numeric value stays a
+    # substring match (the old pandas fall-through).
     where, _ = build_where([{"col": "s", "op": "gt", "value": "x"}], {"s": False})
     assert "LIKE" in where
+
+
+def test_ordering_op_on_string_column_with_numeric_value_try_casts():
+    # CSV uploads land every column as string; a numeric ordering filter must
+    # still compare numerically (rows that don't cast are excluded via NULL).
+    where, params = build_where(
+        [{"col": "amount", "op": "gt", "value": "5000"}], {"amount": False}
+    )
+    assert 'try_cast("amount" AS DOUBLE) > ?' in where
+    assert params == [5000.0]
 
 
 def test_like_metacharacters_are_escaped():

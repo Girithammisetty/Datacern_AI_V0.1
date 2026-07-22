@@ -7,10 +7,13 @@ clauses mirror the previous pandas semantics exactly:
 
 - a filter on a NUMERIC column with a numeric op (gt/gte/lt/lte/eq/neq) and a
   value that parses as a float → a typed numeric comparison (nulls excluded);
-- otherwise a string comparison on ``lower(cast(col as varchar))``: eq / neq are
-  case-insensitive equality; every other op (contains, and gt/gte/lt/lte on a
-  non-numeric column — matching the old fall-through) is a case-insensitive
-  substring LIKE;
+- an ordering op (gt/gte/lt/lte) on a NON-numeric column with a value that
+  parses as a float → ``try_cast(col AS DOUBLE)`` numeric comparison, so
+  numeric filters work on stringly-typed columns (CSV uploads land every
+  column as string); rows whose cell isn't numeric are excluded (NULL cast);
+- otherwise a string comparison on ``lower(cast(col as varchar))``: eq / neq
+  are case-insensitive equality; contains — and an ordering op whose value is
+  not numeric — is a case-insensitive substring LIKE;
 - a filter naming an unknown column, or with an empty/None value, is skipped.
 
 Values are always bound parameters (never interpolated); identifiers are the
@@ -29,6 +32,13 @@ def is_numeric_type(duckdb_type: str) -> bool:
     the types parquet round-trips: ints, floats, decimals)."""
     t = (duckdb_type or "").upper()
     return any(k in t for k in ("INT", "DOUBLE", "FLOAT", "DECIMAL", "REAL", "NUMERIC"))
+
+
+def _as_float(val: Any) -> float | None:
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
 
 
 def _qident(name: str) -> str:
@@ -59,6 +69,9 @@ def build_where(filters: list[dict] | None, col_numeric: dict[str, bool]) -> tup
                 continue
             clauses.append(f"{qcol} {_NUMERIC_OPS[op]} ?")
             params.append(num)
+        elif op in ("gt", "gte", "lt", "lte") and _as_float(val) is not None:
+            clauses.append(f"try_cast({qcol} AS DOUBLE) {_NUMERIC_OPS[op]} ?")
+            params.append(_as_float(val))
         else:
             expr = f"lower(cast({qcol} as varchar))"
             if op == "eq":

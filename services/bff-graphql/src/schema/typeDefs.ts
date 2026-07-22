@@ -1735,6 +1735,58 @@ export const typeDefs = gql`
     updatedAt: DateTime
   }
 
+  "One pushdown row-filter condition on a case trigger (op: eq|neq|contains|gt|gte|lt|lte)."
+  type CaseTriggerCondition { col: String! op: String! value: String! }
+  input CaseTriggerConditionInput { col: String! op: String! value: String! }
+
+  """An event-rule case trigger (realtime-decisioning INC-1): when an ingestion
+  completes into the matching dataset, rows passing the conditions are
+  materialized as cases (idempotent via dataset_urn+row_pk dedup). Triggers
+  create work; they never decide — four-eyes governance is untouched."""
+  type CaseTrigger {
+    id: ID!
+    workspaceId: ID
+    name: String!
+    enabled: Boolean!
+    datasetUrn: String
+    datasetName: String
+    conditions: [CaseTriggerCondition!]!
+    "Row column whose value becomes the case row_pk (dedup identity); null = first column."
+    rowPkField: String
+    severity: String!
+    dueHours: Int!
+    projectionFields: [String!]!
+    maxCasesPerEvent: Int!
+    createdById: String
+    createdAt: DateTime
+    updatedAt: DateTime
+  }
+  input CreateCaseTriggerInput {
+    name: String!
+    enabled: Boolean
+    datasetUrn: String
+    datasetName: String
+    conditions: [CaseTriggerConditionInput!]
+    rowPkField: String
+    severity: String
+    dueHours: Int
+    projectionFields: [String!]
+    maxCasesPerEvent: Int
+  }
+  input UpdateCaseTriggerInput {
+    id: ID!
+    name: String
+    enabled: Boolean
+    datasetUrn: String
+    datasetName: String
+    conditions: [CaseTriggerConditionInput!]
+    rowPkField: String
+    severity: String
+    dueHours: Int
+    projectionFields: [String!]
+    maxCasesPerEvent: Int
+  }
+
   """A custom case-field config (case-service /case-fields, CASE-FR-022).
   \`purpose\` is normalized to the string form (create | update | both) — the
   service serializes it as int16 (0/1/2) on reads."""
@@ -3758,6 +3810,8 @@ export const typeDefs = gql`
     """The workspace disposition catalog (case-service GET /dispositions —
     workspace resolved from the JWT claim). Needs case.disposition.read."""
     dispositions: [Disposition!]!
+    "Event-rule case triggers for the caller's workspace (case.trigger.read)."
+    caseTriggers: [CaseTrigger!]!
     """Custom case-field configs, optionally scoped to one saved query
     (case-service GET /case-fields?query_urn=). Needs case.case.read."""
     caseFields(queryUrn: String): [CaseField!]!
@@ -4673,6 +4727,9 @@ export const typeDefs = gql`
 
     """Create a custom case-field config (case-service POST /case-fields, 201).
     Needs case.case.update."""
+    createCaseTrigger(input: CreateCaseTriggerInput!, idempotencyKey: String): CaseTrigger!
+    updateCaseTrigger(input: UpdateCaseTriggerInput!): CaseTrigger!
+    deleteCaseTrigger(id: ID!): Boolean!
     createCaseField(input: CreateCaseFieldInput!, idempotencyKey: String): CaseField!
     """Edit a custom case-field config (case-service PATCH /case-fields/{id}) —
     purpose + fieldMeta only; name/dataType/queryUrn are immutable and the service

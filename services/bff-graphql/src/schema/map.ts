@@ -644,6 +644,27 @@ function purposeString(p?: number): string | null {
   }
 }
 
+export function mapCaseTrigger(_ctx: GraphQLContext, d: import("../clients/case.js").CaseTriggerDTO) {
+  return {
+    __typename: "CaseTrigger" as const,
+    id: d.id,
+    workspaceId: d.workspace_id ?? null,
+    name: d.name,
+    enabled: d.enabled,
+    datasetUrn: d.dataset_urn ?? null,
+    datasetName: d.dataset_name ?? null,
+    conditions: (d.conditions ?? []).map((c) => ({ col: c.col, op: c.op, value: c.value })),
+    rowPkField: d.row_pk_field ?? null,
+    severity: d.severity,
+    dueHours: d.due_hours,
+    projectionFields: d.projection_fields ?? [],
+    maxCasesPerEvent: d.max_cases_per_event,
+    createdById: d.created_by_id ?? null,
+    createdAt: d.created_at ?? null,
+    updatedAt: d.updated_at ?? null,
+  };
+}
+
 export function mapCaseField(ctx: GraphQLContext, d: CaseFieldDTO) {
   return {
     __typename: "CaseField" as const,

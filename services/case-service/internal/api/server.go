@@ -112,6 +112,14 @@ func (s *Server) Router() http.Handler {
 			r.With(s.RequireAction(authz.ActionFieldManage)).Delete("/{id}", s.handleDeleteField)
 		})
 
+		// Event-rule case triggers (realtime-decisioning INC-1).
+		r.Route("/case-triggers", func(r chi.Router) {
+			r.With(s.RequireAction(authz.ActionTriggerRead)).Get("/", s.handleListTriggers)
+			r.With(s.RequireAction(authz.ActionTriggerCreate)).Post("/", s.handleCreateTrigger)
+			r.With(s.RequireAction(authz.ActionTriggerUpdate)).Patch("/{id}", s.handleUpdateTrigger)
+			r.With(s.RequireAction(authz.ActionTriggerDelete)).Delete("/{id}", s.handleDeleteTrigger)
+		})
+
 		// Typed case schemas (named case TYPES binding a distinct field set, inc10).
 		r.Route("/case-schemas", func(r chi.Router) {
 			r.With(s.RequireAction(authz.ActionSchemaRead)).Get("/", s.handleListSchemas)

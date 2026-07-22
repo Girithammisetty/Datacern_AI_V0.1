@@ -97,6 +97,7 @@ import type {
   CreateDispositionInput,
   UpdateDispositionInput,
   CreateCaseFieldInput,
+  CaseTriggerInput,
   UpdateCaseFieldInput,
   CaseSlaPolicyInput,
   // Tier 4b: ml ops (register/notes/cards + inference lifecycle/schedules).
@@ -1633,6 +1634,45 @@ export function useUpdateDisposition() {
     mutationFn: (vars: { id: string; input: UpdateDispositionInput }) =>
       graphqlRequest<ops.UpdateDispositionResult>(ops.UPDATE_DISPOSITION, vars),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.dispositions() }),
+  });
+}
+
+// ---- event-rule case triggers (realtime-decisioning INC-1) ------------------
+export function useCaseTriggers() {
+  return useQuery({
+    queryKey: qk.caseTriggers(),
+    queryFn: () =>
+      graphqlRequest<ops.CaseTriggersResult>(ops.CASE_TRIGGERS).then((r) => r.caseTriggers),
+  });
+}
+
+export function useCreateCaseTrigger() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CaseTriggerInput) =>
+      graphqlRequest<ops.CreateCaseTriggerResult>(ops.CREATE_CASE_TRIGGER, {
+        input,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["cases", "caseTriggers"] }),
+  });
+}
+
+export function useUpdateCaseTrigger() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CaseTriggerInput & { id: string }) =>
+      graphqlRequest<ops.UpdateCaseTriggerResult>(ops.UPDATE_CASE_TRIGGER, { input }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["cases", "caseTriggers"] }),
+  });
+}
+
+export function useDeleteCaseTrigger() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string }) =>
+      graphqlRequest<ops.DeleteCaseTriggerResult>(ops.DELETE_CASE_TRIGGER, vars),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["cases", "caseTriggers"] }),
   });
 }
 

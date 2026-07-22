@@ -14,12 +14,13 @@ import {
   useCaseFields, useCreateCaseField, useUpdateCaseField, useDeleteCaseField,
   useCaseSchemas, useCreateCaseSchema, useDeleteCaseSchema,
   usePutCaseSlaPolicy, useUsers,
+  useCaseTriggers, useCreateCaseTrigger, useUpdateCaseTrigger, useDeleteCaseTrigger,
 } from "@/lib/graphql/hooks";
 import { useToasts } from "@/stores/ui";
 import { GraphQLRequestError } from "@/lib/graphql/client";
 import type {
   Disposition, DispositionCategory, CaseField, CaseFieldDataType, CaseFieldPurpose, SlaOnBreach,
-  CaseSchema, CaseSchemaField,
+  CaseSchema, CaseSchemaField, CaseTrigger, CaseTriggerCondition, TriggerConditionOp,
 } from "@/lib/graphql/types";
 
 const CATEGORIES: DispositionCategory[] = [
@@ -47,6 +48,7 @@ export default function CaseSettingsPage() {
             ["dispositions", "Dispositions"],
             ["fields", "Case fields"],
             ["schemas", "Case types"],
+            ["triggers", "Triggers"],
             ["sla", "SLA policy"],
           ].map(([v, label]) => (
             <Tabs.Trigger
@@ -67,6 +69,9 @@ export default function CaseSettingsPage() {
         </Tabs.Content>
         <Tabs.Content value="schemas">
           <CaseSchemasPanel />
+        </Tabs.Content>
+        <Tabs.Content value="triggers">
+          <TriggersPanel />
         </Tabs.Content>
         <Tabs.Content value="sla">
           <SlaPolicyPanel />
@@ -916,3 +921,283 @@ function SlaPolicyPanel() {
     </Can>
   );
 }
+
+/* ------------------------- event-rule case triggers ------------------------ */
+
+const TRIGGER_OPS: TriggerConditionOp[] = ["eq", "neq", "contains", "gt", "gte", "lt", "lte"];
+const TRIGGER_SEVERITIES = ["low", "medium", "high", "critical"];
+
+/** Event-rule case triggers (realtime-decisioning INC-1): when an ingestion
+ * completes into the matching dataset, rows passing the conditions become
+ * cases on the live worklist. Real case-service CRUD (/case-triggers). */
+function TriggersPanel() {
+  const query = useCaseTriggers();
+  const push = useToasts((s) => s.push);
+  const toastError = useErrorToast();
+  const create = useCreateCaseTrigger();
+  const update = useUpdateCaseTrigger();
+  const remove = useDeleteCaseTrigger();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [datasetName, setDatasetName] = useState("");
+  const [datasetUrn, setDatasetUrn] = useState("");
+  const [rowPkField, setRowPkField] = useState("");
+  const [severity, setSeverity] = useState("medium");
+  const [dueHours, setDueHours] = useState(72);
+  const [projectionFields, setProjectionFields] = useState("");
+  const [conditions, setConditions] = useState<CaseTriggerCondition[]>([]);
+  const [deleting, setDeleting] = useState<CaseTrigger | null>(null);
+
+  const resetForm = () => {
+    setName(""); setDatasetName(""); setDatasetUrn(""); setRowPkField("");
+    setSeverity("medium"); setDueHours(72); setProjectionFields(""); setConditions([]);
+  };
+
+  const rows = query.data ?? [];
+
+  const columns: Column<CaseTrigger>[] = [
+    { id: "name", header: "Name", cell: (t) => <span className="font-medium">{t.name}</span> },
+    {
+      id: "source", header: "Dataset", cell: (t) => (
+        <span className="font-mono text-xs">{t.datasetName || t.datasetUrn || "—"}</span>
+      ),
+    },
+    {
+      id: "conditions", header: "Conditions", width: 200,
+      cell: (t) =>
+        t.conditions.length === 0
+          ? "all rows"
+          : t.conditions.map((c) => `${c.col} ${c.op} ${c.value}`).join(" ∧ "),
+    },
+    { id: "severity", header: "Severity", width: 100, cell: (t) => t.severity },
+    { id: "due", header: "Due", width: 90, cell: (t) => `${t.dueHours}h` },
+    {
+      id: "enabled", header: "Status", width: 100,
+      cell: (t) => <Badge variant={t.enabled ? "success" : "outline"}>{t.enabled ? "enabled" : "paused"}</Badge>,
+    },
+    {
+      id: "actions", header: "", width: 150,
+      cell: (t) => (
+        <div className="flex justify-end gap-1">
+          <Can gate={FEATURE_GATES.manageCaseTriggers}>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={update.isPending}
+              onClick={() =>
+                update.mutate(
+                  { id: t.id, enabled: !t.enabled },
+                  {
+                    onSuccess: () =>
+                      push({ title: t.enabled ? "Trigger paused" : "Trigger enabled", variant: "success" }),
+                    onError: toastError("Update failed"),
+                  },
+                )
+              }
+            >
+              {t.enabled ? "Pause" : "Enable"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setDeleting(t)}>
+              Delete
+            </Button>
+          </Can>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <p className="text-sm text-muted-foreground">
+          When an ingestion completes into the matching dataset, rows passing the conditions
+          open as cases automatically. Duplicate rows never create duplicate cases.
+        </p>
+        <Can gate={FEATURE_GATES.manageCaseTriggers}>
+          <Button size="sm" className="ml-auto" onClick={() => setCreateOpen(true)}>
+            New trigger
+          </Button>
+        </Can>
+      </div>
+
+      <AsyncBoundary
+        isLoading={query.isLoading}
+        isError={query.isError}
+        error={query.error}
+        isEmpty={!query.isLoading && rows.length === 0}
+        emptyTitle="No triggers yet"
+        onRetry={() => query.refetch()}
+      >
+        <DataTable ariaLabel="Case triggers" rows={rows} columns={columns} rowId={(t) => t.id} />
+      </AsyncBoundary>
+
+      <ConfirmDialog
+        open={createOpen}
+        onOpenChange={(o) => {
+          setCreateOpen(o);
+          if (!o) resetForm();
+        }}
+        title="New case trigger"
+        description="Match by dataset name (as ingested) or exact dataset URN. Conditions filter rows server-side before cases open."
+        confirmLabel={create.isPending ? "Creating…" : "Create"}
+        onConfirm={() => {
+          if (!name.trim() || (!datasetName.trim() && !datasetUrn.trim()) || create.isPending) return;
+          create.mutate(
+            {
+              name: name.trim(),
+              datasetName: datasetName.trim() || undefined,
+              datasetUrn: datasetUrn.trim() || undefined,
+              rowPkField: rowPkField.trim() || undefined,
+              severity,
+              dueHours,
+              projectionFields: projectionFields
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean),
+              conditions,
+            },
+            {
+              onSuccess: () => {
+                setCreateOpen(false);
+                resetForm();
+                push({ title: "Trigger created", variant: "success" });
+              },
+              onError: toastError("Create failed"),
+            },
+          );
+        }}
+      >
+        <div className="mt-3 space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="trig-name">Name</Label>
+            <Input id="trig-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="High-value auto claims" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="trig-ds-name">Dataset name</Label>
+              <Input id="trig-ds-name" value={datasetName} onChange={(e) => setDatasetName(e.target.value)} placeholder="auto-claims" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="trig-ds-urn">or dataset URN</Label>
+              <Input id="trig-ds-urn" value={datasetUrn} onChange={(e) => setDatasetUrn(e.target.value)} placeholder="wr:…:dataset/…" />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="trig-pk">Row ID column</Label>
+              <Input id="trig-pk" value={rowPkField} onChange={(e) => setRowPkField(e.target.value)} placeholder="claim_id (default: first column)" />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="trig-sev">Severity</Label>
+              <select
+                id="trig-sev"
+                className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value)}
+              >
+                {TRIGGER_SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="trig-due">Due (hours)</Label>
+              <Input
+                id="trig-due"
+                type="number"
+                min={1}
+                max={2160}
+                value={dueHours}
+                onChange={(e) => setDueHours(Math.max(1, Number(e.target.value) || 72))}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="trig-proj">Worklist columns (comma-separated; empty = all)</Label>
+            <Input id="trig-proj" value={projectionFields} onChange={(e) => setProjectionFields(e.target.value)} placeholder="claim_id, claimant, amount" />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Row conditions</Label>
+              <Button
+                size="sm"
+                variant="outline"
+                type="button"
+                onClick={() => setConditions((c) => [...c, { col: "", op: "eq", value: "" }])}
+              >
+                Add condition
+              </Button>
+            </div>
+            {conditions.length === 0 && (
+              <p className="text-xs text-muted-foreground">No conditions — every ingested row opens a case (up to the per-event cap).</p>
+            )}
+            {conditions.map((c, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  aria-label={`Condition ${i + 1} column`}
+                  className="flex-1"
+                  placeholder="column"
+                  value={c.col}
+                  onChange={(e) =>
+                    setConditions((cs) => cs.map((x, j) => (j === i ? { ...x, col: e.target.value } : x)))
+                  }
+                />
+                <select
+                  aria-label={`Condition ${i + 1} operator`}
+                  className="h-9 rounded-md border bg-background px-2 text-sm"
+                  value={c.op}
+                  onChange={(e) =>
+                    setConditions((cs) =>
+                      cs.map((x, j) => (j === i ? { ...x, op: e.target.value as TriggerConditionOp } : x)),
+                    )
+                  }
+                >
+                  {TRIGGER_OPS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+                <Input
+                  aria-label={`Condition ${i + 1} value`}
+                  className="flex-1"
+                  placeholder="value"
+                  value={c.value}
+                  onChange={(e) =>
+                    setConditions((cs) => cs.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))
+                  }
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  type="button"
+                  aria-label={`Remove condition ${i + 1}`}
+                  onClick={() => setConditions((cs) => cs.filter((_, j) => j !== i))}
+                >
+                  ✕
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={!!deleting}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        title="Delete trigger?"
+        description={`"${deleting?.name ?? ""}" stops opening cases. Existing cases are untouched.`}
+        confirmLabel={remove.isPending ? "Deleting…" : "Delete"}
+        onConfirm={() => {
+          if (!deleting || remove.isPending) return;
+          remove.mutate(
+            { id: deleting.id },
+            {
+              onSuccess: () => {
+                setDeleting(null);
+                push({ title: "Trigger deleted", variant: "success" });
+              },
+              onError: toastError("Delete failed"),
+            },
+          );
+        }}
+      />
+    </div>
+  );
+}
+

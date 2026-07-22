@@ -1293,6 +1293,45 @@ export interface Disposition {
   updatedAt?: string | null;
 }
 
+export type TriggerConditionOp = "eq" | "neq" | "contains" | "gt" | "gte" | "lt" | "lte";
+export interface CaseTriggerCondition {
+  col: string;
+  op: TriggerConditionOp;
+  value: string;
+}
+/** An event-rule case trigger (realtime-decisioning INC-1): ingestion
+ * completes into the matching dataset → rows passing the conditions become
+ * cases (idempotent via dataset_urn+row_pk dedup). */
+export interface CaseTrigger {
+  id: string;
+  workspaceId: string | null;
+  name: string;
+  enabled: boolean;
+  datasetUrn: string | null;
+  datasetName: string | null;
+  conditions: CaseTriggerCondition[];
+  rowPkField: string | null;
+  severity: string;
+  dueHours: number;
+  projectionFields: string[];
+  maxCasesPerEvent: number;
+  createdById: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+export interface CaseTriggerInput {
+  name?: string;
+  enabled?: boolean;
+  datasetUrn?: string;
+  datasetName?: string;
+  conditions?: CaseTriggerCondition[];
+  rowPkField?: string;
+  severity?: string;
+  dueHours?: number;
+  projectionFields?: string[];
+  maxCasesPerEvent?: number;
+}
+
 export type CaseFieldDataType = "string" | "text" | "integer" | "float" | "boolean" | "date" | "enum";
 export type CaseFieldPurpose = "create" | "update" | "both";
 
