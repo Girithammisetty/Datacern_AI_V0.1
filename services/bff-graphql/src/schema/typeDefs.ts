@@ -480,6 +480,40 @@ export const typeDefs = gql`
 
   type AuditEventConnection { nodes: [AuditEvent!]! pageInfo: PageInfo! }
 
+  enum SiemExportFormat { CEF LEEF JSON }
+
+  """One proposed/decided state of a tenant's SIEM export destination (BRD 59
+  WS2, four-eyes gated). Every propose/approve/reject creates or transitions
+  one row rather than mutating a config in place, so approvedBy/rejectedBy
+  preserve who took each decision."""
+  type SiemConfig {
+    id: ID!
+    endpoint: String!
+    format: SiemExportFormat!
+    active: Boolean!
+    status: String!
+    requestedBy: String!
+    approvedBy: String
+    rejectedBy: String
+    rejectReason: String
+    createdAt: DateTime!
+    updatedAt: DateTime!
+  }
+
+  """The tenant's SIEM export state: the live destination (if any), a
+  proposal awaiting a second approver (if any), and full decision history."""
+  type SiemConfigState {
+    active: SiemConfig
+    pending: SiemConfig
+    history: [SiemConfig!]!
+  }
+
+  input ProposeSiemConfigInput {
+    endpoint: String!
+    format: SiemExportFormat!
+    authRef: String
+  }
+
   """The real result of a chain-integrity verification for one tenant-day
   (audit-service POST /audit/verify). \`sealed=false\` never occurs from this
   route — an unsealed day 409s instead of returning a fake pass/fail."""
@@ -3551,6 +3585,10 @@ export const typeDefs = gql`
     /tenants/self/idp). configured is false when SSO has never been set up.
     Needs the tenant-admin identity scope."""
     tenantIdp: TenantIdpConfig!
+    """The caller tenant's SIEM export destination state (BRD 59 WS2,
+    audit-service GET /audit/siemconfig): the live destination (if any), a
+    proposal awaiting a second approver (if any), and full decision history."""
+    siemConfig: SiemConfigState!
     """A single workspace (rbac-service GET /workspaces/{id})."""
     workspace(id: ID!): Workspace
 
@@ -4502,6 +4540,23 @@ export const typeDefs = gql`
     setTenantIdp(input: SetTenantIdpInput!, idempotencyKey: String): TenantIdpConfig!
     """Turn off SSO for the caller's tenant (DELETE /tenants/self/idp)."""
     deleteTenantIdp: Boolean!
+    """Propose a new SIEM export destination (BRD 59 WS2, audit-service POST
+    /audit/siemconfig) -- four-eyes gated: this creates a pending proposal,
+    it does NOT take effect until a DISTINCT admin approves it. The currently
+    active destination, if any, keeps delivering unaffected until then. Needs
+    audit.siemconfig.create."""
+    proposeSiemConfig(input: ProposeSiemConfigInput!): SiemConfig!
+    """Approve a pending SIEM destination proposal (POST /audit/siemconfig/
+    {id}/approve). Four-eyes: fails if the caller is the same subject who
+    proposed it. Needs audit.siemconfig.approve."""
+    approveSiemConfig(id: ID!): SiemConfig!
+    """Decline a pending SIEM destination proposal (POST /audit/siemconfig/
+    {id}/reject); the proposer may reject their own proposal to withdraw it.
+    Needs audit.siemconfig.approve."""
+    rejectSiemConfig(id: ID!, reason: String): SiemConfig!
+    """Remove a decided (approved/rejected) SIEM destination row (DELETE
+    /audit/siemconfig/{id}). Needs audit.siemconfig.delete."""
+    deleteSiemConfig(id: ID!): Boolean!
     """Upsert one UI label override (identity PUT /tenants/self/labels merges it).
     Returns the full merged override list. Needs identity.user.admin."""
     setTenantLabel(key: String!, value: String!): [LabelOverride!]!

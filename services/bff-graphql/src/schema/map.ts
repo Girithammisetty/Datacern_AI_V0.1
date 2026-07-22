@@ -62,7 +62,14 @@ import type {
   // Tier 4b: identity/rbac admin (content grants + bulk membership).
   ContentGrantDTO, EffectiveAccessEntryDTO, BulkMembersResponseDTO,
 } from "../clients/rbac.js";
-import type { AuditEventDTO, ChainVerifyResultDTO, ComplianceJobDTO, OperationDTO } from "../clients/audit.js";
+import type {
+  AuditEventDTO,
+  ChainVerifyResultDTO,
+  ComplianceJobDTO,
+  OperationDTO,
+  SiemConfigDTO,
+  SiemConfigStateDTO,
+} from "../clients/audit.js";
 import { budgetScopeString, type BudgetDTO, type RateCardDTO, type AnomalyDTO } from "../clients/usage.js";
 import type {
   ConnectorTypeDTO, ConnectionDTO, ConnectionTestDTO, IngestionDTO, UploadDTO,
@@ -309,6 +316,32 @@ export function mapComplianceJob(d: ComplianceJobDTO | OperationDTO) {
     status: d.status,
     resultUrl: "result_url" in d ? d.result_url ?? null : null,
     error: "error" in d ? d.error ?? null : null,
+  };
+}
+
+export function mapSiemConfig(d: SiemConfigDTO) {
+  return {
+    __typename: "SiemConfig" as const,
+    id: d.id,
+    endpoint: d.endpoint,
+    format: d.format,
+    active: d.active,
+    status: d.status,
+    requestedBy: d.requested_by,
+    approvedBy: d.approved_by ?? null,
+    rejectedBy: d.rejected_by ?? null,
+    rejectReason: d.reject_reason ?? null,
+    createdAt: d.created_at,
+    updatedAt: d.updated_at,
+  };
+}
+
+export function mapSiemConfigState(d: SiemConfigStateDTO) {
+  return {
+    __typename: "SiemConfigState" as const,
+    active: d.active ? mapSiemConfig(d.active) : null,
+    pending: d.pending ? mapSiemConfig(d.pending) : null,
+    history: d.history.map(mapSiemConfig),
   };
 }
 

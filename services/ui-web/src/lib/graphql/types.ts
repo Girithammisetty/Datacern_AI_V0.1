@@ -339,6 +339,31 @@ export interface SetTenantIdpInput {
   enabled?: boolean;
 }
 
+// BRD 59 WS2: per-tenant SIEM export destination (four-eyes gated).
+export interface SiemConfig {
+  id: string;
+  endpoint: string;
+  format: "CEF" | "LEEF" | "JSON";
+  active: boolean;
+  status: string;
+  requestedBy: string;
+  approvedBy?: string | null;
+  rejectedBy?: string | null;
+  rejectReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SiemConfigState {
+  active: SiemConfig | null;
+  pending: SiemConfig | null;
+  history: SiemConfig[];
+}
+export interface ProposeSiemConfigInput {
+  endpoint: string;
+  format: "CEF" | "LEEF" | "JSON";
+  authRef?: string;
+}
+
 export interface AuditEvent {
   eventId: ID;
   urn: string;

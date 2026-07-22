@@ -195,6 +195,12 @@ type Publisher interface {
 type Exporter struct {
 	Pub Publisher
 	Log *slog.Logger
+	// Delivery is BRD 59 WS2's per-tenant destination sink -- additive to Pub:
+	// every record still publishes to the shared audit.export.v1 topic exactly
+	// as before, AND (if the tenant has an approved+active destination
+	// configured) is also delivered there in that tenant's chosen format. Nil
+	// is a no-op, so existing wiring that never sets this is unaffected.
+	Delivery *HTTPDelivery
 }
 
 // New builds an Exporter over a real Publisher.
@@ -219,5 +225,8 @@ func (x *Exporter) Publish(ctx context.Context, rec domain.Record) {
 	env := Envelope(rec)
 	if err := x.Pub.Publish(ctx, Topic, env); err != nil {
 		x.log().Warn("siem export publish failed", "event_id", rec.EventID.String(), "event_type", rec.EventType, "err", err)
+	}
+	if x.Delivery != nil {
+		x.Delivery.Deliver(ctx, rec.TenantID, env)
 	}
 }

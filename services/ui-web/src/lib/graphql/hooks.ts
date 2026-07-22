@@ -3511,6 +3511,50 @@ export function useDeleteTenantIdp() {
   });
 }
 
+// ---- BRD 59 WS2: per-tenant SIEM export destination (four-eyes gated) -----
+export function useSiemConfig() {
+  return useQuery({
+    queryKey: ["admin", "siemConfig"],
+    queryFn: () => graphqlRequest<ops.SiemConfigResult>(ops.SIEM_CONFIG).then((r) => r.siemConfig),
+  });
+}
+
+export function useProposeSiemConfig() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: import("./types").ProposeSiemConfigInput) =>
+      graphqlRequest<ops.ProposeSiemConfigResult>(ops.PROPOSE_SIEM_CONFIG, { input }).then((r) => r.proposeSiemConfig),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["admin", "siemConfig"] }),
+  });
+}
+
+export function useApproveSiemConfig() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ApproveSiemConfigResult>(ops.APPROVE_SIEM_CONFIG, { id }).then((r) => r.approveSiemConfig),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["admin", "siemConfig"] }),
+  });
+}
+
+export function useRejectSiemConfig() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; reason?: string }) =>
+      graphqlRequest<ops.RejectSiemConfigResult>(ops.REJECT_SIEM_CONFIG, vars).then((r) => r.rejectSiemConfig),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["admin", "siemConfig"] }),
+  });
+}
+
+export function useDeleteSiemConfig() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.DeleteSiemConfigResult>(ops.DELETE_SIEM_CONFIG, { id }).then((r) => r.deleteSiemConfig),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["admin", "siemConfig"] }),
+  });
+}
+
 // ---- inc18: tenant UI-label overrides editor (display_labels registry) ------
 export function useTenantLabels() {
   return useQuery({

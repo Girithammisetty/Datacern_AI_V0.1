@@ -38,7 +38,7 @@ import {
   // Tier 4b: identity/rbac admin (lifecycle, roles, grants, bulk membership).
   mapCreatedServiceAccount, mapEffectiveAccessEntry, mapContentGrant, mapBulkGroupMembershipResult,
   mapBudget, mapRateCard, mapAnomaly, mapReportSubscription,
-  mapChainVerifyResult, mapComplianceJob,
+  mapChainVerifyResult, mapComplianceJob, mapSiemConfig, mapSiemConfigState,
   decisionAction, urnId,
   mapEvalSuite, mapEvalRun, mapEvalCaseResult, mapEvalDataset, mapEvalCase, mapEvalScorer,
   mapEvalGateResult, mapEvalCanary, mapEvalTrendPoint, mapEvalSloRow,
@@ -551,6 +551,12 @@ export const resolvers = {
 
     complianceOperation: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.audit.operation(a.id).then((d) => mapComplianceJob(d))),
+
+    // BRD 59 WS2: the caller tenant's SIEM export destination state.
+    siemConfig: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const d = await ctx.clients.audit.siemConfig();
+      return mapSiemConfigState(d);
+    },
 
     dataset: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.dataset.dataset(a.id).then((d) => mapDataset(ctx, d))),
@@ -2203,6 +2209,35 @@ export const resolvers = {
     ) => {
       const d = await ctx.clients.audit.generateAiDecisionLog(a.from, a.to, a.agentId);
       return mapComplianceJob(d);
+    },
+
+    // BRD 59 WS2: propose/approve/reject/delete a tenant's SIEM export
+    // destination. Four-eyes is enforced server-side (audit-service); the BFF
+    // is a pure passthrough of the caller's JWT.
+    proposeSiemConfig: async (
+      _p: unknown,
+      a: { input: { endpoint: string; format: string; authRef?: string } },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.audit.proposeSiemConfig({
+        endpoint: a.input.endpoint, format: a.input.format, auth_ref: a.input.authRef,
+      });
+      return mapSiemConfig(d);
+    },
+
+    approveSiemConfig: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.audit.approveSiemConfig(a.id);
+      return mapSiemConfig(d);
+    },
+
+    rejectSiemConfig: async (_p: unknown, a: { id: string; reason?: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.audit.rejectSiemConfig(a.id, a.reason);
+      return mapSiemConfig(d);
+    },
+
+    deleteSiemConfig: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      await ctx.clients.audit.deleteSiemConfig(a.id);
+      return true;
     },
 
     updateCase: async (

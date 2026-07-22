@@ -75,6 +75,13 @@ func (s *Server) Router() http.Handler {
 		r.With(s.RequireAction(authz.ActionComplianceRead)).Post("/compliance/ai-decision-log", s.handleAIDecisionLog)
 		r.With(s.RequireAction(authz.ActionComplianceRead)).Get("/operations/{id}", s.handleGetOperation)
 		r.With(s.RequireAction(authz.ActionDLQRedrive)).Post("/admin/dlq/redrive", s.handleRedrive)
+
+		// BRD 59 WS2 — per-tenant SIEM export destination (four-eyes config change).
+		r.With(s.RequireAction(authz.ActionSiemConfigRead)).Get("/audit/siemconfig", s.handleGetSiemConfig)
+		r.With(s.RequireAction(authz.ActionSiemConfigPropose)).Post("/audit/siemconfig", s.handleProposeSiemConfig)
+		r.With(s.RequireAction(authz.ActionSiemConfigApprove)).Post("/audit/siemconfig/{id}/approve", s.handleApproveSiemConfig)
+		r.With(s.RequireAction(authz.ActionSiemConfigApprove)).Post("/audit/siemconfig/{id}/reject", s.handleRejectSiemConfig)
+		r.With(s.RequireAction(authz.ActionSiemConfigDelete)).Delete("/audit/siemconfig/{id}", s.handleDeleteSiemConfig)
 	})
 	return r
 }

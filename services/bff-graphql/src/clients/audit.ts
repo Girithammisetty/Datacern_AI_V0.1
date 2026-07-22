@@ -70,6 +70,29 @@ export interface OperationDTO {
   error?: string;
 }
 
+/** BRD 59 WS2: /audit/siemconfig row DTO. */
+export interface SiemConfigDTO {
+  id: string;
+  endpoint: string;
+  format: "CEF" | "LEEF" | "JSON";
+  auth_ref?: string;
+  active: boolean;
+  status: string;
+  requested_by: string;
+  approved_by?: string;
+  rejected_by?: string;
+  reject_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** GET /audit/siemconfig response shape. */
+export interface SiemConfigStateDTO {
+  active: SiemConfigDTO | null;
+  pending: SiemConfigDTO | null;
+  history: SiemConfigDTO[];
+}
+
 export class AuditClient {
   constructor(private readonly http: ServiceClient) {}
 
@@ -119,5 +142,35 @@ export class AuditClient {
    * audit.compliance.read. */
   operation(id: string): Promise<OperationDTO> {
     return this.http.get<OperationDTO>(`/api/v1/operations/${encodeURIComponent(id)}`);
+  }
+
+  /** GET /api/v1/audit/siemconfig — the tenant's SIEM export state (BRD 59
+   * WS2). Needs audit.siemconfig.read. */
+  siemConfig(): Promise<SiemConfigStateDTO> {
+    return this.http.get<SiemConfigStateDTO>("/api/v1/audit/siemconfig");
+  }
+
+  /** POST /api/v1/audit/siemconfig — propose a new destination (four-eyes;
+   * does not take effect until a distinct admin approves it). Needs
+   * audit.siemconfig.create. */
+  proposeSiemConfig(body: { endpoint: string; format: string; auth_ref?: string }): Promise<SiemConfigDTO> {
+    return this.http.post<SiemConfigDTO>("/api/v1/audit/siemconfig", { body });
+  }
+
+  /** POST /api/v1/audit/siemconfig/{id}/approve. Needs audit.siemconfig.approve. */
+  approveSiemConfig(id: string): Promise<SiemConfigDTO> {
+    return this.http.post<SiemConfigDTO>(`/api/v1/audit/siemconfig/${encodeURIComponent(id)}/approve`, {});
+  }
+
+  /** POST /api/v1/audit/siemconfig/{id}/reject. Needs audit.siemconfig.approve. */
+  rejectSiemConfig(id: string, reason?: string): Promise<SiemConfigDTO> {
+    return this.http.post<SiemConfigDTO>(`/api/v1/audit/siemconfig/${encodeURIComponent(id)}/reject`, {
+      body: { reason },
+    });
+  }
+
+  /** DELETE /api/v1/audit/siemconfig/{id}. Needs audit.siemconfig.delete. */
+  deleteSiemConfig(id: string): Promise<void> {
+    return this.http.delete<void>(`/api/v1/audit/siemconfig/${encodeURIComponent(id)}`);
   }
 }

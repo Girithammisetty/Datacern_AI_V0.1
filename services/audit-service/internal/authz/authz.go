@@ -50,6 +50,12 @@ const (
 	ActionChainVerify    = "audit.chain.execute"   // POST /audit/verify (AUD-FR-051)
 	ActionComplianceRead = "audit.compliance.read" // compliance packs (AUD-FR-060/061)
 	ActionDLQRedrive     = "audit.dlq.execute"     // POST /admin/dlq/redrive (AUD-FR-006) — platform operator
+
+	// BRD 59 WS2 — per-tenant SIEM export destination (four-eyes config change).
+	ActionSiemConfigRead    = "audit.siemconfig.read"    // GET current config + history
+	ActionSiemConfigPropose = "audit.siemconfig.create"  // POST propose a new destination
+	ActionSiemConfigApprove = "audit.siemconfig.approve" // POST approve OR reject a pending proposal
+	ActionSiemConfigDelete  = "audit.siemconfig.delete"  // DELETE a decided (non-pending) row
 )
 
 // ManifestEntry is one action-catalog row pushed to rbac (RBC-FR-022).
@@ -64,6 +70,7 @@ func Manifest() []ManifestEntry {
 	actions := []string{
 		ActionEventRead, ActionEventExport, ActionExportRead,
 		ActionChainVerify, ActionComplianceRead, ActionDLQRedrive,
+		ActionSiemConfigRead, ActionSiemConfigPropose, ActionSiemConfigApprove, ActionSiemConfigDelete,
 	}
 	out := make([]ManifestEntry, 0, len(actions))
 	for _, a := range actions {

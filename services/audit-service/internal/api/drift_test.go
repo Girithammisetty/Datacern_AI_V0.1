@@ -22,12 +22,16 @@ var canonicalVerbs = map[string]bool{
 // won't resolve and the test fails — forcing this map (and the manifest) to be
 // updated in lockstep with the routes.
 var constByName = map[string]string{
-	"ActionEventRead":      authz.ActionEventRead,
-	"ActionEventExport":    authz.ActionEventExport,
-	"ActionExportRead":     authz.ActionExportRead,
-	"ActionChainVerify":    authz.ActionChainVerify,
-	"ActionComplianceRead": authz.ActionComplianceRead,
-	"ActionDLQRedrive":     authz.ActionDLQRedrive,
+	"ActionEventRead":         authz.ActionEventRead,
+	"ActionEventExport":       authz.ActionEventExport,
+	"ActionExportRead":        authz.ActionExportRead,
+	"ActionChainVerify":       authz.ActionChainVerify,
+	"ActionComplianceRead":    authz.ActionComplianceRead,
+	"ActionDLQRedrive":        authz.ActionDLQRedrive,
+	"ActionSiemConfigRead":    authz.ActionSiemConfigRead,
+	"ActionSiemConfigPropose": authz.ActionSiemConfigPropose,
+	"ActionSiemConfigApprove": authz.ActionSiemConfigApprove,
+	"ActionSiemConfigDelete":  authz.ActionSiemConfigDelete,
 }
 
 // TestActionCatalogNoDrift scans the router source and asserts that every guarded

@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { ScrollText } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { DataTable, type Column } from "@/components/primitives/DataTable";
@@ -64,6 +65,11 @@ export default function AdminAuditPage() {
       <PageHeader
         title="Audit search"
         description="The tamper-evident WORM compliance trail (audit-service, ClickHouse). Dual-attribution: agent actions carry the on-behalf-of user."
+        actions={
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin/audit/export">SIEM export destination</Link>
+          </Button>
+        }
       />
 
       <AuditComplianceCard />

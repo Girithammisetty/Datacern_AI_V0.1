@@ -47,7 +47,7 @@ a self-service `/admin/audit/export` screen; delivery routes per-tenant; four-ey
 on config change (standing-config governance rule).
 
 ### Implement / Test
-- [ ] migration + config API · [ ] delivery routing · [ ] UI + BFF · [ ] integration test: two tenants, two destinations, no cross-delivery.
+- [x] migration + config API · [x] delivery routing · [x] UI + BFF · [x] integration test: two tenants, two destinations, no cross-delivery.
 
 ---
 
@@ -169,7 +169,88 @@ for the next live e2e run (not executed this session, for the same
 shared-state reason). Full `ui-web` suite: 77 files, 472 tests, 0 failures;
 coverage 55.9% (well above WS5's 30% floor).
 
-_Next: WS2 (per-tenant SIEM export destination)._
+### WS2 — Per-tenant SIEM export destination — DONE
+
+**Research before designing:** surveyed the real state of export delivery and
+governance conventions before writing any code. Found `audit-service` already
+publishes every event to a single shared `audit.export.v1` Kafka topic
+(`internal/siemexport/siemexport.go`'s `Exporter.Publish`) but had **no**
+per-tenant destination concept — export was tenant-blind by design. Found
+**exactly one** existing four-eyes (propose→pending_approval→DISTINCT-approver)
+governance implementation in the whole platform —
+`ingestion-service/app/domain/services/writebacks.py` (Python) — and **no** Go
+port of that pattern existed anywhere; ported it fresh into Go for this
+workstream (`internal/pgstore/siemconfigs.go`) rather than inventing a new
+governance shape. Found a ready-made SSRF guard already implemented for
+outbound webhook delivery in `notification-service/internal/channels/webhook/
+ssrf.go` (HTTPS-only + DNS-resolve + private/loopback/link-local/metadata-range
+rejection) — extracted it verbatim into `libs/go-common/httpx/ssrfguard.go`
+(with attribution) rather than reimplementing it, since audit-service's new
+outbound SIEM POST has the exact same "tenant-supplied destination URL" attack
+surface as the webhook path. Found no Go secrets adapter exists for resolving
+an `auth_ref` into a real credential (BYO-P2's secrets adapters are
+Python-only, in ingestion-service) — a real, scoped gap, documented rather than
+faked: `HTTPDelivery.Deliver` sends an unauthenticated (but still SSRF-guarded,
+HTTPS-only) POST when no resolver exists, with the gap called out explicitly
+in the struct's doc comment as follow-up work, not silently stubbed.
+
+**Design decisions:** every propose/approve/reject creates or transitions one
+`tenant_siem_configs` row rather than mutating a single config in place, so
+`approved_by`/`rejected_by` preserve who took each decision and the admin
+screen can show full history — same shape as the write-back and decision-table
+governance rows. `ActiveSiemConfigForDelivery` reads under `app.role=platform`
+(mirrors `ListUnsealedDays`) since the export path processes one shared
+cross-tenant ingest stream and looks up each event's destination by its own
+`tenant_id`, unlike every other SIEM-config method which runs under the
+caller's own `app.tenant_id` RLS context. CEF/LEEF are rendered as real,
+spec-correct line formats (proper header/extension escaping, CEF severity
+derived from `outcome`) rather than a JSON-with-different-content-type
+shortcut, since ArcSight/QRadar collectors parse the wire format strictly.
+
+**Implementation:** `services/audit-service/migrations/000004_siem_configs`
+(RLS + FORCE RLS, tenant-isolation + platform-access policies, partial indexes
+on active/pending); `internal/pgstore/siemconfigs.go` (propose/approve/reject/
+delete/get/list/active, four-eyes enforced with `ErrFourEyesSameActor`/
+`ErrSiemConfigNotPending`); `internal/siemexport/siemformat.go` (JSON/CEF/LEEF
+formatters + escaping); `internal/siemexport/delivery.go` (`HTTPDelivery`,
+SSRF-guarded, best-effort/never blocks the Kafka publish path); `libs/go-common/
+httpx/ssrfguard.go` (new shared package, extracted from notification-service);
+4 new RBAC actions (`audit.siemconfig.{read,create,approve,delete}`) registered
+in both `authz.Manifest()` and `internal/api/drift_test.go`'s `constByName` in
+the same edit — the documented guard against the platform's recurring "action
+missing from rbac catalog blocks all requests" bug class; 5 new REST routes;
+GraphQL schema (`SiemConfig`/`SiemConfigState`/4 mutations) +
+`AuditClient` REST methods + resolvers in bff-graphql; self-service
+`/admin/audit/export` screen (propose/approve/reject/delete, four-eyes UX
+disabling Approve for the proposal's own requester, same pattern as
+`/admin/writebacks`) + a "SIEM export destination" link from `/admin/audit`.
+
+**Test:** Go — `go build`, `go vet`, `go test ./...` clean for audit-service
+(`internal/siemexport`: 7 format tests incl. CEF/LEEF escaping and
+severity-by-outcome, 5 delivery tests incl. SSRF-block and unknown-tenant
+no-op) and `libs/go-common/httpx` (ported SSRF guard tests); `TestActionCatalogNoDrift`
+passing with the 4 new actions bound. **Integration test** (the BRD's explicit
+requirement): `test/integration/siemconfig_isolation_test.go`'s
+`TestSiemConfigTwoTenantsNoCrossDelivery`, live-run against the real local
+Postgres/ClickHouse/Redis/MinIO/Kafka stack — two tenants each propose+approve
+(real four-eyes, distinct approver) a destination via the real `pgstore`
+methods against RLS-enforced Postgres, then `HTTPDelivery.Deliver` is called
+for each tenant against two real `httptest.Server` collectors: asserted each
+collector received **exactly** its own tenant's event and never the other's,
+**and** a raw predicate-free `SELECT count(*) FROM tenant_siem_configs` under
+tenant A's Postgres session (the `audit_rw` non-owner runtime role) saw
+exactly 1 row (its own), never tenant B's — proving isolation is enforced by
+Postgres RLS itself (`MASTER-FR-001`), not merely by the store method's own
+`WHERE tenant_id=$1` clause. Full audit-service integration suite (`-tags
+integration`) re-run end to end: 17/17 tests passing, ~59s. bff-graphql:
+`tsc --noEmit`, `eslint`, `pnpm run schema:snapshot` (checked-in
+`schema.graphql` regenerated for the new types/fields), full suite 36 files /
+296 tests passing. ui-web: `tsc --noEmit` and `eslint` both clean of **new**
+errors (both surfaced the same one pre-existing, unrelated `login/route.ts`
+TS2367 also seen during WS1, confirmed unmodified by this change via `git
+status`); full suite 77 files / 472 tests passing, coverage 55.6%.
+
+_Next: WS3 (white-label branding)._
 
 ---
 

@@ -124,6 +124,8 @@ import type {
   SemanticModel,
   ServiceAccount,
   SetEmbedConfigResult,
+  SiemConfig,
+  SiemConfigState,
   TenantIdpConfig,
   Tenant,
   UpdateChartInput,
@@ -3085,6 +3087,46 @@ export const DELETE_TENANT_IDP = /* GraphQL */ `
   mutation DeleteTenantIdp { deleteTenantIdp }
 `;
 export interface DeleteTenantIdpResult { deleteTenantIdp: boolean }
+
+// ---- BRD 59 WS2: per-tenant SIEM export destination (four-eyes gated) -----
+const SIEM_CONFIG_FIELDS = `
+  id endpoint format active status requestedBy approvedBy rejectedBy rejectReason createdAt updatedAt
+`;
+
+export const SIEM_CONFIG = /* GraphQL */ `
+  query SiemConfig {
+    siemConfig { active { ${SIEM_CONFIG_FIELDS} } pending { ${SIEM_CONFIG_FIELDS} } history { ${SIEM_CONFIG_FIELDS} } }
+  }
+`;
+export interface SiemConfigResult { siemConfig: SiemConfigState }
+
+export const PROPOSE_SIEM_CONFIG = /* GraphQL */ `
+  mutation ProposeSiemConfig($input: ProposeSiemConfigInput!) {
+    proposeSiemConfig(input: $input) { ${SIEM_CONFIG_FIELDS} }
+  }
+`;
+export interface ProposeSiemConfigResult { proposeSiemConfig: SiemConfig }
+
+export const APPROVE_SIEM_CONFIG = /* GraphQL */ `
+  mutation ApproveSiemConfig($id: ID!) {
+    approveSiemConfig(id: $id) { ${SIEM_CONFIG_FIELDS} }
+  }
+`;
+export interface ApproveSiemConfigResult { approveSiemConfig: SiemConfig }
+
+export const REJECT_SIEM_CONFIG = /* GraphQL */ `
+  mutation RejectSiemConfig($id: ID!, $reason: String) {
+    rejectSiemConfig(id: $id, reason: $reason) { ${SIEM_CONFIG_FIELDS} }
+  }
+`;
+export interface RejectSiemConfigResult { rejectSiemConfig: SiemConfig }
+
+export const DELETE_SIEM_CONFIG = /* GraphQL */ `
+  mutation DeleteSiemConfig($id: ID!) {
+    deleteSiemConfig(id: $id)
+  }
+`;
+export interface DeleteSiemConfigResult { deleteSiemConfig: boolean }
 
 // ---- inc18: tenant UI-label overrides editor (display_labels registry) ------
 export const TENANT_LABELS = /* GraphQL */ `

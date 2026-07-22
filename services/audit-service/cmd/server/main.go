@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datacern-ai/audit-service/internal/api"
@@ -165,6 +166,11 @@ func main() {
 	// the SAME Kafka producer already wired for DLQ + meta events — no new
 	// Kafka client. Best-effort; never affects ingest, the hash chain, or WORM.
 	siemExporter := siemexport.New(producer)
+	// BRD 59 WS2: per-tenant SIEM destination delivery, additive to the shared
+	// Kafka topic above. SIEM_EXPORT_ALLOW_HTTP is the dev/e2e escape (mirrors
+	// notification-service's WEBHOOK_ALLOW_HTTP) — never set in prod.
+	siemExporter.Delivery = siemexport.NewHTTPDelivery(
+		siemConfigLookup{store: pg}, env("SIEM_EXPORT_ALLOW_HTTP", "false") == "true")
 
 	// --- WORM object storage (MinIO) ---
 	wormClient, err := worm.New(worm.Config{
@@ -250,4 +256,21 @@ func main() {
 		slog.Error("server failed", "err", err)
 		os.Exit(1)
 	}
+}
+
+// siemConfigLookup adapts *pgstore.Store to siemexport.ConfigLookup (BRD 59
+// WS2) — siemexport stays free of a pgstore import (no dependency on pgx-
+// specific types) by depending only on this narrow interface.
+type siemConfigLookup struct{ store *pgstore.Store }
+
+func (l siemConfigLookup) ActiveSiemConfigForDelivery(ctx context.Context, tenant uuid.UUID) (*siemexport.SiemDestination, error) {
+	cfg, err := l.store.ActiveSiemConfigForDelivery(ctx, tenant)
+	if err != nil || cfg == nil {
+		return nil, err
+	}
+	return &siemexport.SiemDestination{
+		Endpoint: cfg.Endpoint,
+		Format:   siemexport.Format(cfg.Format),
+		AuthRef:  cfg.AuthRef,
+	}, nil
 }
