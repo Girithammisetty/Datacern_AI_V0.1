@@ -1,0 +1,120 @@
+{{- /*
+Per-service database bootstrap on a FRESH managed Postgres instance (BRD 58
+WS3 "DB/role bootstrap job" -- the #1 turnkey blocker: a brand-new cloud
+install has no per-service databases yet, so the first migrate-job.yaml Job
+to dial its own <SVC>_MIGRATE_URL simply fails to connect). Runs at a LOWER
+hook-weight than migrate-job.yaml (-10 vs -5) so every database exists
+before any per-service migration ever dials it.
+
+This is the exact same idempotent script deploy/k8s/data-tier/
+postgres-createdbs.yaml already runs for Hetzner and deploy/local/up.sh runs
+for local dev -- ported here as a portable Helm hook so AWS/GCP/Azure installs
+get it too, instead of only Hetzner. Safe to enable on every cloud: GCP/Azure
+already create these databases via Terraform (google_sql_database /
+azurerm_postgresql_flexible_server_database), so the CREATE DATABASE guard
+below is a no-op there; AWS's Terraform creates none (see its own comment in
+deploy/terraform/aws/rds.tf), so this Job is the only thing that creates them.
+
+Deliberately does NOT create per-service login roles (case_app, identity_app,
+etc.) -- every service's own migrate-job.yaml Job already does that,
+immediately afterward (hook-weight -5), idempotently, with the exact role
+name/password its runtime DSN expects. Duplicating that here in values.yaml
+would risk a transcription drift between the two copies -- and for the two
+services whose migration only creates the role `IF NOT EXISTS` rather than
+correcting it on every run (usage-service, notification-service), a
+DIFFERING password from this Job would never get fixed and would silently
+break that service's auth. The one genuine exception is `semantic`, whose
+migration creates only the NOLOGIN group role `semantic_app` and never a
+login role at all -- replicated verbatim from postgres-createdbs.yaml below,
+the one case with no migration to defer to.
+
+Disabled by default (same convention as observability.serviceMonitor/
+prometheusRule): requires POSTGRES_HOST/POSTGRES_PORT/POSTGRES_ADMIN_USER/
+POSTGRES_ADMIN_PASSWORD to already be real, working values in
+datacern-secrets (declared in externalSecrets.keys already, previously
+"informational" -- this Job is the first thing that actually composes them
+into a DSN). Enable explicitly for a fresh cloud bring-up once those are
+provisioned: --set postgresBootstrap.enabled=true.
+*/}}
+{{- if .Values.postgresBootstrap.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: datacern-postgres-bootstrap
+  labels:
+    {{- include "datacern.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres-bootstrap
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ default 3 .Values.postgresBootstrap.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: postgres-bootstrap
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "datacern.serviceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: bootstrap
+          image: {{ .Values.postgresBootstrap.image }}
+          imagePullPolicy: {{ default "IfNotPresent" .Values.global.imagePullPolicy }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secrets.name }}
+          env:
+            - { name: HOME, value: /tmp }
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              PGPASSWORD="$POSTGRES_ADMIN_PASSWORD"
+              export PGPASSWORD
+              until pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_ADMIN_USER"; do
+                echo "waiting for postgres..."; sleep 2
+              done
+              PSQL="psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_ADMIN_USER -v ON_ERROR_STOP=1"
+
+              # 1) per-service databases (mirrors deploy/k8s/data-tier/postgres-createdbs.yaml)
+              for db in {{ .Values.postgresBootstrap.databases | join " " }}; do
+                $PSQL -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" \
+                  | grep -q 1 || $PSQL -d postgres -c "CREATE DATABASE \"$db\""
+                echo "db ready: $db"
+              done
+
+              # 2) pgvector extension where embeddings/vector columns are used
+              for db in {{ .Values.postgresBootstrap.pgvectorDatabases | join " " }}; do
+                $PSQL -d "$db" -c "CREATE EXTENSION IF NOT EXISTS vector"
+              done
+
+              # 3) semantic-service's login role -- the ONE service whose
+              # migration never creates a login role, only the NOLOGIN group
+              # role `semantic_app` that it grants privileges to. Every other
+              # service's own migrate-job.yaml Job creates its login role
+              # (see this file's header comment).
+              $PSQL -d postgres -c "DO \$\$ BEGIN \
+                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='semantic_app') THEN \
+                  CREATE ROLE semantic_app NOLOGIN; END IF; \
+                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='semantic') THEN \
+                  CREATE ROLE semantic LOGIN PASSWORD 'semantic' NOSUPERUSER NOBYPASSRLS IN ROLE semantic_app; END IF; \
+                END \$\$"
+              echo "datacern-postgres-bootstrap: done"
+          resources:
+            {{- toYaml (default .Values._resourceTiers.small .Values.postgresBootstrap.resources) | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

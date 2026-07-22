@@ -125,8 +125,11 @@ externalSecrets:
   remoteKeyPrefix: datacern/prod
   # Keys to pull from the store into datacern-secrets. Mirrors deploy/CONFIG.md.
   keys:
-    # Postgres endpoint components (admin/DDL role) — informational; the chart no
-    # longer composes DSNs. Per-service FULL DSNs are provided below instead.
+    # Postgres endpoint components (admin/DDL role). Per-service FULL DSNs are
+    # provided below instead for every application service -- these 4 keys exist
+    # for templates/bootstrap-job.yaml alone (BRD 58 WS3, postgresBootstrap.enabled),
+    # which composes them into the admin connection it uses to create each
+    # per-service database on a fresh managed Postgres instance.
     - POSTGRES_HOST
     - POSTGRES_PORT
     - POSTGRES_ADMIN_USER
@@ -243,6 +246,50 @@ migrate:
   enabled: true
   # Extra backoff before failing a migration Job.
   backoffLimit: 1
+
+# --- Postgres per-service database bootstrap (BRD 58 WS3) -----------------------
+# Disabled by default -- see templates/bootstrap-job.yaml's header comment for
+# why (requires a real admin DSN already provisioned, and the risk profile of a
+# hook Job that could block install if that secret is missing). Enable for a
+# fresh cloud bring-up once POSTGRES_HOST/POSTGRES_PORT/POSTGRES_ADMIN_USER/
+# POSTGRES_ADMIN_PASSWORD (already declared in externalSecrets.keys) are real:
+#   --set postgresBootstrap.enabled=true
+postgresBootstrap:
+  enabled: false
+  image: postgres:16-alpine
+  backoffLimit: 3
+  resources: null # defaults to _resourceTiers.small below
+  # Mirrors deploy/k8s/data-tier/postgres-createdbs.yaml's exact database list
+  # (Hetzner) / deploy/local/up.sh (local dev) -- keep these three in sync.
+  databases:
+    - identity
+    - rbac
+    - tool_plane
+    - case_svc
+    - realtimehub
+    - dataset
+    - ingestion
+    - ai_gateway
+    - agent_runtime
+    - memory
+    - pipeline
+    - experiment
+    - inference
+    - query
+    - semantic
+    - eval
+    - chart
+    - usage
+    - notification
+    - pack
+    - audit
+  pgvectorDatabases:
+    - tool_plane
+    - dataset
+    - ai_gateway
+    - agent_runtime
+    - memory
+    - semantic
 
 # --- Observability (Prometheus-Operator convention) -----------------------------
 # Metrics stay pull-based (every service exposes /metrics; see deploy/CONFIG.md).
