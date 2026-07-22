@@ -112,6 +112,10 @@ func (p *Producer) Publish(ctx context.Context, topic string, env event.Envelope
 		{Key: "trace_id", Value: []byte(env.TraceID)},
 		{Key: "content_type", Value: []byte("application/json")},
 	}
+	// W3C trace-context propagation (BRD 58 WS2): rides alongside the
+	// app-level trace_id header above, not in place of it — the two are
+	// separate ID systems (see trace.go's doc comment).
+	headers = append(headers, injectTraceHeaders(ctx)...)
 	p.mu.Lock()
 	sid, ok := p.schemaID[topic]
 	p.mu.Unlock()

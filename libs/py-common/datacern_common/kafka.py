@@ -22,8 +22,29 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from opentelemetry import context as otel_context
+from opentelemetry.propagate import extract, inject
 
 logger = logging.getLogger(__name__)
+
+
+def _inject_trace_headers() -> list[tuple[str, bytes]]:
+    """W3C trace-context headers (traceparent/tracestate) for the current span
+    (BRD 58 WS2). Empty when no real span is active -- OTel's default
+    TraceContextTextMapPropagator skips injecting an invalid span context, so
+    this is a true no-op until tracing is configured (datacern_common.otelx)."""
+    carrier: dict[str, str] = {}
+    inject(carrier)
+    return [(k, v.encode()) for k, v in carrier.items()]
+
+
+def _extract_trace_context(headers) -> otel_context.Context:
+    """Recover the producer's span context from a consumed message's Kafka
+    headers, so the handler's downstream calls parent under it instead of
+    starting a disconnected trace. Absent/empty headers -> the current
+    (empty) context, unchanged."""
+    carrier = {k: v.decode() for k, v in (headers or [])}
+    return extract(carrier)
 
 Handler = Callable[[dict], Awaitable[None]]
 
@@ -64,7 +85,9 @@ class KafkaProducerClient:
 
     async def send(self, topic: str, key: str | None, value: dict) -> None:
         assert self._producer is not None, "producer not started"
-        await self._producer.send_and_wait(topic, key=key, value=value)
+        await self._producer.send_and_wait(
+            topic, key=key, value=value, headers=_inject_trace_headers()
+        )
 
     async def __aenter__(self) -> KafkaProducerClient:
         await self.start()
@@ -193,6 +216,16 @@ class KafkaConsumer:
             stats.dlq += 1
             return
 
+        # Join the producer's trace (BRD 58 WS2) for the duration of this
+        # message's handling -- a no-op when the message carries no
+        # traceparent header (tracing disabled, or an older producer).
+        token = otel_context.attach(_extract_trace_context(getattr(msg, "headers", None)))
+        try:
+            await self._process_envelope(envelope, stats)
+        finally:
+            otel_context.detach(token)
+
+    async def _process_envelope(self, envelope: dict, stats: ConsumeStats) -> None:
         tenant_id = envelope.get("tenant_id", "")
         event_id = envelope.get("event_id", "")
         if event_id and await self.dedup.already_processed(tenant_id, event_id):

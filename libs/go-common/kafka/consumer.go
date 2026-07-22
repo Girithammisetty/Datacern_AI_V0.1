@@ -167,6 +167,9 @@ func (c *ConsumerGroup) ensureTopics(ctx context.Context) {
 // released so a redelivery (or DLQ redrive) reprocesses the event rather than
 // the SETNX permanently masking a never-applied change (MASTER-FR-032).
 func (c *ConsumerGroup) process(ctx context.Context, msg kafka.Message) error {
+	// Join the producer's trace (BRD 58 WS2) — a no-op when the message
+	// carries no traceparent header (tracing disabled, or an older producer).
+	ctx = extractTraceContext(ctx, msg.Headers)
 	var env event.Envelope
 	if err := json.Unmarshal(msg.Value, &env); err != nil {
 		return c.toDLQ(ctx, msg, fmt.Errorf("decode: %w", err))
