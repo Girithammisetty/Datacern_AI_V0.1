@@ -3511,6 +3511,28 @@ export function useDeleteTenantIdp() {
   });
 }
 
+// ---- BRD 59 WS3: white-label branding --------------------------------------
+// Reads come off `me.branding` (useMe(), already fetched at session bootstrap)
+// -- there is no separate branding query. Mutations invalidate `me` so the app
+// shell/embed surfaces re-apply the brand immediately.
+export function useSetTenantBranding() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: import("./types").SetTenantBrandingInput) =>
+      graphqlRequest<ops.SetTenantBrandingResult>(ops.SET_TENANT_BRANDING, { input }).then((r) => r.setTenantBranding),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.me() }),
+  });
+}
+
+export function useDeleteTenantBranding() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      graphqlRequest<ops.DeleteTenantBrandingResult>(ops.DELETE_TENANT_BRANDING).then((r) => r.deleteTenantBranding),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.me() }),
+  });
+}
+
 // ---- BRD 59 WS2: per-tenant SIEM export destination (four-eyes gated) -----
 export function useSiemConfig() {
   return useQuery({

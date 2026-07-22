@@ -73,6 +73,11 @@ type Store interface {
 	GetTenantEmbedConfig(ctx context.Context, tenantID uuid.UUID) (*TenantEmbedConfig, error)
 	UpsertTenantEmbedConfig(ctx context.Context, cfg *TenantEmbedConfig) error
 
+	// --- white-label branding (BRD 59 WS3) ---
+	GetTenantBranding(ctx context.Context, tenantID uuid.UUID) (*TenantBranding, error)
+	UpsertTenantBranding(ctx context.Context, b *TenantBranding) error
+	DeleteTenantBranding(ctx context.Context, tenantID uuid.UUID) error
+
 	// --- per-tenant OIDC IdP config (BYO-P4) ---
 	GetTenantIdpConfig(ctx context.Context, tenantID uuid.UUID) (*TenantIdpConfig, error)
 	// GetTenantIdpConfigByIssuer routes an inbound ID token to its tenant by the

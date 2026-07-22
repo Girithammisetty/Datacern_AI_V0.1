@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n/messages";
 import { NAV_ITEMS, NAV_GROUP_LABEL } from "@/lib/authz/registry";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { DatacernLogo } from "@/components/brand/DatacernLogo";
+import { useMe } from "@/lib/graphql/hooks";
 
 /**
  * Primary navigation. Renders ONLY the items the viewer's capabilities/roles
@@ -21,6 +22,10 @@ export function Sidebar({ pendingCount }: { pendingCount?: number }) {
   const pathname = usePathname();
   const { can, capsDegraded } = useCapabilities();
   const items = NAV_ITEMS.filter((item) => can(item.gate));
+  // BRD 59 WS3: a tenant that uploaded a logo gets it in place of the
+  // platform mark (`useMe()` is already fetched at session bootstrap — the
+  // React Query cache makes this call free, same pattern used elsewhere).
+  const hasLogo = useMe().data?.me.branding?.hasLogo;
 
   return (
     <nav
@@ -28,7 +33,12 @@ export function Sidebar({ pendingCount }: { pendingCount?: number }) {
       className="hidden w-52 shrink-0 flex-col gap-0.5 border-r bg-card/50 p-3 md:flex"
     >
       <div className="mb-4 flex items-center gap-2 px-2">
-        <DatacernLogo className="size-7 shrink-0" />
+        {hasLogo ? (
+          // eslint-disable-next-line @next/next/no-img-element -- tenant-controlled asset via the authed same-origin proxy, not next/image's optimizer.
+          <img src="/api/tenant-branding/logo" alt="" className="size-7 shrink-0 rounded object-contain" />
+        ) : (
+          <DatacernLogo className="size-7 shrink-0" />
+        )}
         <span className="text-lg font-bold tracking-tight">{t("app.name")}</span>
       </div>
       {items.map(({ key, href, icon: Icon, label, group }, i) => {

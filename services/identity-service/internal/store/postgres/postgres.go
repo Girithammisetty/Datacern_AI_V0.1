@@ -164,6 +164,44 @@ func (s *Store) UpsertTenantEmbedConfig(ctx context.Context, cfg *domain.TenantE
 	return err
 }
 
+// --- white-label branding (BRD 59 WS3) ---
+
+const brandingCols = `tenant_id, logo_object_key, logo_content_type, primary_color, accent_color, updated_at, updated_by`
+
+func (s *Store) GetTenantBranding(ctx context.Context, tenantID uuid.UUID) (*domain.TenantBranding, error) {
+	var b domain.TenantBranding
+	err := s.pool.QueryRow(ctx,
+		`SELECT `+brandingCols+` FROM tenant_branding WHERE tenant_id = $1`, tenantID).
+		Scan(&b.TenantID, &b.LogoObjectKey, &b.LogoContentType, &b.PrimaryColor, &b.AccentColor, &b.UpdatedAt, &b.UpdatedBy)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ENotFound("tenant branding")
+		}
+		return nil, err
+	}
+	return &b, nil
+}
+
+func (s *Store) UpsertTenantBranding(ctx context.Context, b *domain.TenantBranding) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO tenant_branding (tenant_id, logo_object_key, logo_content_type, primary_color, accent_color, updated_at, updated_by)
+		 VALUES ($1, $2, $3, $4, $5, now(), $6)
+		 ON CONFLICT (tenant_id) DO UPDATE SET
+		   logo_object_key = EXCLUDED.logo_object_key,
+		   logo_content_type = EXCLUDED.logo_content_type,
+		   primary_color = EXCLUDED.primary_color,
+		   accent_color = EXCLUDED.accent_color,
+		   updated_at = now(),
+		   updated_by = EXCLUDED.updated_by`,
+		b.TenantID, b.LogoObjectKey, b.LogoContentType, b.PrimaryColor, b.AccentColor, b.UpdatedBy)
+	return err
+}
+
+func (s *Store) DeleteTenantBranding(ctx context.Context, tenantID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM tenant_branding WHERE tenant_id = $1`, tenantID)
+	return err
+}
+
 // --- per-tenant OIDC IdP config (BYO-P4) ---
 
 const idpCols = `tenant_id, issuer, client_id, discovery_url, enabled, created_at, updated_at`

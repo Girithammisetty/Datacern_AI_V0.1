@@ -30,6 +30,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/datacern-ai/identity-service/internal/adapters/keycloak"
+	"github.com/datacern-ai/identity-service/internal/blob"
 	"github.com/datacern-ai/identity-service/internal/adapters/oidc"
 	"github.com/datacern-ai/identity-service/internal/adapters/localinfra"
 	"github.com/datacern-ai/identity-service/internal/adapters/vault"
@@ -205,6 +206,48 @@ func main() {
 		log.Warn("denylist: in-memory (set REDIS_ADDR for multi-replica Redis)")
 	}
 
+	// BRD 59 WS3: tenant branding logo object storage (real MinIO/S3, same
+	// adapter case-service uses for evidence). Unlike case-service's evidence
+	// store, a MinIO outage here is NOT fatal to boot: identity-service is on
+	// the critical path for every login/token mint in the platform, while a
+	// branding logo is a small, non-core feature -- color tokens still work
+	// with Logo left nil, and the logo endpoints honestly 501 instead.
+	// Declared as the api.LogoStore interface (not *blob.MinioLogoStore) so the
+	// unconfigured case stays a TRUE nil interface -- assigning a nil *T to an
+	// interface-typed field would make Server.Logo != nil even when unset.
+	var logoStore api.LogoStore
+	if minioEndpoint := os.Getenv("MINIO_ENDPOINT"); minioEndpoint != "" || requireReal {
+		if minioEndpoint == "" {
+			minioEndpoint = "localhost:9000"
+		}
+		accessKey, secretKey, bucket := os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"), os.Getenv("TENANT_BRANDING_BUCKET")
+		if accessKey == "" {
+			accessKey = "datacern"
+		}
+		if secretKey == "" {
+			secretKey = "datacern_dev"
+		}
+		if bucket == "" {
+			bucket = "datacern-tenant-branding"
+		}
+		ls, err := blob.NewMinioLogoStore(ctx, blob.Config{
+			Endpoint: minioEndpoint, AccessKey: accessKey, SecretKey: secretKey,
+			UseSSL: os.Getenv("MINIO_USE_SSL") == "true", Bucket: bucket,
+		})
+		if err != nil {
+			if requireReal {
+				log.Error("tenant branding logo store init failed", "error", err)
+				os.Exit(1)
+			}
+			log.Warn("tenant branding logo store unavailable — logo upload/download will 501", "error", err)
+		} else {
+			logoStore = ls
+			log.Info("tenant branding logo store: minio")
+		}
+	} else {
+		log.Warn("tenant branding logo store: not configured (set MINIO_ENDPOINT) — logo upload/download will 501")
+	}
+
 	deps := domain.StepDeps{Store: store, Keycloak: kc, Terraform: tf, DB: db, Prober: prober, Clock: clock}
 	notify := func(ctx context.Context, t *domain.Tenant, st *domain.ProvisioningStep) {
 		// IDN-FR-010: provisioning progress events -> realtime-hub via outbox.
@@ -317,6 +360,7 @@ func main() {
 		// re-injects it). TRUST_SPIFFE_HEADER=true to enable.
 		TrustSpiffeHeader: os.Getenv("TRUST_SPIFFE_HEADER") == "true",
 		Clock:             clock, Log: log, Ready: ready,
+		Logo: logoStore,
 	}
 
 	// Background loops.

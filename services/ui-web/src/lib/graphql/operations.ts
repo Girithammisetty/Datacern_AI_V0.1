@@ -219,15 +219,37 @@ import type {
   AgentVersionPublishResult,
   TenantAgentConfig,
   AgentRunListItem,
+  TenantBranding,
 } from "./types";
 
 export const ME = /* GraphQL */ `
   query Me {
-    me { userId tenantId tenantName workspaceId workspaceName type scopes isPlatformAdmin roles capabilities capsDegraded displayLabels { key value } }
+    me {
+      userId tenantId tenantName workspaceId workspaceName type scopes isPlatformAdmin roles capabilities capsDegraded
+      displayLabels { key value }
+      branding { configured hasLogo primaryColor accentColor updatedAt }
+    }
   }
 `;
 export interface MeResult {
   me: Viewer;
+}
+
+// ---- BRD 59 WS3: white-label branding --------------------------------------
+export const SET_TENANT_BRANDING = /* GraphQL */ `
+  mutation SetTenantBranding($input: SetTenantBrandingInput!) {
+    setTenantBranding(input: $input) { configured hasLogo primaryColor accentColor updatedAt }
+  }
+`;
+export interface SetTenantBrandingResult {
+  setTenantBranding: TenantBranding;
+}
+
+export const DELETE_TENANT_BRANDING = /* GraphQL */ `
+  mutation DeleteTenantBranding { deleteTenantBranding }
+`;
+export interface DeleteTenantBrandingResult {
+  deleteTenantBranding: boolean;
 }
 
 export const DATASETS = /* GraphQL */ `

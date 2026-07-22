@@ -112,6 +112,18 @@ export interface IdpConfigDTO {
   updated_at?: string | null;
 }
 
+/** GET/PUT /api/v1/tenants/self/branding — the caller tenant's white-label
+ * identity (BRD 59 WS3). primary_color/accent_color are bare HSL triplets
+ * ("221 83% 53%"); the logo bytes themselves are fetched via the same-origin
+ * /api/tenant-branding/logo proxy, not through this DTO. */
+export interface TenantBrandingDTO {
+  configured: boolean;
+  has_logo: boolean;
+  primary_color: string;
+  accent_color: string;
+  updated_at?: string | null;
+}
+
 export class IdentityClient {
   constructor(private readonly http: ServiceClient) {}
 
@@ -232,6 +244,24 @@ export class IdentityClient {
   /** DELETE /api/v1/tenants/self/idp — turn off SSO for the caller's tenant. */
   deleteTenantIdp(): Promise<void> {
     return this.http.delete<void>("/api/v1/tenants/self/idp");
+  }
+
+  // ---- BRD 59 WS3: white-label branding (self-scoped, tenant admin) --------
+  /** GET /api/v1/tenants/self/branding — member-safe: every tenant member's
+   * app shell + embed surfaces need to read the brand to apply it. */
+  tenantBranding(): Promise<TenantBrandingDTO> {
+    return this.http.get<TenantBrandingDTO>("/api/v1/tenants/self/branding");
+  }
+  /** PUT /api/v1/tenants/self/branding — sets the color tokens only; a
+   * previously uploaded logo (set via the separate multipart proxy route,
+   * bypassing this JSON client) is left untouched. Needs identity.user.admin. */
+  setTenantBranding(body: { primary_color: string; accent_color: string }): Promise<TenantBrandingDTO> {
+    return this.http.put<TenantBrandingDTO>("/api/v1/tenants/self/branding", { body });
+  }
+  /** DELETE /api/v1/tenants/self/branding — reverts to the platform default
+   * (clears colors + logo in one action). Needs identity.user.admin. */
+  deleteTenantBranding(): Promise<void> {
+    return this.http.delete<void>("/api/v1/tenants/self/branding");
   }
 
   // ---- Tier 4b: identity/rbac admin — user + service-account lifecycle -----

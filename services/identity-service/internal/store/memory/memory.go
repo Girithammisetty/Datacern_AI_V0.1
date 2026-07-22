@@ -32,6 +32,7 @@ type Store struct {
 	agents       map[string]*domain.AgentPrincipal
 	signingKeys  map[string]*domain.SigningKey
 	embedConfigs map[uuid.UUID]*domain.TenantEmbedConfig
+	branding     map[uuid.UUID]*domain.TenantBranding
 	idpConfigs   map[uuid.UUID]*domain.TenantIdpConfig
 	labels       map[uuid.UUID]map[string]*domain.DisplayLabel
 	idempotency  map[string]*domain.IdempotencyRecord
@@ -52,6 +53,7 @@ func New() *Store {
 		agents:       map[string]*domain.AgentPrincipal{},
 		signingKeys:  map[string]*domain.SigningKey{},
 		embedConfigs: map[uuid.UUID]*domain.TenantEmbedConfig{},
+		branding:     map[uuid.UUID]*domain.TenantBranding{},
 		idpConfigs:   map[uuid.UUID]*domain.TenantIdpConfig{},
 		labels:       map[uuid.UUID]map[string]*domain.DisplayLabel{},
 		idempotency:  map[string]*domain.IdempotencyRecord{},
@@ -289,6 +291,34 @@ func (s *Store) UpsertTenantEmbedConfig(_ context.Context, cfg *domain.TenantEmb
 	defer s.mu.Unlock()
 	cp := *cfg
 	s.embedConfigs[cfg.TenantID] = &cp
+	return nil
+}
+
+// --- white-label branding (BRD 59 WS3) ---
+
+func (s *Store) GetTenantBranding(_ context.Context, tenantID uuid.UUID) (*domain.TenantBranding, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	b, ok := s.branding[tenantID]
+	if !ok {
+		return nil, domain.ENotFound("tenant branding")
+	}
+	cp := *b
+	return &cp, nil
+}
+
+func (s *Store) UpsertTenantBranding(_ context.Context, b *domain.TenantBranding) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *b
+	s.branding[b.TenantID] = &cp
+	return nil
+}
+
+func (s *Store) DeleteTenantBranding(_ context.Context, tenantID uuid.UUID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.branding, tenantID)
 	return nil
 }
 

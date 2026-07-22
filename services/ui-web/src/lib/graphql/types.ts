@@ -105,6 +105,23 @@ export interface Viewer {
   /** Per-tenant UI label overrides (BRD 23 inc3) the app overlays onto its base
    * i18n catalog to white-label the vertical (e.g. "Cases" -> "AP Exceptions"). */
   displayLabels?: LabelOverride[];
+  /** The caller tenant's white-label brand (BRD 59 WS3). */
+  branding?: TenantBranding;
+}
+
+// BRD 59 WS3: white-label branding. primaryColor/accentColor are bare HSL
+// triplets ("221 83% 53%") applied directly as CSS custom properties; the
+// logo bytes are fetched separately via /api/tenant-branding/logo.
+export interface TenantBranding {
+  configured: boolean;
+  hasLogo: boolean;
+  primaryColor: string;
+  accentColor: string;
+  updatedAt?: string | null;
+}
+export interface SetTenantBrandingInput {
+  primaryColor: string;
+  accentColor: string;
 }
 
 export interface LabelOverride {

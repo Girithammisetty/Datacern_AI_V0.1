@@ -13,6 +13,7 @@ import { cap } from "@/lib/authz/registry";
 import { RouteGuard } from "@/components/authz/RouteGuard";
 import { setLabelOverrides } from "@/lib/i18n/messages";
 import { useSessionRefresh } from "@/lib/auth/useSessionRefresh";
+import { applyBrandingTokens } from "@/lib/branding/apply";
 
 /** Load this tenant's UI label overrides (BRD 23 inc3) into the i18n overlay
  * once at bootstrap, so a capability pack's white-label vocabulary ("Cases" ->
@@ -33,6 +34,18 @@ function useLabelOverlay(): number {
     setVersion((v) => v + 1);
   }, [me.data]);
   return version;
+}
+
+/** Apply this tenant's brand color tokens (BRD 59 WS3) as CSS custom
+ * properties on <html> once fetched, and clear them back to the platform
+ * default on logout/tenant-switch (`me.data` going undefined). Mirrors
+ * useLabelOverlay's shape but doesn't need a remount-key: CSS custom
+ * properties repaint live, no React tree change required. */
+function useBrandingOverlay(): void {
+  const me = useMe();
+  useEffect(() => {
+    applyBrandingTokens(me.data?.me.branding);
+  }, [me.data]);
 }
 
 function todayRange(): { from: string; to: string } {
@@ -74,6 +87,7 @@ function ShellInner({ children, session }: { children: React.ReactNode; session:
   // Bumps once when this tenant's label overrides load → remount so the overlay
   // reaches both the nav and the routed page.
   const labelVersion = useLabelOverlay();
+  useBrandingOverlay();
 
   return (
     <div key={labelVersion} className="flex h-screen overflow-hidden">

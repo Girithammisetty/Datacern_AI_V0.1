@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -53,8 +54,22 @@ type Server struct {
 	Clock             func() time.Time
 	Log               *slog.Logger
 
+	// Logo persists tenant branding logo bytes (BRD 59 WS3, MinIO in prod).
+	// Nil is a valid, honest "not configured" state: the branding color tokens
+	// still work, but logo upload/download 501s rather than silently no-op'ing.
+	Logo LogoStore
+
 	// ready is checked by /readyz.
 	Ready func() error
+}
+
+// LogoStore persists tenant branding logo bytes (BRD 59 WS3). The production
+// adapter is MinIO/S3 (internal/blob); the pointer/metadata row (object key +
+// content type) lives in Postgres (tenant_branding).
+type LogoStore interface {
+	Put(ctx context.Context, key string, data []byte, contentType string) error
+	Get(ctx context.Context, key string) ([]byte, error)
+	Delete(ctx context.Context, key string) error
 }
 
 func (s *Server) Router() http.Handler {
@@ -122,6 +137,14 @@ func (s *Server) Router() http.Handler {
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/self/idp", s.handleGetTenantIdp)
 			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/self/idp", s.handleSetTenantIdp)
 			r.With(s.requireScope(ActUserAdmin)).Delete("/tenants/self/idp", s.handleDeleteTenantIdp)
+			// BRD 59 WS3: white-label branding, self-scoped like idp/labels. GETs
+			// are member-safe (the app shell + embed surfaces need to read the
+			// brand); writes need identity.user.admin.
+			r.Get("/tenants/self/branding", s.handleGetTenantBranding)
+			r.Get("/tenants/self/branding/logo", s.handleGetTenantLogo)
+			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/self/branding", s.handleSetTenantBranding)
+			r.With(s.requireScope(ActUserAdmin)).Post("/tenants/self/branding/logo", s.handleUploadTenantLogo)
+			r.With(s.requireScope(ActUserAdmin)).Delete("/tenants/self/branding", s.handleDeleteTenantBranding)
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireSuperAdmin)
 				r.Post("/tenants", s.handleCreateTenant)

@@ -238,6 +238,10 @@ interface ViewerParent {
   _caps?: Promise<ViewerCaps>;
   _tenant?: Promise<{ name: string | null; displayName: string | null }>;
   _labels?: Promise<Array<{ key: string; value: string }>>;
+  _branding?: Promise<{
+    __typename: "TenantBranding";
+    configured: boolean; hasLogo: boolean; primaryColor: string; accentColor: string; updatedAt: string | null;
+  }>;
 }
 
 /** Fetch the caller's rbac roles+capabilities once per request; fail-safe to []
@@ -287,6 +291,27 @@ function viewerLabels(parent: ViewerParent, ctx: GraphQLContext): Promise<Array<
       .catch(() => []);
   }
   return parent._labels;
+}
+
+// BRD 59 WS3: lazy + fail-safe (the all-empty shape on any downstream error),
+// same pattern as viewerLabels — the app shell always has a stable object to
+// apply, even mid-outage.
+function viewerBranding(parent: ViewerParent, ctx: GraphQLContext) {
+  if (!parent._branding) {
+    parent._branding = ctx.clients.identity
+      .tenantBranding()
+      .then((d) => ({
+        __typename: "TenantBranding" as const,
+        configured: d.configured, hasLogo: d.has_logo,
+        primaryColor: d.primary_color, accentColor: d.accent_color,
+        updatedAt: d.updated_at ?? null,
+      }))
+      .catch(() => ({
+        __typename: "TenantBranding" as const,
+        configured: false, hasLogo: false, primaryColor: "", accentColor: "", updatedAt: null,
+      }));
+  }
+  return parent._branding;
 }
 
 /** Flatten one data entry into {chart_id, rows, columns, meta, error}. Both the
@@ -1809,6 +1834,26 @@ export const resolvers = {
 
     deleteTenantIdp: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
       await ctx.clients.identity.deleteTenantIdp();
+      return true;
+    },
+
+    setTenantBranding: async (
+      _p: unknown,
+      a: { input: { primaryColor: string; accentColor: string } },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.identity.setTenantBranding({
+        primary_color: a.input.primaryColor, accent_color: a.input.accentColor,
+      });
+      return {
+        __typename: "TenantBranding" as const,
+        configured: d.configured, hasLogo: d.has_logo,
+        primaryColor: d.primary_color, accentColor: d.accent_color, updatedAt: d.updated_at ?? null,
+      };
+    },
+
+    deleteTenantBranding: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      await ctx.clients.identity.deleteTenantBranding();
       return true;
     },
 
@@ -4802,6 +4847,10 @@ export const resolvers = {
     // i18n catalog. Lazy + fail-safe ([] on any downstream error).
     displayLabels: (parent: ViewerParent, _a: unknown, ctx: GraphQLContext) =>
       viewerLabels(parent, ctx),
+    // BRD 59 WS3: the caller tenant's white-label brand. Lazy + fail-safe
+    // (all-empty shape on any downstream error), same pattern as displayLabels.
+    branding: (parent: ViewerParent, _a: unknown, ctx: GraphQLContext) =>
+      viewerBranding(parent, ctx),
   },
 
   Tenant: {

@@ -12,9 +12,12 @@ import { useSession } from "@/lib/session/SessionContext";
 import {
   useTenant, useSetEmbedConfig, useTenantIdp, useSetTenantIdp, useDeleteTenantIdp,
   useTenantLabels, useSetTenantLabel, useDeleteTenantLabel,
+  useMe, useSetTenantBranding, useDeleteTenantBranding,
 } from "@/lib/graphql/hooks";
 import { GraphQLRequestError } from "@/lib/graphql/client";
 import { formatLocal } from "@/lib/utils";
+import { useToasts } from "@/stores/ui";
+import { hexToHsl, hslToHex } from "@/lib/branding/color";
 
 export default function AdminTenantPage() {
   const { tenantId } = useSession();
@@ -92,6 +95,8 @@ export default function AdminTenantPage() {
             <IdentityProviderCard />
 
             <DisplayLabelsCard />
+
+            <BrandingCard />
           </div>
         )}
       </AsyncBoundary>
@@ -396,6 +401,173 @@ function DisplayLabelsCard() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+const DEFAULT_PRIMARY_HEX = "#2563eb"; // globals.css --primary: 221 83% 53%
+const DEFAULT_ACCENT_HEX = "#e8edf5"; // globals.css --accent: 210 40% 94%
+
+/**
+ * White-label branding (BRD 59 WS3): a logo (MinIO-backed, uploaded via the
+ * same-origin multipart proxy since GraphQL doesn't carry binary) plus
+ * primary/accent color tokens, applied platform-wide as CSS custom properties
+ * the moment they're saved (AppShell's useBrandingOverlay + the embed
+ * surfaces' useEmbedFrame both read `me.branding`). Editing is tenant-admin
+ * scoped; reading (the live preview here, and the brand itself) is member-safe.
+ */
+function BrandingCard() {
+  const me = useMe();
+  const branding = me.data?.me.branding;
+  const setBranding = useSetTenantBranding();
+  const delBranding = useDeleteTenantBranding();
+  const toasts = useToasts();
+  const [busy, setBusy] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const [primaryHex, setPrimaryHex] = useState<string | null>(null);
+  const [accentHex, setAccentHex] = useState<string | null>(null);
+  useEffect(() => {
+    if (primaryHex === null && branding) {
+      setPrimaryHex(hslToHex(branding.primaryColor, DEFAULT_PRIMARY_HEX));
+      setAccentHex(hslToHex(branding.accentColor, DEFAULT_ACCENT_HEX));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branding]);
+
+  const error = (setBranding.error ?? delBranding.error) instanceof GraphQLRequestError
+    ? (setBranding.error ?? delBranding.error) as GraphQLRequestError : null;
+
+  const saveColors = () => {
+    setBranding.mutate({
+      primaryColor: hexToHsl(primaryHex ?? DEFAULT_PRIMARY_HEX),
+      accentColor: hexToHsl(accentHex ?? DEFAULT_ACCENT_HEX),
+    });
+  };
+
+  async function uploadLogo(file: File) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/tenant-branding/logo", { method: "POST", body: fd });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `upload failed (${res.status})`);
+      }
+      toasts.push({ title: `Logo updated (${file.name})`, variant: "success" });
+      await me.refetch();
+    } catch (e) {
+      toasts.push({ title: e instanceof Error ? e.message : "logo upload failed", variant: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const configured = branding?.configured ?? false;
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader className="flex-row items-center justify-between">
+        <CardTitle className="text-sm">Branding</CardTitle>
+        <Badge variant={configured ? "success" : "secondary"}>{configured ? "configured" : "not configured"}</Badge>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        <p className="text-xs text-muted-foreground">
+          Replace the platform mark and accent colors with your own — applied across the app shell and any
+          embedded surface (BRD 59). Colors apply immediately platform-wide; changing them here previews live.
+        </p>
+
+        <Can gate={FEATURE_GATES.manageLabels} fallback={<BrandingReadOnly branding={branding} />}>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex size-14 items-center justify-center overflow-hidden rounded-md border bg-muted">
+              {branding?.hasLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element -- tenant-controlled asset via the authed proxy.
+                <img src="/api/tenant-branding/logo" alt="Current logo" className="size-full object-contain" />
+              ) : (
+                <span className="text-[0.65rem] text-muted-foreground">no logo</span>
+              )}
+            </div>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm hover:bg-accent">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                className="sr-only"
+                disabled={busy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadLogo(f);
+                  e.target.value = "";
+                }}
+              />
+              {busy ? "Uploading…" : branding?.hasLogo ? "Replace logo" : "Upload logo"}
+            </label>
+            <span className="text-xs text-muted-foreground">PNG, JPEG, SVG, or WebP — up to 2 MB.</span>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="brand-primary">Primary color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="brand-primary" type="color" className="h-9 w-12 rounded border"
+                  value={primaryHex ?? DEFAULT_PRIMARY_HEX}
+                  onChange={(e) => setPrimaryHex(e.target.value)}
+                />
+                <span className="font-mono text-xs text-muted-foreground">{primaryHex ?? DEFAULT_PRIMARY_HEX}</span>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="brand-accent">Accent color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="brand-accent" type="color" className="h-9 w-12 rounded border"
+                  value={accentHex ?? DEFAULT_ACCENT_HEX}
+                  onChange={(e) => setAccentHex(e.target.value)}
+                />
+                <span className="font-mono text-xs text-muted-foreground">{accentHex ?? DEFAULT_ACCENT_HEX}</span>
+              </div>
+            </div>
+          </div>
+
+          {branding?.updatedAt && <Row label="Last updated" value={formatLocal(branding.updatedAt)} />}
+          {error && <p role="alert" className="text-xs text-destructive" data-testid="mutation-error">{error.message}</p>}
+          <div className="flex items-center gap-2">
+            <Button size="sm" disabled={setBranding.isPending} onClick={saveColors}>
+              {setBranding.isPending ? "Saving…" : "Save colors"}
+            </Button>
+            {configured && (
+              <Button size="sm" variant="outline" disabled={delBranding.isPending} onClick={() => setConfirmOpen(true)}>
+                {delBranding.isPending ? "Resetting…" : "Reset to default"}
+              </Button>
+            )}
+          </div>
+        </Can>
+      </CardContent>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Reset branding to default?"
+        description="Clears the uploaded logo and both color tokens — the platform's own mark and palette apply again immediately."
+        confirmLabel="Reset"
+        destructive
+        onConfirm={() => delBranding.mutate(undefined, {
+          onSuccess: () => { setConfirmOpen(false); setPrimaryHex(DEFAULT_PRIMARY_HEX); setAccentHex(DEFAULT_ACCENT_HEX); },
+        })}
+      />
+    </Card>
+  );
+}
+
+function BrandingReadOnly({ branding }: { branding: { configured: boolean; hasLogo: boolean } | undefined }) {
+  return (
+    <p className="text-xs text-muted-foreground">
+      {branding?.configured
+        ? "This tenant has custom branding configured."
+        : "This tenant is using the platform default branding."}{" "}
+      Editing needs the tenant-admin capability.
+    </p>
   );
 }
 

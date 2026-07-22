@@ -64,7 +64,7 @@ embed.
 it; admin upload screen; CSP-safe asset serving.
 
 ### Implement / Test
-- [ ] branding store + upload · [ ] shell/embed theming · [ ] visual e2e in light/dark.
+- [x] branding store + upload · [x] shell/embed theming · [x] visual e2e in light/dark.
 
 ---
 
@@ -251,6 +251,107 @@ TS2367 also seen during WS1, confirmed unmodified by this change via `git
 status`); full suite 77 files / 472 tests passing, coverage 55.6%.
 
 _Next: WS3 (white-label branding)._
+
+### WS3 — White-label branding (logo / theme) — DONE
+
+**Research before designing:** surveyed the actual state of logo/branding,
+embed theming, and asset-serving conventions before writing any code. Found
+no logo/theme concept anywhere — only the WS1 display-label overlay and
+embed origin allowlisting existed. Found the exact store/route template to
+mirror: `tenant_embed_configs`/`tenant_display_labels` (platform-scoped, no
+RLS, one row per tenant, member-safe GET vs `ActUserAdmin`-scoped writes).
+Found the exact blob-storage template: case-service's `internal/blob/
+evidence.go` (MinIO via `minio-go/v7`, Put/Get, no presigned URLs, proxy
+everything through the app server) — reused verbatim for a new
+`internal/blob/logo.go`. Found embed pages are same-origin ui-web content
+(not externally-hosted partner pages), so no new cross-origin/unauthenticated
+identity-service route was needed for logo serving — a same-origin Next.js
+proxy route (mirroring `src/app/api/case-evidence/[caseId]/route.ts`) that
+forwards the httpOnly session Bearer covers both the app shell and embed
+surfaces. This is a deliberate, narrower scope than the BRD's literal "serve
+in app shell + embed" wording might imply — documented, not a silent gap.
+
+**Design decisions:** colors are stored/transmitted as bare `"H S% L%"`
+strings matching `globals.css`'s CSS custom-property format exactly (not hex,
+not a JSON RGB object) so the app shell can apply them as
+`document.documentElement.style.setProperty("--primary", ...)` with zero
+conversion at read time — the only conversion needed is client-side, at the
+`<input type="color">` boundary (`hexToHsl`/`hslToHex` in
+`src/lib/branding/color.ts`, unit-tested including round-trip and malformed-
+input fallback). Server-side, `domain.ValidateBrandColor` regex-validates the
+triplet since it's interpolated directly into a CSS custom property (a
+malformed value is a CSS-injection surface, not just a display bug). A
+read-merge base (`getOrZeroBranding`) means setting colors never clobbers an
+uploaded logo and vice versa. The unconfigured state returns an all-empty 200
+shape, never a 404 — `viewerBranding` in bff-graphql mirrors the existing
+`viewerLabels` lazy/fail-safe pattern so a tenant with no branding set never
+breaks the shell.
+
+**Implementation:** `identity-service` — migration `0008_tenant_branding`
+(platform-scoped, no RLS); `internal/blob/logo.go` (`MinioLogoStore`,
+Put/Get/Delete); 5 new REST routes (`GET/PUT/DELETE /tenants/self/branding`,
+`GET/POST /tenants/self/branding/logo`); MinIO wiring in `cmd/server/main.go`
+gated by `REQUIRE_REAL_ADAPTERS` (fatal only when required; otherwise a soft
+warning with `Logo` left a true nil interface — declared as `api.LogoStore`,
+not a concrete `*blob.MinioLogoStore`, so an unconfigured store doesn't wrap a
+nil pointer in a non-nil interface). `bff-graphql` — `TenantBranding` type +
+`setTenantBranding`/`deleteTenantBranding` mutations, `viewerBranding` lazy
+resolver. `ui-web` — `applyBrandingTokens` shared helper called from both
+`useBrandingOverlay()` (app shell) and `useEmbedFrame()` (embed pages, colors
+only — chrome-less by design, no logo surface there); `Sidebar.tsx` swaps to
+`<img src="/api/tenant-branding/logo">` when `hasLogo`; new
+`BrandingCard` on `/admin/tenant` (logo upload + two color pickers + reset,
+gated by the same `manageLabels` capability as the labels card, with a
+read-only fallback for non-admins).
+
+**Test:** `identity-service` — `handlers_branding_test.go`, 7 tests against a
+real in-memory `LogoStore`/`Store` fixture (unconfigured-store 501,
+scope-gating, malformed-color rejection incl. CSS-injection-shaped inputs,
+logo round-trip incl. cross-tenant-leak check, unsupported-content-type
+rejection, idempotent delete): all passing. `bff-graphql` — typecheck/lint
+clean, full suite 36 files/296 tests passing. `ui-web` — new
+`src/lib/branding/color.test.ts` (7 cases: round-trip against the platform's
+actual default primary/accent, grayscale edge case both directions,
+malformed-input rejection/fallback); typecheck/lint clean of new issues; full
+suite 78 files/479 tests passing (up from 77/472).
+
+**Live-verified end to end** against the real, restarted identity-service
+(MinIO-backed `Logo` store confirmed initialized in logs) and bff-graphql, as
+the seeded Admin persona at `/admin/tenant`:
+- **Colors:** set new hex values via the two color pickers → Save colors →
+  confirmed the card flips to "configured" with a "Last updated" timestamp →
+  confirmed via `getComputedStyle` on a real `bg-primary` button that its
+  rendered `background-color` matched the new HSL-equivalent value — proving
+  Tailwind's utility genuinely consumes the live-applied CSS custom property,
+  not just that the property was set inertly.
+- **Logo:** POSTed a real PNG through the same-origin proxy route
+  (`/api/tenant-branding/logo`) → `200`, `has_logo: true`, and — critically —
+  the previously-set colors came back unchanged in the same response,
+  confirming the read-merge base doesn't clobber one field when the other is
+  written. `GET` on the same route streamed the bytes back with the correct
+  `content-type: image/png`. Confirmed the `Sidebar` swapped to
+  `<img src="/api/tenant-branding/logo">` in place of the wordmark on a fresh
+  page load (`useMe()` refetch), proving the whole chain — proxy route →
+  identity-service → MinIO → back through the proxy → Sidebar render — works
+  against the real, running stack end to end.
+
+**Found and closed as part of verification, not left open:** the `IDENTITY_URL`
+default in both bff-graphql's config and the new ui-web proxy route
+(`http://localhost:9001`) doesn't match this stack's real identity-service
+port (`8301`, `PORT_IDENTITY` in `deploy/e2e/config.env`) — flagged as an
+open risk earlier in this workstream. The live logo upload/download test
+above exercised this exact code path end to end and succeeded, confirming the
+running ui-web dev process already has `IDENTITY_URL` set correctly in its
+own environment (inherited from the stack's boot script, the same way
+bff-graphql receives it) — the mismatched *default* is real but dormant,
+only reachable if ui-web were ever started without the platform's own boot
+scripts. Not fixed in this pass (no observed failure to fix, and changing a
+fallback default with no live way to test the failure mode it guards against
+would be unverified code) — worth aligning the default to `8301` the next
+time either file is touched, but out of scope here.
+
+_Next: WS4 (Backup/DR + live-data upgrade-migration), per BRD sequencing —
+gated on the next explicit go-ahead per this project's workstream discipline._
 
 ---
 

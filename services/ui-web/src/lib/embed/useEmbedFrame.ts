@@ -1,9 +1,15 @@
 "use client";
 import { useEffect } from "react";
+import { useMe } from "@/lib/graphql/hooks";
+import { applyBrandingTokens } from "@/lib/branding/apply";
 
 /**
  * Shared embed-surface behavior for every `/embed/*` page:
  *  - applies the host-requested theme (`?theme=light|dark`) to <html>;
+ *  - applies the tenant's brand color tokens (BRD 59 WS3) so charts/buttons
+ *    inside the iframe match the embedding partner's palette -- embed pages
+ *    are headless/chrome-less by design (no sidebar/topbar), so there is no
+ *    logo surface to swap here; only the color tokens apply;
  *  - strips the one-time `?t=` token from the visible URL once the middleware
  *    has moved it into the httpOnly `wr_embed` cookie;
  *  - posts `datacern:ready` and continuous `datacern:resize` (content height)
@@ -15,6 +21,14 @@ import { useEffect } from "react";
  * (theme changes) are accepted only from the document referrer's origin.
  */
 export function useEmbedFrame(): void {
+  // The embed session's own JWT (wr_embed cookie) is tenant-scoped, so this
+  // resolves to the SAME tenant the iframe's data queries are already scoped
+  // to -- no separate embed-branding endpoint needed.
+  const me = useMe();
+  useEffect(() => {
+    applyBrandingTokens(me.data?.me.branding);
+  }, [me.data]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 

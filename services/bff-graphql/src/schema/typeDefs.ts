@@ -90,6 +90,27 @@ export const typeDefs = gql`
     pack can white-label the vertical (e.g. "Cases" -> "AP Exceptions"). Empty
     when none are set or the lookup fails (the base catalog is used)."""
     displayLabels: [LabelOverride!]!
+    """The caller's tenant's white-label brand (BRD 59 WS3): color tokens the
+    app shell + embed surfaces apply as CSS custom properties, and whether a
+    logo has been uploaded (fetched separately via /api/tenant-branding/logo,
+    not through GraphQL). Never null — an unconfigured tenant gets the
+    all-empty shape so the app shell always has something to render."""
+    branding: TenantBranding!
+  }
+
+  """A tenant's white-label identity (BRD 59 WS3). primaryColor/accentColor are
+  bare HSL triplets ("221 83% 53%") applied directly as CSS custom properties."""
+  type TenantBranding {
+    configured: Boolean!
+    hasLogo: Boolean!
+    primaryColor: String!
+    accentColor: String!
+    updatedAt: DateTime
+  }
+
+  input SetTenantBrandingInput {
+    primaryColor: String!
+    accentColor: String!
   }
 
   """One per-tenant UI label override: an i18n key and the string to show for
@@ -4540,6 +4561,15 @@ export const typeDefs = gql`
     setTenantIdp(input: SetTenantIdpInput!, idempotencyKey: String): TenantIdpConfig!
     """Turn off SSO for the caller's tenant (DELETE /tenants/self/idp)."""
     deleteTenantIdp: Boolean!
+    """Set the caller tenant's brand color tokens (BRD 59 WS3, PUT
+    /tenants/self/branding). Leaves a previously uploaded logo untouched —
+    upload/replace the logo via POST /api/tenant-branding/logo (multipart,
+    outside GraphQL). Needs identity.user.admin."""
+    setTenantBranding(input: SetTenantBrandingInput!): TenantBranding!
+    """Revert the caller tenant to the platform default brand: clears colors
+    AND the logo in one action (DELETE /tenants/self/branding). Needs
+    identity.user.admin."""
+    deleteTenantBranding: Boolean!
     """Propose a new SIEM export destination (BRD 59 WS2, audit-service POST
     /audit/siemconfig) -- four-eyes gated: this creates a pending proposal,
     it does NOT take effect until a DISTINCT admin approves it. The currently
