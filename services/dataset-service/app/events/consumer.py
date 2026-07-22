@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 
 from app.domain.entities import DatasetStatus, Visibility
-from app.domain.errors import SnapshotAlreadyRegistered
+from app.domain.errors import Conflict, SnapshotAlreadyRegistered
 from app.domain.ports import DedupStore
 from app.domain.services import (
     CallCtx,
@@ -169,7 +169,13 @@ class IngestionEventHandler:
                 existing = await uow.datasets.get(dataset_id)
                 if existing:
                     return existing
-            if payload.get("dataset_name") and payload.get("workspace_id"):
+            elif payload.get("dataset_name") and payload.get("workspace_id"):
+                # Name fallback is ONLY for legacy events that carry no dataset
+                # id. When the payload has an id, resolving by name to a
+                # DIFFERENT dataset would register this ingestion's bronze
+                # snapshot against that dataset's table — never readable there,
+                # so the event retries out to the DLQ and the upload's data is
+                # orphaned (the duplicate-name new_dataset bug).
                 existing = await uow.datasets.get_by_name(
                     payload["workspace_id"], payload["dataset_name"]
                 )
@@ -181,16 +187,38 @@ class IngestionEventHandler:
         # dataset id (it is embedded in the bronze table name and in every
         # dataset_urn it handed out), so the row must carry that exact id —
         # minting a fresh one here is the URN drift this fixes.
-        return await self.datasets.create(
-            ctx,
-            {
-                "id": dataset_id,  # None -> DatasetService mints one (API path)
-                "workspace_id": payload["workspace_id"],
-                "name": payload.get("dataset_name") or f"ingestion-{payload['ingestion_id']}",
-                "iceberg_table": payload.get("iceberg_table"),
-                "visibility": Visibility.WORKSPACE,
-                "tags": payload.get("tags") or [],
-            },
+        base = {
+            "id": dataset_id,  # None -> DatasetService mints one (API path)
+            "workspace_id": payload["workspace_id"],
+            "iceberg_table": payload.get("iceberg_table"),
+            "visibility": Visibility.WORKSPACE,
+            "tags": payload.get("tags") or [],
+        }
+        name = payload.get("dataset_name") or f"ingestion-{payload['ingestion_id']}"
+        try:
+            return await self.datasets.create(ctx, {**base, "name": name})
+        except Conflict:
+            pass
+        # The requested name is taken by another dataset in the workspace
+        # (names are unique per workspace). The data is already committed to
+        # this ingestion's own bronze table, so de-conflict the name rather
+        # than DLQing the event and orphaning the upload.
+        for n in range(2, 100):
+            candidate = f"{name} ({n})"
+            try:
+                dataset = await self.datasets.create(ctx, {**base, "name": candidate})
+            except Conflict:
+                continue
+            logger.warning(
+                "dataset name %r already exists in workspace %s; registered "
+                "ingestion %s as %r (dataset %s)",
+                name, payload["workspace_id"], payload["ingestion_id"],
+                candidate, dataset.id,
+            )
+            return dataset
+        raise Conflict(
+            f"could not find a free name for dataset {name!r} in workspace "
+            f"{payload['workspace_id']} after 99 attempts"
         )
 
     async def _on_failed(self, envelope: dict) -> None:

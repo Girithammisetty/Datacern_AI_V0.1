@@ -214,6 +214,81 @@ class TestUrnSingleSourceOfTruth:
         assert self.MINTED not in state.datasets
 
 
+class TestDuplicateNameNewDataset:
+    """Regression: a new_dataset ingestion whose name already exists in the
+    workspace. The event carries a freshly minted dataset id and its OWN bronze
+    table; resolving by name to the pre-existing dataset registered the new
+    snapshot against the OLD dataset's table (never readable there), so the
+    event retried out to the DLQ and the upload's rows were orphaned. The
+    consumer must create the dataset under the event's id with a de-conflicted
+    name instead."""
+
+    MINTED = "019f8741-0000-4bbb-8bbb-0123456789ab"
+    WORKSPACE = "33333333-3333-4333-8333-333333333333"
+
+    async def _existing(self, c, name="Orders"):
+        from app.domain.services import CallCtx
+
+        return await c.dataset_service.create(
+            CallCtx(tenant_id=TENANT_A, actor={"type": "user", "id": "u-1"}),
+            {"workspace_id": self.WORKSPACE, "name": name},
+        )
+
+    def _env(self, ingestion_id, **kw):
+        return ingestion_envelope(
+            TENANT_A, ingestion_id,
+            dataset_urn=f"wr:{TENANT_A}:dataset:dataset/{self.MINTED}",
+            dataset_id=self.MINTED,
+            **kw,
+        )
+
+    async def test_duplicate_name_creates_new_dataset_under_event_id(
+        self, recording_container
+    ):
+        c = recording_container
+        old = await self._existing(c)
+        table = f"bronze.t.ds_{self.MINTED}"
+        await seed_snapshot(c, table=table, snapshot_id=3301)
+        await c.bus.publish(
+            "ingestion.events.v1",
+            self._env("ing-dupname", iceberg_table=table, snapshot_id=3301),
+        )
+        state = c.memory_state
+        # nothing DLQ'd: the upload registered as a second dataset, id = event's
+        assert set(state.datasets) == {old.id, self.MINTED}
+        created = state.datasets[self.MINTED]
+        assert created.name == "Orders (2)"
+        assert created.iceberg_table == table
+        versions = list(state.versions.values())
+        assert len(versions) == 1
+        assert versions[0].dataset_id == self.MINTED
+        assert versions[0].iceberg_snapshot_id == 3301
+        # the pre-existing dataset is untouched
+        assert state.datasets[old.id].name == "Orders"
+        assert state.datasets[old.id].current_version_id is None
+
+        # broker re-key (new event_id, same ingestion): natural idempotency —
+        # no "Orders (3)" appears
+        await c.bus.publish(
+            "ingestion.events.v1",
+            self._env("ing-dupname", iceberg_table=table, snapshot_id=3301),
+        )
+        assert set(state.datasets) == {old.id, self.MINTED}
+        assert len(state.versions) == 1
+
+    async def test_suffix_skips_taken_names(self, recording_container):
+        c = recording_container
+        await self._existing(c, "Orders")
+        await self._existing(c, "Orders (2)")
+        table = f"bronze.t.ds_{self.MINTED}"
+        await seed_snapshot(c, table=table, snapshot_id=3302)
+        await c.bus.publish(
+            "ingestion.events.v1",
+            self._env("ing-dupname2", iceberg_table=table, snapshot_id=3302),
+        )
+        assert c.memory_state.datasets[self.MINTED].name == "Orders (3)"
+
+
 class TestIngestionFailed:
     async def test_marks_versionless_dataset_failed(self, recording_container):
         c = recording_container
