@@ -144,7 +144,7 @@ func TestMain(m *testing.M) {
 	}
 
 	pg := store.NewPG(pool)
-	searchClient, err := search.New("http://localhost:9200")
+	searchClient, err := search.New("http://localhost:9200", search.Options{NumShards: 1})
 	if err != nil {
 		log.Fatalf("opensearch: %v", err)
 	}

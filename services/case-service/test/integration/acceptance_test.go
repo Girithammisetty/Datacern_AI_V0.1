@@ -437,7 +437,7 @@ func TestAC14_SearchUnavailable(t *testing.T) {
 	require.NotEmpty(t, c["id"])
 
 	// A server whose search client points at a closed port returns 503 on list.
-	broken, err := search.New("http://localhost:9201")
+	broken, err := search.New("http://localhost:9201", search.Options{NumShards: 1})
 	require.NoError(t, err)
 	bs := &api.Server{Store: h.pg, Search: broken, Projector: h.server.Projector, Authz: authz.AllowAll{},
 		Verifier: api.NewVerifierStatic(&h.key.PublicKey, "datacern-test", "datacern"), Snapshots: api.NewFSSnapshotStore(mustTempDir())}

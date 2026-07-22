@@ -44,6 +44,36 @@ func env(key, def string) string {
 	return def
 }
 
+func envBool(key string, def bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return def
+	}
+	return b
+}
+
+// envList parses a comma-separated env var into a trimmed, non-empty string
+// slice (e.g. CLICKHOUSE_ADDRS="ch-0:9010,ch-1:9010,ch-2:9010" for an HA
+// cluster, B9). Returns nil when unset, so callers fall back to the
+// single-address CLICKHOUSE_ADDR.
+func envList(key string) []string {
+	v := os.Getenv(key)
+	if v == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil))) // MASTER-FR-050
 
@@ -98,10 +128,16 @@ func main() {
 
 	// --- ClickHouse append-only store ---
 	ch, err := chstore.Open(ctx, chstore.Config{
-		Addr:     env("CLICKHOUSE_ADDR", "localhost:9010"),
-		Database: env("CLICKHOUSE_DB", "audit"),
-		Username: env("CLICKHOUSE_USER", "datacern"),
-		Password: env("CLICKHOUSE_PASSWORD", "datacern_dev"),
+		Addr: env("CLICKHOUSE_ADDR", "localhost:9010"),
+		// CLICKHOUSE_ADDRS (comma-separated) targets an HA, Keeper-coordinated
+		// cluster; CLICKHOUSE_REPLICATED then switches Migrate's DDL to
+		// ReplicatedReplacingMergeTree (B9). Unset in dev/Hetzner: single-node
+		// CLICKHOUSE_ADDR + ReplacingMergeTree, unchanged.
+		Addrs:      envList("CLICKHOUSE_ADDRS"),
+		Replicated: envBool("CLICKHOUSE_REPLICATED", false),
+		Database:   env("CLICKHOUSE_DB", "audit"),
+		Username:   env("CLICKHOUSE_USER", "datacern"),
+		Password:   env("CLICKHOUSE_PASSWORD", "datacern_dev"),
 	})
 	if err != nil {
 		slog.Error("clickhouse connect failed", "err", err)

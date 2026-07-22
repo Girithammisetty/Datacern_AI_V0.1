@@ -27,16 +27,40 @@ import (
 
 // Client is the real OpenSearch adapter.
 type Client struct {
-	os *opensearch.Client
+	os        *opensearch.Client
+	numShards int
+}
+
+// Options configures New. NumShards<=0 defaults to 1, the prior single-node
+// behaviour. Username/Password are optional HTTP basic auth (e.g. Amazon
+// OpenSearch Service's fine-grained access control master user) — leave both
+// empty for an unauthenticated dev/Hetzner cluster.
+type Options struct {
+	NumShards int
+	Username  string
+	Password  string
 }
 
 // New dials the OpenSearch cluster at addr (e.g. http://localhost:9200).
-func New(addr string) (*Client, error) {
-	c, err := opensearch.NewClient(opensearch.Config{Addresses: []string{addr}})
+// NumShards sets every new tenant index's index.number_of_shards (B9/B10,
+// scalability audit: this was hardcoded to 1). A single-node dev/Hetzner
+// cluster should keep it at 1; a real multi-node cluster (e.g. a managed AWS
+// OpenSearch Service domain) can raise it to spread a tenant's cases index
+// across nodes.
+func New(addr string, opts Options) (*Client, error) {
+	if opts.NumShards <= 0 {
+		opts.NumShards = 1
+	}
+	cfg := opensearch.Config{Addresses: []string{addr}}
+	if opts.Username != "" {
+		cfg.Username = opts.Username
+		cfg.Password = opts.Password
+	}
+	c, err := opensearch.NewClient(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{os: c}, nil
+	return &Client{os: c, numShards: opts.NumShards}, nil
 }
 
 // Ping checks cluster reachability (readyz).
@@ -61,7 +85,7 @@ func physicalIndex(tenant uuid.UUID, gen string) string {
 	return "cases-" + tenant.String() + "-" + gen
 }
 
-const indexMapping = `{
+const indexMappingTemplate = `{
   "mappings": {"properties": {
     "tenant_id": {"type": "keyword"}, "workspace_id": {"type": "keyword"},
     "case_number": {"type": "long"}, "status": {"type": "keyword"}, "severity": {"type": "keyword"},
@@ -72,7 +96,7 @@ const indexMapping = `{
     "display_projection": {"type": "flat_object"}, "custom_fields": {"type": "flat_object"},
     "case_version": {"type": "long"}
   }},
-  "settings": {"index.number_of_shards": 1, "index.refresh_interval": "1s"}
+  "settings": {"index.number_of_shards": %d, "index.refresh_interval": "1s"}
 }`
 
 // EnsureIndex creates the tenant index + alias if absent (idempotent). The
@@ -93,7 +117,8 @@ func (c *Client) EnsureIndex(ctx context.Context, tenant uuid.UUID) error {
 }
 
 func (c *Client) createIndex(ctx context.Context, idx string) error {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, "/"+idx, strings.NewReader(indexMapping))
+	mapping := fmt.Sprintf(indexMappingTemplate, c.numShards)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, "/"+idx, strings.NewReader(mapping))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.os.Perform(req)
 	if err != nil {

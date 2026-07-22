@@ -46,6 +46,16 @@ output "kafka_bootstrap_brokers" {
   value       = aws_msk_cluster.this.bootstrap_brokers_sasl_scram
 }
 
+output "opensearch_endpoint" {
+  description = "Amazon OpenSearch Service domain endpoint (OPENSEARCH_URL host, B9/B10)."
+  value       = aws_opensearch_domain.this.endpoint
+}
+
+output "opensearch_data_node_count" {
+  description = "Provisioned OpenSearch data node count — feed into case-service's OPENSEARCH_NUMBER_OF_SHARDS so every tenant index actually spreads across all nodes."
+  value       = var.opensearch_data_node_count
+}
+
 output "bucket_names" {
   description = "Map of logical bucket name -> actual S3 bucket name."
   value       = { for k, b in aws_s3_bucket.this : k => b.bucket }

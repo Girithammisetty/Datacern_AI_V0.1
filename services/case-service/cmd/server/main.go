@@ -111,7 +111,21 @@ func main() {
 	st := store.NewPG(pool)
 
 	// Real OpenSearch adapter (CASE-FR-040): list/search/facets + projection.
-	searchClient, err := search.New(env("OPENSEARCH_URL", "http://localhost:9200"))
+	// OPENSEARCH_NUMBER_OF_SHARDS (B9/B10, scalability audit): was hardcoded to
+	// 1; a real multi-node cluster (e.g. AWS OpenSearch Service) can raise this.
+	numShards := 1
+	if v := os.Getenv("OPENSEARCH_NUMBER_OF_SHARDS"); v != "" {
+		if n, e := strconv.Atoi(v); e == nil && n > 0 {
+			numShards = n
+		}
+	}
+	searchClient, err := search.New(env("OPENSEARCH_URL", "http://localhost:9200"), search.Options{
+		NumShards: numShards,
+		// Amazon OpenSearch Service fine-grained access control (empty on a
+		// dev/Hetzner cluster with security disabled).
+		Username: os.Getenv("OPENSEARCH_USERNAME"),
+		Password: os.Getenv("OPENSEARCH_PASSWORD"),
+	})
 	if err != nil {
 		slog.Error("opensearch client", "err", err)
 		os.Exit(1)

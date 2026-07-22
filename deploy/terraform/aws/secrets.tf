@@ -19,6 +19,11 @@ locals {
     # --- Redis (managed TLS -> rediss://) ---
     REDIS_URL = "rediss://:${random_password.redis_auth.result}@${aws_elasticache_replication_group.this.primary_endpoint_address}:6379"
 
+    # --- OpenSearch (case-service search/facets; B9/B10) ---
+    OPENSEARCH_URL      = "https://${aws_opensearch_domain.this.endpoint}"
+    OPENSEARCH_USERNAME = var.opensearch_master_username
+    OPENSEARCH_PASSWORD = random_password.opensearch_master.result
+
     # --- Kafka / MSK (SASL/SCRAM over TLS) ---
     KAFKA_BOOTSTRAP     = aws_msk_cluster.this.bootstrap_brokers_sasl_scram
     KAFKA_SASL_USERNAME = var.kafka_sasl_username

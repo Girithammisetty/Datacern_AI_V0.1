@@ -79,7 +79,8 @@ provisioned as managed in cloud TF; HPA templated but unconfigured.
 - Apply TF on ONE cloud (AWS first), run the CD workflow, prove `make doctor` green in-cluster.
 
 ### Implement / Test
-- [ ] DB/role bootstrap job · [ ] managed OpenSearch/ClickHouse module · [ ] HPA values · [ ] **apply on AWS + prove rollout** (needs a cloud account — resource-gated, not code-gated).
+- [x] managed OpenSearch module (AWS only — see B9/B10 log below; GCP/Azure have no native managed equivalent).
+- [ ] DB/role bootstrap job · [ ] managed ClickHouse module (no native offering on any cloud) · [ ] HPA values · [ ] **apply on AWS + prove rollout** (needs a cloud account — resource-gated, not code-gated).
 
 ---
 
@@ -96,8 +97,7 @@ Full analysis in [scalability-audit](../initiatives/scalability-audit.md). Prior
 ### Implement / Test
 - [x] **B2** upload size/row cap · [x] **B7** `processed_events` retention + index
   · [x] **B6** outbox reaper · [x] **B3** LIMIT-all-callers · [x] **B1** streaming commit
-  · [x] **B5** bulk reindex + `(tenant_id,created_at)` index — see log below.
-- [ ] B9/B10 (=WS3).
+  · [x] **B5** bulk reindex + `(tenant_id,created_at)` index · [x] **B9/B10** (partial — see log below).
 
 ---
 
@@ -352,5 +352,108 @@ struct-alignment drift in `opensearch.go`'s `Doc` type, untouched by this
 change). OpenSearch had to be started for this dev stack (it wasn't running;
 confirmed with the user before booting it — a stopped datastore container
 only, no application service touched).
+
+### B9/B10 — provision ClickHouse + OpenSearch HA (partial — code done, cloud apply resource-gated) — PARTIAL
+
+**Research before writing anything:** surveyed the actual state of
+`deploy/terraform/{aws,gcp,azure,hetzner}/` before designing a fix — grepped
+the whole Terraform tree for `opensearch|elasticsearch|clickhouse`: zero real
+resources anywhere, on any cloud. Confirmed **no cloud has a native managed
+ClickHouse offering** (AWS, GCP, and Azure all lack one — self-hosted-with-
+replication is the only honest option everywhere); **Amazon OpenSearch
+Service is the ONE native managed OpenSearch/Elasticsearch-family product
+across all three clouds** (GCP/Azure have none). This asymmetry drove the
+split scope below rather than inventing a fake "managed ClickHouse" resource
+that doesn't exist on any provider.
+
+**Done, real, and verified:**
+1. **case-service: configurable OpenSearch shard count.** `number_of_shards`
+   was a hardcoded `1` in `indexMapping` (`internal/search/opensearch.go`).
+   Templated it via a new `search.Options{NumShards, Username, Password}`
+   passed to `search.New` (also carries optional HTTP basic auth for Amazon
+   OpenSearch Service's fine-grained access control — the codebase's existing
+   pattern is username/password everywhere, not request-signing). Verified
+   against the **real** local OpenSearch cluster: `TestOpenSearchConfigurableShardCount`
+   creates a tenant index with `NumShards: 3` and reads back
+   `GET /<alias>/_settings` to confirm `number_of_shards: "3"`, not the old 1.
+2. **audit-service: ClickHouse HA-capable config (Keeper-coordinated
+   replication, opt-in).** `chstore.Config` gained `Addrs []string` (multiple
+   node endpoints; falls back to the existing single `Addr` when empty) and
+   `Replicated bool`, which switches `Migrate`'s DDL from
+   `ReplacingMergeTree` to `ReplicatedReplacingMergeTree('/clickhouse/tables/
+   {shard}/audit_events', '{replica}', ingested_at)` — same columns,
+   partitioning, ordering, and the existing 7-year WORM TTL either way (the
+   TTL was already present pre-existing; B9's "retention/TTL" ask was already
+   satisfied, nothing to add there). New `CLICKHOUSE_ADDRS`/
+   `CLICKHOUSE_REPLICATED` env vars in `cmd/server/main.go`, defaulting to the
+   unchanged single-node dev/Hetzner path. Pulled the DDL string-building into
+   a pure `buildMigrateDDL` function so both engine variants are unit-tested
+   without a live cluster (`chstore_test.go`) — a genuinely replicated,
+   Keeper-coordinated ClickHouse cluster isn't available in this environment
+   to verify end-to-end, so this is deliberately scoped to "config + DDL
+   correctness," not a live HA verification.
+3. **AWS Terraform: real Amazon OpenSearch Service domain** (`opensearch.tf`)
+   — multi-AZ (`zone_awareness_config`), 3 data nodes + 3 dedicated masters by
+   default (all counts are variables), EBS gp3, encryption at rest +
+   node-to-node, HTTPS-only, fine-grained access control (generated master
+   password, mirroring the existing `random_password.db_admin`/`redis_auth`
+   pattern — never hardcoded). Endpoint + generated credentials wired into
+   `secrets.tf`'s `computed_secrets` (`OPENSEARCH_URL`/`OPENSEARCH_USERNAME`/
+   `OPENSEARCH_PASSWORD`) and new `opensearch_endpoint`/
+   `opensearch_data_node_count` outputs, following the exact existing
+   RDS/ElastiCache/MSK conventions in this module. `values-aws.yaml` gained
+   `OPENSEARCH_URL`/`OPENSEARCH_NUMBER_OF_SHARDS` config placeholders (CD
+   overrides them from the Terraform outputs, same mechanism already used for
+   `ICEBERG_WAREHOUSE`).
+
+**Explicitly NOT done, and why (flagged honestly rather than faked):**
+- **No cloud account is available in this environment** — verification for
+  the Terraform piece stops at `terraform init -backend=false` +
+  `terraform validate` (both pass, and are this module's own documented
+  no-credentials verification path per its `versions.tf`/README). `plan`/
+  `apply` against real AWS need real credentials; this remains exactly what
+  the WS3 checklist already called "resource-gated, not code-gated."
+- **GCP/Azure/Hetzner still run case-service's self-hosted single-node
+  OpenSearch StatefulSet** (`deploy/k8s/data-tier/search-audit.yaml`,
+  `replicas: 1`, no multi-node discovery config) and single-node ClickHouse
+  (no Keeper). Turning that into a genuine multi-node/Keeper-coordinated
+  StatefulSet is real, substantial k8s work (headless-service DNS for stable
+  replica addressing, OpenSearch cluster-manager-node discovery, ClickHouse
+  Keeper quorum config) that this environment has **no way to validate** — no
+  local `kind`/`k3d`/`minikube` cluster and no `kubectl` context configured
+  (`kubectl cluster-info` errors, no current-context). Hand-authoring
+  untested Keeper/discovery YAML would risk shipping subtly-broken infra with
+  no way to catch it, which is worse than leaving the gap explicit. Tracked
+  as the next actionable slice of B9/B10 (needs either a real cluster to
+  develop against, or the AWS OpenSearch Service path above extended to
+  GCP/Azure via Elastic Cloud or an equivalent supported managed vendor, per
+  the original design note's "or a supported managed vendor" fallback).
+- **Fine-grained access control credentials aren't wired into the Helm
+  chart's case-service pod env yet.** `search.New` already accepts
+  `Username`/`Password`, and Terraform already generates + publishes them to
+  Secrets Manager, but the chart's `env:` entries are unconditional across
+  all 4 cloud overlays and the Deployment template has no `optional`
+  secretKeyRef support — adding a required env var referencing a secret key
+  that only exists on AWS would break pod startup on every other cloud/dev.
+  Verified this isn't yet an issue with `helm lint`/`helm template` against
+  every values overlay (`values.yaml`, `-aws`, `-gcp`, `-azure`, `-hetzner`
+  all render cleanly, 0 errors) precisely because the credential wiring was
+  deliberately left out rather than done unsafely. Documented in
+  `values-aws.yaml` as the concrete last-mile follow-up.
+
+**Test:** `case-service` full suite (unit + Docker-backed integration,
+`CASE_IT=1 go test ./...`): all packages `ok`, 0 fails, including the new
+shard-count test. `audit-service`: `go build`/`go vet` clean; new
+`chstore_test.go` (2 tests, pure DDL-string assertions, no live cluster
+needed) both pass. `audit-service`'s Docker-backed acceptance suite: 9 of 10
+pass; `TestAC05_ChainTamperEvidence` fails intermittently — **confirmed via
+`git stash` that this reproduces identically on completely unmodified code**
+(ran 5 times total across modified/unmodified, symptoms varied between runs:
+sometimes a manifest-hash mismatch, sometimes an extra event count), so it's
+a pre-existing environment/isolation issue unrelated to this change, not a
+regression — flagged separately rather than silently left for someone else to
+rediscover. Terraform: `terraform fmt -check`, `terraform init -backend=false`,
+`terraform validate` all pass for the AWS module. Helm: `helm lint` and
+`helm template` pass for the default values and all four cloud overlays.
 
 _See BRD 59 for feature expansion (5B)._

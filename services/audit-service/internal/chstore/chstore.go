@@ -20,17 +20,25 @@ import (
 
 // Store wraps a ClickHouse connection.
 type Store struct {
-	conn  driver.Conn
-	table string
+	conn       driver.Conn
+	table      string
+	replicated bool
 }
 
 // Config configures the ClickHouse connection.
 type Config struct {
-	Addr     string // host:port native protocol, e.g. localhost:9010
-	Database string
-	Username string
-	Password string
-	Table    string // default audit_events
+	Addr  string   // host:port native protocol, e.g. localhost:9010 (single-node default)
+	Addrs []string // optional: multiple node endpoints for an HA cluster; when non-empty, takes precedence over Addr
+	// Replicated switches Migrate's DDL from single-node ReplacingMergeTree to
+	// ReplicatedReplacingMergeTree (B9: HA ClickHouse). Requires a real
+	// ClickHouse Keeper-coordinated cluster (each node's config defining the
+	// {shard}/{replica} macros) -- leave false for the single-node dev/Hetzner
+	// deployment, where a replicated engine would fail with no Keeper present.
+	Replicated bool
+	Database   string
+	Username   string
+	Password   string
+	Table      string // default audit_events
 }
 
 // Open dials ClickHouse and returns a Store. It does not run DDL; call Migrate.
@@ -38,8 +46,12 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 	if cfg.Table == "" {
 		cfg.Table = "audit_events"
 	}
+	addrs := cfg.Addrs
+	if len(addrs) == 0 {
+		addrs = []string{cfg.Addr}
+	}
 	conn, err := clickhouse.Open(&clickhouse.Options{
-		Addr: []string{cfg.Addr},
+		Addr: addrs,
 		Auth: clickhouse.Auth{
 			Database: cfg.Database,
 			Username: cfg.Username,
@@ -56,7 +68,7 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 	if err := conn.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("clickhouse ping: %w", err)
 	}
-	return &Store{conn: conn, table: cfg.Table}, nil
+	return &Store{conn: conn, table: cfg.Table, replicated: cfg.Replicated}, nil
 }
 
 // Ping checks connectivity (readyz).
@@ -65,14 +77,19 @@ func (s *Store) Ping(ctx context.Context) error { return s.conn.Ping(ctx) }
 // Close releases the connection.
 func (s *Store) Close() error { return s.conn.Close() }
 
-// Migrate creates the append-only audit_events table (idempotent). Single-node
-// ReplacingMergeTree(ingested_at) keyed on (tenant_id, occurred_at, event_id):
-// replays converge to one row per (tenant,event) at merge time; queries use
-// FINAL for exactness (AUD-FR-004). Partitioned by month, 7-year TTL
-// (AUD-FR-010/011). chain_date carries the ingest-day the chain seq belongs to
-// (BR-2/BR-3).
-func (s *Store) Migrate(ctx context.Context) error {
-	ddl := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+// buildMigrateDDL renders the audit_events DDL for either a single-node
+// (ReplacingMergeTree) or Keeper-coordinated HA (ReplicatedReplacingMergeTree)
+// deployment. Pulled out of Migrate as a pure function so the DDL shape is
+// unit-testable without a live ClickHouse connection (B9).
+func buildMigrateDDL(table string, replicated bool) string {
+	engine := "ReplacingMergeTree(ingested_at)"
+	if replicated {
+		// {shard}/{replica} are ClickHouse macros defined per-node by the
+		// cluster's config (Keeper-coordinated); every replica of the same
+		// shard uses the same ZK-style path so writes converge across nodes.
+		engine = fmt.Sprintf("ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/%s', '{replica}', ingested_at)", table)
+	}
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
   event_id UUID,
   event_type LowCardinality(String),
   source_topic LowCardinality(String),
@@ -99,11 +116,22 @@ func (s *Store) Migrate(ctx context.Context) error {
   INDEX ix_actor actor_id TYPE bloom_filter GRANULARITY 4,
   INDEX ix_agent via_agent_id TYPE bloom_filter GRANULARITY 4,
   INDEX ix_trace trace_id TYPE bloom_filter GRANULARITY 4
-) ENGINE = ReplacingMergeTree(ingested_at)
+) ENGINE = %s
 PARTITION BY toYYYYMM(occurred_at)
 ORDER BY (tenant_id, occurred_at, event_id)
-TTL toDateTime(occurred_at) + INTERVAL 7 YEAR`, s.table)
-	return s.conn.Exec(ctx, ddl)
+TTL toDateTime(occurred_at) + INTERVAL 7 YEAR`, table, engine)
+}
+
+// Migrate creates the append-only audit_events table (idempotent). Single-node
+// ReplacingMergeTree(ingested_at) keyed on (tenant_id, occurred_at, event_id):
+// replays converge to one row per (tenant,event) at merge time; queries use
+// FINAL for exactness (AUD-FR-004). Partitioned by month, 7-year TTL
+// (AUD-FR-010/011). chain_date carries the ingest-day the chain seq belongs to
+// (BR-2/BR-3). When the store was opened with Config.Replicated, the table is
+// created as ReplicatedReplacingMergeTree instead (B9, HA ClickHouse) — same
+// columns, partitioning, ordering and TTL either way.
+func (s *Store) Migrate(ctx context.Context) error {
+	return s.conn.Exec(ctx, buildMigrateDDL(s.table, s.replicated))
 }
 
 // Insert appends one record (real batch insert). Idempotency is provided by the
