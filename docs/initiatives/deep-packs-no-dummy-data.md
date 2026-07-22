@@ -1,8 +1,23 @@
 # Deep packs + the no-dummy-data rule (tenant-dataset binding)
 
 **Status:** BUILT + LIVE-VERIFIED (2026-07-22). pack-service inc20 binding shipped;
-five packs converted to data-free v2.0.0 (card-disputes, banking-aml,
-insurance-claims-payer, healthcare-provider-rcm, chargeback-representment).
+**13 packs** converted to data-free v2.0.0 — wave 1: card-disputes, banking-aml,
+insurance-claims-payer, healthcare-provider-rcm, chargeback-representment
+(commit 9546564); wave 2, every healthcare + banking vertical:
+care-management-medicare, post-acute-care, payer-fwa-siu, pharmacy-benefit-mgmt,
+pharmacovigilance, device-complaints, credit-disputes, mortgage-loss-mitigation
+(commit dc17df4). Full live install e2e proven on card-disputes (wave 1) AND
+credit-disputes (wave 2): real tenant uploads → reuse×2 + explicit bind×1 →
+0 failed → four-eyes semantic approval → dashboards materialized → macro
+rewrite to the bound dataset name confirmed in saved-query SQL.
+
+**Wave-2 governance patterns worth keeping:** decision tables never propose a
+clinical/fraud/regulatory determination — routing and expediting only. Packs
+whose v1 disposition catalogs held only end-determination codes took one of two
+honest paths: omit `default_outcome` so unmatched work stays in the analyst
+worklist (device-complaints, credit-disputes), or add ONE neutral escalation
+code (pharmacovigilance `escalate_medical_review`, mortgage-loss-mitigation
+`escalate_underwriting_review`, mirroring banking-aml's `escalate_l2`).
 
 ## 1. Analysis
 
