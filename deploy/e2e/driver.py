@@ -82,42 +82,50 @@ def align_workspace_to_rbac():
 rds = redislib.Redis(host="localhost", port=6379, db=0)
 
 
-# ---------- OPA projection seeding + self-healing action catalog ----------
-# HARNESS BOOTSTRAP (not the product path): the e2e operator (MANAGER/APPROVER)
-# must be authorized BEFORE any grants exist — rbac's member API is action-gated
-# and no admin member exists yet, so the harness plays the platform-provisioner
-# role and writes the operator's admin projection directly. Everything user-
-# facing (the demo personas) flows through the REAL grant path instead:
-# role grants -> rbac projection worker -> perm:* AND authz:proj:* (dual-write).
+# ---------- operator bootstrap via the REAL grant path (no fakes) ----------
+# HARNESS BOOTSTRAP (platform-provisioner role, not the product path): the e2e
+# operator (MANAGER/APPROVER) must be authorized BEFORE any grants exist —
+# rbac's member API is action-gated and no admin member exists yet. The
+# bootstrap therefore writes the SAME durable Postgres membership rows rbac's
+# AddMember writes (Admin for tenant management + "Use case Admin" for the
+# domain actions the driver exercises: ai.proposal.approve, memory.corpus.admin,
+# semantic writes), then triggers rbac's REAL rebuild so the worker materializes
+# BOTH projections (perm:* and authz:proj:*) truthfully from SQL ground truth.
+# The former raw-Redis perm:* wildcard seeding and the seed_py_authz fake-facts
+# helper are GONE (no-fallback rule): if the projector fails, the run fails.
 def seed_projection_admin():
-    for user in (MANAGER, APPROVER):
-        rds.set(f"perm:{TENANT}:{user}:flags", json.dumps({"admin": True, "ws_admin": [WORKSPACE]}))
-        rds.set(f"perm:{TENANT}:{user}:actions", json.dumps({"actions": ["*"]}))
-        rds.set(f"perm:{TENANT}:{user}:ws:{WORKSPACE}",
-                json.dumps({"actions": ["*"], "archived": False, "deleted": False}))
-    rds.set(f"perm:{TENANT}:meta", json.dumps({"autonomous_enabled": True}))
-
-
-def seed_py_authz(action):
-    """FALLBACK/BOOTSTRAP ONLY: seed the Python-services OPA projection
-    (datacern_common single-key scheme: authz:proj:{tenant}:{user}:{action}:{ws})
-    with admin facts for the harness operator subjects. The REAL path is rbac's
-    projection worker, which dual-writes authz:proj:* from actual grants — this
-    helper exists for the harness operators (who have no grants in a bare e2e
-    run) and for the loudly-logged 403 safety net in req(). NOTE: this rds.set
-    clobbers any real (versioned) key for the same (user, action, ws)."""
-    users = [MANAGER, APPROVER, f"agent:{c.AGENT_ID}@{c.AGENT_VERSION}", "svc:e2e"]
-    for user in users:
-        for ws, scoped in (("", False), (WORKSPACE, True)):
-            facts = {
-                "action_known": True, "action_scoped": scoped, "autonomous_enabled": True,
-                "flags": {"found": True, "admin": True, "ws_admin": [WORKSPACE]},
-                "tenant_actions": {"found": True, "actions": [action]},
-                "workspace": {"assigned": True, "actions": [action], "archived": False},
-                "resource": {"found": True, "level": "owner", "archived": False},
-                "workspace_archived_tenant": False,
-            }
-            rds.set(f"authz:proj:{TENANT}:{user}:{action}:{ws}", json.dumps(facts))
+    import psycopg
+    su = c.superadmin_token()
+    r = requests.post(f"{c.RBAC}/api/v1/admin/tenants/{TENANT}/seed",
+                      headers={"Authorization": f"Bearer {su}"}, timeout=30)
+    if r.status_code != 200:
+        print(f"  !! tenant seed: {r.status_code} {r.text[:120]}")
+    with psycopg.connect(_RBAC_DSN, autocommit=True) as conn:
+        conn.execute("SELECT set_config('app.tenant_id', %s, false)", (TENANT,))
+        for sub in (MANAGER, APPROVER):
+            for gname in ("Admin", "Use case Admin"):
+                row = conn.execute(
+                    "SELECT id FROM groups WHERE tenant_id = %s AND group_type = 'permission' "
+                    "AND lower(name) = lower(%s)", (TENANT, gname)).fetchone()
+                if not row:
+                    print(f"  !! permission group {gname!r} missing for tenant {TENANT}")
+                    continue
+                conn.execute(
+                    "INSERT INTO members (id, tenant_id, group_id, user_id) "
+                    "VALUES (%s,%s,%s,%s) ON CONFLICT (group_id, user_id) DO NOTHING",
+                    (str(uuid.uuid4()), TENANT, row[0], sub))
+    requests.post(f"{c.RBAC}/api/v1/admin/projection/rebuild?tenant={TENANT}",
+                  headers={"Authorization": f"Bearer {su}"}, timeout=30)
+    # Wait for the worker to materialize the operator's Python-scheme facts —
+    # the projector is the ONLY authorization source now.
+    probe = f"authz:proj:{TENANT}:{MANAGER}:ai.proposal.approve:{WORKSPACE}"
+    for _ in range(60):
+        if rds.get(probe):
+            return
+        time.sleep(0.5)
+    print("  !! operator authz:proj facts not materialized within 30s — the "
+          "grants->projector path is broken; subsequent authorized calls WILL "
+          "fail (no fake facts are seeded).")
 
 
 def grant_resource(urn, level="owner"):
@@ -154,25 +162,18 @@ IN_SCOPE_ACTION_SERVICES = ("case", "ingestion", "dataset", "rbac")
 
 
 def req(method, url, tok, **kw):
-    """Authorized request. For in-scope services no self-heal is applied — their
-    actions must be known to OPA natively (GAP 1). For out-of-scope services
-    (agent-runtime/memory) a single py-projection seed+retry remains until their
-    own fix lands."""
+    """Authorized request. NO self-heal for any service (no-fallback rule):
+    every 403 surfaces so the real grant path (memberships -> rbac projector ->
+    perm:*/authz:proj:*) gets fixed instead of being papered over with planted
+    facts. The denied action is printed to make the missing grant obvious."""
     headers = kw.pop("headers", {})
     headers["Authorization"] = f"Bearer {tok}"
-    for attempt in range(3):
-        r = requests.request(method, url, headers=headers, timeout=60, **kw)
-        if r.status_code != 403:
-            return r
+    r = requests.request(method, url, headers=headers, timeout=60, **kw)
+    if r.status_code == 403:
         act = _extract_denied_action(r.text)
-        if not act or act.split(".", 1)[0] in IN_SCOPE_ACTION_SERVICES:
-            return r  # in-scope: surface the denial (native OPA must allow)
-        # Out-of-scope safety net — LOUD: the real path (grants -> rbac projector
-        # -> authz:proj:*) should have authorized this; falling back masks it.
-        print(f"  !! authz safety net: {method} {url} denied for {act!r}; "
-              f"seeding PERMISSIVE authz:proj facts and retrying (real path missed)")
-        seed_py_authz(act)
-        time.sleep(0.2)
+        print(f"  !! authz denied: {method} {url} ({act or 'unknown action'}) — "
+              "check the operator's role memberships / rbac projection (no fake "
+              "facts are seeded)")
     return r
 
 
@@ -598,9 +599,10 @@ def step_e_grant_and_apply(case_id, proposal_id):
     # E2 — human APPROVES the real proposal (agent-runtime HITL -> Temporal signal ->
     # agent-runtime mints the RS256 grant and calls tool-plane).
     if proposal_id:
-        # a DIFFERENT human approves (self-approval is denied by policy)
+        # a DIFFERENT human approves (self-approval is denied by policy);
+        # the approver holds ai.proposal.approve via their REAL "Use case
+        # Admin" membership (seed_projection_admin) — no fake facts.
         approver_tok = c.user_token(APPROVER, TENANT, ["*"], workspace_id=WORKSPACE)
-        seed_py_authz("agent.proposal.decide"); seed_py_authz("ai.proposal.approve")
         dr = req("POST", f"{c.AGENT_RUNTIME}/api/v1/proposals/{proposal_id}/decide", approver_tok,
                  headers=J(), json={"action": "approve"})
         if dr.status_code in (200, 202):
@@ -703,9 +705,6 @@ def step_f_learning(case_id):
         info(f"memory provision: {e}")
     # register the resolved_cases corpus + ingest a resolved-case document (real embed)
     su = c.superadmin_token()
-    # harness-operator pre-authorization for memory-service (canonical action;
-    # in a full `make up` the operator's REAL Admin projection covers this).
-    seed_py_authz("memory.corpus.admin")
     for ck in ("resolved_cases", "docs"):
         req("POST", f"{c.MEMORY}/api/v1/corpora", utok(), headers=J(),
             json={"corpus_key": ck, "kind": "rag", "description": f"{ck} (e2e)"})

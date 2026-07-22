@@ -341,7 +341,12 @@ def seed_persona_grants():
         # materializes their perm:* AND authz:proj:* projections truthfully
         # (admin=true because they really hold the Admin role) instead of the
         # driver's raw-Redis bootstrap being the only thing authorizing them.
-        memberships += [(d.MANAGER, "Admin"), (d.APPROVER, "Admin")]
+        # "Use case Admin" is added because the domain actions the e2e driver
+        # exercises (ai.proposal.approve, memory.corpus.admin, semantic writes)
+        # live on that role, NOT on the tenant-management Admin role — this is
+        # what let the driver's deleted seed_py_authz fakes die (no-fallback).
+        memberships += [(d.MANAGER, "Admin"), (d.MANAGER, "Use case Admin"),
+                        (d.APPROVER, "Admin"), (d.APPROVER, "Use case Admin")]
         for sub, gname in memberships:
             row = conn.execute(
                 "SELECT id FROM groups WHERE tenant_id = %s AND group_type = 'permission' "
