@@ -58,7 +58,7 @@ anything that changes a record. Nothing the AI suggests is applied automatically
     area: "casework",
     audience: "all",
     order: 1,
-    related: ["case-cockpit", "getting-started"],
+    related: ["case-cockpit", "getting-started", "case-triggers"],
     body: `
 Your **worklist** is where the day starts. Each row is a **case** — a durable
 pointer to one record (a dispute, a claim, an appeal…) plus its workflow state.
@@ -245,7 +245,7 @@ approves. This is "four-eyes," and it's enforced by the platform, not by policy.
     area: "casework",
     audience: ["Dispute Operations Manager", "manager"],
     order: 6,
-    related: ["approvals", "case-cockpit"],
+    related: ["approvals", "case-cockpit", "case-triggers", "automation-playbook"],
     body: `
 **Decision tables** capture the deterministic part of your policy as governed
 rules — "if the amount is under X and the reason code is Y, recommend Z" — so
@@ -275,6 +275,133 @@ version supersedes the old one** — the same four-eyes flow as everything else:
 
 > **Who uses this:** the **operations manager** owns the policy tables; analysts
 > see their outcomes as recommendations on cases.
+`,
+  },
+  {
+    slug: "case-triggers",
+    title: "Automating case creation (triggers)",
+    summary: "Open cases automatically when new data matches a condition — no engineering required.",
+    area: "casework",
+    audience: ["Dispute Operations Manager", "manager"],
+    order: 7,
+    related: ["worklist", "datasets", "decision-tables", "automation-playbook"],
+    body: `
+A **case trigger** watches a dataset for new data and automatically opens a case
+for every row that matches a condition — so a high-value claim, an urgent
+denial, or an out-of-pattern transaction becomes work the moment it lands,
+instead of waiting for someone to notice it. Triggers create **work, never a
+decision** — the disposition, approval, and four-eyes rules that govern a
+manually-opened case apply identically to a triggered one.
+
+## Configure a trigger
+
+1. Go to **Cases → Settings → Triggers** and choose **New trigger**.
+2. Point it at a **dataset** (by name — the trigger re-matches on future
+   ingestions to that name, including ones that haven't happened yet).
+3. Set the **row ID column** (the column that uniquely identifies a row — it
+   becomes the case's reference back to the source data) and, optionally, which
+   columns to **project** onto the case (defaults to every column).
+4. Build one or more **conditions** — column, operator (equals, not-equals,
+   contains, or a numeric comparison like *greater than*), and value. All
+   conditions must match (AND).
+5. Set the **severity** and **due hours** the resulting cases get, then
+   **enable** it.
+
+## What happens when data lands
+
+- Every time a matching ingestion **completes**, the trigger fetches the rows
+  that satisfy its conditions and opens one case per row — up to its per-event
+  cap, so a huge file can't flood the worklist in one shot.
+- **Re-running the same data twice never duplicates a case.** Each case is keyed
+  to its source row, so a replayed or re-delivered event is a no-op.
+- A trigger can be **paused** at any time without losing its configuration, or
+  **deleted** if it's no longer needed.
+
+## Good to know
+
+- Numeric conditions (*greater than*, *at least*…) work correctly even on
+  freshly-uploaded CSV data, which lands as text — the platform compares the
+  values numerically under the hood.
+- A trigger that matches a dataset but produces no cases usually means its
+  condition didn't match any rows in that particular file — check the value and
+  operator, not the trigger itself.
+
+> **Who uses this:** the **operations manager** who owns case-intake policy
+> configures triggers; everyone else just sees the cases they open show up on
+> the worklist like any other case.
+`,
+  },
+  {
+    slug: "automation-playbook",
+    title: "Building your own automation: pipelines, decision tables & triggers",
+    summary: "How the three self-service automation building blocks fit together — and when to reach for each.",
+    area: "casework",
+    audience: "all",
+    order: 8,
+    related: ["case-triggers", "decision-tables", "pipelines", "datasets"],
+    body: `
+Datacern gives you three self-service building blocks for automating your
+operation — no engineering ticket required for any of them. Each does one job
+well; most real workflows combine two or three.
+
+## The three building blocks
+
+- [Case triggers](/help/case-triggers) — answers *"when data like this shows
+  up, open a case for it automatically."* Configured under **Cases → Settings →
+  Triggers**.
+- [Decision tables](/help/decision-tables) — answers *"given the facts on a
+  case, what should the routine outcome be?"* Configured under **Decision
+  Tables**.
+- [Pipelines](/help/pipelines) — answers *"train a model that predicts or
+  scores something from historical data."* Configured under **Pipelines**.
+
+They compose in the order data actually flows:
+
+1. **Triggers turn incoming data into work.** A new claim, transaction, or
+   record lands → a trigger matching your condition (e.g. amount over a
+   threshold, a specific denial code) opens a case for it automatically. Without
+   a trigger, someone has to notice new data and open the case by hand.
+2. **Decision tables turn facts into a routine recommendation.** Once a case is
+   open, a published decision table can propose a disposition for the clear-cut,
+   rules-based portion of your policy — "if X and Y, recommend Z" — as a
+   **proposal** a person still approves.
+3. **Pipelines turn history into a model.** For the part of the decision that
+   isn't a clean rule (fraud likelihood, risk scoring), train a model on your
+   historical data. The Copilot and agents use the trained model to ground their
+   recommendations — again, always as a proposal, never an auto-applied decision.
+
+## A worked example
+
+Say you want to auto-escalate high-value claims for review:
+
+1. **Author the rule of thumb** as a decision table draft — *"if amount > $5,000
+   and reason code is in the high-risk set, recommend Investigate."*
+   [Submit it for approval](/help/decision-tables) like any governed change.
+2. **Wire the intake** with a case trigger on your claims dataset — condition
+   *amount greater than 5000* — so those claims open as cases the moment they're
+   ingested, instead of waiting to be found in a queue.
+3. **Optional: sharpen it with a model.** If "high-value" alone isn't precise
+   enough, train a classifier in **Pipelines** on your labeled claim history and
+   let the Copilot cite its score alongside the decision-table outcome.
+4. Every disposition that comes out of this — rule-driven, model-informed, or a
+   human's own judgment — still goes through [four-eyes approval](/help/approvals)
+   before anything writes back. Automation changes how work *arrives* and what
+   gets *recommended*; it never removes the second set of eyes.
+
+## Good to know
+
+- All three are **versioned and governed** the same way: a decision table has a
+  draft → review → published lifecycle; a trigger can be paused instead of
+  deleted while you tune it; a pipeline run is logged and its model registered,
+  never silently swapped in.
+- Start with a **trigger** if your problem is "nobody notices this in time."
+  Start with a **decision table** if your problem is "we decide this
+  inconsistently." Start with a **pipeline** if the decision genuinely needs
+  a pattern in historical data, not just a rule.
+
+> **Who uses this:** operations managers and model-builders design the
+> automation; everyone else experiences it as cases simply showing up on their
+> worklist, already triaged.
 `,
   },
 
@@ -360,7 +487,7 @@ browse it, and chart it — all under row-level tenant isolation.
     area: "ml",
     audience: ["datascientist", "Model Builder"],
     order: 1,
-    related: ["datasets", "ml-eval"],
+    related: ["datasets", "ml-eval", "automation-playbook"],
     body: `
 **Pipelines** turn a dataset into a trained model. You pick an algorithm template,
 bind it to a dataset, run it, and the platform trains a real model and registers

@@ -118,7 +118,14 @@ When the issuer eats a loss it can recover, you drive the network **chargeback**
     {
       roleName: "Dispute Operations Manager",
       tagline: "Own the desk — approve dispositions, tune the rules, watch the clocks.",
-      usesCapabilities: ["approvals", "decision-tables", "dashboards", "worklist", "case-cockpit"],
+      usesCapabilities: [
+        "approvals",
+        "decision-tables",
+        "case-triggers",
+        "dashboards",
+        "worklist",
+        "case-cockpit",
+      ],
       steps: `
 You run the desk. You're the one who holds **approve**, so proposals become real
 only when you say so.
@@ -135,7 +142,12 @@ only when you say so.
    rules, **batch-evaluate** the draft against recent disputes to see what would
    change, then **submit** — a second reviewer publishes the new version. *(See
    “Decision tables”.)*
-4. **Balance the load.** Use the worklist filters to spot bottlenecks and reassign
+4. **Automate intake for the cases that can't wait.** In **Cases → Settings →
+   Triggers**, set a condition on the disputes dataset (e.g. amount over your
+   escalation threshold) so those disputes open as cases the moment they're
+   ingested, instead of surfacing only when someone works the queue. *(See
+   “Automating case creation” and “Building your own automation”.)*
+5. **Balance the load.** Use the worklist filters to spot bottlenecks and reassign
    across intake, fraud, and chargeback.
 `,
     },
