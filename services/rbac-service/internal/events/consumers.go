@@ -174,7 +174,8 @@ func (c *KafkaConsumer) Run(ctx context.Context) {
 func (c *KafkaConsumer) processMessage(ctx context.Context, msg kafka.Message) error {
 	var env Envelope
 	if err := json.Unmarshal(msg.Value, &env); err != nil {
-		return c.toDLQ(ctx, msg, fmt.Errorf("decode: %w", err))
+		// Undecodable message: no tenant can be recovered from it.
+		return c.toDLQ(ctx, msg, uuid.Nil, fmt.Errorf("decode: %w", err))
 	}
 	// Dedup on event_id (24h TTL).
 	if c.Rdb != nil {
@@ -197,14 +198,23 @@ func (c *KafkaConsumer) processMessage(ctx context.Context, msg kafka.Message) e
 		}
 		backoff *= 2
 	}
-	return c.toDLQ(ctx, msg, lastErr)
+	// env decoded fine (the earlier decode branch already returned otherwise),
+	// so its real tenant_id is available and gets threaded through to the DLQ.
+	return c.toDLQ(ctx, msg, env.TenantID, lastErr)
 }
 
-func (c *KafkaConsumer) toDLQ(ctx context.Context, msg kafka.Message, cause error) error {
+func (c *KafkaConsumer) toDLQ(ctx context.Context, msg kafka.Message, tenant uuid.UUID, cause error) error {
 	if c.DLQ == nil {
 		return cause
 	}
-	env := NewEnvelope("consumer.poison", uuid.Nil, Actor{Type: "service", ID: "rbac-service"}, "", "",
+	if tenant == uuid.Nil {
+		// No real tenant to attribute this poison event to (undecodable
+		// message, or an upstream producer that itself sent a nil tenant) —
+		// fall back to the platform sentinel rather than emitting a
+		// tenant_id that fails the master envelope contract.
+		tenant = PlatformTenant
+	}
+	env := NewEnvelope("consumer.poison", tenant, Actor{Type: "service", ID: "rbac-service"}, "", "",
 		map[string]any{"topic": msg.Topic, "error": cause.Error(), "raw": string(msg.Value)})
 	dlqTopic := fmt.Sprintf("%s.%s.dlq", msg.Topic, c.Group)
 	if err := c.DLQ.Publish(ctx, dlqTopic, env); err != nil {

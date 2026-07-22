@@ -13,6 +13,16 @@ import (
 // Topic is rbac-service's event topic (MASTER-FR-030).
 const Topic = "rbac.events.v1"
 
+// PlatformTenant is the reserved non-nil tenant id for events that have no
+// real tenant to attribute to — currently only KafkaConsumer.toDLQ's
+// consumer.poison envelope when the source message couldn't even be decoded
+// enough to recover its own tenant_id. The master envelope contract
+// (MASTER-FR-031) requires tenant_id to be non-nil, so uuid.Nil is not a
+// legal stand-in for "no tenant" (BRD 58 WS5 conformance finding: a DLQ event
+// built with uuid.Nil would itself be rejected by consumption-side
+// validation as ENVELOPE_INVALID).
+var PlatformTenant = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+
 // Actor identifies who caused an event.
 type Actor struct {
 	Type string `json:"type"` // user | service | agent
