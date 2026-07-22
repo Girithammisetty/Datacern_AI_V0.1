@@ -229,6 +229,9 @@ func main() {
 	// Outbox relay → notification.events.v1 (MASTER-FR-034).
 	relay := gcoutbox.New(events.OutboxSource{St: st}, producer, events.Topic)
 	go relay.Run(ctx)
+	// B6 (BRD 58): published outbox rows are drained but never pruned; sweep
+	// them past a retention window so the table doesn't grow unboundedly.
+	go gcoutbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
 
 	// Durable digest-flush + webhook-retry worker.
 	wk := worker.New(st, pl, emailSender)

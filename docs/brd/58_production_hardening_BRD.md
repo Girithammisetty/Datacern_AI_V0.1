@@ -134,4 +134,61 @@ of OOMing. 0 = unlimited.
 **Test:** `tests/unit/test_upload_caps.py` (5 cases: within/over-bytes/over-parts/
 unlimited/boundary) green; full ingestion unit suite **535 passed**; ruff clean.
 
+### B6/B7 — retention reapers (outbox + processed_events) — DONE
+
+**A real correctness bug found via testing, not assumed away:** outbox tables
+have RLS (FORCE ROW LEVEL SECURITY) with a tenant-scoped policy. A plain
+cross-tenant DELETE with no session context matches ZERO rows — not an error,
+silently useless — the write-path twin of what SEC-1 guards against for reads.
+Every service's own outbox relay already opens this door with a `set_config`
+GUC before querying, and the GUC **differs per service** (verified in code, not
+assumed from one example): `app.role='platform'` for case/chart/notification/
+query/usage/identity/tool-plane; `app.worker='on'` for rbac-service;
+`app.worker='true'` for dataset-service/memory-service. ingestion-service uses
+neither — its relay bypasses RLS via two narrow SECURITY DEFINER SQL functions
+(migration 0005), so a plain DELETE there needed a matching function, not a GUC.
+`processed_events` had NO cross-tenant policy at all in dataset-service or
+memory-service — a background sweep would have silently pruned nothing.
+
+**Go (`libs/go-common/outbox.Pruner`):** batched DELETE via `pgx.BeginFunc`,
+re-asserting `PlatformGUC`/`PlatformVal` inside the same transaction as each
+batch (constructor requires both — no accidental silent-no-op default). Wired
+into all 8 Go outbox owners: case-service, chart-service, notification-service,
+query-service, rbac-service, usage-service, identity-service, tool-plane
+(gateway + registry) — each with its verified-correct GUC.
+**Test:** `go test ./outbox/...` — 10 cases incl. batching, GUC-set-before-delete
+assertion, unsafe-identifier rejection, no-GUC-skips-set_config. All 8 services
+`go build`/`go test` clean (0 fails).
+
+**Python (`libs/py-common/datacern_common/retention.py`):** `RetentionSpec` +
+`prune_table`, same transaction-scoped `worker_guc`/`worker_val` re-assertion
+per batch. Wired into dataset-service (outbox + processed_events) and
+memory-service (outbox + processed_events), each hourly.
+**New migrations** (forward-only, mirroring each service's own `worker_outbox`
+precedent): dataset-service `0005_processed_events_worker_policy.py`,
+memory-service `0003_processed_events_worker_policy.py` — grant
+`app.worker='true'` cross-tenant access to `processed_events`, which previously
+had none. Both remain single alembic heads (`alembic heads` verified).
+**Test:** `test_retention.py` — 15 cases incl. worker-GUC-set-before-delete,
+no-GUC-skips-set_config, unsafe-GUC-rejection. Ruff clean; dataset-service 214
+passed, memory-service 43 passed (full unit suites, 0 fails).
+
+**ingestion-service (bespoke — the generic helper doesn't apply):** new
+migration `0009_outbox_prune_fn.py` adds `ing_outbox_prune(retention_seconds,
+batch)`, a SECURITY DEFINER function matching 0005's `ing_outbox_claim_pending`/
+`ing_outbox_mark_published` precedent exactly. New `prune_pending()` in
+`app/events/outbox.py` calls it on Postgres, plain DELETE on SQLite (unit tier).
+**Test:** `test_outbox_prune.py` — 4 cases against real SQLite (old-published
+pruned, recent kept, **unpublished rows survive regardless of age** — only
+delivered events are safe to drop). Full ingestion-service suite 539 passed.
+
+**Deferred, explicitly (not silently dropped):** processed_events on the other
+6 Python owners (ai-gateway, eval-service, experiment-service, inference-service,
+pipeline-orchestrator, semantic-service) needs the identical
+worker-policy-migration + wiring pattern established here — mechanical, same
+shape, not yet applied. rbac-service's `outbox` table is Go (already covered,
+`app.worker='on'`) — it has no `processed_events` table. Live/soak verification
+(does the GUC actually work against a real RLS-enforced Postgres, not just unit
+fakes) is pending the next full-stack boot.
+
 _See BRD 59 for feature expansion (5B)._

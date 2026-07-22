@@ -21,6 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	gckafka "github.com/datacern-ai/go-common/kafka"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/otelx"
 	"github.com/datacern-ai/go-common/redisx"
 
@@ -131,6 +132,10 @@ func main() {
 	// usage.events.v1 (MASTER-FR-034).
 	relay := &events.Relay{Source: st, Publisher: kpub, Interval: 500 * time.Millisecond}
 	go relay.Run(ctx)
+	// B6 (BRD 58): published outbox rows are drained but never pruned; sweep
+	// them past a retention window so the table doesn't grow unboundedly. (This
+	// service's own usage_* tables already have EnforceRetention above.)
+	go gcoutbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
 
 	// Periodic workers.
 	runner := &jobs.Runner{Store: st}

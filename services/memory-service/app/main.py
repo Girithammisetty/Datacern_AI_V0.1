@@ -91,6 +91,41 @@ async def _start_workers(container: Container):
         tasks.append(asyncio.create_task(relay_loop()))
         logger.info("memory outbox relay started")
 
+        # B6/B7 (BRD 58): outbox rows are drained above but never pruned, and
+        # processed_events (consumer dedup) has no TTL — both grow unboundedly
+        # forever. Both tables gate cross-tenant access behind app.worker='true'
+        # (outbox: migration 0001; processed_events: migration 0003) — the SAME
+        # GUC this service's own OutboxDispatcher sets. Sweep both hourly.
+        session_factory = container.extras.get("session_factory")
+        if session_factory is not None:
+            from datetime import timedelta
+
+            from datacern_common.retention import RetentionSpec, prune_table
+
+            async def retention_loop():
+                specs = [
+                    RetentionSpec(table="outbox", ts_col="published_at",
+                                  retention=timedelta(days=30), require_not_null=True,
+                                  worker_guc="app.worker", worker_val="true"),
+                    RetentionSpec(table="processed_events", ts_col="created_at",
+                                  retention=timedelta(hours=48),
+                                  worker_guc="app.worker", worker_val="true"),
+                ]
+                while True:
+                    await asyncio.sleep(3600)
+                    for spec in specs:
+                        try:
+                            n = await prune_table(session_factory, spec)
+                            if n:
+                                logger.info(
+                                    "retention pruned", extra={"table": spec.table, "deleted": n}
+                                )
+                        except Exception:  # noqa: BLE001
+                            logger.exception("retention prune failed", extra={"table": spec.table})
+
+            tasks.append(asyncio.create_task(retention_loop()))
+            logger.info("memory retention reaper started (outbox + processed_events)")
+
     for con in container.kafka_consumers:
         try:
             await con.start()

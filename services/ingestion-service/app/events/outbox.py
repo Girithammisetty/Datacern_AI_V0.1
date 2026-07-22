@@ -158,3 +158,36 @@ async def publish_pending(
             event.published_at = datetime.now(UTC)
     await session.commit()
     return len(rows)
+
+
+async def prune_pending(session: AsyncSession, retention_seconds: int, batch: int = 1000) -> int:
+    """B6 (BRD 58): delete published outbox rows past a retention window, in
+    batches, until a pass deletes fewer than `batch` rows.
+
+    Same cross-tenant problem as `publish_pending` (a plain DELETE hits
+    `tenant_isolation` with no GUC set): uses the `ing_outbox_prune`
+    SECURITY DEFINER function (migration 0009), scoped to just this table.
+    SQLite (unit tier, no RLS) uses a plain DELETE."""
+    dialect = session.get_bind().dialect.name
+    total = 0
+    while True:
+        if dialect == "postgresql":
+            n = (
+                await session.execute(
+                    sa.text("SELECT ing_outbox_prune(:sec, :batch)"),
+                    {"sec": retention_seconds, "batch": batch},
+                )
+            ).scalar_one()
+        else:
+            cutoff = datetime.now(UTC).timestamp() - retention_seconds
+            result = await session.execute(
+                sa.delete(OutboxEvent).where(
+                    OutboxEvent.published_at.is_not(None),
+                    sa.func.extract("epoch", OutboxEvent.published_at) < cutoff,
+                )
+            )
+            n = result.rowcount or 0
+        await session.commit()
+        total += n
+        if n < batch:
+            return total

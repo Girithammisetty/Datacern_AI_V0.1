@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/datacern-ai/go-common/otelx"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/redisx"
 
 	"github.com/datacern-ai/identity-service/internal/adapters/awskms"
@@ -103,6 +104,9 @@ func main() {
 		store = postgres.New(pool)
 		ready = func() error { return pool.Ping(context.Background()) }
 		log.Info("store: postgres")
+		// B6 (BRD 58): published outbox rows are drained but never pruned; sweep
+		// them past a retention window so the table doesn't grow unboundedly.
+		go gcoutbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
 	} else {
 		if requireReal {
 			mustReal("DATABASE_URL", "in-memory store")

@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"log/slog"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -25,6 +27,7 @@ import (
 	gcevent "github.com/datacern-ai/go-common/event"
 	gckafka "github.com/datacern-ai/go-common/kafka"
 	"github.com/datacern-ai/go-common/otelx"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/redisx"
 
 	"github.com/datacern-ai/case-service/internal/api"
@@ -36,6 +39,7 @@ import (
 	"github.com/datacern-ai/case-service/internal/search"
 	"github.com/datacern-ai/case-service/internal/sla"
 	"github.com/datacern-ai/case-service/internal/store"
+	"github.com/datacern-ai/case-service/internal/triggers"
 )
 
 func env(key, def string) string {
@@ -181,6 +185,9 @@ func main() {
 	}
 	relay := &events.Relay{Source: st, Publisher: pub, Interval: 250 * time.Millisecond}
 	go relay.Run(ctx)
+	// B6 (BRD 58): published outbox rows are drained but never pruned; sweep them
+	// past a retention window so the table doesn't grow unboundedly forever.
+	go gcoutbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
 
 	// Search-index consumer: reprojects cases into OpenSearch from case.events.v1
 	// (CASE-FR-041, ≤5s eventual). Real Kafka consumer group + Redis dedup.
@@ -197,17 +204,35 @@ func main() {
 		go idxConsumer.Run(ctx)
 		defer func() { _ = idxConsumer.Close() }()
 
-		// Inbound consumers: inference auto-case + identity unassign (§6).
+		// Inbound consumers: inference auto-case + identity unassign (§6) +
+		// tenant-authored case triggers on ingestion.completed (INC-1).
 		creator := &creatorAdapter{store: st}
+		var trigKey *rsa.PrivateKey
+		if pem := os.Getenv("REGISTER_SIGNING_KEY_PEM"); pem != "" {
+			if k, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(pem)); err == nil {
+				trigKey = k
+			} else {
+				slog.Warn("trigger dataset client: signing key parse failed (triggers disabled)", "err", err)
+			}
+		}
+		applier := &triggers.Applier{
+			Store: st,
+			Rows: triggers.NewDatasetHTTP(os.Getenv("DATASET_URL"),
+				os.Getenv("JWT_ISSUER"), os.Getenv("JWT_AUDIENCE"),
+				os.Getenv("REGISTER_SIGNING_KID"), trigKey),
+		}
 		inboundHandler := func(ctx context.Context, e gcevent.Envelope) error {
 			if err := events.InferenceHandler(creator)(ctx, e); err != nil {
+				return err
+			}
+			if err := events.IngestionTriggerHandler(applier)(ctx, e); err != nil {
 				return err
 			}
 			return events.IdentityHandler(creator)(ctx, e)
 		}
 		inbound := gckafka.NewConsumerGroup(gckafka.ConsumerConfig{
 			Brokers: strings.Split(brokers, ","), GroupID: "case-inbound",
-			Topics: []string{"inference.events.v1", "identity.events.v1", "rbac.events.v1"},
+			Topics:  []string{"inference.events.v1", "identity.events.v1", "rbac.events.v1", "ingestion.events.v1"},
 			Handler: inboundHandler, Dedup: rc, DLQ: dlq,
 			SASL: kafkaSASL, TLS: kafkaTLS,
 		})

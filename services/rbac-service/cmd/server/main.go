@@ -33,6 +33,7 @@ import (
 	"github.com/datacern-ai/rbac-service/internal/store"
 	"github.com/datacern-ai/rbac-service/seed"
 
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/otelx"
 )
 
@@ -191,6 +192,9 @@ func run() error {
 	defer func() { _ = pub.Close() }()
 	relay := events.NewOutboxRelay(st, pub)
 	go relay.Run(ctx)
+	// B6 (BRD 58): published outbox rows are drained but never pruned; sweep
+	// them past a retention window so the table doesn't grow unboundedly.
+	go gcoutbox.NewPruner(pool, "outbox", "app.worker", "on").Run(ctx)
 
 	// Inbound consumers (identity + *.created for implicit grants).
 	if brokers != "false" {

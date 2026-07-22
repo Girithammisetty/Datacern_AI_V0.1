@@ -27,6 +27,7 @@ import (
 	"github.com/datacern-ai/query-service/internal/store"
 
 	"github.com/datacern-ai/go-common/dbcheck"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/otelx"
 )
 
@@ -233,6 +234,9 @@ func main() {
 	}
 	relay := &events.Relay{Source: st, Publisher: pub, Interval: time.Second}
 	go relay.Run(ctx)
+	// B6 (BRD 58): published outbox rows are drained but never pruned; sweep
+	// them past a retention window so the table doesn't grow unboundedly.
+	go gcoutbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
 
 	// Result retention GC (QRY-FR-062: 24h then GC; history row persists).
 	go func() {

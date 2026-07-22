@@ -101,6 +101,9 @@ func main() {
 		relay := outbox.New(st, core.Producer, events.Topic)
 		relay.Interval = time.Second
 		go relay.Run(ctx)
+		// B6 (BRD 58): published outbox rows are drained but never pruned; sweep
+		// them past a retention window so the table doesn't grow unboundedly.
+		go outbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
 
 		// Cache-invalidation consumers (CHART-FR-031): semantic/query/dataset.
 		inv := &events.Invalidator{Store: st, Cache: core.Cache, Log: slog.Default()}

@@ -52,12 +52,39 @@ async def _outbox_relay_loop(container) -> None:
             await asyncio.sleep(1.0)
 
 
+async def _retention_loop(container) -> None:
+    """B6 (BRD 58): outbox rows are drained above but never pruned — the table
+    grows unboundedly forever even though every published row is already
+    durably delivered. Sweep published rows past a retention window hourly.
+
+    Unlike other services' outbox tables (a session GUC opens cross-tenant
+    access), this one's relay bypasses RLS via narrow SECURITY DEFINER
+    functions (migration 0005) -- prune_pending uses the matching
+    `ing_outbox_prune` function (migration 0009), not the generic
+    datacern_common.retention helper."""
+    from app.events.outbox import prune_pending
+
+    retention_seconds = 30 * 24 * 3600
+    while True:
+        try:
+            await asyncio.sleep(3600)
+            async with container.db.session_factory() as session:
+                n = await prune_pending(session, retention_seconds)
+            if n:
+                logger.info("retention pruned", extra={"table": "outbox", "deleted": n})
+        except asyncio.CancelledError:
+            break
+        except Exception:  # noqa: BLE001
+            logger.exception("retention prune failed", extra={"table": "outbox"})
+
+
 def create_app(container: Container | None = None, settings: Settings | None = None) -> FastAPI:
     container = container or build_container(settings)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         relay_task = None
+        retention_task = None
         # Deploy-time action-catalog registration (RBC-FR-022) so OPA's catalog
         # knows every action this service authorizes against (`action_known`).
         if container.settings.adapter_mode == "real":
@@ -70,15 +97,18 @@ def create_app(container: Container | None = None, settings: Settings | None = N
             # Outbox -> Kafka relay worker (drains ingestion.events.v1).
             relay_task = asyncio.create_task(_outbox_relay_loop(container))
             logger.info("ingestion outbox relay worker started")
+            retention_task = asyncio.create_task(_retention_loop(container))
+            logger.info("ingestion retention reaper started (outbox)")
         try:
             yield
         finally:
-            if relay_task is not None:
-                relay_task.cancel()
-                try:
-                    await relay_task
-                except (asyncio.CancelledError, Exception):  # noqa: BLE001
-                    pass
+            for t in (relay_task, retention_task):
+                if t is not None:
+                    t.cancel()
+                    try:
+                        await t
+                    except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                        pass
             await container.db.dispose()
 
     app = FastAPI(

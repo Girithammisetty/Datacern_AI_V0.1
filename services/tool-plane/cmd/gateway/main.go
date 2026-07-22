@@ -20,6 +20,7 @@ import (
 	"github.com/datacern-ai/go-common/authjwt"
 	"github.com/datacern-ai/go-common/dbcheck"
 	"github.com/datacern-ai/go-common/otelx"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/redisx"
 	"github.com/datacern-ai/tool-plane/internal/api"
 	"github.com/datacern-ai/tool-plane/internal/authz"
@@ -156,6 +157,9 @@ func main() {
 	go runSLASweep(ctx, st, health)
 
 	startRelay(ctx, st, requireReal, mustReal)
+	// B6 (BRD 58): published outbox rows are drained but never pruned; sweep
+	// them past a retention window so the table doesn't grow unboundedly.
+	go gcoutbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
 
 	addr := env("LISTEN_ADDR", ":8091")
 	httpSrv := &http.Server{Addr: addr, Handler: otelx.WrapHandler(gw.Router(), "mcp-gateway"), ReadHeaderTimeout: 10 * time.Second}
