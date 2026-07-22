@@ -186,6 +186,30 @@ describe("RouteGuard blocks a disallowed route", () => {
     expect(screen.queryByTestId("no-access")).not.toBeInTheDocument();
   });
 
+  it("adjuster on /admin/customization (BRD 59 WS1 hub) sees a no-access state", () => {
+    mockPath = "/admin/customization";
+    mockViewer = ADJUSTER;
+    renderWithProviders(
+      <RouteGuard>
+        <div data-testid="customization-page">CUSTOMIZATION</div>
+      </RouteGuard>,
+    );
+    expect(screen.getByTestId("no-access")).toBeInTheDocument();
+    expect(screen.queryByTestId("customization-page")).not.toBeInTheDocument();
+  });
+
+  it("admin on /admin/customization sees the page", () => {
+    mockPath = "/admin/customization";
+    mockViewer = ADMIN;
+    renderWithProviders(
+      <RouteGuard>
+        <div data-testid="customization-page">CUSTOMIZATION</div>
+      </RouteGuard>,
+    );
+    expect(screen.getByTestId("customization-page")).toBeInTheDocument();
+    expect(screen.queryByTestId("no-access")).not.toBeInTheDocument();
+  });
+
   it("datascientist on /cases is blocked", () => {
     mockPath = "/cases";
     mockViewer = DATASCIENTIST;

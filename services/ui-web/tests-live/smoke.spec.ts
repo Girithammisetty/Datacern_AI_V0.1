@@ -26,6 +26,10 @@ const MODULE_ROUTES: Array<{ path: string; service: string }> = [
   { path: "/ml/eval", service: "eval-service" },
   { path: "/admin/users", service: "identity-service" },
   { path: "/admin/roles", service: "rbac-service (roles)" },
+  // BRD 59 WS1: the unified Customization hub — composes 9 already-fetched
+  // queries (packs, agents, decisions, semantic models, roles, ontology,
+  // labels, embed, IdP) into one status-card grid, no new backend calls.
+  { path: "/admin/customization", service: "customization hub (composition-only)" },
   { path: "/admin/groups", service: "rbac-service (groups)" },
   { path: "/admin/workspaces", service: "rbac-service (workspaces)" },
   { path: "/admin/teams", service: "rbac-service (teams)" },
@@ -70,5 +74,17 @@ test.describe("smoke: auth posture", () => {
     // Their day-job surface loads.
     await page.goto("/cases");
     await expectPageHealthy(page, { notRedirectedFrom: "/cases" });
+  });
+
+  // BRD 59 WS1: the first live spec asserting a persona is HIDDEN from an
+  // admin-only route/card, not just that a lesser persona can still reach
+  // their own pages. The route guard (RouteGuard.tsx) renders a non-leaking
+  // NoAccess state in place of the page rather than redirecting — same URL,
+  // no page data ever reaches the client.
+  test("a non-admin persona (adjuster) is denied the Customization hub, not shown it", async ({ page }) => {
+    await loginAs(page, PERSONAS().adjuster);
+    await page.goto("/admin/customization", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("no-access")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Customization" })).not.toBeVisible();
   });
 });

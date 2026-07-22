@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Users, UsersRound, Boxes, Building2, KeyRound, KeySquare, ScrollText, Archive, Wallet, ShieldCheck, Siren, Brain, Router, Wrench, BellRing, ArrowLeftRight, Blocks, Globe } from "lucide-react";
+import { Users, UsersRound, Boxes, Building2, KeyRound, KeySquare, ScrollText, Archive, Wallet, ShieldCheck, Siren, Brain, Router, Wrench, BellRing, ArrowLeftRight, Blocks, Globe, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/primitives";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
@@ -13,6 +13,16 @@ const ADMIN: Gate = role(ADMIN_ROLE);
 // platform-operator flag — a mere tenant admin never sees it.
 type AdminLink = { href: string; title: string; description: string; icon: typeof Users; gate: Gate };
 const SECTIONS: { title: string; links: AdminLink[] }[] = [
+  {
+    // BRD 59 WS1: every self-service lever (packs, agents, decisions,
+    // semantic models, roles, ontology, labels, embed, BYO-OIDC) in one
+    // discoverable place — this is a deep-link, not a duplicate of anything
+    // below; each lever still lives on its own real editor page.
+    title: "Customization",
+    links: [
+      { href: "/admin/customization", title: "Tenant customization", description: "Every self-service lever for shaping this tenant's platform, in one place.", icon: Sparkles, gate: ADMIN },
+    ],
+  },
   {
     title: "Access & identity",
     links: [
