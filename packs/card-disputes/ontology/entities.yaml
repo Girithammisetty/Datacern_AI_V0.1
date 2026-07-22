@@ -1,0 +1,59 @@
+# Domain ontology (dataset-service inc11): the entity TYPES this vertical
+# operates on and their typed relationships — the type-level model behind the
+# cd_cardholders / cd_transactions / cd_disputes datasets. Attribute names match
+# the seed CSV columns so the ontology describes data that actually exists.
+- entity_key: cardholder
+  name: Cardholder
+  description: "The disputing account holder (consumer or business debit/credit)."
+  attributes:
+    - { name: cardholder_name, data_type: string }
+    - { name: segment, data_type: string }
+    - { name: card_product, data_type: string, description: "debit | credit" }
+    - { name: risk_tier, data_type: string }
+    - { name: prior_dispute_count, data_type: integer }
+    - { name: tenure_months, data_type: integer }
+  relationships:
+    - { name: disputes, target: dispute, cardinality: has_many }
+    - { name: transactions, target: transaction, cardinality: has_many }
+- entity_key: transaction
+  name: "Card transaction"
+  description: "An authorization/settlement event a dispute can reference."
+  attributes:
+    - { name: txn_date, data_type: date }
+    - { name: mcc, data_type: string }
+    - { name: merchant_name, data_type: string }
+    - { name: merchant_country, data_type: string }
+    - { name: channel, data_type: string, description: "card_present | card_not_present" }
+    - { name: entry_mode, data_type: string }
+    - { name: amount, data_type: float }
+  relationships:
+    - { name: cardholder, target: cardholder, cardinality: belongs_to }
+    - { name: disputes, target: dispute, cardinality: has_many }
+- entity_key: dispute
+  name: "Card dispute"
+  description: >-
+    A Reg E / Reg Z billing-error or fraud claim over one transaction, carrying
+    the regulatory clock, provisional-credit state, and adjudication outcome.
+  attributes:
+    - { name: dispute_type, data_type: string }
+    - { name: reason_code, data_type: string }
+    - { name: reg_flag, data_type: string, description: "reg_e | reg_z" }
+    - { name: provisional_credit, data_type: string }
+    - { name: amount, data_type: float }
+    - { name: recovery_amount, data_type: float }
+    - { name: deadline_days_left, data_type: integer }
+  relationships:
+    - { name: cardholder, target: cardholder, cardinality: belongs_to }
+    - { name: transaction, target: transaction, cardinality: belongs_to }
+    - { name: chargeback, target: chargeback, cardinality: has_one }
+- entity_key: chargeback
+  name: Chargeback
+  description: >-
+    The network recovery action (Visa/Mastercard reason-coded) filed against
+    the merchant's acquirer when dispute evidence supports recovery.
+  attributes:
+    - { name: reason_code, data_type: string }
+    - { name: network, data_type: string }
+    - { name: recovery_amount, data_type: float }
+  relationships:
+    - { name: dispute, target: dispute, cardinality: belongs_to }

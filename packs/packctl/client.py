@@ -80,6 +80,67 @@ class PlatformClient:
     def dataset_urn(self, ds: dict) -> str:
         return f"wr:{self.tenant_id}:dataset:dataset/{ds['id']}"
 
+    def get_dataset(self, dataset_id: str) -> dict | None:
+        r = self._req("GET", f"{self.endpoints.dataset}/api/v1/datasets/{dataset_id}",
+                      self.author_token())
+        if r.status_code == 200:
+            return r.json().get("data", r.json())
+        return None
+
+    def dataset_columns(self, dataset_id: str) -> list[str] | None:
+        """The dataset's current-version column names (via a 1-row browse).
+        None means the columns could not be determined (e.g. no readable
+        version yet) — callers must treat that as unverifiable, not as empty."""
+        r = self._req("GET", f"{self.endpoints.dataset}/api/v1/datasets/{dataset_id}"
+                             f"/rows?limit=1", self.author_token())
+        if r.status_code == 200:
+            data = r.json().get("data", r.json())
+            cols = data.get("columns")
+            if isinstance(cols, list):
+                return [str(c) for c in cols]
+        return None
+
+    def bind_dataset(self, identity: str, name: str, *, urn: str | None = None,
+                     required_columns: list[str] | None = None) -> dict | None:
+        """Resolve a pack dataset DECLARATION (no shipped seed file — the
+        no-dummy-data rule) to a REAL tenant dataset: an explicit URN binding
+        first, else reuse of a same-name tenant dataset. Validates the bound
+        dataset exposes the declared required columns (fail-closed with the
+        missing list). Never uploads or fabricates anything. Returns the
+        resolved dataset dict, or None (with an honest failed action)."""
+        ds: dict | None = None
+        if urn:
+            ds = self.get_dataset(urn.rsplit("/", 1)[-1])
+            if ds is None:
+                self._record("datasets", identity, "failed", None,
+                             f"bound dataset {urn} not found in this workspace/tenant")
+                return None
+        else:
+            ds = self.find_dataset(name)
+            if ds is None:
+                need = f" (required columns: {', '.join(required_columns)})" \
+                    if required_columns else ""
+                self._record("datasets", identity, "failed", None,
+                             f"requires_binding: no dataset bound for {identity!r} and no "
+                             f"tenant dataset named {name!r} exists{need}")
+                return None
+        if required_columns:
+            cols = self.dataset_columns(ds["id"])
+            if cols is None:
+                self._record("datasets", identity, "failed", None,
+                             f"dataset {ds.get('name')!r} has no readable version to "
+                             f"validate required columns against")
+                return None
+            missing = [c for c in required_columns if c not in cols]
+            if missing:
+                self._record("datasets", identity, "failed", None,
+                             f"dataset {ds.get('name')!r} is missing required columns: "
+                             f"{', '.join(missing)}")
+                return None
+        self._record("datasets", identity, "bind" if urn else "reuse",
+                     self.dataset_urn(ds), f"bound to tenant dataset {ds.get('name')!r}")
+        return ds
+
     def ensure_dataset(self, identity: str, name: str, csv_bytes: bytes,
                        file_format: str = "csv") -> str | None:
         """Upload a file-backed dataset under a STABLE name (idempotent: reuse

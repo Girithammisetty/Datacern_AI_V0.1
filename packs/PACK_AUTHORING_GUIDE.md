@@ -1,5 +1,17 @@
 # Datacern vertical-pack authoring guide (for pack authors and agents)
 
+> **⚠ SUPERSEDED IN PART (2026-07-22, the no-dummy-data rule).** Product packs
+> ship **ZERO seed data**: no CSVs, no seeded case queue, no eval golden sets,
+> no dashboards-on-demo-data. Dataset entries are **binding contracts**
+> (`{identity, name, required_columns}`, no `file`) resolved to the tenant's
+> REAL data at install (pack-service `dataset_bindings`). Everything below
+> about seed CSVs, the 26-row main table, `cases/queue.yaml`, and per-row
+> patterns applies ONLY to explicit demo packs — never to product packs.
+> **Read `DEEP_PACK_AUTHORING_ADDENDUM.md` for the current grammar** (all 22
+> supported kinds, exact schemas, and the binding install path). The five
+> deep v2.0.0 packs (card-disputes, banking-aml, insurance-claims-payer,
+> healthcare-provider-rcm, chargeback-representment) are the canonical form.
+
 You are authoring ONE capability pack (a directory under `Datacern-ai/packs/<pack-name>/`)
 plus ONE BRD (`docs/brd/<NN>_<slug>_pack_BRD.md` at the Nemesis repo root). Packs are
 declarative content installed through Core public APIs by packctl — ZERO Core changes.

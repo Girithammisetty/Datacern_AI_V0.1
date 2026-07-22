@@ -1,0 +1,22 @@
+# Governed SoR write-back adapters (ingestion-service inc12): OUTGOING
+# connections declared with skip_test + EMPTY secrets — the tenant completes
+# real credentials/endpoints in Data → Connections, and every write executes
+# proposal-mode with four-eyes (BRD 26 BR-1: no autonomous billing write ever
+# reaches the practice-management or billing system). The URLs/hosts are
+# placeholders the tenant replaces; nothing is called at install.
+- name: "Practice management appeal & claim status sync"
+  connector_type: http_api
+  direction: outgoing
+  config:
+    method: POST
+    url: "https://practice-mgmt.example.invalid/api/v1/claims/status"
+    headers: { Content-Type: "application/json" }
+- name: "Billing system A/R ledger upsert"
+  connector_type: postgres
+  direction: outgoing
+  config:
+    host: "billing-db.example.invalid"
+    port: 5432
+    database: billing
+    username: datacern_writeback
+    ssl_mode: require

@@ -1,0 +1,21 @@
+# Governed model blueprints (experiment-service inc9): the intended models
+# this vertical runs, independent of any trained artifact. Each corresponds to
+# a training pipeline this pack already ships (pipelines/templates.yaml), so
+# the blueprint and its implementation stay in one governed pair.
+- archetype_key: payer_pa_approval_scorer
+  name: "PA approval scorer"
+  task_type: classification
+  target: status
+  description: >-
+    Supervised scorer over decided prior-auth requests
+    (payer-prior-auth-requests): predicts the likely approve/deny outcome from
+    urgency, requested procedure (CPT/ICD-10), product type, and turnaround
+    history — the deterministic-first pre-router for PA review ordering.
+    Implemented by the pack's xgboost training pipeline.
+  expected_metrics: { f1: 0.80 }
+  governance_notes: >-
+    Adverse-determination relevant: scores inform review ordering only — a
+    denial of care is never issued by the model, and every adverse
+    determination carries documented findings from a qualified human clinical
+    reviewer (CMS 2024 MA rule, per this pack's grounding). Promotion requires
+    eval-gate + four-eyes medical-director approval.

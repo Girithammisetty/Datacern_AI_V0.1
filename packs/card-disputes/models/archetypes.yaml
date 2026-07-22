@@ -1,0 +1,30 @@
+# Governed model blueprints (experiment-service inc9): the intended models this
+# vertical runs, independent of any trained artifact. Each corresponds to a
+# training pipeline this pack already ships (pipelines/templates.yaml), so the
+# blueprint and its implementation stay in one governed pair.
+- archetype_key: cd_dispute_outcome_scorer
+  name: "Dispute outcome scorer"
+  task_type: classification
+  target: disposition
+  description: >-
+    Supervised scorer over adjudicated disputes (cd-disputes): predicts the
+    likely disposition from dispute type, reason code, amount, regulatory
+    regime, and cardholder history — the deterministic-first pre-router for
+    intake triage. Implemented by the pack's xgboost training pipeline.
+  expected_metrics: { f1: 0.80 }
+  governance_notes: >-
+    Denial-relevant: scores inform triage ordering only — every determination
+    remains a four-eyes human decision, and Reg E/Z denials always carry
+    documented human findings. Promotion requires eval-gate + manager approval.
+- archetype_key: cd_txn_anomaly_detector
+  name: "Transaction anomaly detector"
+  task_type: anomaly_detection
+  target: null
+  description: >-
+    Unsupervised surface scan over cd-transactions for card-testing bursts
+    (micro-auths then a large CNP charge) and dispute-ring patterns.
+    Implemented by the pack's isolation-forest training pipeline.
+  expected_metrics: {}
+  governance_notes: >-
+    Detector output opens review work, never adverse action; flagged activity
+    routes to the fraud-review queue for human investigation.

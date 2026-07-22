@@ -1,23 +1,24 @@
-# Pack datasets (ingestion-service file_upload, stable names for idempotency).
-# In production these tables arrive via the issuer's core processor and
-# network connectors (deferred until pack-service ships connector
-# materialization); this seed data is REAL rows in the same landing shape,
-# encoding genuine dispute patterns so every downstream component runs against
-# real signal from day one: a card-testing burst (micro-auths then a large
-# CNP charge), a serial first-party "item not received" disputer with prior
-# delivery-confirmed denials, a cancelled-recurring subscription trap hitting
-# two cardholders, an ATM partial-dispense shortfall, a same-day duplicate
-# restaurant charge, and a high-value cross-border CNP fraud on a new account
-# (Reg E new-account timing).
+# Pack dataset BINDING CONTRACTS (no-dummy-data rule): the pack ships ZERO
+# seed data. Each entry declares the dataset the workflow needs and the exact
+# landing-shape columns it requires; at install the tenant binds it to a REAL
+# dataset (explicit dataset_bindings on the install request, or same-name
+# reuse), and pack-service validates the bound dataset exposes every required
+# column — failing closed with the missing list. Real data arrives through the
+# pack's governed source connectors (connections/sources.yaml) or file upload.
 - identity: cd_cardholders
   name: cd-cardholders
-  file: data/cd_cardholders.csv
-  format: csv
+  required_columns:
+    [cardholder_id, cardholder_name, segment, card_product, home_state,
+     tenure_months, risk_tier, prior_dispute_count, account_age_bucket]
 - identity: cd_transactions
   name: cd-transactions
-  file: data/cd_transactions.csv
-  format: csv
+  required_columns:
+    [txn_id, cardholder_id, account_id, txn_date, txn_month, mcc,
+     merchant_name, merchant_country, channel, entry_mode, amount]
 - identity: cd_disputes
   name: cd-disputes
-  file: data/cd_disputes.csv
-  format: csv
+  required_columns:
+    [dispute_id, cardholder_id, account_id, txn_id, network, card_product,
+     dispute_type, reason_code, reg_flag, severity, status, disposition,
+     provisional_credit, chargeback_filed, deadline_bucket, assigned_tier,
+     filed_month, age_days, deadline_days_left, amount, recovery_amount]

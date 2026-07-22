@@ -1,0 +1,30 @@
+# Governed typed case schemas (case-service inc10): the two payer review work
+# items as named case TYPES binding their adjudication field sets, so intake
+# creates structurally-complete cases (not generic cases with prose notes).
+# Embedded field defs use {name, data_type, label, required}; names align with
+# cases/fields.yaml and the binding-contract dataset columns.
+- schema_key: payer_pa_review
+  name: "Prior-authorization review"
+  description: >-
+    A pending prior-authorization request under review against plan
+    medical-necessity criteria, tracked against the regulatory turnaround
+    clock (expedited vs standard window). Adverse determinations always
+    require a qualified human clinician.
+  fields:
+    - { name: urgency,              data_type: enum,   label: "PA urgency tier",             required: true }
+    - { name: cpt_code,             data_type: string, label: "Procedure code (CPT/HCPCS)",  required: true }
+    - { name: product_type,         data_type: enum,   label: "Product type",                required: false }
+    - { name: agent_recommendation, data_type: enum,   label: "Agent recommendation",        required: false }
+    - { name: agent_confidence,     data_type: float,  label: "Agent confidence",            required: false }
+    - { name: turnaround_hours,     data_type: float,  label: "Hours on the regulatory clock", required: false }
+- schema_key: payer_appeal
+  name: "Claim-denial appeal"
+  description: >-
+    A provider or member appeal of a claim denial, carrying the original
+    denial reason code (CARC), the procedure at issue, and the dollar value
+    at stake; verdicts follow the plan's appeal levels toward external review.
+  fields:
+    - { name: denial_reason_code, data_type: string, label: "Denial reason code (CARC)",   required: true }
+    - { name: cpt_code,           data_type: string, label: "Procedure code (CPT/HCPCS)",  required: false }
+    - { name: potential_value,    data_type: float,  label: "Appeal value at stake (USD)", required: true }
+    - { name: product_type,       data_type: enum,   label: "Product type",                required: false }

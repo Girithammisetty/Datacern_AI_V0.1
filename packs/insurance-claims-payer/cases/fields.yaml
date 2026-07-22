@@ -1,0 +1,57 @@
+# Typed custom case fields (case-service CASE-FR-022) — the payer review work
+# item's real adjudication attributes, typed so the case form validates them
+# and decision surfaces can read them structurally instead of parsing notes.
+# data_type is IMMUTABLE after creation (case-service) — chosen deliberately.
+# Names are the exact columns of the payer-prior-auth-requests / payer-appeals
+# binding contracts (data/datasets.yaml) so field data and dataset agree.
+- name: urgency
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "PA urgency tier"
+    options: [standard, urgent]
+    required: false
+- name: cpt_code
+  data_type: string
+  purpose: both
+  field_meta:
+    label: "Procedure code (CPT/HCPCS)"
+    required: false
+- name: denial_reason_code
+  data_type: string
+  purpose: both
+  field_meta:
+    label: "Denial reason code (CARC)"
+    required: false
+- name: product_type
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Product type"
+    options: [HMO, PPO, EPO, MEDICARE_ADVANTAGE]
+    required: false
+- name: agent_recommendation
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Agent recommendation"
+    options: [approve, escalate_md]
+    required: false
+- name: agent_confidence
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Agent confidence"
+    required: false
+- name: turnaround_hours
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Hours on the regulatory clock"
+    required: false
+- name: potential_value
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Appeal value at stake (USD)"
+    required: false

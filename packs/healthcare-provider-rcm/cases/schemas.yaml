@@ -1,0 +1,30 @@
+# Governed typed case schemas (case-service inc10): the two provider-RCM work
+# items as named case TYPES binding the adjudication field set, so intake
+# creates structurally-complete cases (not generic cases with prose notes).
+# Embedded field defs use {name, data_type, label, required}; names and types
+# align with cases/fields.yaml and the rcm_denials / rcm_remits contracts.
+- schema_key: denial_appeal
+  name: "Claim denial review"
+  description: >-
+    A payer claim denial worked by a denials specialist: CARC/RARC-grounded
+    classification (BRD 26 BR-4 — administrative, coverage, documentation,
+    bundling, timely-filing), then appeal, corrected resubmission, or
+    write-off review inside the payer-configured appeal window.
+  fields:
+    - { name: carc_code,            data_type: string,  label: "CARC (claim adjustment reason code)",   required: true }
+    - { name: rarc_code,            data_type: string,  label: "RARC (remittance advice remark code)",  required: false }
+    - { name: denial_category,      data_type: enum,    label: "Denial category (BR-4 class)",          required: true }
+    - { name: appeal_status,        data_type: enum,    label: "Appeal status",                          required: false }
+    - { name: denied_amount,        data_type: float,   label: "Denied amount at risk (USD)",           required: true }
+    - { name: appeal_deadline_days, data_type: integer, label: "Payer appeal window — days remaining",  required: false }
+- schema_key: underpayment_dispute
+  name: "Underpayment dispute"
+  description: >-
+    An 835 remittance line paid below the contracted amount (RCM-FR-050): the
+    variance is disputed with the payer citing the fee schedule, inside the
+    payer-contract dispute window (BR-5 — time-barred items are not proposed).
+  fields:
+    - { name: carc_code,            data_type: string,  label: "CARC (claim adjustment reason code)",       required: false }
+    - { name: payment_variance,     data_type: float,   label: "Underpayment variance recovered/at risk (USD)", required: true }
+    - { name: appeal_status,        data_type: enum,    label: "Appeal status",                              required: false }
+    - { name: appeal_deadline_days, data_type: integer, label: "Payer appeal window — days remaining",       required: false }

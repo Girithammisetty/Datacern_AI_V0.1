@@ -1,0 +1,24 @@
+# Governed source-connector templates (ingestion-service inc13): INCOMING
+# connections pre-declared with skip_test + EMPTY secrets, so the provider's
+# expected feeds exist as governed starting points the tenant completes with
+# real hosts/credentials in Data → Connections. Nothing is polled at install.
+# The X12 835 remittance files landing on the SFTP drop are decoded by Core
+# ingestion's standards-interop layer (BRD 57 X12) into the rcm-remits
+# landing shape.
+- name: "Payer X12 835 remittance drop (SFTP)"
+  connector_type: sftp
+  direction: incoming
+  config:
+    host: "edi-gateway.example.invalid"
+    port: 22
+    username: datacern_ingest
+    root_directory: "/outbound/835-remits"
+- name: "Billing system extracts (S3)"
+  connector_type: s3
+  direction: incoming
+  config:
+    region: us-east-1
+    bucket: provider-billing-extracts
+    root_prefix: "daily/"
+    file_format: csv
+    glob: "*.csv"

@@ -87,11 +87,22 @@ def install(manifest: Manifest, client: PlatformClient,
 
             if kind == "datasets":
                 for ds in doc if isinstance(doc, list) else [doc]:
-                    data_file = Path(manifest.pack_dir) / ds["file"]
-                    urn = client.ensure_dataset(
-                        comp.identity if len(doc) == 1 else ds["identity"],
-                        ds["name"], data_file.read_bytes(),
-                        ds.get("format", "csv"))
+                    if ds.get("file"):
+                        data_file = Path(manifest.pack_dir) / ds["file"]
+                        urn = client.ensure_dataset(
+                            comp.identity if len(doc) == 1 else ds["identity"],
+                            ds["name"], data_file.read_bytes(),
+                            ds.get("format", "csv"))
+                    else:
+                        # No shipped seed file (no-dummy-data rule): the entry is
+                        # a binding DECLARATION — reuse a same-name REAL tenant
+                        # dataset or fail honestly. Explicit URN bindings are a
+                        # pack-service install parameter; the CLI resolves by
+                        # name only.
+                        bound = client.bind_dataset(
+                            ds["identity"], ds["name"],
+                            required_columns=ds.get("required_columns"))
+                        urn = client.dataset_urn(bound) if bound else None
                     if urn:
                         dataset_urns[ds["identity"]] = urn
 

@@ -1,0 +1,25 @@
+# Governed typed case schema (case-service inc10): the merchant chargeback-
+# response work item as a named case TYPE binding the response field set, so
+# intake creates a structurally-complete evidence-package work item (not a
+# generic case with prose notes). Embedded field defs use {name, data_type,
+# label, required}; names align with cases/fields.yaml and the mr_chargebacks
+# contract columns. Real evidence FILES (delivery confirmations, usage logs,
+# policy disclosures, alert credits) attach to the case via the platform's
+# case-attachments capability (BRD 77) — the pack only defines the typed work
+# item that the evidence package hangs off.
+- schema_key: chargeback_representment
+  name: "Chargeback representment"
+  description: >-
+    An incoming network chargeback triaged for the merchant's fight/accept
+    decision: reason-code-matched evidence assembly, response-window
+    awareness, and fight economics — resolved by a four-eyes human
+    determination.
+  fields:
+    - { name: network,           data_type: enum,    label: "Card network",                                    required: false }
+    - { name: reason_code,       data_type: string,  label: "Network reason code",                             required: true }
+    - { name: reason_family,     data_type: enum,    label: "Reason family",                                   required: false }
+    - { name: evidence_strength, data_type: enum,    label: "Evidence package strength",                       required: false }
+    - { name: fight_economics,   data_type: enum,    label: "Fight economics vs merchant-configured threshold", required: false }
+    - { name: chargeback_amount, data_type: float,   label: "Liability at stake (USD)",                        required: true }
+    - { name: recovered_amount,  data_type: float,   label: "Recovered via representment (USD)",               required: false }
+    - { name: days_to_deadline,  data_type: integer, label: "Network response window — days left",             required: false }

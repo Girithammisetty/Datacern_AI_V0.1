@@ -1,12 +1,18 @@
-# Pipeline seeds (BRD 26 §4 denial_reversal_probability archetype, expressed
-# against the real pipeline-orchestrator algorithm catalog): a denial-
-# prediction classifier trained on the seed claims table (payer, service
-# line, CPT, amounts, clean/first-pass flags -> denied outcome). The nightly
-# underpayment-scan and AR-prioritization Argo workflows (RCM-FR-050/060) are
-# deferred — they require pack-service pipeline materialization beyond the
-# algorithm-template surface.
+# Pipeline seeds (BRD 26 §4, expressed against the real pipeline-orchestrator
+# algorithm catalog): a supervised denial-prediction classifier over the bound
+# claims table (payer, service line, CPT, amounts, clean/first-pass flags ->
+# denied outcome) and an unsupervised underpayment surface scan over the bound
+# 835 remit lines (RCM-FR-050 dispute-candidate detection). Both train on the
+# tenant's REAL bound datasets — the pack ships no data. The nightly Argo
+# workflow orchestration (RCM-FR-050/060 schedules) remains deferred beyond
+# the algorithm-template surface.
 - identity: denial_prediction_classifier
   name: "Denial prediction (xgboost)"
   algorithm: xgboost
   mode: train
   dataset: rcm_claims
+- identity: underpayment_anomaly_isolation_forest
+  name: "Remit underpayment anomaly scan (isolation forest)"
+  algorithm: isolation_forest
+  mode: train
+  dataset: rcm_remits

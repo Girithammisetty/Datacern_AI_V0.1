@@ -42,7 +42,11 @@ REQUIRED_FIELDS = {
     "roles": ["name", "actions"],
     "decision_models": ["name", "rules"],
     "saved_queries": ["name", "sql"],
-    "datasets": ["identity", "name", "file"],
+    # `file` is deliberately NOT required: a product pack declares its datasets
+    # as BINDING CONTRACTS (identity + name + required_columns) and never ships
+    # seed data (the no-dummy-data rule); `file` remains legal only for legacy
+    # packs and explicit demo packs.
+    "datasets": ["identity", "name"],
     "pipelines": ["name", "algorithm", "dataset"],
     "verified_queries": ["nl_text", "sql_text"],
 }
@@ -231,3 +235,18 @@ def _kind_specific(kind: str, entry: dict, ptr: str, file: str, report: LintRepo
     if kind == "semantic_models" and not entry.get("name"):
         report.findings.append(Finding("MISSING_FIELD", "error", kind, file, f"{ptr}/name",
                                        "semantic model needs a 'name'"))
+    if kind == "datasets":
+        # No-dummy-data rule: product packs must not ship seed data; a dataset
+        # entry is a binding contract the tenant satisfies with REAL data.
+        if entry.get("file"):
+            report.findings.append(Finding(
+                "SEED_DATA_SHIPPED", "warning", kind, file, f"{ptr}/file",
+                "pack ships seed data — product packs must declare a binding "
+                "contract (identity/name/required_columns) instead; seed files "
+                "belong only in explicit demo packs"))
+        elif not entry.get("required_columns"):
+            report.findings.append(Finding(
+                "NO_BINDING_CONTRACT", "warning", kind, file, f"{ptr}/required_columns",
+                "file-less dataset declares no required_columns — the bound "
+                "tenant dataset cannot be validated against the pack's "
+                "expected shape"))

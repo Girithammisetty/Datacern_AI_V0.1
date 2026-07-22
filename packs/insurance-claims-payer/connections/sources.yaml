@@ -1,0 +1,25 @@
+# Governed source-connector templates (ingestion-service inc13): INCOMING
+# connections pre-declared with skip_test + EMPTY secrets, so the payer's
+# expected feeds exist as governed starting points the tenant completes with
+# real hosts/credentials in Data → Connections. Nothing is polled at install.
+#
+# X12 837 decode ships in Core (BRD 57 standards interop) — the SFTP drop
+# below is only the transport; Core's ingestion decodes the 837 claim files
+# it picks up there.
+- name: "X12 837 claim file drop (SFTP)"
+  connector_type: sftp
+  direction: incoming
+  config:
+    host: "edi-gateway.example.invalid"
+    port: 22
+    username: datacern_ingest
+    root_directory: "/inbound/claims-837"
+- name: "Eligibility/enrollment batch extracts (S3)"
+  connector_type: s3
+  direction: incoming
+  config:
+    region: us-east-1
+    bucket: payer-eligibility-extracts
+    root_prefix: "daily/"
+    file_format: csv
+    glob: "*.csv"

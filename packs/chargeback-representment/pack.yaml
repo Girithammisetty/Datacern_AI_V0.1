@@ -2,12 +2,16 @@
 # PSP-side chargeback response and representment (the merchant mirror of the
 # issuer card-disputes pack, BRD 32): decide which incoming chargebacks to
 # fight and with what evidence. Installable TODAY against Datacern Core's
-# public APIs via packctl; the manifest envelope follows BRD 23
+# public APIs via packctl/pack-service; the manifest envelope follows BRD 23
 # (PKG-FR-001/003). Components the current Core cannot materialize are
 # declared under `deferred` — recorded in the install ledger, never faked.
+# v2.0.0 (no-dummy-data rule): the pack ships ZERO seed data — datasets are
+# binding CONTRACTS resolved to the tenant's REAL data at install; cases
+# arrive from real rows via case triggers/intake, not seeds; eval golden sets
+# are curated by the tenant from its own adjudicated history.
 pack_manifest: 1
 name: chargeback-representment
-version: 1.0.0
+version: 2.0.0
 publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted chargeback representment for merchants, PSPs/acquirers offering
@@ -37,16 +41,33 @@ components:
     - { file: "dashboards/program_health_thresholds.yaml", identity: "program_health_thresholds" }
   dispositions:
     - { file: "cases/dispositions.yaml", identity: "dispositions" }
-  cases:
-    - { file: "cases/queue.yaml", identity: "response_queue" }
+  case_fields:
+    - { file: "cases/fields.yaml", identity: "representment_fields" }
+  case_schemas:
+    - { file: "cases/schemas.yaml", identity: "representment_schema" }
+  ontology:
+    - { file: "ontology/entities.yaml", identity: "representment_ontology" }
+  decision_models:
+    - { file: "decisions/fight_accept_routing.yaml", identity: "fight_accept_routing" }
+    - { file: "decisions/response_window_expedite.yaml", identity: "response_window_expedite" }
   roles:
     - { file: "rbac/roles.yaml", identity: "roles" }
   agent_configs:
     - { file: "agents/configs.yaml", identity: "agent_configs" }
+  guardrails:
+    - { file: "agents/guardrails.yaml", identity: "agent_guardrails" }
   memories:
     - { file: "memories/grounding.yaml", identity: "grounding" }
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
+  display_labels:
+    - { file: "labels/overrides.yaml", identity: "label_overrides" }
+  model_archetypes:
+    - { file: "models/archetypes.yaml", identity: "model_blueprints" }
+  write_adapters:
+    - { file: "connections/write_adapters.yaml", identity: "sor_writeback" }
+  connection_templates:
+    - { file: "connections/sources.yaml", identity: "source_feeds" }
 deferred:
   - kind: agent_recipes
     reason: >-

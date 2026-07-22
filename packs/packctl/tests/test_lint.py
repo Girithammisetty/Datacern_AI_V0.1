@@ -28,16 +28,17 @@ def _write(root: Path, components: str, files: dict[str, str]) -> Path:
 
 
 def _clean_pack(root: Path) -> Path:
-    """A minimal, correct pack: one dataset + a case queue that references it."""
+    """A minimal, correct PRODUCT pack (no-dummy-data rule): the dataset is a
+    file-less binding CONTRACT (required_columns declared), plus a case queue
+    that references it."""
     return _write(
         root,
         "  datasets:\n    - {file: data/ds.yaml, identity: ds}\n"
         "  dispositions:\n    - {file: disp.yaml, identity: disp}\n"
         "  cases:\n    - {file: queue.yaml, identity: queue}\n",
         {
-            "data/ds.yaml": "- {identity: exceptions, name: exceptions, file: rows.csv}\n",
-            "rows.csv": "id\n1\n",
-            "data/rows.csv": "id\n1\n",
+            "data/ds.yaml": "- {identity: exceptions, name: exceptions, "
+                            "required_columns: [id]}\n",
             "disp.yaml": "- {code: fraud, label: Fraud, category: true_positive}\n",
             "queue.yaml": "dataset: exceptions\nrows:\n  - {row_pk: EX-1}\n",
         },
@@ -48,6 +49,32 @@ def test_clean_pack_has_no_findings(tmp_path):
     report = lint_pack(_clean_pack(tmp_path / "p"))
     assert report.ok and report.pack == "lint-fixture"
     assert report.findings == []
+
+
+def test_shipped_seed_data_warns(tmp_path):
+    # No-dummy-data rule: a dataset entry with a seed `file` lints as a
+    # SEED_DATA_SHIPPED warning (legal for legacy/demo packs, flagged for
+    # product packs); it is NOT an error.
+    root = _write(
+        tmp_path / "p",
+        "  datasets:\n    - {file: data/ds.yaml, identity: ds}\n",
+        {"data/ds.yaml": "- {identity: exceptions, name: exceptions, file: rows.csv}\n",
+         "rows.csv": "id\n1\n"},
+    )
+    report = lint_pack(root)
+    assert report.ok  # warning only
+    assert any(f.code == "SEED_DATA_SHIPPED" for f in report.warnings)
+
+
+def test_fileless_dataset_without_required_columns_warns(tmp_path):
+    root = _write(
+        tmp_path / "p",
+        "  datasets:\n    - {file: data/ds.yaml, identity: ds}\n",
+        {"data/ds.yaml": "- {identity: exceptions, name: exceptions}\n"},
+    )
+    report = lint_pack(root)
+    assert report.ok  # warning only
+    assert any(f.code == "NO_BINDING_CONTRACT" for f in report.warnings)
 
 
 def test_missing_required_field_is_error(tmp_path):

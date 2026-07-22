@@ -1,0 +1,56 @@
+# Governed decision table (BRD 54) — a deterministic, explainable, no-LLM
+# first-cut triage over the prior-auth review worklist. Columns are the
+# payer-prior-auth-requests binding-contract columns (data/datasets.yaml), so
+# the table reads exactly what intake projects from the real dataset. It
+# EXECUTES to the same governed four-eyes proposal an agent produces: every
+# matched case becomes a case.apply_disposition proposal a human reviewer must
+# approve — the table proposes, a human decides. It NEVER proposes pa_denied:
+# an adverse determination always carries documented findings from a qualified
+# human clinician (per this pack's grounding on the CMS 2024 MA rule).
+# Outcome disposition_codes are validated against this workspace's disposition
+# catalog at install time, so `dispositions` installs before this.
+- identity: pa_review_triage
+  name: "Prior-auth review triage table"
+  rules:
+    # Urgent PA burning its expedited regulatory window — this pack's
+    # grounding treats a pending urgent PA older than ~a day as at-risk.
+    - when:
+        - { column: urgency, op: eq, value: urgent }
+        - { column: status, op: eq, value: pending }
+        - { column: turnaround_hours, op: gte, value: 24 }
+      then: { disposition_code: escalate_md, severity: critical }
+      note: "Urgent PA at-risk on the expedited regulatory clock — medical director now, ahead of queue order"
+    # Standard PA approaching the standard-window deadline (plan-configured
+    # runway threshold inside the standard regulatory window).
+    - when:
+        - { column: urgency, op: eq, value: standard }
+        - { column: status, op: eq, value: pending }
+        - { column: turnaround_hours, op: gte, value: 120 }
+      then: { disposition_code: escalate_md, severity: high }
+      note: "Standard PA has consumed most of its regulatory window (plan-configured runway threshold) — expedite review"
+    # Specialty-drug PAs — highest appeal exposure per this pack's grounding;
+    # route to the medical director rather than deciding at nurse level.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: cpt_code, op: in, value: [J1745, "96413"] }
+      then: { disposition_code: escalate_md, severity: high }
+      note: "Specialty-drug PA (elevated overturn exposure) — medical-director review per pack grounding"
+    # The PA agent itself flagged low confidence — honor its escalation.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: agent_recommendation, op: eq, value: escalate_md }
+      then: { disposition_code: escalate_md, severity: high }
+      note: "Agent recommendation is below-confidence escalation — a clinician must review"
+    # High-confidence agent-recommended approval on a standard request:
+    # approval is the only adverse-free outcome this table proposes, and the
+    # proposal still requires four-eyes human sign-off.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: urgency, op: eq, value: standard }
+        - { column: agent_recommendation, op: eq, value: approve }
+        - { column: agent_confidence, op: gte, value: 0.85 }
+      then: { disposition_code: pa_approved, severity: medium }
+      note: "High-confidence approve recommendation (plan-configured confidence threshold) — propose approval; reviewer confirms"
+  # Nothing matched deterministically -> a human reviews; the table never
+  # proposes a denial or guesses on ambiguous requests.
+  default_outcome: { disposition_code: escalate_md, severity: low }

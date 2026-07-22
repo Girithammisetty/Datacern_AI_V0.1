@@ -1,0 +1,50 @@
+# Typed custom case fields (case-service CASE-FR-022) — the AML alert work
+# item's real triage attributes, typed so the case form validates them and
+# decision surfaces read them structurally instead of parsing notes.
+# data_type is IMMUTABLE after creation (case-service) — chosen deliberately.
+# Names mirror the aml_alerts binding-contract columns so field data and the
+# bound dataset agree. typology / scenario_rule / assigned_tier stay `string`
+# (not enum) on purpose: they are institution-configured taxonomies from the
+# tenant's monitoring system, not a closed regulatory set.
+- name: typology
+  data_type: string
+  purpose: both
+  field_meta:
+    label: "Alert typology"
+    required: false
+- name: scenario_rule
+  data_type: string
+  purpose: both
+  field_meta:
+    label: "Monitoring scenario rule"
+    required: false
+- name: assigned_tier
+  data_type: string
+  purpose: both
+  field_meta:
+    label: "Assigned review tier"
+    required: false
+- name: amount_involved
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Amount involved (USD)"
+    required: false
+- name: age_days
+  data_type: integer
+  purpose: both
+  field_meta:
+    label: "Alert age (days)"
+    required: false
+- name: match_score
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Sanctions name-match score"
+    required: false
+- name: account_id
+  data_type: string
+  purpose: both
+  field_meta:
+    label: "Account"
+    required: false

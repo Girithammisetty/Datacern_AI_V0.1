@@ -1,0 +1,34 @@
+# Governed model blueprints (experiment-service inc9): the intended models
+# this vertical runs, independent of any trained artifact. Each corresponds to
+# a training pipeline this pack already ships (pipelines/templates.yaml), so
+# the blueprint and its implementation stay in one governed pair.
+- archetype_key: mr_win_likelihood_scorer
+  name: "Representment win-likelihood scorer"
+  task_type: classification
+  target: outcome
+  description: >-
+    Supervised scorer over adjudicated chargebacks (mr-chargebacks): predicts
+    the representment outcome from reason family, evidence strength, fight
+    economics, amount, and customer history — the deterministic-first
+    prioritizer for the response queue. Implemented by the pack's xgboost
+    training pipeline.
+  expected_metrics: { f1: 0.80 }
+  governance_notes: >-
+    The score only prioritizes which chargebacks are worth fighting (evidence
+    cost vs recovery odds); the decision to submit a representment is a
+    four-eyes human determination by the Dispute Program Manager. Promotion
+    requires eval-gate + manager approval.
+- archetype_key: mr_order_anomaly_detector
+  name: "Order anomaly detector"
+  task_type: anomaly_detection
+  target: null
+  description: >-
+    Unsupervised surface scan over mr-orders for chargeback-prone and
+    friendly-fraud-prone order patterns (AVS/CVV, delivery, device, and
+    channel signals). Implemented by the pack's isolation-forest training
+    pipeline.
+  expected_metrics: {}
+  governance_notes: >-
+    Detector output opens review work, never adverse action; flagged orders
+    route to human pattern review — customer block-listing is itself a
+    four-eyes decision.

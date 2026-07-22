@@ -1,0 +1,41 @@
+# Second governed decision table (BRD 54): deterministic merchant-error
+# recovery routing — the non-fraud complement to reg_e_triage. Operates ONLY on
+# columns the v1 seeded queue projections already carry (dispute_type,
+# reason_code, amount, deadline_days_left), because an upgrade cannot alter an
+# existing case's display_projection. Executes to the same governed four-eyes
+# proposal path: the table proposes, the Dispute Operations Manager decides.
+- identity: merchant_error_recovery
+  name: "Merchant error recovery routing"
+  rules:
+    # Duplicate capture — same amount, same terminal, minutes apart. Cleanest
+    # network recovery there is (Visa 12.6.1 / MC 4834 duplicate processing).
+    - when:
+        - { column: dispute_type, op: eq, value: duplicate_charge }
+      then: { disposition_code: file_chargeback, severity: medium }
+      note: "Duplicate processing — recover via 12.6.1/4834 with both capture records"
+    # Merchant-promised credit never posted (Visa 13.6 / MC 4860).
+    - when:
+        - { column: dispute_type, op: eq, value: credit_not_processed }
+      then: { disposition_code: file_chargeback, severity: low }
+      note: "Credit not processed — recover with the merchant's credit voucher"
+    # Post-cancellation recurring billing with the cancellation record.
+    - when:
+        - { column: dispute_type, op: eq, value: cancelled_recurring }
+      then: { disposition_code: file_chargeback, severity: medium }
+      note: "Recurring charge after documented cancellation — chargeback with the cancellation record"
+    # ATM partial dispense: Reg E error confirmed by operator reconciliation —
+    # resolve for the cardholder (precedent: DSP-4015).
+    - when:
+        - { column: dispute_type, op: eq, value: atm_shortfall }
+      then: { disposition_code: resolve_cardholder_favor, severity: medium }
+      note: "ATM partial dispense confirmed by cash-total reconciliation — Reg E error"
+    # Material-value defective/not-as-described merchandise with return
+    # evidence supports recovery; below that, evidence cost exceeds recovery.
+    - when:
+        - { column: dispute_type, op: eq, value: quality_defective }
+        - { column: amount, op: gte, value: 100 }
+      then: { disposition_code: file_chargeback, severity: medium }
+      note: "Defective/not-as-described at material value — recover with return/refusal evidence"
+  # Nothing matched deterministically -> a human analyst investigates; the
+  # table never guesses on fraud-typed or ambiguous disputes.
+  default_outcome: { disposition_code: escalate_fraud_review, severity: medium }

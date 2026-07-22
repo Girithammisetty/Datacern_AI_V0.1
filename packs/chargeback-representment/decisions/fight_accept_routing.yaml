@@ -1,0 +1,53 @@
+# Governed decision table (BRD 54) — deterministic, explainable, no-LLM
+# fight/accept economics routing over the chargeback work item's real
+# contract columns (status, fight_economics, evidence_strength,
+# first_party_suspect, reason_family — all from the mr_chargebacks binding
+# contract). It EXECUTES to the same governed four-eyes proposal an agent
+# produces: an operator dry-runs or batch-runs it across the worklist, and
+# every matched case becomes a case.apply_disposition proposal that the
+# Dispute Program Manager must approve. The table proposes, a human decides —
+# no autonomous representment filing, refund, or block-listing. The economics
+# floor is merchant-configured upstream (the fight_economics column already
+# encodes it) — this table never hard-codes a dollar threshold.
+# disposition_codes are validated against this workspace's disposition catalog
+# at install time, so `dispositions` installs before this.
+- identity: fight_accept_routing
+  name: "Fight/accept economics routing"
+  rules:
+    # Evidence cost exceeds recovery odds: below the merchant-configured
+    # economics floor with a weak/partial package, accepting is the rational
+    # outcome even when the merchant is right.
+    - when:
+        - { column: status, op: eq, value: open }
+        - { column: fight_economics, op: eq, value: below_threshold }
+        - { column: evidence_strength, op: in, value: [weak, partial] }
+      then: { disposition_code: accept_liability_refund, severity: low }
+      note: "Below the merchant-configured economics floor with a weak/partial package — fees and effort exceed expected recovery"
+    # First-party (friendly-fraud) suspect with a strong contradicting
+    # package: fight AND feed the prevention loop; each claim still stands on
+    # its own evidence, and block-listing is a separate human decision.
+    - when:
+        - { column: status, op: eq, value: open }
+        - { column: first_party_suspect, op: eq, value: "yes" }
+        - { column: evidence_strength, op: eq, value: strong }
+      then: { disposition_code: flag_friendly_fraud_pattern, severity: high }
+      note: "Strong evidence contradicts a first-party-suspect claim — represent and feed the prevention loop"
+    # Processing errors (duplicate capture, credit not processed) recover
+    # with the merchant's own records — the lowest-cost evidence there is.
+    - when:
+        - { column: status, op: eq, value: open }
+        - { column: reason_family, op: eq, value: processing_error }
+        - { column: evidence_strength, op: in, value: [strong, partial] }
+      then: { disposition_code: represent_with_evidence, severity: medium }
+      note: "Processing-error family with the merchant's own capture/credit records — low-cost recovery"
+    # Strong reason-code-matched evidence with favorable economics — the
+    # standard representment-preparation route.
+    - when:
+        - { column: status, op: eq, value: open }
+        - { column: evidence_strength, op: eq, value: strong }
+        - { column: fight_economics, op: eq, value: above_threshold }
+      then: { disposition_code: represent_with_evidence, severity: medium }
+      note: "Reason-code-matched strong evidence above the merchant-configured economics floor — prepare the package"
+  # Deliberately no default_outcome: an unmatched chargeback produces no
+  # proposal and simply stays in the analyst worklist for human review — the
+  # table never guesses on pending-evidence or ambiguous claims.

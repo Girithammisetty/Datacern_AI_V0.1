@@ -1,0 +1,24 @@
+# Governed SoR write-back adapters (ingestion-service inc12): OUTGOING
+# connections declared with skip_test + EMPTY secrets — the tenant completes
+# real credentials/endpoints in Data → Connections, and every write executes
+# proposal-mode with four-eyes (no autonomous SoR change; the SAR-workflow
+# sync carries alert STATUS/disposition only — never SAR content, per SAR
+# confidentiality). The URLs/hosts are placeholders the tenant replaces;
+# nothing is called at install. No Authorization header ships in config —
+# credentials live only in the tenant's completed secrets.
+- name: "AML case management status sync"
+  connector_type: http_api
+  direction: outgoing
+  config:
+    method: POST
+    url: "https://aml-case-management.example.invalid/api/v1/alerts/status"
+    headers: { Content-Type: "application/json" }
+- name: "Alert disposition ledger upsert"
+  connector_type: postgres
+  direction: outgoing
+  config:
+    host: "aml-alert-db.example.invalid"
+    port: 5432
+    database: aml_alerts
+    username: datacern_writeback
+    ssl_mode: require

@@ -1,0 +1,60 @@
+# Domain ontology (dataset-service inc11): the entity TYPES this vertical
+# operates on and their typed relationships — the type-level model behind the
+# mr_customers / mr_orders / mr_chargebacks contracts. Attribute names match
+# the contract columns so the ontology describes data that actually lands.
+- entity_key: customer
+  name: Customer
+  description: "The buyer behind the disputed order — history bands drive friendly-fraud pattern review."
+  attributes:
+    - { name: customer_name, data_type: string }
+    - { name: tenure_band, data_type: string }
+    - { name: order_count_band, data_type: string }
+    - { name: prior_chargebacks_band, data_type: string, description: "none | 1_2 | 3_plus" }
+    - { name: loyalty_tier, data_type: string }
+  relationships:
+    - { name: orders, target: order, cardinality: has_many }
+- entity_key: order
+  name: Order
+  description: >-
+    The merchant's sale record — the compelling-evidence source (AVS/CVV
+    result, delivery confirmation, device match) a representment cites.
+  attributes:
+    - { name: product_category, data_type: string }
+    - { name: channel, data_type: string, description: "web | app | marketplace" }
+    - { name: avs_cvv_match, data_type: string, description: "yes | no" }
+    - { name: delivery_confirmation, data_type: string, description: "yes | no" }
+    - { name: device_match, data_type: string, description: "yes | no" }
+    - { name: ltv_band, data_type: string }
+    - { name: amount, data_type: float }
+  relationships:
+    - { name: customer, target: customer, cardinality: belongs_to }
+    - { name: chargebacks, target: chargeback, cardinality: has_many }
+- entity_key: chargeback
+  name: Chargeback
+  description: >-
+    An incoming reason-coded network dispute against one order, carrying the
+    response window, evidence-strength read, and fight economics.
+  attributes:
+    - { name: network, data_type: string }
+    - { name: reason_code, data_type: string }
+    - { name: reason_family, data_type: string, description: "fraud | consumer_dispute | processing_error" }
+    - { name: evidence_strength, data_type: string }
+    - { name: fight_economics, data_type: string }
+    - { name: first_party_suspect, data_type: string, description: "yes | no" }
+    - { name: days_to_deadline, data_type: integer }
+    - { name: status, data_type: string }
+    - { name: amount, data_type: float }
+  relationships:
+    - { name: order, target: order, cardinality: belongs_to }
+    - { name: representment, target: representment, cardinality: has_one }
+- entity_key: representment
+  name: Representment
+  description: >-
+    The merchant's second presentment — the fight decision, its evidence
+    package, and the recovery outcome.
+  attributes:
+    - { name: represented, data_type: string, description: "yes | no" }
+    - { name: outcome, data_type: string, description: "won | lost | accepted | resolved_prior | pending" }
+    - { name: recovered_amount, data_type: float }
+  relationships:
+    - { name: chargeback, target: chargeback, cardinality: belongs_to }

@@ -19,6 +19,10 @@ class InstallRequest(BaseModel):
     version: str | None = None
     workspace_id: str | None = None
     dry_run: bool = False
+    # inc20 (no-dummy-data rule): pack dataset identity -> REAL tenant dataset
+    # URN. File-less pack dataset declarations resolve through this (or by
+    # same-name reuse); a missing binding fails honestly as requires_binding.
+    dataset_bindings: dict[str, str] | None = None
 
 
 def _ws(req: InstallRequest, principal: Principal) -> str:
@@ -47,7 +51,7 @@ async def create_install(
     user_jwt = get_bearer(request)
     client = installer.build_client(settings, principal.tenant_id, ws, user_jwt)
 
-    plan = await asyncio.to_thread(installer.plan, client, manifest)
+    plan = await asyncio.to_thread(installer.plan, client, manifest, body.dataset_bindings)
     if body.dry_run:
         return {"data": {"pack": manifest.name, "version": manifest.version,
                          "workspace_id": ws, "dry_run": True, "plan": plan}}
@@ -62,7 +66,8 @@ async def create_install(
             operation="install", manifest_snapshot=snapshot)
 
     origin_of = installer.origin_tag(manifest.name, manifest.version)
-    ledger, pending_dashboards = await asyncio.to_thread(installer.run_install, client, manifest, origin_of)  # noqa: E501
+    ledger, pending_dashboards = await asyncio.to_thread(
+        installer.run_install, client, manifest, origin_of, body.dataset_bindings)
 
     # If dashboards are pending, try to complete now — succeeds only when the
     # pack's semantic model is already published (e.g. an idempotent re-install);
@@ -233,6 +238,8 @@ async def uninstall(
 class TransitionRequest(BaseModel):
     dry_run: bool = False
     to_install_id: str | None = None  # rollback only: which prior install to restore
+    # inc20: pack dataset identity -> tenant dataset URN (see InstallRequest).
+    dataset_bindings: dict[str, str] | None = None
 
 
 @router.post("/installs/{install_id}/upgrade")
@@ -255,7 +262,7 @@ async def upgrade_install(
     target = catalog.load_manifest(prior["pack_name"])  # current on-disk = the new version
     return await _transition(request, principal, prior, prior_ledger, target,
                              operation="upgrade", target_snapshot=installer.snapshot_bundle(target),
-                             dry_run=body.dry_run)
+                             dry_run=body.dry_run, dataset_bindings=body.dataset_bindings)
 
 
 @router.post("/installs/{install_id}/rollback")
@@ -292,12 +299,14 @@ async def rollback_install(
         target = installer.rehydrate_bundle(snapshot, tmp)
         return await _transition(request, principal, current, current_ledger, target,
                                  operation="rollback", target_snapshot=snapshot,
-                                 dry_run=body.dry_run, target_version=target_row["pack_version"])
+                                 dry_run=body.dry_run, target_version=target_row["pack_version"],
+                                 dataset_bindings=body.dataset_bindings)
 
 
 async def _transition(request: Request, principal, prior: dict, prior_ledger: list[dict],
                       target, *, operation: str, target_snapshot: dict, dry_run: bool,
-                      target_version: str | None = None):
+                      target_version: str | None = None,
+                      dataset_bindings: dict[str, str] | None = None):
     """Shared upgrade/rollback core: diff, then (unless dry_run) materialize the
     target over the prior install, supersede the prior, and record a new row."""
     db, settings = request.app.state.db, request.app.state.settings
@@ -313,7 +322,7 @@ async def _transition(request: Request, principal, prior: dict, prior_ledger: li
     client = installer.build_client(settings, principal.tenant_id, ws, get_bearer(request))
     origin_of = installer.origin_tag(target.name, version)
     new_ledger, pending_dashboards, removed_outcomes, _ = await asyncio.to_thread(
-        installer.run_upgrade, client, target, prior_ledger, origin_of)
+        installer.run_upgrade, client, target, prior_ledger, origin_of, dataset_bindings)
 
     failed = sum(1 for r in new_ledger if r["action"] == "failed")
     status = "failed" if failed else ("awaiting_approval" if pending_dashboards else "installed")

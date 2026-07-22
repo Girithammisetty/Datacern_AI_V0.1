@@ -1,0 +1,41 @@
+# Second governed decision table (BRD 54): response-window expedite routing —
+# the clock-first complement to fight_accept_routing. A strong case filed
+# after the network response window closes is a lost case, so near-expiry
+# chargebacks are routed ahead of everything else. Operates ONLY on
+# mr_chargebacks binding-contract columns (status, days_to_deadline,
+# deadline_bucket, evidence_strength). Window lengths are network/acquirer
+# facts carried in the data (days_to_deadline, deadline_bucket) — the table
+# frames urgency off those columns and never asserts its own day-counts.
+# Executes to the same governed four-eyes proposal path: the table proposes,
+# the Dispute Program Manager decides.
+- identity: response_window_expedite
+  name: "Response-window expedite routing"
+  rules:
+    # Window closes today and the package is strong — file now or lose the
+    # recovery regardless of economics ordering.
+    - when:
+        - { column: status, op: eq, value: open }
+        - { column: days_to_deadline, op: lte, value: 0 }
+        - { column: evidence_strength, op: eq, value: strong }
+      then: { disposition_code: represent_with_evidence, severity: critical }
+      note: "Response window closes today with a strong package — expedite the filing"
+    # Window closes today without an assembled package — a late filing is a
+    # lost case plus fees; propose accepting unless the manager overrides.
+    - when:
+        - { column: status, op: eq, value: open }
+        - { column: days_to_deadline, op: lte, value: 0 }
+        - { column: evidence_strength, op: in, value: [weak, pending] }
+      then: { disposition_code: accept_liability_refund, severity: high }
+      note: "Window closing without an assembled package — late filing forfeits recovery; manager may override"
+    # Tightest deadline bucket with a strong package and favorable economics
+    # — jump the queue into representment preparation.
+    - when:
+        - { column: status, op: eq, value: open }
+        - { column: deadline_bucket, op: eq, value: "0_7_days" }
+        - { column: evidence_strength, op: eq, value: strong }
+        - { column: fight_economics, op: eq, value: above_threshold }
+      then: { disposition_code: represent_with_evidence, severity: high }
+      note: "Tightest response bucket with strong evidence and favorable economics — expedite package assembly"
+  # Deliberately no default_outcome: chargebacks with runway or unassembled
+  # evidence stay in the analyst worklist for human review — the table
+  # proposes, a human decides.

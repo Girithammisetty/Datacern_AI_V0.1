@@ -94,10 +94,15 @@ def build_client(settings: Settings, tenant_id: str, workspace_id: str, user_jwt
 
 # ---- dry-run plan -----------------------------------------------------------
 
-def plan(client, manifest) -> list[dict]:
+def plan(client, manifest, bindings: dict[str, str] | None = None) -> list[dict]:
     """Compute what an install WOULD do without any side effect (PKG-FR-020):
     per component, `create` (new) or `exists` (idempotent no-op); kinds inc1
-    doesn't materialize are `deferred` with a reason."""
+    doesn't materialize are `deferred` with a reason. File-less dataset
+    declarations (the no-dummy-data rule) plan as `bind` (explicit binding
+    supplied), `reuse` (a same-name tenant dataset exists), or
+    `requires_binding` (nothing to resolve against — the apply would fail)."""
+    from packctl.manifest import load_component_file  # noqa: PLC0415
+
     ops: list[dict] = []
     existing = _existing_names(client)
     materializable = set(INC1_KINDS) | set(INC2_PHASE1_KINDS)
@@ -111,6 +116,25 @@ def plan(client, manifest) -> list[dict]:
         if comp.kind not in materializable:
             ops.append({"kind": comp.kind, "identity": comp.identity, "action": "deferred",
                         "detail": "needs a Core write surface not exposed yet"})
+            continue
+        if comp.kind == "datasets":
+            doc = load_component_file(manifest, comp)
+            for ds in (doc if isinstance(doc, list) else [doc]):
+                if (bindings or {}).get(ds["identity"]):
+                    action, detail = "bind", f"binds to {bindings[ds['identity']]}"
+                elif ds["name"] in existing.get("datasets", set()):
+                    action, detail = ("reuse", "same-name tenant dataset exists") \
+                        if not ds.get("file") else ("exists", "")
+                elif ds.get("file"):
+                    action, detail = "create", ""
+                else:
+                    need = ", ".join(ds.get("required_columns") or []) or "none declared"
+                    action = "requires_binding"
+                    detail = (f"no tenant dataset bound or named {ds['name']!r} — "
+                              f"supply dataset_bindings[{ds['identity']!r}] "
+                              f"(required columns: {need})")
+                ops.append({"kind": "datasets", "identity": comp.identity,
+                            "name": ds["name"], "action": action, "detail": detail})
             continue
         for name in _component_names(manifest, comp):
             action = "exists" if name in existing.get(comp.kind, set()) else "create"
@@ -232,7 +256,8 @@ def _component_names(manifest, comp) -> list[str]:
 
 # ---- execute ----------------------------------------------------------------
 
-def run_install(client, manifest, origin_of: Callable[[str, str], str]) -> list[dict]:
+def run_install(client, manifest, origin_of: Callable[[str, str], str],
+                bindings: dict[str, str] | None = None) -> list[dict]:
     """Materialize the inc1 kinds in order, capturing each object's real id (so
     uninstall can reverse it) + its create/noop/failed action. One ledger row
     per materialized object, origin-tagged."""
@@ -342,7 +367,7 @@ def run_install(client, manifest, origin_of: Callable[[str, str], str]) -> list[
     # inc2 data chain: datasets + semantic/verified DRAFTS + saved queries.
     # Dashboards are held for run_complete (they need the model's published
     # measure projection — a steward must approve the model first).
-    data_records, pending_dashboards = run_data_chain(client, manifest, origin_of)
+    data_records, pending_dashboards = run_data_chain(client, manifest, origin_of, bindings)
     records.extend(data_records)
     return records, pending_dashboards
 
@@ -521,27 +546,57 @@ def _semantic_published(client, name: str):
     return None, False
 
 
-def run_data_chain(client, manifest, origin_of):
-    """inc2 phase 1: ingest datasets, author the semantic model + verified
-    queries as governed DRAFTS (submitted, NOT approved), create saved queries.
-    Returns (records, pending_dashboards: bool)."""
+def _rewrite_dataset_macros(sql: str, name_map: dict[str, str]) -> str:
+    """Rewrite {{dataset('<pack-name>')}} macros to the BOUND tenant dataset's
+    real name, so pack queries execute against the tenant's real data when the
+    binding resolved to a differently-named dataset."""
+    for old, new in name_map.items():
+        sql = sql.replace(f"dataset('{old}')", f"dataset('{new}')")
+        sql = sql.replace(f'dataset("{old}")', f'dataset("{new}")')
+    return sql
+
+
+def run_data_chain(client, manifest, origin_of, bindings: dict[str, str] | None = None):
+    """inc2 phase 1: resolve/ingest datasets, author the semantic model +
+    verified queries as governed DRAFTS (submitted, NOT approved), create saved
+    queries. Returns (records, pending_dashboards: bool).
+
+    Dataset resolution (inc20, the no-dummy-data rule): an entry WITHOUT a
+    shipped seed file is a binding CONTRACT — resolved to a REAL tenant dataset
+    via an explicit ``bindings`` entry (identity -> dataset URN) or same-name
+    reuse, with required-column validation; nothing is ever uploaded for it.
+    Entries WITH a file keep the legacy seed-upload path (demo packs only)."""
     from pathlib import Path  # noqa: PLC0415
 
     from packctl.manifest import load_component_file  # noqa: PLC0415
 
     records: list[dict] = []
     dataset_urns: dict[str, str] = {}
+    # pack dataset name -> bound real dataset name (for query-macro rewrite)
+    name_map: dict[str, str] = {}
 
-    # datasets — ingested as the installing user (no four-eyes).
+    # datasets — bound to real tenant data, or (legacy/demo) ingested.
     for comp in manifest.components_of("datasets"):
         doc = load_component_file(manifest, comp)
         for ds in (doc if isinstance(doc, list) else [doc]):
-            path = Path(manifest.pack_dir) / ds["file"]
-            urn = client.ensure_dataset(ds["identity"], ds["name"],
-                                        path.read_bytes(), ds.get("format", "csv"))
-            act = client.actions[-1] if client.actions else {}
-            if urn:
-                dataset_urns[ds["identity"]] = urn
+            explicit = (bindings or {}).get(ds["identity"])
+            if explicit or not ds.get("file"):
+                bound = client.bind_dataset(
+                    ds["identity"], ds["name"], urn=explicit,
+                    required_columns=ds.get("required_columns"))
+                act = client.actions[-1] if client.actions else {}
+                urn = client.dataset_urn(bound) if bound else None
+                if bound:
+                    dataset_urns[ds["identity"]] = urn
+                    if bound.get("name") and bound["name"] != ds["name"]:
+                        name_map[ds["name"]] = bound["name"]
+            else:
+                path = Path(manifest.pack_dir) / ds["file"]
+                urn = client.ensure_dataset(ds["identity"], ds["name"],
+                                            path.read_bytes(), ds.get("format", "csv"))
+                act = client.actions[-1] if client.actions else {}
+                if urn:
+                    dataset_urns[ds["identity"]] = urn
             records.append(_rec("datasets", ds["name"], origin_of,
                                 action=act.get("action", "failed" if not urn else "create"),
                                 urn=urn, detail=act.get("detail", "")))
@@ -569,7 +624,8 @@ def run_data_chain(client, manifest, origin_of):
             author = client.author_token()
             cr = client._req("POST", f"{e.semantic}/api/v1/verified-queries", author, headers=JSON_H,  # noqa: E501
                              json={"workspace_id": client.workspace_id, "nl_text": vq["nl_text"],
-                                   "sql_text": vq["sql_text"], "model": vq.get("model"),
+                                   "sql_text": _rewrite_dataset_macros(vq["sql_text"], name_map),
+                                   "model": vq.get("model"),
                                    "tags": vq.get("tags", [])})
             if cr.status_code == 201:
                 vid = cr.json()["data"]["id"]
@@ -586,7 +642,8 @@ def run_data_chain(client, manifest, origin_of):
     for comp in manifest.components_of("saved_queries"):
         doc = load_component_file(manifest, comp)
         for q in (doc if isinstance(doc, list) else [doc]):
-            qid = client.ensure_saved_query(q["identity"], q["name"], q["sql"],
+            qid = client.ensure_saved_query(q["identity"], q["name"],
+                                            _rewrite_dataset_macros(q["sql"], name_map),
                                             q.get("description", ""), q.get("tags", []))
             act = client.actions[-1] if client.actions else {}
             records.append(_rec("saved_queries", q["name"], origin_of,
@@ -769,7 +826,8 @@ def diff_plan(prior_ledger: list[dict], target_manifest) -> dict:
             "removed_rows": removed_rows}
 
 
-def run_upgrade(client, target_manifest, prior_ledger, origin_of):
+def run_upgrade(client, target_manifest, prior_ledger, origin_of,
+                bindings: dict[str, str] | None = None):
     """Apply a target version over a prior install — the shared core of both
     upgrade and rollback. Materializes the target (idempotent: added objects
     create, retained objects no-op) and REVERSES the components the target no
@@ -777,7 +835,7 @@ def run_upgrade(client, target_manifest, prior_ledger, origin_of):
     retained rows so the new install stays fully reversible on a later uninstall.
     Returns (new_ledger, pending_dashboards, removed_outcomes, diff)."""
     diff = diff_plan(prior_ledger, target_manifest)
-    new_ledger, pending = run_install(client, target_manifest, origin_of)
+    new_ledger, pending = run_install(client, target_manifest, origin_of, bindings)
 
     # A retained object was created by the pack in the PRIOR version, so although
     # this run sees it as a no-op (it already exists) it remains pack-owned and

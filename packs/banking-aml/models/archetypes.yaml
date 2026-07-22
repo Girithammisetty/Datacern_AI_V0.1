@@ -1,0 +1,36 @@
+# Governed model blueprints (experiment-service inc9): the intended models
+# this vertical runs, independent of any trained artifact. Each corresponds
+# to a training pipeline this pack already ships (pipelines/templates.yaml),
+# so the blueprint and its implementation stay in one governed pair.
+- archetype_key: aml_alert_disposition_scorer
+  name: "Alert disposition scorer"
+  task_type: classification
+  target: disposition
+  description: >-
+    Supervised scorer over the tenant's human-dispositioned alerts
+    (aml-alerts): predicts the likely triage disposition from typology,
+    scenario rule, severity, tier, aging, and exposure — the
+    deterministic-first pre-router that ranks the L1 queue. Implemented by
+    the pack's xgboost training pipeline.
+  expected_metrics: { f1: 0.80 }
+  governance_notes: >-
+    Scores order and route review work only — the model NEVER files a SAR,
+    clears an alert, or blocks a transaction; every disposition remains a
+    four-eyes human decision, and the SAR filing decision belongs exclusively
+    to the MLRO/BSA officer. Promotion requires model-risk validation review
+    and manager approval (four-eyes).
+- archetype_key: aml_txn_anomaly_detector
+  name: "Transaction anomaly detector"
+  task_type: anomaly_detection
+  target: null
+  description: >-
+    Unsupervised surface scan over aml-transactions for profile-deviation
+    patterns the scenario rules miss: peer-group anomalies, dormant-account
+    reactivation bursts, funnel-account flow shapes. Implemented by the
+    pack's isolation-forest training pipeline.
+  expected_metrics: {}
+  governance_notes: >-
+    Detector output OPENS review work, never adverse action: flagged
+    activity routes to the alert-triage queue for human investigation and
+    never auto-files a SAR or restricts a customer. Promotion requires
+    model-risk validation review and manager approval (four-eyes).

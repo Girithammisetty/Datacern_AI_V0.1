@@ -1,0 +1,47 @@
+# Governed decision table (BRD 54) — a deterministic, explainable, no-LLM
+# first-cut triage over the denial worklist's real columns (denial_category,
+# appeal_status, denied_amount, appeal_deadline_days — all rcm-denials
+# binding-contract columns). It EXECUTES to the same governed four-eyes
+# proposal an agent produces: an operator dry-runs or batch-runs it across the
+# worklist, and every matched case becomes a case.apply_disposition proposal a
+# denials specialist or A/R manager must approve. No autonomous determination —
+# the table proposes, a human decides (BRD 26 BR-1). Outcome disposition_codes
+# are validated against this workspace's disposition catalog at install time,
+# so `dispositions` installs before this. Numeric thresholds are
+# institution-configured starting points, not regulatory values.
+- identity: denial_triage
+  name: "Denial worklist triage"
+  rules:
+    # Appeal window nearly closed with no appeal on file — timely-filing risk.
+    - when:
+        - { column: appeal_status, op: eq, value: not_appealed }
+        - { column: appeal_deadline_days, op: between, value: [0, 30] }
+      then: { disposition_code: escalate_payer, severity: critical }
+      note: "Payer-configured appeal window nearly closed with no appeal on file — expedite; the expedite band is an institution-configured threshold"
+    # High-dollar denial with the appeal window still open — appeal preparation.
+    - when:
+        - { column: denied_amount, op: gte, value: 5000 }
+        - { column: appeal_status, op: eq, value: not_appealed }
+      then: { disposition_code: appeal_submitted, severity: high }
+      note: "High-dollar denial inside the payer-configured appeal window — route to appeal preparation; the dollar floor is institution-configured"
+    # Administrative denials (authorization/identifier defects) — the queue's
+    # own precedent class for record-backed overturns.
+    - when:
+        - { column: denial_category, op: eq, value: administrative }
+        - { column: appeal_status, op: eq, value: not_appealed }
+      then: { disposition_code: appeal_submitted, severity: high }
+      note: "Administrative denial (authorization/identifier defect) — appeal with the supporting record when one exists"
+    # Documentation/coding defects are correctable — corrected resubmission.
+    - when:
+        - { column: denial_category, op: eq, value: documentation }
+      then: { disposition_code: corrected_resubmit, severity: medium }
+      note: "Documentation/coding defect — coder review, then corrected resubmission within the payer window"
+    # Coverage (LCD/NCD) denials need clinical judgment — never auto-routed
+    # to appeal (BR-4: appeal only where a clinical case exists).
+    - when:
+        - { column: denial_category, op: eq, value: coverage }
+      then: { disposition_code: escalate_payer, severity: medium }
+      note: "Coverage (LCD/NCD) denial — clinical review decides appeal vs write-off; the table never makes that call"
+  # Nothing matched deterministically -> a human reviews; the table proposes,
+  # a human decides.
+  default_outcome: { disposition_code: escalate_payer, severity: medium }

@@ -1,0 +1,18 @@
+# Governed SoR write-back adapters (ingestion-service inc12): OUTGOING
+# connections declared with skip_test + EMPTY secrets — the tenant completes
+# real credentials/endpoints in Data → Connections, and every write executes
+# proposal-mode with four-eyes (no autonomous SoR change). The hosts are
+# placeholders the tenant replaces; nothing is called at install. Credentials
+# are NEVER declared here — no Authorization header in config; auth is
+# supplied by the tenant through the connection's secret store.
+#
+# X12 276 outbound claim-status-inquiry RENDERING ships in Core (BRD 57
+# standards interop); this adapter is the governed connection that rendered
+# traffic flows over.
+- name: "Claims platform claim-status sync"
+  connector_type: http_api
+  direction: outgoing
+  config:
+    method: POST
+    url: "https://claims-platform.example.invalid/api/v1/claims/status"
+    headers: { Content-Type: "application/json" }

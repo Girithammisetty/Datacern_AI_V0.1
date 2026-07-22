@@ -1,0 +1,44 @@
+# Second governed decision table (BRD 54): deterministic backlog-aging and
+# exposure escalation — the queue-hygiene complement to alert_triage.
+# Operates ONLY on aml_alerts binding-contract columns (status, age_days,
+# amount_involved, severity, assigned_tier), which are the columns cases
+# created from real alert rows project. Aging cut-offs are the institution's
+# configured internal review SLAs — kept deliberately early so that if an
+# escalated case later converts to a SAR recommendation, the MLRO's filing
+# decision is made with ample runway (framed qualitatively; the table cites
+# no regulatory deadline as its own). Executes to the same governed
+# four-eyes proposal path: the table proposes, a human decides.
+- identity: backlog_escalation
+  name: "AML backlog aging and exposure escalation"
+  rules:
+    # Aged open alert — institution-configured backlog SLA breach.
+    - when:
+        - { column: status, op: eq, value: open }
+        - { column: age_days, op: gte, value: 20 }
+      then: { disposition_code: escalate_l2, severity: high }
+      note: >-
+        Open alert has aged past the institution-configured triage SLA —
+        escalate so an investigator decides before further aging erodes the
+        runway for any downstream reporting decision.
+    # Very large open exposure gets an investigator regardless of age.
+    - when:
+        - { column: status, op: eq, value: open }
+        - { column: amount_involved, op: gte, value: 250000 }
+      then: { disposition_code: escalate_l2, severity: critical }
+      note: >-
+        Dollar exposure above the institution-configured large-exposure
+        cut-off — risk-times-dollar ranking (not FIFO) puts this in front
+        of an L2 investigator now.
+    # Critical-severity alerts should not sit in the L1 queue.
+    - when:
+        - { column: status, op: eq, value: open }
+        - { column: severity, op: eq, value: critical }
+        - { column: assigned_tier, op: eq, value: l1 }
+      then: { disposition_code: escalate_l2, severity: critical }
+      note: >-
+        Critical-severity alert still assigned to L1 — route to L2 so the
+        highest-risk work is handled at investigation depth.
+  # Unmatched alerts stay with the human L1/L2 review flow — the default
+  # proposes nothing stronger than continued human review; a reviewer must
+  # approve any disposition the table proposes (four-eyes).
+  default_outcome: { disposition_code: escalate_l2, severity: low }

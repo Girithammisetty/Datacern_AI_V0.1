@@ -1,0 +1,44 @@
+# Second governed decision table (BRD 54): deterministic appeal routing — the
+# appeals complement to pa_review_triage. Columns are the payer-appeals
+# binding-contract columns (data/datasets.yaml). Executes to the same governed
+# four-eyes proposal path: the table proposes, a human decides. It NEVER
+# proposes appeal_upheld — sustaining a denial is an adverse determination
+# that always carries documented human clinical findings.
+- identity: appeal_expedite_routing
+  name: "Appeal expedite routing table"
+  rules:
+    # Level-2 appeal: the last internal stop before external/independent
+    # review — the plan-configured verdict deadline makes this the plan's
+    # final chance to get it right; medical director owns it.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: level, op: gte, value: 2 }
+      then: { disposition_code: escalate_md, severity: critical }
+      note: "Second-level appeal nearing its regulatory verdict clock — last internal stop before external review; medical director owns the verdict"
+    # Medical-necessity denials (CARC CO-50) require clinical judgment against
+    # plan criteria — never decidable at analyst level.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: denial_reason_code, op: eq, value: CO-50 }
+      then: { disposition_code: escalate_md, severity: high }
+      note: "Medical-necessity denial under appeal — clinical criteria review by the medical director, not an analyst call"
+    # Administrative precert-absent denials (CARC CO-197) are routinely
+    # overturned at level 1 when a retro-authorization is permitted (this
+    # pack's grounding precedent). Propose the member-favorable outcome; the
+    # reviewer verifies the authorization record before approving.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: level, op: eq, value: 1 }
+        - { column: denial_reason_code, op: eq, value: CO-197 }
+      then: { disposition_code: appeal_overturned, severity: medium }
+      note: "Administrative precert-absent denial — level-1 overturn is the documented precedent; reviewer verifies the auth record before approving"
+    # High-dollar appeal above the plan-configured materiality threshold —
+    # payment-integrity attention plus medical-director priority.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: potential_value, op: gte, value: 5000 }
+      then: { disposition_code: escalate_md, severity: high }
+      note: "Appeal value above the plan-configured materiality threshold — expedite with payment-integrity visibility"
+  # Nothing matched deterministically -> a human appeals analyst reviews; the
+  # table never sustains a denial by default.
+  default_outcome: { disposition_code: escalate_md, severity: low }

@@ -1,12 +1,16 @@
 # banking-aml capability pack (BRD 30) — Core-neutral edition, and the first
 # NON-healthcare pack: the cross-industry Core-neutrality proof (BRD 30 AC-15).
-# Installable TODAY against Datacern Core's public APIs via packctl; the
-# manifest envelope follows BRD 23 (PKG-FR-001/003). Components the current
+# Installable TODAY against Datacern Core's public APIs via packctl/pack-service;
+# the manifest envelope follows BRD 23 (PKG-FR-001/003). Components the current
 # Core cannot materialize are declared under `deferred` with the exact BRD 30
 # requirement they trace to — recorded in the install ledger, never faked.
+# v2.0.0 (no-dummy-data rule): the pack ships ZERO seed data — datasets are
+# binding CONTRACTS resolved to the tenant's REAL data at install; cases arrive
+# from real rows via case triggers/intake, not seeds; eval golden sets are
+# curated by the tenant from its own adjudicated history.
 pack_manifest: 1
 name: banking-aml
-version: 1.0.0
+version: 2.0.0
 publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   AI-assisted AML / BSA financial-crime workflow for US banks (BRD 30): alert
@@ -16,7 +20,7 @@ description: >-
   relationship-network analytics, BSA/OFAC grounding memories, and
   transaction-anomaly + alert-scoring training pipelines.
 categories: [banking, aml, financial-crime, sanctions]
-regulatory: [bsa, fincen_sar, ofac, sr_11_7, fatf]
+regulatory: [bsa, fincen_sar, ofac, sr_26_2, fatf]
 components:
   datasets:
     - { file: "data/datasets.yaml", identity: "datasets" }
@@ -32,20 +36,37 @@ components:
     - { file: "dashboards/transaction_monitoring.yaml", identity: "transaction_monitoring" }
   dispositions:
     - { file: "cases/dispositions.yaml", identity: "dispositions" }
-  cases:
-    - { file: "cases/queue.yaml", identity: "alert_queue" }
+  case_fields:
+    - { file: "cases/fields.yaml", identity: "alert_fields" }
+  case_schemas:
+    - { file: "cases/schemas.yaml", identity: "alert_schema" }
+  ontology:
+    - { file: "ontology/entities.yaml", identity: "aml_ontology" }
+  decision_models:
+    - { file: "decisions/alert_triage.yaml", identity: "alert_triage" }
+    - { file: "decisions/backlog_escalation.yaml", identity: "backlog_escalation" }
   roles:
     - { file: "rbac/roles.yaml", identity: "roles" }
   agent_configs:
     - { file: "agents/configs.yaml", identity: "agent_configs" }
+  guardrails:
+    - { file: "agents/guardrails.yaml", identity: "agent_guardrails" }
   memories:
     - { file: "memories/grounding.yaml", identity: "grounding" }
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
+  display_labels:
+    - { file: "labels/overrides.yaml", identity: "label_overrides" }
+  model_archetypes:
+    - { file: "models/archetypes.yaml", identity: "model_blueprints" }
+  write_adapters:
+    - { file: "connections/write_adapters.yaml", identity: "sor_writeback" }
+  connection_templates:
+    - { file: "connections/sources.yaml", identity: "source_feeds" }
 # NOTE on graph analytics: NOT deferred. Related-party network expansion
 # (AML-FR-030 peer_comparison / US-3 network graph) ships Core-supported today
-# via the aml-relationship-edges dataset + the party_network_edges saved query
-# (parent/child/n edge list — the network-chart source pattern).
+# via the aml-relationship-edges dataset contract + the party_network_edges
+# saved query (parent/child/n edge list — the network-chart source pattern).
 deferred:
   - kind: agent_recipes
     reason: >-

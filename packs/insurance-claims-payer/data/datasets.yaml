@@ -1,22 +1,33 @@
-# Pack datasets (ingestion-service file_upload, stable names for idempotency).
-# In production these tables arrive via the customer's SoR connectors
-# (INS-FR-060 — deferred until pack-service ships connector materialization);
-# this seed data is REAL rows in the same shape those connectors land, so every
-# downstream component (semantic model, dashboards, cases, pipelines) runs
-# against genuine data from day one.
+# Pack dataset BINDING CONTRACTS (no-dummy-data rule): the pack ships ZERO
+# seed data. Each entry declares the dataset the workflow needs and the exact
+# landing-shape columns it requires; at install the tenant binds it to a REAL
+# dataset (explicit dataset_bindings on the install request, or same-name
+# reuse), and pack-service validates the bound dataset exposes every required
+# column — failing closed with the missing list. Real data arrives through the
+# pack's governed source connectors (connections/sources.yaml — X12 837 claim
+# drops, eligibility batch extracts) or file upload.
 - identity: payer_claims
   name: payer-claims
-  file: data/payer_claims.csv
-  format: csv
+  required_columns:
+    [claim_id, member_id, provider_npi, provider_specialty, plan_year,
+     product_type, service_month, place_of_service, cpt_code, icd10_code,
+     service_line, billed_amount, allowed_amount, paid_amount, status,
+     network_status, member_state]
 - identity: payer_denials
   name: payer-denials
-  file: data/payer_denials.csv
-  format: csv
+  required_columns:
+    [denial_id, claim_id, member_id, denial_reason_code, denial_reason_text,
+     cpt_code, service_line, decision_by, decision_month, product_type,
+     member_state, appealed]
 - identity: payer_appeals
   name: payer-appeals
-  file: data/payer_appeals.csv
-  format: csv
+  required_columns:
+    [appeal_id, denial_id, claim_id, level, submitted_by, submitted_month,
+     status, verdict_by, member_state, denial_reason_code, cpt_code,
+     potential_value]
 - identity: prior_auth_requests
   name: payer-prior-auth-requests
-  file: data/prior_auth_requests.csv
-  format: csv
+  required_columns:
+    [par_id, member_id, provider_npi, requested_service, cpt_code, icd10_code,
+     urgency, submitted_month, status, turnaround_hours, product_type,
+     member_state, agent_recommendation, agent_confidence]

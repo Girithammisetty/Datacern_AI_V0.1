@@ -1,0 +1,32 @@
+# Second governed decision table (BRD 54): deterministic small-balance and
+# bundling adjustment-review routing — the economics complement to
+# denial_triage. Operates ONLY on rcm-denials binding-contract columns
+# (denied_amount, denial_category, appeal_status). Executes to the same
+# governed four-eyes proposal path: the table proposes an adjustment REVIEW;
+# the write-off itself is always a human determination (BRD 26 BR-1).
+# Dollar floors are institution-configured starting points.
+- identity: small_balance_review
+  name: "Small-balance adjustment review routing"
+  rules:
+    # Below the small-balance floor with no appeal started — appeal cost
+    # likely exceeds recovery; recommend adjustment review.
+    - when:
+        - { column: denied_amount, op: between, value: [0, 250] }
+        - { column: appeal_status, op: eq, value: not_appealed }
+      then: { disposition_code: write_off, severity: low }
+      note: "Below the institution-configured small-balance floor — recommend adjustment review; a human approves any write-off"
+    # NCCI bundling edits — verify the edit applies before chasing recovery.
+    - when:
+        - { column: denial_category, op: eq, value: bundling }
+      then: { disposition_code: balance_verified_correct, severity: low }
+      note: "Bundling (NCCI-edit) denial — verify the edit applies; when the bundle is correct there is no recovery to pursue"
+    # Appeal already upheld at low dollar value — second-level appeal is
+    # rarely economic; recommend adjustment review.
+    - when:
+        - { column: appeal_status, op: eq, value: upheld }
+        - { column: denied_amount, op: lte, value: 500 }
+      then: { disposition_code: write_off, severity: low }
+      note: "Appeal upheld at low dollar value — second-level appeal rarely economic; adjustment review, human decides"
+  # Ambiguous economics -> a human reviews; the table proposes, a human
+  # decides.
+  default_outcome: { disposition_code: escalate_payer, severity: medium }

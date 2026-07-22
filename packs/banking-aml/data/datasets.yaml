@@ -1,25 +1,30 @@
-# Pack datasets (ingestion-service file_upload, stable names for idempotency).
-# In production these tables arrive via the customer's core-banking + AML
-# platform connectors (AML-FR-100 — deferred until pack-service ships
-# connector materialization); this seed data is REAL rows in the same landing
-# shape, encoding the BRD 30 typologies so every downstream component runs
-# against genuine patterns from day one: paired sub-$10K same-day cash
-# deposits (structuring), a 3-hop rapid layering wire chain, a dormant-then-
-# active mule, a florist with weekly $50K international wires (peer anomaly,
-# AC-9), sanctions near-match names, and a funnel account.
+# Pack dataset BINDING CONTRACTS (no-dummy-data rule): the pack ships ZERO
+# seed data. Each entry declares the dataset the AML workflow needs and the
+# exact landing-shape columns it requires; at install the tenant binds it to a
+# REAL dataset (explicit dataset_bindings on the install request, or same-name
+# reuse), and pack-service validates the bound dataset exposes every required
+# column — failing closed with the missing list. Real data arrives through the
+# pack's governed source connectors (connections/sources.yaml — the tenant's
+# core-banking + payment-message feeds) or file upload.
 - identity: aml_parties
   name: aml-parties
-  file: data/aml_parties.csv
-  format: csv
+  required_columns:
+    [party_id, party_name, party_type, sic_code, declared_business,
+     party_jurisdiction, risk_rating, kyc_status, pep_flag, onboard_month,
+     expected_monthly_volume]
 - identity: aml_transactions
   name: aml-transactions
-  file: data/aml_transactions.csv
-  format: csv
+  required_columns:
+    [txn_id, party_id, account_id, txn_date, txn_month, channel, direction,
+     amount, counterparty_id, counterparty_jurisdiction, branch_id,
+     cross_border]
 - identity: aml_alerts
   name: aml-alerts
-  file: data/aml_alerts.csv
-  format: csv
+  required_columns:
+    [alert_id, party_id, account_id, typology, scenario_rule, severity,
+     status, disposition, assigned_tier, alert_month, age_days,
+     amount_involved, match_score]
 - identity: aml_relationship_edges
   name: aml-relationship-edges
-  file: data/aml_relationship_edges.csv
-  format: csv
+  required_columns:
+    [src_id, dst_id, edge_type, weight]

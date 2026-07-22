@@ -1,0 +1,50 @@
+# Typed custom case fields (case-service CASE-FR-022) — the dispute work item's
+# real adjudication attributes, typed so the case form validates them and
+# decision surfaces can read them structurally instead of parsing notes.
+# data_type is IMMUTABLE after creation (case-service) — chosen deliberately.
+# Values mirror the cd_disputes seed columns so field data and dataset agree.
+- name: network
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Card network"
+    options: [visa, mastercard]
+    required: false
+- name: reason_code
+  data_type: string
+  purpose: both
+  field_meta:
+    label: "Network reason code"
+    required: false
+- name: reg_flag
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Regulatory regime"
+    options: [reg_e, reg_z]
+    required: false
+- name: provisional_credit
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Provisional credit status"
+    options: [not_required, due, issued, reversed]
+    required: false
+- name: dispute_amount
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Disputed amount (USD)"
+    required: false
+- name: recovery_amount
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Recovered from merchant (USD)"
+    required: false
+- name: deadline_days_left
+  data_type: integer
+  purpose: both
+  field_meta:
+    label: "Regulatory clock — days left"
+    required: false

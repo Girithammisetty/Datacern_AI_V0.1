@@ -1,0 +1,21 @@
+# Governed typed case schema (case-service inc10): the AML alert work item as
+# a named case TYPE binding the triage field set, so intake from real alert
+# rows creates a structurally-complete alert case (not a generic case with
+# prose notes). Embedded field defs use {name, data_type, label, required};
+# names align with cases/fields.yaml and the aml_alerts binding contract.
+- schema_key: aml_alert
+  name: "AML alert (BSA/FinCEN triage)"
+  description: >-
+    A transaction-monitoring or sanctions-screening alert under the
+    institution's BSA/AML program, triaged to a governed disposition
+    (false-positive clearance, L2 escalation, SAR recommendation with the
+    filing decision reserved to the MLRO/BSA officer, sanctions true hit, or
+    EDD referral).
+  fields:
+    - { name: typology,        data_type: string,  label: "Alert typology",              required: true }
+    - { name: scenario_rule,   data_type: string,  label: "Monitoring scenario rule",    required: false }
+    - { name: assigned_tier,   data_type: string,  label: "Assigned review tier",        required: false }
+    - { name: amount_involved, data_type: float,   label: "Amount involved (USD)",       required: true }
+    - { name: age_days,        data_type: integer, label: "Alert age (days)",            required: false }
+    - { name: match_score,     data_type: float,   label: "Sanctions name-match score",  required: false }
+    - { name: account_id,      data_type: string,  label: "Account",                     required: false }

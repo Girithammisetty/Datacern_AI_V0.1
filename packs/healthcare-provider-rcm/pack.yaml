@@ -1,20 +1,28 @@
 # healthcare-provider-rcm capability pack (BRD 26) — Core-neutral edition.
-# Installable TODAY against Datacern Core's public APIs via packctl; the
-# manifest envelope follows BRD 23 (PKG-FR-001/003). Components the current
-# Core cannot materialize are declared under `deferred` with the exact BRD 26
-# requirement they trace to — recorded in the install ledger, never faked.
+# Installable TODAY against Datacern Core's public APIs via packctl/
+# pack-service; the manifest envelope follows BRD 23 (PKG-FR-001/003).
+# Components the current Core cannot materialize are declared under `deferred`
+# with the exact BRD 26 requirement they trace to — recorded in the install
+# ledger, never faked.
+# v2.0.0 (no-dummy-data rule): the pack ships ZERO seed data — datasets are
+# binding CONTRACTS resolved to the tenant's REAL data at install; cases
+# arrive from real rows via case triggers/intake, not seeds; eval golden sets
+# are curated by the tenant from its own adjudicated history.
 pack_manifest: 1
 name: healthcare-provider-rcm
-version: 1.0.0
+version: 2.0.0
 publisher: { id: pub-datacern, name: "Datacern Inc." }
 description: >-
   Provider-side revenue cycle management for medical groups, hospitals, and
   RCM outsourcers (BRD 26): claim/remit/denial/AR semantic models with the
   RCM KPI catalog (clean-claim rate, denial rate, days in A/R, net collection
   rate), an RCM command center plus denial-analytics and A/R-aging dashboards,
-  a denials + underpayment review queue with RCM dispositions, the provider
-  revenue-cycle role catalog, denial-specialist and revenue-cycle-analyst
-  copilot grounding, and a denial-prediction training pipeline.
+  a denials + underpayment review workflow with typed case schemas and RCM
+  dispositions, governed denial-triage and small-balance decision tables, the
+  provider revenue-cycle role catalog, denial-specialist and
+  revenue-cycle-analyst copilot grounding with PHI-redaction guardrails, and
+  denial-prediction + underpayment-anomaly training pipelines with governed
+  model blueprints.
 categories: [healthcare, provider, revenue-cycle, coding, denial-mgmt, ar]
 regulatory: [hipaa, cms_billing, lcd_ncd, ncci, no_surprises_act, rac_audit_defensible]
 components:
@@ -33,16 +41,33 @@ components:
     - { file: "dashboards/ar_aging_actions.yaml", identity: "ar_aging_actions" }
   dispositions:
     - { file: "cases/dispositions.yaml", identity: "dispositions" }
-  cases:
-    - { file: "cases/queue.yaml", identity: "denial_queue" }
+  case_fields:
+    - { file: "cases/fields.yaml", identity: "rcm_case_fields" }
+  case_schemas:
+    - { file: "cases/schemas.yaml", identity: "rcm_case_schemas" }
+  ontology:
+    - { file: "ontology/entities.yaml", identity: "rcm_ontology" }
+  decision_models:
+    - { file: "decisions/denial_triage.yaml", identity: "denial_triage" }
+    - { file: "decisions/small_balance_review.yaml", identity: "small_balance_review" }
   roles:
     - { file: "rbac/roles.yaml", identity: "roles" }
   agent_configs:
     - { file: "agents/configs.yaml", identity: "agent_configs" }
+  guardrails:
+    - { file: "agents/guardrails.yaml", identity: "agent_guardrails" }
   memories:
     - { file: "memories/grounding.yaml", identity: "grounding" }
   pipelines:
     - { file: "pipelines/templates.yaml", identity: "pipelines" }
+  display_labels:
+    - { file: "labels/overrides.yaml", identity: "label_overrides" }
+  model_archetypes:
+    - { file: "models/archetypes.yaml", identity: "model_blueprints" }
+  write_adapters:
+    - { file: "connections/write_adapters.yaml", identity: "sor_writeback" }
+  connection_templates:
+    - { file: "connections/sources.yaml", identity: "source_feeds" }
 deferred:
   - kind: agent_recipes
     reason: >-

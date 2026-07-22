@@ -1,0 +1,58 @@
+# Typed custom case fields (case-service CASE-FR-022) — the chargeback
+# work item's real response attributes, typed so the case form validates them
+# and decision surfaces can read them structurally instead of parsing notes.
+# data_type is IMMUTABLE after creation (case-service) — chosen deliberately.
+# Names mirror the mr_chargebacks contract columns so field data and the bound
+# dataset agree.
+- name: network
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Card network"
+    options: [visa, mastercard]
+    required: false
+- name: reason_code
+  data_type: string
+  purpose: both
+  field_meta:
+    label: "Network reason code"
+    required: false
+- name: reason_family
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Reason family"
+    options: [fraud, consumer_dispute, processing_error]
+    required: false
+- name: evidence_strength
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Evidence package strength"
+    options: [strong, partial, weak, pending]
+    required: false
+- name: fight_economics
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Fight economics vs merchant-configured threshold"
+    options: [above_threshold, below_threshold]
+    required: false
+- name: chargeback_amount
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Liability at stake (USD)"
+    required: false
+- name: recovered_amount
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Recovered via representment (USD)"
+    required: false
+- name: days_to_deadline
+  data_type: integer
+  purpose: both
+  field_meta:
+    label: "Network response window — days left"
+    required: false

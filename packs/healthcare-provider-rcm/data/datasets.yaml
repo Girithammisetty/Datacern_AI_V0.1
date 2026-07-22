@@ -1,23 +1,36 @@
-# Pack datasets (ingestion-service file_upload, stable names for idempotency).
-# In production these tables arrive via the provider's EHR/PMS/clearinghouse
-# connectors — EDI 837 claims, EDI 835 remits, denial worklists, A/R aging
-# (RCM-FR-090, deferred until pack-service ships connector materialization).
-# This seed data is REAL rows in the same landing shape, so every downstream
-# component (semantic models, dashboards, cases, pipelines) runs against
-# genuine data from day one.
+# Pack dataset BINDING CONTRACTS (no-dummy-data rule): the pack ships ZERO
+# seed data. Each entry declares the dataset the RCM workflow needs and the
+# exact landing-shape columns it requires; at install the tenant binds it to a
+# REAL dataset (explicit dataset_bindings on the install request, or same-name
+# reuse), and pack-service validates the bound dataset exposes every required
+# column — failing closed with the missing list. Real data arrives through the
+# pack's governed source connectors (connections/sources.yaml — X12 835 remit
+# drops, billing-system extracts) or file upload: EDI 837 claims, EDI 835
+# remits, denial worklists, and A/R aging in the provider's own shape.
 - identity: rcm_claims
   name: rcm-claims
-  file: data/rcm_claims.csv
-  format: csv
+  required_columns:
+    [claim_id, encounter_id, patient_account_id, payer_name, payer_type,
+     rendering_provider_npi, service_line, cpt_code, icd10_code, service_month,
+     billed_amount, contractual_adjustment, net_charges, expected_paid,
+     paid_amount, patient_responsibility, status, clean_claim, first_pass,
+     days_to_payment]
 - identity: rcm_remits
   name: rcm-remits
-  file: data/rcm_remits.csv
-  format: csv
+  required_columns:
+    [remit_id, claim_id, payer_name, remit_month, carc_code, rarc_code,
+     billed_amount, allowed_amount, paid_amount, expected_paid,
+     payment_variance, contractual_adjustment, patient_responsibility,
+     underpayment_flag]
 - identity: rcm_denials
   name: rcm-denials
-  file: data/rcm_denials.csv
-  format: csv
+  required_columns:
+    [denial_id, claim_id, carc_code, rarc_code, denial_reason_text,
+     denial_category, cpt_code, service_line, payer_name, denial_month,
+     denied_amount, appeal_status, appeal_deadline_days]
 - identity: rcm_ar_aging
   name: rcm-ar-aging
-  file: data/rcm_ar_aging.csv
-  format: csv
+  required_columns:
+    [ar_id, claim_id, patient_account_id, payer_name, payer_type, service_line,
+     aging_bucket, over_90, balance_type, balance_amount, days_outstanding,
+     followup_priority_score, last_action, as_of_month]

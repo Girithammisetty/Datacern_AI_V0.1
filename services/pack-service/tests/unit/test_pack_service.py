@@ -121,11 +121,65 @@ def test_plan_marks_inc1_kinds_create_and_others_deferred():
     # inc1 kinds present in card-disputes are planned as create
     assert kinds.get("dispositions") == "create"
     assert kinds.get("decision_models") == "create"
-    # inc2 data chain is now materializable (create), not faked
-    assert kinds.get("datasets") == "create"
+    # inc20 (no-dummy-data rule): card-disputes v2 ships NO seed data — its
+    # file-less dataset contracts, with nothing bound and no same-name tenant
+    # dataset, plan as an honest requires_binding (the apply would fail).
+    assert kinds.get("datasets") == "requires_binding"
     assert kinds.get("semantic_models") == "create"
     # dashboards wait for the steward to approve the semantic model (phase 2)
     assert any(o["kind"] == "dashboards" and o["action"] == "after_approval" for o in ops)
+
+    # An explicit binding flips the same entries to `bind`.
+    bound = installer.plan(_FakeClient(), manifest, {
+        "cd_cardholders": "wr:t:dataset:dataset/111",
+        "cd_transactions": "wr:t:dataset:dataset/222",
+        "cd_disputes": "wr:t:dataset:dataset/333"})
+    assert {o["action"] for o in bound if o["kind"] == "datasets"} == {"bind"}
+
+
+def test_plan_reuses_same_name_tenant_dataset_for_fileless_contract():
+    # inc20: with no explicit binding, a file-less dataset contract whose
+    # declared name matches an EXISTING tenant dataset plans as `reuse`.
+    manifest = catalog.load_manifest("card-disputes")
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"data": [{"id": "d1", "name": "cd-disputes"},
+                             {"id": "d2", "name": "cd-transactions"},
+                             {"id": "d3", "name": "cd-cardholders"}]}
+
+    class _FakeClient:
+        workspace_id = "ws-1"
+        endpoints = types.SimpleNamespace(
+            case="c", rbac="r", query="q", agent="a", semantic="s",
+            chart="ch", dataset="d", ingestion="i", memory="m", pipeline="p", identity="id")
+
+        @staticmethod
+        def author_token():
+            return "tok"
+
+        @staticmethod
+        def _req(method, url, tok):
+            return _Resp()
+
+    ops = installer.plan(_FakeClient(), manifest)
+    ds = [o for o in ops if o["kind"] == "datasets"]
+    assert ds and all(o["action"] == "reuse" for o in ds)
+
+
+def test_rewrite_dataset_macros_binds_pack_names_to_real_names():
+    sql = "SELECT count(*) FROM {{dataset('cd-disputes')}} d " \
+          "JOIN {{dataset('cd-transactions')}} t ON d.txn_id = t.txn_id"
+    out = installer._rewrite_dataset_macros(
+        sql, {"cd-disputes": "issuer-disputes-2026", "cd-transactions": "issuer-txns"})
+    assert "{{dataset('issuer-disputes-2026')}}" in out
+    assert "{{dataset('issuer-txns')}}" in out
+    assert "cd-disputes" not in out
+    # no bindings → untouched
+    assert installer._rewrite_dataset_macros(sql, {}) == sql
 
 
 def test_plan_materializes_case_fields(tmp_path):

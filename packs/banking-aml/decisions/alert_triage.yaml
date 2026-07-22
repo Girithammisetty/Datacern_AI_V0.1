@@ -1,0 +1,76 @@
+# Governed decision table (BRD 54) — a deterministic, explainable, no-LLM
+# first-cut triage over the columns cases created from real aml-alerts rows
+# project (typology, scenario_rule, match_score, amount_involved — all in the
+# aml_alerts binding contract). It EXECUTES to the same governed four-eyes
+# proposal an agent produces: an operator dry-runs or batch-runs it across
+# the worklist, and every matched case becomes a case.apply_disposition
+# proposal a human reviewer must approve. No autonomous determination — the
+# table proposes, a human decides; in particular it NEVER proposes
+# sanctions_true_hit (identity confirmation is a human adjudication) and
+# never treats recommend_sar as decidable by rule (SAR judgment needs
+# narrative evidence). Dollar cut-offs below are institution-configured
+# triage thresholds, not regulatory requirements. Outcome disposition_codes
+# are validated against this workspace's disposition catalog at install, so
+# `dispositions` installs before this (packctl INSTALL_ORDER).
+- identity: alert_triage
+  name: "AML alert triage table"
+  rules:
+    # Sanctions near-match with a high fuzzy score — the one queue where
+    # waiting is not an option, but the true-hit call stays human.
+    - when:
+        - { column: typology, op: eq, value: sanctions_near_match }
+        - { column: match_score, op: gte, value: 0.85 }
+      then: { disposition_code: escalate_l2, severity: critical }
+      note: >-
+        High fuzzy name-match: route to sanctions adjudication immediately.
+        A true hit (block & report) requires a human to confirm identity on
+        distinguishing evidence (DOB, address, ID number) — the table never
+        declares one from a score.
+    # Sanctions near-match well below the institution-configured
+    # adjudication floor — propose clearance, human still approves.
+    - when:
+        - { column: typology, op: eq, value: sanctions_near_match }
+        - { column: match_score, op: between, value: [0, 0.6] }
+      then: { disposition_code: clear_false_positive, severity: low }
+      note: >-
+        Score is below the institution-configured adjudication floor for
+        this screen — propose false-positive clearance; the clearance is
+        only applied after documented human approval (four-eyes).
+    # Multi-party movement typologies need network case-building at L2.
+    - when:
+        - { column: typology, op: in, value: [layering, funnel_account] }
+      then: { disposition_code: escalate_l2, severity: high }
+      note: >-
+        Multi-hop / many-to-one movement patterns cannot be resolved from a
+        single alert row — escalate for network expansion (relationship
+        edges, counterparty jurisdictions) and prior-history review.
+    # Structuring pattern at material institution-configured volume.
+    - when:
+        - { column: typology, op: eq, value: structuring }
+        - { column: amount_involved, op: gte, value: 50000 }
+      then: { disposition_code: escalate_l2, severity: high }
+      note: >-
+        Repeated just-under-reporting-threshold cash activity at material
+        aggregate volume (institution-configured cut-off) is a classic
+        CTR-evasion indicator — build the L2 case on the deposit pattern.
+    # Dormant-account reactivation — profile inconsistency is a due-
+    # diligence question as much as a triage one.
+    - when:
+        - { column: typology, op: eq, value: dormant_activity }
+      then: { disposition_code: edd_required, severity: medium }
+      note: >-
+        Activity inconsistent with the customer's expected profile after
+        dormancy — refresh due diligence on the relationship; triage of the
+        underlying flows continues alongside the EDD referral.
+    # Peer-group anomaly at large institution-configured exposure.
+    - when:
+        - { column: typology, op: eq, value: peer_anomaly }
+        - { column: amount_involved, op: gte, value: 100000 }
+      then: { disposition_code: escalate_l2, severity: high }
+      note: >-
+        Severe deviation from the declared-business peer group at large
+        exposure (institution-configured cut-off) — escalate with the
+        peer-comparison evidence attached.
+  # Nothing matched deterministically -> a human analyst investigates; the
+  # table proposes, the reviewing human decides (four-eyes).
+  default_outcome: { disposition_code: escalate_l2, severity: medium }

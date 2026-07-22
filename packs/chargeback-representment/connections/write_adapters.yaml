@@ -1,0 +1,21 @@
+# Governed SoR write-back adapters (ingestion-service inc12): OUTGOING
+# connections declared with skip_test + EMPTY secrets — the tenant completes
+# real credentials/endpoints in Data → Connections, and every write executes
+# proposal-mode with four-eyes (no autonomous representment filing). The
+# URLs/hosts are placeholders the tenant replaces; nothing is called at
+# install, and no credential material (no Authorization header) ever lives in
+# pack config.
+- name: "Representment submission (PSP dispute portal)"
+  connector_type: http_api
+  direction: outgoing
+  config:
+    method: POST
+    url: "https://psp-dispute-portal.example.invalid/api/v1/representments"
+    headers: { Content-Type: "application/json" }
+- name: "Chargeback status sync (acquirer dispute API)"
+  connector_type: http_api
+  direction: outgoing
+  config:
+    method: POST
+    url: "https://acquirer-disputes.example.invalid/api/v1/chargebacks/status"
+    headers: { Content-Type: "application/json" }

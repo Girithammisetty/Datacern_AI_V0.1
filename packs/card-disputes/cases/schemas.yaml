@@ -1,0 +1,19 @@
+# Governed typed case schema (case-service inc10): the card-dispute work item
+# as a named case TYPE binding the adjudication field set, so intake creates a
+# structurally-complete dispute case (not a generic case with prose notes).
+# Embedded field defs use {name, data_type, label, required}; names align with
+# cases/fields.yaml and the cd_disputes seed columns.
+- schema_key: card_dispute
+  name: "Card dispute (Reg E / Reg Z)"
+  description: >-
+    A cardholder billing-error or fraud dispute under Reg E (debit, 12 CFR
+    1005.11) or Reg Z (credit, 12 CFR 1026.13), adjudicated with
+    regulatory-clock awareness and optional network chargeback recovery.
+  fields:
+    - { name: network,              data_type: enum,    label: "Card network",                 required: false }
+    - { name: reason_code,          data_type: string,  label: "Network reason code",          required: false }
+    - { name: reg_flag,             data_type: enum,    label: "Regulatory regime",            required: true }
+    - { name: provisional_credit,   data_type: enum,    label: "Provisional credit status",    required: false }
+    - { name: dispute_amount,       data_type: float,   label: "Disputed amount (USD)",        required: true }
+    - { name: recovery_amount,      data_type: float,   label: "Recovered from merchant (USD)", required: false }
+    - { name: deadline_days_left,   data_type: integer, label: "Regulatory clock — days left", required: false }

@@ -1,0 +1,23 @@
+# Governed source-connector templates (ingestion-service inc13): INCOMING
+# connections pre-declared with skip_test + EMPTY secrets, so the merchant's
+# expected feeds exist as governed starting points the tenant completes with
+# real hosts/credentials in Data → Connections. Nothing is polled at install.
+# These are how the mr-chargebacks / mr-orders / mr-customers binding
+# contracts get their real rows.
+- name: "Acquirer chargeback report drop (SFTP)"
+  connector_type: sftp
+  direction: incoming
+  config:
+    host: "acquirer-gateway.example.invalid"
+    port: 22
+    username: datacern_ingest
+    root_directory: "/outbound/chargeback-reports"
+- name: "Order/CRM compelling-evidence exports (S3)"
+  connector_type: s3
+  direction: incoming
+  config:
+    region: us-east-1
+    bucket: merchant-order-exports
+    root_prefix: "daily/"
+    file_format: csv
+    glob: "*.csv"
