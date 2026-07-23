@@ -137,3 +137,13 @@ _inc3 (deferred, infra): run-lifecycle execution of the compiled data-prep DAG v
 `LocalPipelineExecutor` in `drive_run`, persisting the computed output as a durable
 dataset version — needs the Iceberg-commit write path (ingestion-service), the one
 genuinely infra-heavy leg of this BRD._
+
+### Agent-path live-verified (2026-07-23)
+
+Drove `run_data_pipeline_builder` through the REAL model path (ai-gateway → Ollama,
+grounding faked — the roster-test pattern), `scratchpad/agent_live_verify.py`: for
+"clean the claims dataset: keep positive amounts, fill missing values, one-hot the
+merchant" the model composed a governed `pipeline.template.create` proposal with a
+valid DAG — `read-from-warehouse → handle-missing-values → filter-data →
+select-columns → one-hot-encoder → write-to-warehouse` (136 tokens). Proposal-mode,
+tier write-proposal.

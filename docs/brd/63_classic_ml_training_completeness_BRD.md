@@ -121,3 +121,10 @@ trains+logs a run; rich metrics present; runs persisted in live MLflow. This
 surfaced + fixed 3 real bugs the unit tier missed (commit 261b0f5): mlflow
 LightGBM-flavor logging, the tabular-prep crash on non-tabular inputs, and a
 logger UnboundLocalError.
+
+### Agent-path live-verified (2026-07-23)
+
+Drove `run_model_training` through the REAL model path (ai-gateway → Ollama): for
+"train an xgboost classifier to predict fraud, and tune it with a grid search using
+5-fold cross-validation" the model resolved `xgboost` and carried a real HPO strategy
+into the governed proposal params — `search=grid, cv_folds=5` — exactly as requested.
