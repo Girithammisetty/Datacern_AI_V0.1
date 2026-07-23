@@ -83,11 +83,9 @@ registry (real where locally testable; cloud legs honestly infra-gated, never fa
 | **62** local pipeline execution + operator parity | P1, P3, P4, P5 | **inc1 + inc2 DONE** (operators + local executor + parity params, 27 tests; `data_pipeline_builder` agent + generic `pipeline.template.create` tool, 3 tests). inc3 (run-lifecycle persistence of a computed output dataset) deferred — needs the Iceberg-commit write path (ingestion-service), the one infra-heavy leg. |
 | **63** classic-ML training completeness | M1, M4, M5, M6, M7, M8 | **DONE** (real HPO/CV/feature-selection/LightGBM/regularized-linear/rich-metrics + `model_training` tuning proposals; 16 tests). |
 | **64** forecasting + statistical anomaly | M2, M3 | **DONE** (real StatsForecast + z-score engine + agent hints; 13 tests). |
-| **65** warehouse write-back sinks | P2 | pending — infra-gated (Athena/BigQuery/Synapse); lowest local value. |
+| **65** warehouse write-back sinks | P2 | **DONE** — swappable WarehouseSink registry: local+objectstore real (parquet to MinIO), athena/bigquery/synapse config-gated (honest DependencyUnavailable); 7 tests. |
 
-**12 of 13 gaps closed at the code+unit-test level.** Remaining: P2 (BRD 65,
-infra-gated), the BRD 62 `data_pipeline_builder` agent + run-lifecycle persistence,
-and live-verification of 62–64 against the running stack.
+**13 of 13 gaps closed** — all four BRDs (62 inc1-inc3, 63, 64, 65) landed, unit-tested, and (62-64) live-verified against MLflow + Ollama. Cloud warehouse write paths (Athena/BigQuery/Synapse) are config-gated (honest infra-gating, no faked writes).
 
 ## Sequencing
 62 (foundation — everything classic-pipeline depends on it) → 63 (training depth) →
