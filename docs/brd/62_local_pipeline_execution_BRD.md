@@ -167,8 +167,21 @@ select-columns → write) drives to `succeeded` with a persisted `warehouse/…`
 ref, correct `output_rows`, and all nodes `Succeeded`; a bad-operator run drives to
 `failed` (fail-closed). Full pipeline-orchestrator suite green (**161**).
 
-**Note (authoring follow-up):** the executor honors rich operator params (proven by
-inc1's 27 tests), but the catalog only declares JSON-schema params for a subset of
-operators today, so operators like `group-by` can't yet be authored with params
-through strict validation. Declaring the remaining operator param schemas is a small
-catalog-completeness follow-up (execution is already complete).
+### Operator authoring param schemas — DONE
+
+The catalog now declares JSON-schema authoring params for **every** data-prep
+operator (`catalog.py _OVERRIDES`), so a pipeline carrying their params validates
+identically to a UI submit — previously only a subset had schemas, so e.g.
+`group-by` with `by`/`aggregations` was rejected `UNKNOWN_PARAM` at authoring even
+though the executor honored the params. Added/extended: group-by, cast-data,
+rename-columns, sort-data, remove-duplicate-rows, add-guid-column, long/wide
+converters, remove-outliers, quantization, minmax/zscore-scale, pca,
+linear-combination, python-expression, transform-data, ordinal/target encoders,
+the four filters, merge-data, and richer handle-missing-values/sample-data — with
+data-aware `column`/`columns` formats, enums, and required/default flags.
+
+**Test:** `tests/unit/test_operator_authoring.py` (4) — a coverage guard (every
+DATA_PREP operator has an authoring param case), a validation sweep proving one
+realistic param set per operator passes `validate_definition` with **zero PARAM
+errors**, and the exact `group-by`-with-params case that used to fail now both
+validates AND executes. Full pipeline-orchestrator suite green (**165**).

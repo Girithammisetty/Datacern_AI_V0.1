@@ -60,7 +60,6 @@ _OVERRIDES: dict[str, dict] = {
             "on": {"type": "string", "format": "column", "required": True},
         },
     },
-    "merge-data": {"min_inputs": 2, "max_inputs": 8},
     "union": {"min_inputs": 2, "max_inputs": 8},
     "filter-data": {
         "parameters": {"expression": {"type": "text", "format": "expression",
@@ -74,19 +73,201 @@ _OVERRIDES: dict[str, dict] = {
     "handle-missing-values": {
         "parameters": {
             # BRD 62 (P4): linear_interpolation / expression / previous_existing /
-            # next_existing added for  parity.
+            # next_existing added for parity.
             "strategy": {"type": "string",
                          "enum": ["mean", "median", "most_frequent", "constant", "drop",
                                   "linear_interpolation", "expression",
                                   "previous_existing", "next_existing"],
                          "required": True, "default": "mean"},
+            "columns": {"type": "array", "format": "columns", "item_format": "column",
+                        "required": False, "item_description": "columns to fill (default: all)"},
+            "fill_value": {"type": "number", "required": False, "default": 0,
+                           "description": "value used by the 'constant' strategy"},
+            "expression": {"type": "text", "format": "expression", "required": False,
+                           "description": "fill from this expression ('expression' strategy)"},
+            "group_by": {"type": "string", "format": "column", "required": False,
+                         "description": "fill within groups of this column"},
         },
     },
     "sample-data": {
-        "parameters": {"n_rows": {"type": "int", "minimum": 1, "required": True}},
+        # Either an absolute row count OR a fraction (executor defaults to frac 0.1).
+        "parameters": {
+            "n_rows": {"type": "int", "minimum": 1, "required": False},
+            "fraction": {"type": "number", "minimum": 0.0, "maximum": 1.0, "required": False},
+            "random_state": {"type": "int", "required": False, "default": 42},
+        },
     },
     "one-hot-encoder": {
-        "parameters": {"columns": {"type": "array", "min_items": 1, "required": True}},
+        "parameters": {"columns": {"type": "array", "format": "columns",
+                                   "item_format": "column", "min_items": 1,
+                                   "required": True, "item_description": "column name"}},
+    },
+    # --- authoring param schemas for the remaining data-prep operators so a
+    # validated pipeline can carry their params (the executor already honors them;
+    # this closes the authoring/validation gap noted in BRD 62). ---
+    "ordinal-encoder": {
+        "parameters": {"columns": {"type": "array", "format": "columns",
+                                   "item_format": "column", "min_items": 1,
+                                   "required": True, "item_description": "column name"}},
+    },
+    "target-encoder": {
+        "parameters": {
+            "columns": {"type": "array", "format": "columns", "item_format": "column",
+                        "min_items": 1, "required": True},
+            "target": {"type": "string", "format": "column", "required": True},
+        },
+    },
+    "rename-columns": {
+        "parameters": {"mapping": {"type": "dictionary", "required": True,
+                                   "description": "{old_name: new_name}"}},
+    },
+    "sort-data": {
+        "parameters": {
+            "by": {"type": "array", "format": "columns", "item_format": "column",
+                   "min_items": 1, "required": True},
+            "ascending": {"type": "boolean", "required": False, "default": True},
+        },
+    },
+    "remove-duplicate-rows": {
+        "parameters": {
+            "subset": {"type": "array", "format": "columns", "item_format": "column",
+                       "required": False, "item_description": "dedup on these columns"},
+            "keep": {"type": "string", "enum": ["first", "last"], "required": False,
+                     "default": "first"},
+        },
+    },
+    "add-guid-column": {
+        "parameters": {"column": {"type": "string", "required": False,
+                                  "default": "_row_guid_"}},
+    },
+    "group-by": {
+        "parameters": {
+            "by": {"type": "array", "format": "columns", "item_format": "column",
+                   "min_items": 1, "required": True},
+            "aggregations": {"type": "dictionary", "format": "key_value", "required": True,
+                             "description": "{column: agg} — mean/median/sum/count/min/max/"
+                                            "std/var/sem/first/last/size"},
+            "join_with_original": {"type": "boolean", "required": False, "default": False},
+        },
+    },
+    "long-to-wide-converter": {
+        "parameters": {
+            "index": {"type": "string", "format": "column", "required": True},
+            "columns": {"type": "string", "format": "column", "required": True,
+                        "description": "column whose values become new columns"},
+            "values": {"type": "string", "format": "column", "required": True},
+            "aggfunc": {"type": "string", "required": False, "default": "first"},
+        },
+    },
+    "wide-to-long-converter": {
+        "parameters": {
+            "id_vars": {"type": "array", "format": "columns", "item_format": "column",
+                        "min_items": 1, "required": True},
+            "value_vars": {"type": "array", "format": "columns", "item_format": "column",
+                           "required": False},
+            "var_name": {"type": "string", "required": False, "default": "variable"},
+            "value_name": {"type": "string", "required": False, "default": "value"},
+        },
+    },
+    "cast-data": {
+        "parameters": {"casts": {"type": "dictionary", "format": "key_value",
+                                 "required": True,
+                                 "description": "{column: type} — int/float/string/bool/"
+                                                "datetime/date"}},
+    },
+    "remove-outliers": {
+        "parameters": {
+            "columns": {"type": "array", "format": "columns", "item_format": "column",
+                        "required": False, "item_description": "numeric columns (default: all)"},
+            "method": {"type": "string", "enum": ["iqr", "zscore"], "required": False,
+                       "default": "iqr"},
+            "threshold": {"type": "number", "required": False, "default": 3.0,
+                          "description": "z-score cutoff (method=zscore)"},
+            "k": {"type": "number", "required": False, "default": 1.5,
+                  "description": "IQR multiplier (method=iqr)"},
+        },
+    },
+    "quantization": {
+        "parameters": {
+            "column": {"type": "string", "format": "column", "required": True},
+            "bins": {"type": "int", "minimum": 2, "required": False, "default": 4},
+            "output_column": {"type": "string", "required": False},
+            "strategy": {"type": "string", "enum": ["quantile", "uniform"],
+                         "required": False, "default": "quantile"},
+        },
+    },
+    "minmax-scale": {
+        "parameters": {"columns": {"type": "array", "format": "columns",
+                                   "item_format": "column", "required": False,
+                                   "item_description": "numeric columns (default: all)"}},
+    },
+    "zscore-normalization": {
+        "parameters": {"columns": {"type": "array", "format": "columns",
+                                   "item_format": "column", "required": False,
+                                   "item_description": "numeric columns (default: all)"}},
+    },
+    "pca": {
+        "parameters": {
+            "columns": {"type": "array", "format": "columns", "item_format": "column",
+                        "required": False, "item_description": "numeric columns (default: all)"},
+            "n_components": {"type": "int", "minimum": 1, "required": False},
+            "keep_original": {"type": "boolean", "required": False, "default": False},
+            "random_state": {"type": "int", "required": False, "default": 42},
+        },
+    },
+    "linear-combination": {
+        "parameters": {
+            "weights": {"type": "dictionary", "required": True,
+                        "description": "{column: weight} — weighted sum into output_column"},
+            "output_column": {"type": "string", "required": False,
+                              "default": "linear_combination"},
+            "bias": {"type": "number", "required": False, "default": 0.0},
+        },
+    },
+    "python-expression": {
+        "parameters": {
+            "expression": {"type": "text", "format": "expression", "required": True},
+            "output_column": {"type": "string", "required": False,
+                              "default": "expr_result"},
+        },
+    },
+    "transform-data": {
+        "parameters": {
+            "function": {"type": "string",
+                         "enum": ["log", "sqrt", "abs", "exp", "square"],
+                         "required": False, "default": "log"},
+            "columns": {"type": "array", "format": "columns", "item_format": "column",
+                        "required": False, "item_description": "numeric columns (default: all)"},
+        },
+    },
+    "variance-filter": {
+        "parameters": {"threshold": {"type": "number", "minimum": 0.0, "required": False,
+                                     "default": 0.0}},
+    },
+    "quasi-constant-filter": {
+        "parameters": {"threshold": {"type": "number", "minimum": 0.0, "maximum": 1.0,
+                                     "required": False, "default": 0.99}},
+    },
+    "correlation-filter": {
+        "parameters": {"threshold": {"type": "number", "minimum": 0.0, "maximum": 1.0,
+                                     "required": False, "default": 0.95}},
+    },
+    "statistical-filter": {
+        "parameters": {
+            "target": {"type": "string", "format": "column", "required": True},
+            "threshold": {"type": "number", "minimum": 0.0, "maximum": 1.0,
+                          "required": False, "default": 0.05},
+        },
+    },
+    "merge-data": {
+        "min_inputs": 2, "max_inputs": 8,
+        "parameters": {
+            "on": {"type": "string", "format": "column", "required": False,
+                   "description": "key column (omit for a column-wise/index merge)"},
+            "join_type": {"type": "string", "format": "enum",
+                          "enum": ["inner", "left", "outer", "right"],
+                          "required": False, "default": "outer"},
+        },
     },
 }
 
