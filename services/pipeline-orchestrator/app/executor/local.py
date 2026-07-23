@@ -211,19 +211,45 @@ class LocalTrainingExecutor:
             mlflow.log_param("n_rows", len(df))
             mlflow.log_param("n_features", len(feature_names))
 
-            estimator = _build_estimator(spec.algorithm, spec.params)
-            metrics, fitted = self._fit_and_score(
-                estimator, X, y_raw, family, train_test_split,
-                params=spec.params, algorithm=spec.algorithm)
-            mlflow.log_metrics(metrics)
+            # BRD 64: real forecasting (M2) / statistical z-score anomaly (M3) are
+            # not sklearn estimators — run the dedicated engines, log real metrics +
+            # a result artifact (no sklearn-registry version; honest, not faked).
+            if spec.algorithm == "stats_forecast":
+                from app.executor import forecasting
+                fres = forecasting.run_forecast(spec.rows, dict(spec.params or {}))
+                mlflow.log_metrics(fres["metrics"])
+                mlflow.log_dict(fres, "forecast.json")
+                result = TrainingResult(
+                    mlflow_run_id=run.info.run_id,
+                    model_uri=f"runs:/{run.info.run_id}/forecast.json",
+                    registered_model_name=spec.registered_model_name, model_version="",
+                    metrics=fres["metrics"], params=dict(spec.params or {}),
+                    row_count=len(df))
+            elif spec.algorithm == "z_score_based_anomaly_detection":
+                from app.executor import anomaly
+                ares = anomaly.score(spec.rows, dict(spec.params or {}))
+                mlflow.log_metrics(ares["metrics"])
+                mlflow.log_dict(ares, "anomaly.json")
+                result = TrainingResult(
+                    mlflow_run_id=run.info.run_id,
+                    model_uri=f"runs:/{run.info.run_id}/anomaly.json",
+                    registered_model_name=spec.registered_model_name, model_version="",
+                    metrics=ares["metrics"], params=dict(spec.params or {}),
+                    row_count=len(df))
+            else:
+                estimator = _build_estimator(spec.algorithm, spec.params)
+                metrics, fitted = self._fit_and_score(
+                    estimator, X, y_raw, family, train_test_split,
+                    params=spec.params, algorithm=spec.algorithm)
+                mlflow.log_metrics(metrics)
 
-            model_uri, registered_name, version = self._log_model(
-                mlflow, fitted, X, spec)
+                model_uri, registered_name, version = self._log_model(
+                    mlflow, fitted, X, spec)
 
-            result = TrainingResult(
-                mlflow_run_id=run.info.run_id, model_uri=model_uri,
-                registered_model_name=registered_name, model_version=version,
-                metrics=metrics, params=dict(spec.params or {}), row_count=len(df))
+                result = TrainingResult(
+                    mlflow_run_id=run.info.run_id, model_uri=model_uri,
+                    registered_model_name=registered_name, model_version=version,
+                    metrics=metrics, params=dict(spec.params or {}), row_count=len(df))
         logger.info("trained %s run=%s metrics=%s", spec.algorithm, result.mlflow_run_id,
                     metrics)
         return result

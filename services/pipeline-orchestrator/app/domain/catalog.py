@@ -253,9 +253,10 @@ def seed_algorithm_templates() -> list[AlgorithmTemplate]:
     order = 0
     for name, (mtype, label) in _ALGO_META.items():
         order += 1
-        # BR-14: z_score_based_anomaly_detection is a V1 placeholder — served,
-        # not runnable.
-        runnable = name != "z_score_based_anomaly_detection"
+        # BRD 64 (M3): z_score_based_anomaly_detection is now a REAL statistical
+        # anomaly engine (app/executor/anomaly.py), no longer a placeholder — every
+        # catalog algorithm is runnable.
+        runnable = True
         train_body = {"train_component": f"{name}-train"} if runnable else {}
         tune_body = ({"train_component": "hyperparameter-search",
                       "algorithm": name} if runnable else {})

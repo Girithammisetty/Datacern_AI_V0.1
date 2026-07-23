@@ -34,12 +34,15 @@ def test_ac8_xgboost_tune_missing_validation_role_rejected():
     assert "MISSING_MODEL_INPUT_ROLE: VALIDATION" in str(exc.value.message)
 
 
-def test_br14_zscore_not_runnable():
+def test_zscore_anomaly_is_now_runnable():
+    # BRD 64 (M3): z_score_based_anomaly_detection is a REAL statistical anomaly
+    # engine now (was a BR-14 V1 placeholder) — it instantiates a train pipeline.
     z = ALGOS["z_score_based_anomaly_detection"]
-    assert z.runnable is False
-    with pytest.raises(TemplateNotRunnable):
-        instantiate(z, mode="train", dataset_refs={"TRAIN": "wr:t:dataset:dataset/tr"},
-                    params={})
+    assert z.runnable is True
+    definition = instantiate(z, mode="train",
+                             dataset_refs={"TRAIN": "wr:t:dataset:dataset/tr"}, params={})
+    assert any(n["component"] == "z_score_based_anomaly_detection-train"
+               for n in definition["nodes"])
 
 
 def test_train_mode_uses_native_train_component():

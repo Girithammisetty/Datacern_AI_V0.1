@@ -35,7 +35,7 @@ async def test_bootstrap_populates_catalog_tables(app_sf):
     assert n_algos == 21
     assert n_comps == len(components)
     assert xgb_runnable is True
-    assert z_runnable is False  # BR-14 preserved in the DB row
+    assert z_runnable is True  # BRD 64 (M3): z-score is now a real runnable engine
     assert xgb_meta.get("supervised") is True  # metadata column round-tripped
 
     # Idempotent re-bootstrap (on_conflict_do_update) still works.

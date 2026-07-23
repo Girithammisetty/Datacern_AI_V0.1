@@ -50,6 +50,14 @@ _ALGO_HINTS = {
     "decision tree": "decision_tree", "naive bayes": "naive_bayes",
     "knn": "knn", "nearest neighbor": "knn", "svm": "svm",
     "support vector": "svm", "linear regression": "linear_regression",
+    # BRD 64: forecasting + statistical-anomaly task phrasings resolve to the real
+    # StatsForecast / z-score engines.
+    "forecast": "stats_forecast", "forecasting": "stats_forecast",
+    "time series": "stats_forecast", "time-series": "stats_forecast",
+    "arima": "stats_forecast", "predict future": "stats_forecast",
+    "statistical anomaly": "z_score_based_anomaly_detection",
+    "z-score": "z_score_based_anomaly_detection", "z score": "z_score_based_anomaly_detection",
+    "outlier group": "z_score_based_anomaly_detection",
 }
 _DEFAULT_ALGORITHM = "random_forest"
 

@@ -21,6 +21,7 @@ dependencies = [
     "scikit-learn>=1.4",
     "xgboost>=2.0",
     "lightgbm>=4.0",
+    "statsforecast>=1.7",
     "mlflow>=3.11,<4",
     "pyarrow>=23.0.1",
     "datacern-common",
