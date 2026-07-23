@@ -201,3 +201,44 @@ UI spots: `SchemaField.tsx` (widget), `form.ts` (serialize), `canvas.ts`
 (load round-trip). Tests: `SchemaField.test.tsx` (+1, asserts the JSON textarea)
 and `form.test.ts` (+1, asserts JSON parse + malformed-JSON error) — **33** UI
 unit tests green across the three pipeline-form files.
+
+**Live-verified in the browser (2026-07-23).** Restarted pipeline-orchestrator
+(no `--reload`, so it was serving the pre-change catalog) via the harness
+`start_pipeline` recipe, logged into ui-web as the data-scientist persona, opened
+the no-code Pipeline builder (`/data/pipelines` → New pipeline). The step palette
+loaded — proving the `GET /components` fetch authorized and flowed UI→BFF→the
+restarted orchestrator. Added the **Linear Combination** operator; its config
+drawer rendered `weights *` as a **raw-JSON textarea** (the fix — pre-change it
+was a plain text input), accepted the numeric-valued dict
+`{"amount":0.7,"score":0.3}`, and the "Required" error cleared. Clicking
+**Validate** round-tripped the authored params to the orchestrator's
+`validate_definition` (200) which returned only the expected DAG-shape errors
+(unconnected input, missing read/write-to-warehouse) and **no param error on the
+dictionary** — before the fix the raw-string serialization would have failed
+backend validation. No console errors.
+
+### `int`-typed hyperparameter widget fix — DONE (found while training a model via UI)
+
+Building an end-to-end **training** pipeline in the UI (`read-from-warehouse` →
+`logistic_regression-train`) surfaced a second cross-layer type-vocabulary
+mismatch: the catalog declares integer hyperparameters with the backend's
+canonical type name **`int`** (e.g. `logistic_regression.max_iter`,
+`catalog.py`), but the UI's numeric-widget detection only recognized `integer`
+/`number`. So every `int`-typed param rendered as a **plain text box** and
+serialized a string (`"200"`), which `validate_definition` rejected with
+`expected integer` — blocking authoring of *any* algorithm with an int
+hyperparameter through the no-code builder. Fixed by accepting `int` alongside
+`integer` in `SchemaField.tsx` (number widget + integer step) and `form.ts`
+(numeric coercion + whole-number check). Test: `form.test.ts` (+1, asserts a
+`max_iter` `int` param coerces `"200"`→`200` and still enforces
+whole-number+bounds).
+
+**Live-verified (2026-07-23).** With the fix, `max_iter` renders as a `number`
+input; the training pipeline `claims-type-classifier`
+(`read-from-warehouse[auto-claims]` → `logistic_regression-train`, C=1,
+max_iter=200) **validates green**, saves, and a governed run (label_column=
+`claim_type` via `run_parameters`) drove to **succeeded** — training a real
+`logistic_regression` model logged to MLflow (`model_uri models:/m-fd49d6a3…`,
+registered `wr_…_claims-type-classifier/1`, accuracy/f1/roc_auc = 1.0) and shown
+`succeeded` on the UI Pipeline runs page. Full UI+model path proven: build →
+validate → save → run → trained model.

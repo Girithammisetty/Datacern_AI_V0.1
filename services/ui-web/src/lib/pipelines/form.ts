@@ -81,11 +81,13 @@ export function collect(params: PipelineStepParam[], values: ParamValues): Colle
       continue;
     }
 
-    if (p.type === "integer" || p.type === "number") {
+    // Backend integers use the canonical type name `int` (also accept `integer`).
+    const isInt = p.type === "int" || p.type === "integer";
+    if (isInt || p.type === "number") {
       const n = Number(s);
       if (!Number.isFinite(n)) {
         errors[p.name] = "Must be a number";
-      } else if (p.type === "integer" && !intSchema.safeParse(n).success) {
+      } else if (isInt && !intSchema.safeParse(n).success) {
         errors[p.name] = "Must be a whole number";
       } else if (p.min != null && n < p.min) {
         errors[p.name] = `Must be ≥ ${p.min}`;

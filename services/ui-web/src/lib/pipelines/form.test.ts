@@ -84,6 +84,22 @@ describe("pipeline step-param form helpers", () => {
     });
   });
 
+  it("coerces a backend `int`-typed param (e.g. max_iter) to a whole number", () => {
+    // The catalog declares integer hyperparameters with the canonical type `int`
+    // (not `integer`); the UI must still treat it as numeric or a string "200" is
+    // sent and the backend rejects it with "expected integer".
+    const params: PipelineStepParam[] = [
+      { name: "max_iter", type: "int", required: false, default: 200, enumValues: null, min: 10, max: 10000, help: null },
+    ];
+    const r = collect(params, { max_iter: "200" });
+    expect(r.ok).toBe(true);
+    expect(r.parameters.max_iter).toBe(200);
+    expect(typeof r.parameters.max_iter).toBe("number");
+    // still enforces whole-number + bounds
+    expect(collect(params, { max_iter: "12.5" }).errors.max_iter).toBeTruthy();
+    expect(collect(params, { max_iter: "5" }).errors.max_iter).toBeTruthy();
+  });
+
   it("parses a `dictionary` param (non-string values, no key_value format) as JSON", () => {
     // linear-combination.weights is dict[str,float] — can't be key_value (str→str),
     // so it's a bare `dictionary`. The UI must still JSON-parse it, not store a string.

@@ -157,7 +157,9 @@ export function SchemaField({
       />
     );
   } else {
-    const numeric = param.type === "integer" || param.type === "number";
+    // Backend integers use the canonical type name `int`; also accept `integer`.
+    const isInt = param.type === "int" || param.type === "integer";
+    const numeric = isInt || param.type === "number";
     widget = (
       <Input
         {...common}
@@ -165,7 +167,7 @@ export function SchemaField({
         type={numeric ? "number" : "text"}
         min={numeric && param.min != null ? param.min : undefined}
         max={numeric && param.max != null ? param.max : undefined}
-        step={param.type === "integer" ? 1 : undefined}
+        step={isInt ? 1 : undefined}
         value={strValue}
         onChange={(e) => onChange(e.target.value)}
         autoComplete="off"
