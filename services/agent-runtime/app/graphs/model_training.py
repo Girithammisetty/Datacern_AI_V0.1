@@ -214,6 +214,10 @@ def build_model_training_graph(deps: GraphDeps):
         params: dict[str, Any] = {**p["hyperparameters"], "label_column": p["label_column"]}
         if p.get("feature_columns"):
             params["feature_columns"] = p["feature_columns"]
+        # BRD 63: carry the proposed tuning + feature-selection strategy into the
+        # governed run params — the executor honors search/n_trials/cv_folds and
+        # feature_selection/n_features (real HPO + wrapper selection).
+        params.update(p.get("tuning_params") or {})
         args = {
             "algorithm": algorithm,
             "mode": "train",
@@ -223,6 +227,12 @@ def build_model_training_graph(deps: GraphDeps):
             "name": f"{state.get('algo_label', algorithm)} train — predict {p['label_column']}",
         }
         hp_summary = ", ".join(f"{k}={v}" for k, v in p["hyperparameters"].items()) or "defaults"
+        tp = p.get("tuning_params") or {}
+        if tp.get("search"):
+            hp_summary += (f"; {tp['search']} search {tp.get('n_trials', '')}×"
+                           f"{tp.get('cv_folds', '')}-fold CV")
+        if tp.get("feature_selection"):
+            hp_summary += f"; {tp['feature_selection']} feature-selection"
         state["write_intent"] = WriteIntent(
             tool_id=TRAINING_TOOL_ID, tool_version=TRAINING_TOOL_VERSION,
             tier="write-proposal", side_effects="reversible", args=args,
@@ -260,12 +270,39 @@ def _normalise_plan(parsed: dict, schema: dict, state: dict) -> dict:
         feats = [str(f) for f in feats if isinstance(f, str) and f.strip()] or None
     else:
         feats = None
+    tuning_params = _normalise_tuning(parsed)
     rationale = parsed.get("rationale")
     if not isinstance(rationale, str) or not rationale.strip():
         rationale = (f"Grounded {state['algorithm']} plan: fills the template schema "
                      f"({len(hyper)} params) to predict '{label}'.")
     return {"hyperparameters": hyper, "label_column": label, "feature_columns": feats,
-            "rationale": rationale.strip()[:4000]}
+            "tuning_params": tuning_params, "rationale": rationale.strip()[:4000]}
+
+
+def _normalise_tuning(parsed: dict) -> dict:
+    """Extract a safe, clamped HPO + feature-selection strategy from the model
+    output. Absent/none → empty (single fit, no selection) — the executor treats an
+    absent strategy as a plain single-estimator fit."""
+    out: dict[str, Any] = {}
+    tuning = parsed.get("tuning") if isinstance(parsed.get("tuning"), dict) else {}
+    search = str(tuning.get("search", "none")).lower()
+    if search in ("grid", "random"):
+        out["search"] = search
+        try:
+            out["n_trials"] = max(1, min(200, int(tuning.get("n_trials", 20))))
+        except (TypeError, ValueError):
+            out["n_trials"] = 20
+        try:
+            out["cv_folds"] = max(2, min(10, int(tuning.get("cv_folds", 5))))
+        except (TypeError, ValueError):
+            out["cv_folds"] = 5
+    fs = str(parsed.get("feature_selection", "none")).lower()
+    if fs in ("sequential", "kbest"):
+        out["feature_selection"] = fs
+        n_feat = parsed.get("n_features")
+        if isinstance(n_feat, (int, float)) and int(n_feat) > 0:
+            out["n_features"] = int(n_feat)
+    return out
 
 
 @register("model_training.v1")

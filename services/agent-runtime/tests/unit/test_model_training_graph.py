@@ -59,6 +59,37 @@ async def test_model_training_produces_write_intent():
     assert outcome.evidence                            # grounding memories surfaced
 
 
+async def test_model_training_proposes_tuning_strategy():
+    # BRD 63: when the request asks to tune + select features, the agent carries a
+    # clamped HPO + feature-selection strategy into the governed run params, which
+    # the executor honors (real grid/random search + wrapper selection).
+    plan = (
+        '{"hyperparameters": {"max_depth": 5}, "label_column": "is_fraud",'
+        ' "tuning": {"search": "random", "n_trials": 999, "cv_folds": 5},'
+        ' "feature_selection": "sequential", "n_features": 8,'
+        ' "rationale": "Request asks to tune + reduce features."}'
+    )
+    deps = _deps(llm=FakeLlm(content=plan))
+    outcome = await run_model_training(deps, {
+        "tenant_id": TENANT_A,
+        "query": "tune an xgboost with a random search and select the best features"})
+    params = outcome.write_intent.args["params"]
+    assert params["search"] == "random"
+    assert params["n_trials"] == 200          # clamped from 999 to the 200 ceiling
+    assert params["cv_folds"] == 5
+    assert params["feature_selection"] == "sequential"
+    assert params["n_features"] == 8
+    assert "search" in outcome.write_intent.predicted_effect["summary"].lower()
+
+
+async def test_model_training_omits_tuning_when_not_asked():
+    deps = _deps()  # default plan has no "tuning" key
+    outcome = await run_model_training(deps, {
+        "tenant_id": TENANT_A, "query": "train an xgboost classifier to predict fraud"})
+    params = outcome.write_intent.args["params"]
+    assert "search" not in params and "feature_selection" not in params
+
+
 async def test_model_training_called_grounding_tools():
     deps = _deps()
     await run_model_training(deps, {
