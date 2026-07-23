@@ -356,3 +356,19 @@ revoke-then-exchange-fails (revoked key → 401), and cross-tenant revoke isolat
 The listing never serializes `secret_hash`. Full identity-service unit suite green,
 `go vet` clean. Postgres store verified by column-alignment inspection (memory tier
 is the tested path; both share the domain contract).
+
+**Live-verified against the running stack** (identity-service rebuilt + restarted,
+migration `0009` applied at boot → `schema_migrations` v9, not dirty; the postgres
+store IS the live path here, not memory). Full lifecycle proven end-to-end:
+zero-scope caller mint → 403; admin mint → 201 with a shown-once `wr_xa_…`
+plaintext; listing returns metadata with no `secret_hash`; unauth exchange → 200
+Bearer whose decoded claims are a real `agent_autonomous` principal
+(`agent_id=acme-ext-bot`, `iss/aud` correct, scopes carried through); three
+malformed/unknown keys each → 401; revoke → 204 then the same key's exchange →
+401 (fails closed). **The whole loop closes:** a self-minted credential, exchanged
+with no harness token, driven through the `datacern-agent` SDK, created a **real
+PENDING proposal** (`cd8eae75-…`) in the running agent-runtime with the
+**server-derived** `predicted_effect` (anti-laundering `authoritative_summary` +
+`args_digest`) — a governed four-eyes proposal, not an execution. Proof that a
+tenant can self-issue an external-agent credential and it still lands on the
+governed rails.
