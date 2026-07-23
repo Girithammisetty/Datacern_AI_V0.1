@@ -1,7 +1,7 @@
 # BRD 60 — External-agent toolset allow-list closure
 
 **Status:** done — 2026-07-23
-**Commits:** `<pending>`  ·  **Related:** [BRD 60](../brd/60_external_agent_governance_BRD.md) (external agent governance), BRD 53 (custom agents / per-agent guardrail envelope), memory `project_datacern_external_agent_governance`, `project_windrose_custom_agents`
+**Commits:** `bb37751`  ·  **Related:** [BRD 60](../brd/60_external_agent_governance_BRD.md) (external agent governance), BRD 53 (custom agents / per-agent guardrail envelope), memory `project_datacern_external_agent_governance`, `project_windrose_custom_agents`
 
 ---
 
