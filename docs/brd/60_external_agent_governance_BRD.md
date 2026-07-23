@@ -409,3 +409,16 @@ non-POST 405, propose→agent-runtime with Bearer+body+traceparent passthrough
 and verbatim pending response, list-tools→mcp-gateway JSON-RPC passthrough,
 upstream `GUARDRAIL_VIOLATION` copied back verbatim, and upstream-down → 502.
 Full bff-graphql unit suite green (304), `tsc --noEmit` clean.
+
+**Live-verified against the running stack** (bff-graphql restarted via
+`deploy/local/restart_bff.sh` with `VERIFY_JWT=true`, so the edge really
+verifies the agent token's signature against the identity JWKS). The customer's
+agent reached **everything through the one public ingress** (`bff:4000`),
+never touching an internal service directly: a WS2-minted key was exchanged for
+an agent token, then the `datacern-agent` SDK pointed at the bff edge —
+`list_tools(gateway_url=…/external/v1)` returned the real tool list
+(`case.apply_disposition`) via the mcp-gateway, and `propose(...)` created a
+**real PENDING proposal** (`ef95da52-…`) via agent-runtime with the
+server-derived `predicted_effect`. Edge auth gates held live: a missing token →
+`401`, a non-agent (user) token → `403`. The proposal still lands on the same
+four-eyes/WORM rails — the public edge changed the ingress, not the governance.
