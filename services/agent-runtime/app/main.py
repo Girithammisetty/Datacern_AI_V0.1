@@ -29,6 +29,7 @@ from app.api.routes import (
     chat,
     decisions,
     entity_merges,
+    external,
     health,
     jwks,
     outcomes,
@@ -182,6 +183,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(replay.router)
     app.include_router(proposals.router)
     app.include_router(registry.router)
+    app.include_router(external.router)
     app.include_router(a2a.router)
     app.include_router(transcripts.router)
     app.include_router(sft.router)
