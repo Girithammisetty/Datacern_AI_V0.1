@@ -462,3 +462,15 @@ driving the real `create_from_intent` with a tenant policy set: out-of-scope
 workspace → `GuardrailViolation` (no proposal), in-scope → pending, PII policy →
 stored `rationale`/`predicted_effect` scrubbed, no policy → no-op. Full agent-
 runtime suite green (320 passed, 13 skipped).
+
+**Live-verified against the running stack** (agent-runtime restarted via
+`deploy/local/restart_agent_runtime.sh`; the postgres `get_tenant_config` path
+IS the live path here). A `guardrail_policy` (`data_scope.workspaces=[W_allowed]`,
+`pii.redact=true`) was set on `acme-ext-bot`'s tenant config, then a WS2-minted
+token drove `POST /external/v1/intents` — the ingress that previously bypassed
+the envelope entirely: an **out-of-scope** declared workspace → `403
+GUARDRAIL_VIOLATION` (no proposal row); an **in-scope** workspace → `200 pending`
+with the stored `rationale` returned as `approve per adjuster [REDACTED:email],
+phone [REDACTED:phone]` and `predicted_effect.agent_summary` as
+`notify [REDACTED:email]`. The envelope now binds the external agent identically
+to an internal graph. Cleaned up afterward (policy reset to `{}`).
