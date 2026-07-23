@@ -139,6 +139,32 @@ async def test_external_proposal_blocks_self_approval_when_high_risk(client_and_
     assert "distinct approver" in str(ei.value)
 
 
+async def test_external_intent_rejects_unregistered_agent(client_and_container):
+    client, _ = client_and_container
+    # An external token whose agent_id is NOT registered (no agent_version row,
+    # hence no declared toolset). For the less-trusted external boundary an
+    # absent allow-list must be DENY-ALL, not allow-all: the ingress fails closed
+    # before any run/proposal exists (BRD 60 allow-list defense-in-depth).
+    r = await client.post("/external/v1/intents", json=_VALID,
+                          headers=_auth(agent_id="ghost-bot"))
+    assert r.status_code == 403, r.text
+    assert r.json()["error"]["code"] == "GUARDRAIL_VIOLATION"
+
+
+async def test_external_intent_rejects_empty_toolset_agent(client_and_container):
+    client, c = client_and_container
+    # A registered external agent whose declared toolset is EMPTY. Same deny-all
+    # stance: without an allow-list an external agent may not propose anything,
+    # so the empty-toolset skip in _enforce_guardrail can never open the surface.
+    await c.store.create_agent_version(AgentVersion(
+        agent_key="empty-bot", version=1, graph_ref="external", graph_digest="x",
+        toolset=[], status="published"))
+    r = await client.post("/external/v1/intents", json=_VALID,
+                          headers=_auth(agent_id="empty-bot"))
+    assert r.status_code == 403, r.text
+    assert r.json()["error"]["code"] == "GUARDRAIL_VIOLATION"
+
+
 async def test_external_intent_validates_body(client_and_container):
     client, _ = client_and_container
     bad = {k: v for k, v in _VALID.items() if k != "affected_urns"}

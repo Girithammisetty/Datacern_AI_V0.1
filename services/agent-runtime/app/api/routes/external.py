@@ -32,7 +32,7 @@ from fastapi import APIRouter, Body, Request
 from app.api.auth import principal_of
 from app.api.schemas import proposal_view
 from app.domain.entities import Run, new_uuid
-from app.domain.errors import PermissionDenied, ValidationFailed
+from app.domain.errors import GuardrailViolation, PermissionDenied, ValidationFailed
 from app.graphs.base import WriteIntent
 
 router = APIRouter(prefix="/external/v1")
@@ -73,6 +73,26 @@ async def submit_external_intent(request: Request, body: dict = Body(...)):
         agent_version = int(principal.agent_version)
     except (TypeError, ValueError):
         raise PermissionDenied("agent token agent_version must be an integer")
+
+    # External agents are strictly LESS trusted than the platform's own graphs,
+    # so a declared toolset allow-list is MANDATORY for them: an external agent
+    # may only ever propose a tool it has explicitly registered. This is the
+    # deliberate asymmetry with internal agents — where a missing/empty toolset
+    # means "no write surface declared" and downstream gates suffice — because
+    # for an external caller an empty allow-list must mean DENY-ALL, not
+    # allow-all. Without this gate an unregistered (or toolset-less) external
+    # identity would sail past `_enforce_guardrail`'s allow-list check, which is
+    # skipped on an empty set (services/agent-runtime/app/proposals/service.py),
+    # leaving the external write surface open by omission. Fail closed here,
+    # before any run/proposal row exists (BRD 60 allow-list defense-in-depth).
+    version = await c.store.get_agent_version(principal.agent_id, agent_version)
+    declared = [t.get("tool_id") for t in (version.toolset if version else [])
+                if isinstance(t, dict) and t.get("tool_id")]
+    if not declared:
+        raise GuardrailViolation(
+            f"external agent {principal.agent_id!r} v{agent_version} has no "
+            "registered toolset allow-list; register the agent's permitted tools "
+            "before it can propose a write")
 
     # obo_sub present -> the agent acts on behalf of a real user, whose
     # per-resource grants scope its reach (the caller-gate binds). Absent ->
