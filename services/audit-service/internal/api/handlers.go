@@ -54,21 +54,21 @@ func (s *Server) presignTTL() time.Duration {
 // --- search --------------------------------------------------------------
 
 type eventDTO struct {
-	EventID     string          `json:"event_id"`
-	EventType   string          `json:"event_type"`
-	TenantID    string          `json:"tenant_id"`
-	Actor       actorDTO        `json:"actor"`
-	ViaAgent    *viaAgentDTO    `json:"via_agent"`
-	ResourceURN string          `json:"resource_urn"`
-	Action      string          `json:"action"`
-	OccurredAt  string          `json:"occurred_at"`
-	IngestedAt  string          `json:"ingested_at"`
-	TraceID     string          `json:"trace_id"`
-	PayloadDig  string          `json:"payload_digest"`
-	Payload     json.RawMessage `json:"payload,omitempty"`
-	BodyWithheld bool           `json:"body_withheld"`
-	ChainSeq    uint64          `json:"chain_seq"`
-	ChainHash   string          `json:"chain_hash"`
+	EventID      string          `json:"event_id"`
+	EventType    string          `json:"event_type"`
+	TenantID     string          `json:"tenant_id"`
+	Actor        actorDTO        `json:"actor"`
+	ViaAgent     *viaAgentDTO    `json:"via_agent"`
+	ResourceURN  string          `json:"resource_urn"`
+	Action       string          `json:"action"`
+	OccurredAt   string          `json:"occurred_at"`
+	IngestedAt   string          `json:"ingested_at"`
+	TraceID      string          `json:"trace_id"`
+	PayloadDig   string          `json:"payload_digest"`
+	Payload      json.RawMessage `json:"payload,omitempty"`
+	BodyWithheld bool            `json:"body_withheld"`
+	ChainSeq     uint64          `json:"chain_seq"`
+	ChainHash    string          `json:"chain_hash"`
 }
 
 type actorDTO struct {
@@ -399,6 +399,41 @@ func (s *Server) handleAIDecisionLog(w http.ResponseWriter, r *http.Request) {
 	s.handlePack(w, r, "ai_decision_log", func(ctx context.Context, tenant uuid.UUID, from, to time.Time, ag string) (string, string, error) {
 		return s.Compliance.AIDecisionLog(ctx, tenant, from, to, ag)
 	})
+}
+
+// handleEvidencePack (BRD 60 WS5): synchronous single-decision auditor evidence
+// pack. Unlike the SOC2/AI-decision-log packs (tenant+range, async zip), this is
+// one decision, small, and returned inline so an auditor (or the demo) gets the
+// tamper-evident document in a single call. Tenant always from the verified JWT.
+func (s *Server) handleEvidencePack(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ProposalID string `json:"proposal_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ProposalID == "" {
+		writeErr(w, r, domain.EValidation("proposal_id is required", nil))
+		return
+	}
+	claims := ClaimsFrom(r.Context())
+	tenant, terr := claims.Tenant()
+	if terr != nil {
+		writeErr(w, r, domain.EValidation("tenant missing from token", nil))
+		return
+	}
+	pack, err := s.Compliance.EvidencePack(r.Context(), tenant, body.ProposalID, time.Now())
+	if err != nil {
+		if de, ok := err.(*domain.Error); ok {
+			writeErr(w, r, de)
+		} else {
+			writeErr(w, r, domain.EInternal(err.Error()))
+		}
+		return
+	}
+	if s.Meta != nil {
+		// The auditor pulling evidence is itself an audited read.
+		s.Meta.Searched(r.Context(), tenant, claims.Sub,
+			meta.FilterDigest("evidence-pack:"+body.ProposalID), true)
+	}
+	writeJSON(w, http.StatusOK, pack)
 }
 
 type packFn func(ctx context.Context, tenant uuid.UUID, from, to time.Time, agentID string) (string, string, error)

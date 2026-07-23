@@ -20,6 +20,7 @@ import (
 
 	"github.com/datacern-ai/audit-service/internal/chstore"
 	"github.com/datacern-ai/audit-service/internal/domain"
+	"github.com/datacern-ai/audit-service/internal/pgstore"
 	"github.com/datacern-ai/audit-service/internal/worm"
 )
 
@@ -27,6 +28,10 @@ import (
 type Builder struct {
 	CH   *chstore.Store
 	WORM *worm.Client
+	// PG is required only by EvidencePack (BRD 60 WS5) — the chain-proof step
+	// reads chain_heads + sealed manifests. The SOC2/AIDecisionLog packs don't
+	// need it, so it stays optional (nil-safe) for backward compatibility.
+	PG *pgstore.Store
 }
 
 // eventCSVHeader is the stable column order for event CSVs.

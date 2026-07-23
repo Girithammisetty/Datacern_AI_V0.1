@@ -237,7 +237,7 @@ func main() {
 		PG:          pg,
 		Redis:       redis,
 		WORM:        wormClient,
-		Compliance:  &compliance.Builder{CH: ch, WORM: wormClient},
+		Compliance:  &compliance.Builder{CH: ch, WORM: wormClient, PG: pg},
 		Redriver:    consumer,
 		Meta:        metaEmitter,
 		Authz:       az,

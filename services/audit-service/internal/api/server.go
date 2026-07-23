@@ -73,6 +73,9 @@ func (s *Server) Router() http.Handler {
 		r.With(s.RequireAction(authz.ActionExportRead)).Get("/exports", s.handleListExports)
 		r.With(s.RequireAction(authz.ActionComplianceRead)).Post("/compliance/soc2-pack", s.handleSOC2Pack)
 		r.With(s.RequireAction(authz.ActionComplianceRead)).Post("/compliance/ai-decision-log", s.handleAIDecisionLog)
+		// BRD 60 WS5 — single-decision auditor evidence pack (reuses the
+		// already-registered audit.compliance.read action; it's a compliance read).
+		r.With(s.RequireAction(authz.ActionComplianceRead)).Post("/compliance/evidence-pack", s.handleEvidencePack)
 		r.With(s.RequireAction(authz.ActionComplianceRead)).Get("/operations/{id}", s.handleGetOperation)
 		r.With(s.RequireAction(authz.ActionDLQRedrive)).Post("/admin/dlq/redrive", s.handleRedrive)
 

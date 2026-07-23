@@ -124,11 +124,17 @@ of the internal `persona_copilot` graph to a request-scoped enforcement point
 that also covers the external-intent ingress, closing the one control that does
 not automatically transfer to external callers today.
 
-## WS5 — SDK + compliance-evidence export — planned
+## WS5 — SDK + compliance-evidence export
 
-A thin client SDK (the customer's agent calls "propose(tool, args)") and an
-auditor-facing evidence export ("here is the WORM audit pack for this decision")
-— the tangible artifacts that make the differentiation demoable.
+The tangible artifacts that make the differentiation demoable: an auditor-facing
+evidence export ("here is the tamper-evident audit pack for this decision") and
+a thin client SDK (the customer's agent calls "propose(tool, args)").
+
+### Implement / Test
+- [x] auditor evidence-pack endpoint (audit-service) — see Implementation & Test
+  log; live-verified through the real OPA auth path against the running WORM store.
+- [ ] BFF query + ui-web "download/view evidence pack" on the decision detail.
+- [ ] thin client SDK (propose/list-tools helpers).
 
 ---
 
@@ -200,3 +206,48 @@ data_scope/budget/PII envelope to the ingress is WS4.
 
 _Next: WS2 (dedicated external-agent self-service credential + `/token/agent/
 external` exchange) — gated on the next explicit go-ahead._
+
+### WS5 — auditor evidence-pack (audit-service) — DONE
+
+**The demoable differentiator: "here is the tamper-evident audit pack for this
+decision."** Given one governed decision (`proposal_id`), audit-service now
+assembles an auditor-facing evidence pack — everything an examiner needs to see
+who proposed, who approved (a DISTINCT human), when, the exact governed tool
+call, and cryptographic proof the record wasn't altered.
+
+**Research before building** confirmed the entire supply already exists and just
+needed composing (no async/zip machinery for a single small decision): resource/
+trace-scoped `chstore.Search`, per-day `ChainScan` + `chain.Verify`, the sealed-
+manifest proof (`pgstore.GetChainHead.SealedAt` + `LatestManifest`), and the
+proposal↔tool join recipe already used by the existing `AIDecisionLog` pack.
+
+**Implementation** (`services/audit-service`): new `internal/compliance/
+evidence.go` — `Builder.EvidencePack(tenant, proposalID)` gathers the proposal
+lifecycle (exact `wr:{tenant}:agent:proposal/{id}` URN) + the executed
+`ai.tool_invoked.v1` calls (shared `trace_id`), embeds each event's immutable
+chain position, and per distinct chain-day re-verifies the hash chain against
+its sealed WORM manifest. A pure `summarizeDecision` derives the four-eyes claim
+(`four_eyes = a distinct human approver != the on-behalf-of user`). New
+synchronous `POST /compliance/evidence-pack` returns the pack inline (the pack
+is small — one decision). Reuses the already-registered `audit.compliance.read`
+OPA action (deliberately, to sidestep the recurring rbac-catalog-gap bug class).
+`compliance.Builder` gained an optional `PG` (nil-safe; the SOC2/AI-decision-log
+packs don't need it).
+
+**Test:** 4 pure unit tests for `summarizeDecision` (four-eyes true; self-
+approval is NOT four-eyes; rejected outcome; autonomous-no-approver). A
+Docker-backed integration test seeds a real 3-event decision (agent-proposed
+on-behalf-of u-alice → tool executed → approved by a DISTINCT human u-bob) into
+real ClickHouse with a correctly-computed hash chain, seals the day, and asserts
+the pack proves `four_eyes=true` AND `sealed/valid/manifest_match` end to end;
+plus an unknown-proposal → NOT_FOUND. Full audit-service unit suite green.
+
+**Live-verified end to end** against the running stack (user-approved audit-
+service restart): minted a real `typ=service` token scoped `audit.compliance.
+read`, POSTed the external-agent proposal from WS1 inc-1 → `200` with the pack
+assembled from the **real running WORM store** (real `chain_seq: 407`, real
+`chain_hash`, `via_agent: acme-ext-bot`), and — critically — the chain-proof for
+today's still-unsealed day honestly reported `sealed: false` / "verifiable once
+the daily WORM export seals it" rather than fabricating a verification. A token
+WITHOUT the scope → `403` (the OPA gate bites); an unknown proposal → `404` (no
+fabricated empty pack).
