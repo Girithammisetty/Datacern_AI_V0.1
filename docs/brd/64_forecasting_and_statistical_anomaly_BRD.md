@@ -60,3 +60,11 @@ all five metrics + a weighted composite, fail-closed on bad params. Retired-plac
 tests updated (`test_algorithms.py`, `test_catalog_bootstrap.py` now assert z-score is
 runnable). Full pipeline-orchestrator suite green (**152**); `model_training` suite
 green. No regression.
+
+### Live-verified (2026-07-23)
+
+Drove the REAL `LocalTrainingExecutor` against running MLflow (:5500): a
+`stats_forecast` run (AutoARIMA, season 12, horizon 6) logged real backtest
+mae/rmse; a `z_score_based_anomaly_detection` run flagged the stark outlier group
+(n_anomalies=1, rate=0.17, 6 groups). Both persisted real runs + result artifacts
+in MLflow. Executor bugs found+fixed in commit 261b0f5.

@@ -110,3 +110,14 @@ proposal, and omits it when not asked. Full pipeline-orchestrator suite green
 
 _inc3 (live-verify): drive a tuned training run through the real training path +
 `model_training` agent against the running stack (next)._
+
+### Live-verified (2026-07-23)
+
+Drove the REAL `LocalTrainingExecutor` against the running MLflow (:5500),
+`scratchpad/parity_live_verify.py`: a `random_forest` run with `{search:grid,
+cv_folds:3}` logged `hpo_search=1.0` + `cv_score≈0.95` + `roc_auc≈0.96` (real
+GridSearchCV+CV); `light_gbm` is the real `lightgbm.sklearn.LGBMClassifier` and
+trains+logs a run; rich metrics present; runs persisted in live MLflow. This
+surfaced + fixed 3 real bugs the unit tier missed (commit 261b0f5): mlflow
+LightGBM-flavor logging, the tabular-prep crash on non-tabular inputs, and a
+logger UnboundLocalError.
