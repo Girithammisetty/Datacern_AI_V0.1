@@ -1,6 +1,6 @@
 # BRD 60 — External Agent Governance
 
-**Status:** in-progress — 2026-07-22 · inc-1 landed
+**Status:** COMPLETE — 2026-07-23 · WS1–WS5 + allow-list closure landed & live-verified
 **Owner:** platform · **Related:** BRD 53 (custom agents), tool-plane MCP gateway, ProposalService four-eyes, audit WORM chain, memories `project_windrose_custom_agents`, `project_windrose_ml_engineer_agent`, `project_windrose_decision_writeback`
 
 ---
