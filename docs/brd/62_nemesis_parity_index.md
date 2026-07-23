@@ -80,7 +80,7 @@ registry (real where locally testable; cloud legs honestly infra-gated, never fa
 
 | BRD | Gaps | State |
 |-----|------|-------|
-| **62** local pipeline execution + operator parity | P1, P3, P4, P5 | **inc1 DONE** (operators + local executor + parity params, 27 tests). inc2 (data_pipeline_builder agent + run-lifecycle persistence) pending — persistence needs the Iceberg-commit write path (ingestion-service), flagged infra follow-up. |
+| **62** local pipeline execution + operator parity | P1, P3, P4, P5 | **inc1 + inc2 DONE** (operators + local executor + parity params, 27 tests; `data_pipeline_builder` agent + generic `pipeline.template.create` tool, 3 tests). inc3 (run-lifecycle persistence of a computed output dataset) deferred — needs the Iceberg-commit write path (ingestion-service), the one infra-heavy leg. |
 | **63** classic-ML training completeness | M1, M4, M5, M6, M7, M8 | **DONE** (real HPO/CV/feature-selection/LightGBM/regularized-linear/rich-metrics + `model_training` tuning proposals; 16 tests). |
 | **64** forecasting + statistical anomaly | M2, M3 | **DONE** (real StatsForecast + z-score engine + agent hints; 13 tests). |
 | **65** warehouse write-back sinks | P2 | pending — infra-gated (Athena/BigQuery/Synapse); lowest local value. |
