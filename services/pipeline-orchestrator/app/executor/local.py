@@ -186,16 +186,23 @@ class LocalTrainingExecutor:
         family = _family(spec.algorithm, spec.model_type)
         label_col = spec.label_column
 
-        if family in ("classification", "regression") and label_col and label_col in df:
-            y_raw = df[label_col]
-            X = df.drop(columns=[label_col])
+        # BRD 64: forecasting / statistical anomaly consume spec.rows directly (a
+        # series / grouped rows) — skip the tabular X/y feature prep, which would
+        # crash on a single-column series ("No objects to concatenate").
+        _special = spec.algorithm in ("stats_forecast", "z_score_based_anomaly_detection")
+        if _special:
+            y_raw, X, feature_names = None, pd.DataFrame(), []
         else:
-            y_raw = None
-            X = df.drop(columns=[label_col]) if (label_col and label_col in df) else df
+            if family in ("classification", "regression") and label_col and label_col in df:
+                y_raw = df[label_col]
+                X = df.drop(columns=[label_col])
+            else:
+                y_raw = None
+                X = df.drop(columns=[label_col]) if (label_col and label_col in df) else df
 
-        X = pd.get_dummies(X, dummy_na=False)
-        X = X.apply(pd.to_numeric, errors="coerce").fillna(0.0)
-        feature_names = list(X.columns)
+            X = pd.get_dummies(X, dummy_na=False)
+            X = X.apply(pd.to_numeric, errors="coerce").fillna(0.0)
+            feature_names = list(X.columns)
 
         run_kwargs = {"run_id": spec.mlflow_run_id} if spec.mlflow_run_id else {}
         with mlflow.start_run(**run_kwargs) as run:
@@ -251,7 +258,7 @@ class LocalTrainingExecutor:
                     registered_model_name=registered_name, model_version=version,
                     metrics=metrics, params=dict(spec.params or {}), row_count=len(df))
         logger.info("trained %s run=%s metrics=%s", spec.algorithm, result.mlflow_run_id,
-                    metrics)
+                    result.metrics)
         return result
 
     def _fit_and_score(self, estimator, X, y_raw, family, train_test_split, *,
@@ -379,10 +386,14 @@ class LocalTrainingExecutor:
 
     def _log_model(self, mlflow, estimator, X, spec: TrainingSpec):
         # Flavor-aware logging: mlflow>=3 loads sklearn-flavor models through
-        # skops' trust gate, which rejects xgboost.* types — XGB estimators
-        # must go through the xgboost flavor (still pyfunc-loadable downstream).
-        if type(estimator).__module__.startswith("xgboost"):
+        # skops' trust gate, which rejects native xgboost.*/lightgbm.* types — those
+        # estimators must go through their own flavor (still pyfunc-loadable
+        # downstream). BRD 63: lightgbm added alongside xgboost.
+        module = type(estimator).__module__
+        if module.startswith("xgboost"):
             import mlflow.xgboost as flavor
+        elif module.startswith("lightgbm"):
+            import mlflow.lightgbm as flavor
         else:
             import mlflow.sklearn as flavor
 
