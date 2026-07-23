@@ -41,6 +41,15 @@ type Consumer struct {
 	Log            *slog.Logger
 	RescanInterval time.Duration
 	DedupTTL       time.Duration
+	// BatchSize/BatchWindow bound the micro-batch consume() accumulates before
+	// calling Processor.HandleBatch (B8, scalability audit): audit-service is
+	// the highest-volume consumer, and processing one Kafka message at a time
+	// paid a full chain-lock + ClickHouse-insert round trip per event. A batch
+	// always contains at least 1 message (the first FetchMessage of a cycle
+	// blocks as before) and grows up to BatchSize or until BatchWindow elapses
+	// since that first message, whichever comes first. Defaults: 200 / 200ms.
+	BatchSize   int
+	BatchWindow time.Duration
 }
 
 // recordExister lets the dedup path confirm an event truly landed (closes the
@@ -142,71 +151,144 @@ func (c *Consumer) consume(ctx context.Context, topics []string) {
 		MaxBytes:    10 << 20,
 	})
 	defer reader.Close()
+	size := c.BatchSize
+	if size <= 0 {
+		size = 200
+	}
+	window := c.BatchWindow
+	if window <= 0 {
+		window = 200 * time.Millisecond
+	}
 	for {
-		msg, err := reader.FetchMessage(ctx)
-		if err != nil {
-			if ctx.Err() != nil {
-				return
-			}
-			c.log().Error("kafka fetch failed", "err", err)
-			if !sleep(ctx, time.Second) {
-				return
-			}
-			continue
-		}
-		if err := c.processMsg(ctx, msg); err != nil {
-			// Transient store outage: pause — do not commit (BR-6). ctx was
-			// cancelled (shutdown/rescan); leave the offset for redelivery.
+		msgs := c.fetchBatch(ctx, reader, size, window)
+		if ctx.Err() != nil {
 			return
 		}
-		if err := reader.CommitMessages(ctx, msg); err != nil && ctx.Err() == nil {
+		if len(msgs) == 0 {
+			continue // transient fetch error on the blocking first fetch; already logged+backed off
+		}
+		if err := c.processBatch(ctx, msgs); err != nil {
+			// Transient store outage: pause — do not commit (BR-6). ctx was
+			// cancelled (shutdown/rescan); leave the offsets for redelivery.
+			return
+		}
+		if err := reader.CommitMessages(ctx, msgs...); err != nil && ctx.Err() == nil {
 			c.log().Error("kafka commit failed", "err", err)
 		}
 	}
 }
 
-// processMsg handles one message. Returns nil when the offset may be committed
-// (success, true-duplicate, or DLQ'd); returns a non-nil error only when it must
-// pause without committing (ctx cancelled mid transient-retry).
-func (c *Consumer) processMsg(ctx context.Context, msg kafka.Message) error {
-	var env domain.Envelope
-	if err := json.Unmarshal(msg.Value, &env); err != nil {
-		return c.toDLQ(ctx, msg, domain.ReasonPayloadDecode, err)
+// fetchBatch blocks for the first message exactly like the old one-at-a-time
+// loop (same read-error backoff), then opportunistically pulls more messages
+// with a shrinking per-call deadline until size is reached or window elapses
+// since the first message arrived. Never returns partial batches for reasons
+// other than "no more messages arrived in time" — a genuine read error after
+// the first message just stops accumulation early; the batch collected so far
+// is still processed, and the failing fetch surfaces again on the next cycle.
+func (c *Consumer) fetchBatch(ctx context.Context, reader *kafka.Reader, size int, window time.Duration) []kafka.Message {
+	first, err := reader.FetchMessage(ctx)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		c.log().Error("kafka fetch failed", "err", err)
+		sleep(ctx, time.Second)
+		return nil
 	}
-	src := Source{Topic: msg.Topic, Partition: msg.Partition, Offset: msg.Offset}
+	msgs := []kafka.Message{first}
+	deadline := time.Now().Add(window)
+	for len(msgs) < size {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		fetchCtx, cancel := context.WithTimeout(ctx, remaining)
+		next, err := reader.FetchMessage(fetchCtx)
+		cancel()
+		if err != nil {
+			break
+		}
+		msgs = append(msgs, next)
+	}
+	return msgs
+}
 
-	// Dedup (MASTER-FR-032) with crash-window recovery: a "duplicate" that is not
-	// actually in the store is reprocessed so no acked event is lost.
-	if c.Dedup != nil && env.EventID != uuid.Nil {
-		ttl := c.DedupTTL
-		if ttl <= 0 {
-			ttl = 24 * time.Hour
-		}
-		fresh, err := c.Dedup.SetNX(ctx, "audit:dedup:"+env.EventID.String(), ttl)
-		if err == nil && !fresh {
-			if c.CH != nil && env.TenantID != uuid.Nil {
-				if rec, gerr := c.CH.GetEvent(ctx, env.TenantID, env.EventID); gerr == nil && rec != nil {
-					return nil // genuine duplicate, already stored
-				}
-			} else {
-				return nil
+// processBatch decodes and dedups every message, runs the survivors through
+// Processor.HandleBatch (one chain-lock hold per tenant + one ClickHouse
+// InsertBatch for the whole micro-batch, B8), and DLQs each terminal-error
+// item individually. Returns nil when every message in msgs may be committed
+// (stored, true-duplicate, or DLQ'd); returns a non-nil error only when it
+// must pause without committing any of them (BR-6) — ctx cancelled mid
+// transient-retry, or a DLQ publish itself could not complete.
+func (c *Consumer) processBatch(ctx context.Context, msgs []kafka.Message) error {
+	items := make([]Item, 0, len(msgs))
+	owners := make([]int, 0, len(msgs)) // owners[j] = index into msgs for items[j]
+
+	for i, msg := range msgs {
+		var env domain.Envelope
+		if err := json.Unmarshal(msg.Value, &env); err != nil {
+			if err := c.toDLQ(ctx, msg, domain.ReasonPayloadDecode, err); err != nil {
+				return err
 			}
-			// fall through: reprocess (recover a lost pre-insert crash window)
+			continue
 		}
+
+		// Dedup (MASTER-FR-032) with crash-window recovery: a "duplicate" that
+		// is not actually in the store is reprocessed so no acked event is lost.
+		if c.Dedup != nil && env.EventID != uuid.Nil {
+			ttl := c.DedupTTL
+			if ttl <= 0 {
+				ttl = 24 * time.Hour
+			}
+			fresh, err := c.Dedup.SetNX(ctx, "audit:dedup:"+env.EventID.String(), ttl)
+			if err == nil && !fresh {
+				if c.CH != nil && env.TenantID != uuid.Nil {
+					if rec, gerr := c.CH.GetEvent(ctx, env.TenantID, env.EventID); gerr == nil && rec != nil {
+						continue // genuine duplicate, already stored -> committable
+					}
+				} else {
+					continue
+				}
+				// fall through: reprocess (recover a lost pre-insert crash window)
+			}
+		}
+
+		items = append(items, Item{
+			Source: Source{Topic: msg.Topic, Partition: msg.Partition, Offset: msg.Offset},
+			Env:    env,
+		})
+		owners = append(owners, i)
+	}
+
+	if len(items) == 0 {
+		return nil
 	}
 
 	backoff := 200 * time.Millisecond
 	for {
-		err := c.Processor.Handle(ctx, src, env)
+		results, err := c.Processor.HandleBatch(ctx, items)
 		if err == nil {
+			for j, itemErr := range results {
+				if itemErr == nil {
+					continue
+				}
+				var term *TerminalError
+				if !asTerminal(itemErr, &term) {
+					// HandleBatch's contract is: per-item results are always
+					// *TerminalError (anything else comes back as the batch-
+					// wide err instead). Defensive only — should not happen.
+					c.log().Error("unexpected per-item ingest error", "err", itemErr)
+					continue
+				}
+				if err := c.toDLQ(ctx, msgs[owners[j]], term.Reason, term.Err); err != nil {
+					return err
+				}
+			}
 			return nil
 		}
-		var term *TerminalError
-		if asTerminal(err, &term) {
-			return c.toDLQ(ctx, msg, term.Reason, term.Err)
-		}
-		// Transient: pause and retry the same message (BR-6).
-		c.log().Warn("ingest transient error; pausing", "topic", msg.Topic, "err", err)
+		// Transient: pause and retry the SAME batch (BR-6). items/owners are
+		// stable across retries — HandleBatch does not mutate its input.
+		c.log().Warn("ingest transient error; pausing batch", "size", len(items), "err", err)
 		if !sleep(ctx, backoff) {
 			return ctx.Err()
 		}

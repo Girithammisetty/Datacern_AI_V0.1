@@ -22,9 +22,9 @@ import (
 // each event_id (a transient outage, BR-6), succeeding on retry. UNIT-TEST
 // DOUBLE ONLY — never wired into cmd/server.
 type flakyInserter struct {
-	real   *chstore.Store
-	mu     sync.Mutex
-	seen   map[uuid.UUID]bool
+	real *chstore.Store
+	mu   sync.Mutex
+	seen map[uuid.UUID]bool
 }
 
 func (f *flakyInserter) Insert(ctx context.Context, r domain.Record) error {
@@ -36,6 +36,18 @@ func (f *flakyInserter) Insert(ctx context.Context, r domain.Record) error {
 		return fmt.Errorf("transient clickhouse outage")
 	}
 	return f.real.Insert(ctx, r)
+}
+
+// InsertBatch applies the same first-attempt-fails-per-event_id rule as
+// Insert. Not exercised today (the Kafka consumer still calls Handle, not
+// HandleBatch), kept only to satisfy ingest.RecordInserter.
+func (f *flakyInserter) InsertBatch(ctx context.Context, recs []domain.Record) error {
+	for _, r := range recs {
+		if err := f.Insert(ctx, r); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // TestAC11_TransientClickHouseNoGap: a transient ClickHouse insert failure that

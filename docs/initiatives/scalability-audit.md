@@ -1,11 +1,12 @@
 # Scalability bottleneck audit (millions of records / cases per tenant)
 
-**Status:** mostly implemented — 2026-07-23 · see [BRD 58 WS4](../brd/58_production_hardening_BRD.md#ws4--scalability-blockers-from-the-audit-gates-millionstenant)
-for the landed fixes and test evidence. B1, B2, B3, B4, B5, B6, B7 DONE;
+**Status:** all BLOCKER-tier items done or partial — 2026-07-23 · see
+[BRD 58 WS4](../brd/58_production_hardening_BRD.md#ws4--scalability-blockers-from-the-audit-gates-millionstenant)
+for the landed fixes and test evidence. B1, B2, B3, B4, B5, B6, B7, B8 DONE;
 B9/B10 PARTIAL (AWS managed OpenSearch + configurable shards done, ClickHouse
-HA + GCP/Azure parity still open); **B8 still open** (audit-service per-record
-insert, no batching). RISK-tier items below are unverified against current
-code — treat as still open unless a BRD 58 log entry says otherwise.
+HA + GCP/Azure parity still open). RISK-tier items below are unverified
+against current code — treat as still open unless a BRD 58 log entry says
+otherwise.
 **Related:** [stability-durability](stability-durability.md), memory `project_datacern_stability_doctor`
 
 ---
@@ -49,19 +50,20 @@ Priority order (highest value / lowest risk first):
 4. **B9+B10 — provision ClickHouse + OpenSearch** in Helm/Terraform: persistent + replicated, configurable shards/replicas, retention/TTL. Required before real scale. **PARTIAL** — AWS managed OpenSearch + configurable shards done; ClickHouse HA and GCP/Azure parity still open.
 5. **B5 — bulk `_bulk` reindex + batched reads + `(tenant_id,created_at)` index.** Needed for scale *and* the stability self-heal. **DONE**, load-tested at 1M cases (1m15.8s).
 6. **B4 — DuckDB view instead of table-copy materialization.** One-line fix in `query-service`; live-verified against real MinIO/Iceberg data that it registers a VIEW and DuckDB pushes column projection into the parquet scan. **DONE**, added after the original roadmap — see BRD 58 log.
-7. **B8 — audit-service batch insert + lock scope.** Still open — the highest-volume consumer (`chstore.Insert` → `InsertBatch([]{r})`, one record at a time) has never been touched.
+7. **B8 — audit-service batch chain-append + batch ClickHouse insert.** Batched the Kafka consume loop (bounded micro-batch, default 200 msgs / 200ms), `chain.Manager.AppendBatch` (one lock hold + one atomic Redis pipeline + one Postgres checkpoint per tenant group instead of per event), and `chstore.InsertBatch` for the whole micro-batch. **DONE** — see BRD 58 log.
 
 ---
 
 ## 3. Implementation & Test
 See [BRD 58 WS4](../brd/58_production_hardening_BRD.md#ws4--scalability-blockers-from-the-audit-gates-millionstenant)
 for the full implement/test log per item, including live-data and 1M-row
-load-test evidence. B8 and the RISK tier below remain unaddressed and still
-need the same rigor: a load test at the target row count, not just unit tests.
+load-test evidence. The RISK tier below remains unaddressed and still needs
+the same rigor: a load test at the target row count, not just unit tests.
 
-**Verdict (updated 2026-07-23):** 6 of 7 BLOCKER-tier items are done, two of
-them load-test-proven at 1M rows (B1: 25MB peak memory regardless of scale;
-B5: 1M-case reindex in 1m15.8s). B9/B10 is partial (AWS only, no ClickHouse
-HA). B8 (audit-service batching) and the full RISK tier are still open — those
-are what stands between "scales to millions on the read/ingest/reindex path"
-and "scales to millions everywhere."
+**Verdict (updated 2026-07-23):** all 8 BLOCKER-tier items are done, three of
+them load-test/live-proven against real infra (B1: 25MB peak memory
+regardless of scale; B5: 1M-case reindex in 1m15.8s; B8: byte-identical
+chain output batched vs. sequential, verified against real Redis/Postgres/
+ClickHouse/Kafka). B9/B10 is partial (AWS only, no ClickHouse HA). The
+RISK tier is what stands between "scales to millions on the read/ingest/
+reindex/audit path" and "scales to millions everywhere."

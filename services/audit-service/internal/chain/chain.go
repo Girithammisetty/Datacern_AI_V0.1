@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -171,6 +172,181 @@ func (m *Manager) Append(ctx context.Context, tenant, eventID uuid.UUID, payload
 		}
 	}
 	return link, nil
+}
+
+// BatchItem is one event's chain-append request within AppendBatch. All items
+// in a call must belong to the same tenant (grouping is the caller's job —
+// the chain is per-(tenant,day), so cross-tenant batching would gain nothing
+// and only complicate the single lock hold below).
+type BatchItem struct {
+	EventID       uuid.UUID
+	PayloadDigest string
+	OccurredAt    time.Time
+}
+
+// AppendBatch assigns chain positions for many same-tenant events in one lock
+// hold, one pipelined Redis round trip, and one Postgres checkpoint — instead
+// of Append's per-event lock acquire/release + ~4 Redis round trips + 1
+// Postgres upsert (B8, scalability audit: audit-service is the
+// highest-volume consumer and this per-event cost was its throughput
+// ceiling). Returns links in the same order as items. Result is identical to
+// calling Append once per item under one continuously-held lock — this is
+// purely a throughput optimization, not a behavior change.
+func (m *Manager) AppendBatch(ctx context.Context, tenant uuid.UUID, items []BatchItem) ([]Link, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	if len(items) == 1 {
+		link, err := m.Append(ctx, tenant, items[0].EventID, items[0].PayloadDigest, items[0].OccurredAt)
+		if err != nil {
+			return nil, err
+		}
+		return []Link{link}, nil
+	}
+
+	date := m.now().Format("2006-01-02")
+	links := make([]Link, len(items))
+	assignKeys := make([]string, len(items))
+	for i, it := range items {
+		assignKeys[i] = fmt.Sprintf("audit:chain:assign:%s:%s", tenant, it.EventID)
+	}
+
+	// Fast path (mirrors Append's single-event fast path): a batch redelivered
+	// after a crash between "Redis committed" and "Kafka offset committed" may
+	// find some or all of its events already assigned. No lock needed to read.
+	pending, err := m.batchMissingAssignments(ctx, assignKeys, links)
+	if err != nil {
+		return nil, err
+	}
+	if len(pending) == 0 {
+		return links, nil
+	}
+
+	lockKey := fmt.Sprintf("audit:chain:lock:%s:%s", tenant, date)
+	token := uuid.NewString()
+	if err := m.acquire(ctx, lockKey, token); err != nil {
+		return nil, err
+	}
+	defer func() { _ = releaseScript.Run(ctx, m.redis.R, []string{lockKey}, token).Err() }()
+
+	// Re-check under the lock: another replica may have assigned some of the
+	// still-pending items between our first check and acquiring the lock.
+	pending, err = m.batchMissingAssignments(ctx, subsetOf(assignKeys, pending), links, pending...)
+	if err != nil {
+		return nil, err
+	}
+	if len(pending) == 0 {
+		return links, nil
+	}
+
+	seqKey := fmt.Sprintf("audit:chain:seq:%s:%s", tenant, date)
+	headKey := fmt.Sprintf("audit:chain:head:%s:%s", tenant, date)
+
+	exists, err := m.redis.Exists(ctx, seqKey)
+	if err != nil {
+		return nil, fmt.Errorf("chain seq check: %w", err)
+	}
+	var seq uint64
+	var prev string
+	if !exists {
+		seq, prev, err = m.seed(ctx, tenant, date)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		seqStr, _, err := m.redis.Get(ctx, seqKey)
+		if err != nil {
+			return nil, fmt.Errorf("chain seq read: %w", err)
+		}
+		seq, _ = strconv.ParseUint(seqStr, 10, 64)
+		headStr, ok, err := m.redis.Get(ctx, headKey)
+		if err != nil {
+			return nil, fmt.Errorf("chain head read: %w", err)
+		}
+		if ok {
+			prev = headStr
+		} else {
+			prev = domain.GenesisHash(tenant, date)
+		}
+	}
+
+	// Assign every still-pending item IN ORDER off one local running counter
+	// and running prev-hash, then write everything back in one atomic
+	// pipeline (MULTI/EXEC) — stronger than Append's original sequence of
+	// separate SET calls, since a mid-write crash here can no longer land
+	// between "assignment written" and "head advanced" for different events.
+	pipe := m.redis.R.TxPipeline()
+	for _, idx := range pending {
+		it := items[idx]
+		seq++
+		hash := domain.ChainHash(prev, it.EventID, it.PayloadDigest, it.OccurredAt)
+		link := Link{ChainDate: date, Seq: seq, Hash: hash}
+		links[idx] = link
+		prev = hash
+		b, _ := json.Marshal(link)
+		pipe.Set(ctx, assignKeys[idx], string(b), m.keyTTL)
+	}
+	pipe.Set(ctx, seqKey, seq, m.keyTTL)
+	pipe.Set(ctx, headKey, prev, m.keyTTL)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return nil, fmt.Errorf("chain batch persist: %w", err)
+	}
+
+	// Postgres checkpoint: one upsert for the whole group's final state,
+	// same best-effort tolerance as Append (see its comment) — the live
+	// sequence always reseeds from the durable ClickHouse tip, never from
+	// this checkpoint.
+	if err := m.pg.UpsertChainHead(ctx, tenant, date, prev, seq); err != nil {
+		if m.metrics != nil {
+			m.metrics.ChainHeadUpsertFailures.Inc()
+		}
+	}
+	return links, nil
+}
+
+// batchMissingAssignments pipelines a GET per key in keys and fills links at
+// the corresponding original index (from origIdx, or 0..len(keys)-1 when
+// origIdx is empty) for every hit. Returns the original indices that missed.
+func (m *Manager) batchMissingAssignments(ctx context.Context, keys []string, links []Link, origIdx ...int) ([]int, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	pipe := m.redis.R.Pipeline()
+	cmds := make([]*redis.StringCmd, len(keys))
+	for i, k := range keys {
+		cmds[i] = pipe.Get(ctx, k)
+	}
+	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+		return nil, fmt.Errorf("chain batch assignment check: %w", err)
+	}
+	var missing []int
+	for i, cmd := range cmds {
+		idx := i
+		if len(origIdx) > 0 {
+			idx = origIdx[i]
+		}
+		raw, err := cmd.Result()
+		if err != nil {
+			missing = append(missing, idx)
+			continue
+		}
+		var link Link
+		if json.Unmarshal([]byte(raw), &link) != nil {
+			missing = append(missing, idx)
+			continue
+		}
+		links[idx] = link
+	}
+	return missing, nil
+}
+
+// subsetOf returns the elements of full at each index in idx.
+func subsetOf(full []string, idx []int) []string {
+	out := make([]string, len(idx))
+	for i, j := range idx {
+		out[i] = full[j]
+	}
+	return out
 }
 
 // seed computes the cold-start (seq, head) for a day from the durable store.

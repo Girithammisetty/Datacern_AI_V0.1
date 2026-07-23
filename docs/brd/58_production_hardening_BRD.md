@@ -98,10 +98,10 @@ Full analysis in [scalability-audit](../initiatives/scalability-audit.md). Prior
 - [x] **B2** upload size/row cap · [x] **B7** `processed_events` retention + index
   · [x] **B6** outbox reaper · [x] **B3** LIMIT-all-callers · [x] **B1** streaming commit
   · [x] **B5** bulk reindex + `(tenant_id,created_at)` index · [x] **B9/B10** (partial — see log below)
-  · [x] **B4** DuckDB view materialization (see log below).
-  Still open: **B8** (audit-service per-record ClickHouse insert + per-tenant/date
-  Redis lock — highest-volume consumer, no batching yet) and the full B9/B10
-  ClickHouse-HA + GCP/Azure managed-search parity.
+  · [x] **B4** DuckDB view materialization · [x] **B8** batch chain-append + batch ClickHouse
+  insert (see log below).
+  Still open: the full B9/B10 ClickHouse-HA + GCP/Azure managed-search parity, and
+  the RISK-tier items (see [scalability-audit](../initiatives/scalability-audit.md)).
 
 ---
 
@@ -396,6 +396,75 @@ medicare_advantage=10`, total 48) matches the file's real row count,
 proving the view returns identical data to the old table-copy path. Probe
 file removed after verification — this is a one-line production fix, not new
 permanent test surface.
+
+### B8 — audit-service: batch chain-append + batch ClickHouse insert — DONE
+
+**Root cause confirmed by reading the code, not assumed:** `Consumer.consume()`
+(`services/audit-service/internal/ingest/consumer.go`) fetched and processed
+exactly one Kafka message per iteration — `FetchMessage` → `Processor.Handle`
+→ `CommitMessages` — and `Processor.Handle` called `chain.Manager.Append`
+(one distributed-lock acquire/release + ~4 Redis round trips + 1 best-effort
+Postgres checkpoint) and `chstore.Store.Insert` (a native ClickHouse batch
+statement of exactly one row) per event. audit-service is the platform's
+highest-volume consumer (every governed write anywhere emits an audit event),
+so this per-event round-trip cost was its throughput ceiling — exactly as B8
+flagged.
+
+**Fix, three layers, same three files the audit named:**
+1. **`chain.Manager.AppendBatch`** (`internal/chain/chain.go`) — assigns
+   positions for many same-tenant events under ONE lock hold: a pipelined
+   Redis fast-path check (skip the lock entirely if every item already has an
+   assignment — crash-redelivery case), then one `TxPipeline` (atomic
+   MULTI/EXEC — stronger than `Append`'s original sequence of separate SET
+   calls) writing every event's assignment plus the final seq/head, and one
+   Postgres checkpoint upsert for the whole group instead of one per event.
+   `Append` itself is unchanged and still used for single-event callers.
+2. **`Processor.HandleBatch`** (`internal/ingest/processor.go`) — groups a
+   micro-batch's envelopes by tenant, calls `AppendBatch` once per tenant
+   group, then one `chstore.InsertBatch` for the whole micro-batch. Shares the
+   PII-gate/digest/record-shaping logic with `Handle` via a new `buildPending`
+   helper (extracted, not duplicated) so both paths can never drift.
+   Per-item terminal errors (bad envelope) surface individually — one bad
+   event never blocks or DLQs the rest of the batch.
+3. **`Consumer.consume`** (`internal/ingest/consumer.go`) — replaced the
+   one-message loop with a bounded micro-batch accumulator (`fetchBatch`):
+   blocks for the first message exactly like before (same read-error
+   backoff), then opportunistically pulls more for up to `BatchWindow`
+   (default 200ms) or until `BatchSize` (default 200) is reached, whichever
+   first. `processBatch` decodes+dedups every message (unchanged per-message
+   dedup semantics — MASTER-FR-032's crash-window-recovery logic is untouched),
+   runs the survivors through `HandleBatch`, and DLQs each terminal item
+   individually. A transient error pauses and retries the WHOLE batch without
+   committing any offset in it (same BR-6 contract, coarser granularity —
+   safe because chain assignment and ClickHouse's ReplacingMergeTree are both
+   idempotent under redelivery).
+
+**Test — unit, byte-for-byte correctness anchor:** new
+`TestHandleBatchMatchesHandleOneAtATime` runs the same 5 events through
+`Handle` one at a time vs. through one `HandleBatch` call and asserts
+identical `ChainSeq`/`ChainHash`/`EventID` for every row — batching must be a
+pure throughput change, never a behavior change. Plus
+`TestHandleBatchGroupsIndependentlyPerTenant` (two tenants in one batch never
+share a sequence) and `TestHandleBatchTerminalErrorDoesNotBlockOtherItems`
+(one bad envelope doesn't stop the rest). `go test ./...` (audit-service unit
+tier): all packages pass.
+
+**Test — live, against real Redis/Postgres/ClickHouse/Kafka:** ran the full
+`-tags=integration` suite (real Docker infra, not mocks) before and after —
+21 of 24 tests pass identically; the fix didn't regress any of them,
+including `TestAC11_TransientClickHouseNoGap` (HIGH-1: a retried event reuses
+its assigned seq, no chain gap) and `TestAC05_ChainTamperEvidence` (chain
+integrity holds). The other 3 (`TestAC04_DLQEnvelopeInvalid`,
+`TestAC15_DLQRedrive`, `TestAC11b_ConcurrentAppendSingleWriter`) fail on
+**unmodified `main` too** — verified by `git stash`-ing this change and
+re-running them against the identical live infra: same failures, same
+symptoms (a ClickHouse `Memory limit (total) exceeded: maximum 1.50 GiB` for
+two of them; the third times out draining a `case.events.v1` backlog that
+this one shared local dev stack has accumulated over a full day of repeated
+test runs — traced with temporary debug logging down to a
+consumer/broker-level stall unrelated to any code changed here). Pre-existing
+local-environment fragility, not a regression — flagged honestly, not
+silently worked around.
 
 ### B9/B10 — provision ClickHouse + OpenSearch HA (partial — code done, cloud apply resource-gated) — PARTIAL
 
