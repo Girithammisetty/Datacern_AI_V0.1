@@ -180,8 +180,15 @@ func (d *DuckDB) Execute(ctx context.Context, q Query, sink Sink) (Stats, error)
 	return stats, nil
 }
 
-// materialize loads httpfs, configures the S3 reader, and (re)creates each
-// requested dataset as a table in the worker's private catalog (QRY-FR-005).
+// materialize loads httpfs, configures the S3 reader, and (re)registers each
+// requested dataset as a VIEW over its parquet files in the worker's private
+// catalog (QRY-FR-005) — not a physical TABLE copy (B4, scalability audit):
+// a `CREATE TABLE AS SELECT *` would force DuckDB to eagerly read and copy
+// every row/column of the source files before the user's query ever runs,
+// even when that query only needs a handful of columns or a filtered slice.
+// A VIEW is metadata-only; the optimizer inlines it when the user SQL runs,
+// pushing projection and filter predicates straight into read_parquet's own
+// scan, so a query only pays for the columns/row-groups it actually touches.
 // Runs at most once per worker (one Execute == one worker), so INSTALL/LOAD
 // httpfs happens exactly once per query. Idents are engine-quoted by the
 // resolver (BR-1); URIs are single-quote-escaped defensively even though they
@@ -224,7 +231,7 @@ func (d *DuckDB) materialize(ctx context.Context, db *sql.DB, tables []TableSour
 			quoted[i] = sqlString(u)
 		}
 		list := "[" + strings.Join(quoted, ", ") + "]"
-		stmt := fmt.Sprintf("CREATE OR REPLACE TABLE %s AS SELECT * FROM read_parquet(%s)", t.Ident, list)
+		stmt := fmt.Sprintf("CREATE OR REPLACE VIEW %s AS SELECT * FROM read_parquet(%s)", t.Ident, list)
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("duckdb materialize %s: %w", t.Ident, err)
 		}

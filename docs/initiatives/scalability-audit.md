@@ -1,6 +1,11 @@
 # Scalability bottleneck audit (millions of records / cases per tenant)
 
-**Status:** analysis + fix roadmap — 2026-07-21 · implementation pending
+**Status:** mostly implemented — 2026-07-23 · see [BRD 58 WS4](../brd/58_production_hardening_BRD.md#ws4--scalability-blockers-from-the-audit-gates-millionstenant)
+for the landed fixes and test evidence. B1, B2, B3, B4, B5, B6, B7 DONE;
+B9/B10 PARTIAL (AWS managed OpenSearch + configurable shards done, ClickHouse
+HA + GCP/Azure parity still open); **B8 still open** (audit-service per-record
+insert, no batching). RISK-tier items below are unverified against current
+code — treat as still open unless a BRD 58 log entry says otherwise.
 **Related:** [stability-durability](stability-durability.md), memory `project_datacern_stability_doctor`
 
 ---
@@ -38,18 +43,25 @@ Read-only audit; evidence by `file:line`. Severity: BLOCKER (~1M) / RISK (~10M).
 
 Priority order (highest value / lowest risk first):
 
-1. **B1+B2 — streaming Iceberg commit + hard size cap.** Append via `iter_batches` / incremental `Table.append` instead of one full read; enforce a server-side max rows/bytes at upload assembly. *The true ingest ceiling — nothing else matters if data can't load.*
-2. **B6+B7 — retention reapers.** Copy usage-service `EnforceRetention` pattern: prune published outbox rows past a grace window; TTL `processed_events` (+ `created_at` index). Cheap, closes the unbounded-growth class.
-3. **B3 — wrap `ExecSQL` with the caller's LIMIT for all callers.** Small, isolated; big waste reduction.
-4. **B9+B10 — provision ClickHouse + OpenSearch** in Helm/Terraform: persistent + replicated, configurable shards/replicas, retention/TTL. Required before real scale.
-5. **B5 — bulk `_bulk` reindex + batched reads + `(tenant_id,created_at)` index.** Needed for scale *and* the stability self-heal.
+1. **B1+B2 — streaming Iceberg commit + hard size cap.** Append via `iter_batches` / incremental `Table.append` instead of one full read; enforce a server-side max rows/bytes at upload assembly. *The true ingest ceiling — nothing else matters if data can't load.* **DONE** — see BRD 58 log.
+2. **B6+B7 — retention reapers.** Copy usage-service `EnforceRetention` pattern: prune published outbox rows past a grace window; TTL `processed_events` (+ `created_at` index). Cheap, closes the unbounded-growth class. **DONE** (2 of 8 Python services deferred, tracked in BRD 58 log).
+3. **B3 — wrap `ExecSQL` with the caller's LIMIT for all callers.** Small, isolated; big waste reduction. **DONE**.
+4. **B9+B10 — provision ClickHouse + OpenSearch** in Helm/Terraform: persistent + replicated, configurable shards/replicas, retention/TTL. Required before real scale. **PARTIAL** — AWS managed OpenSearch + configurable shards done; ClickHouse HA and GCP/Azure parity still open.
+5. **B5 — bulk `_bulk` reindex + batched reads + `(tenant_id,created_at)` index.** Needed for scale *and* the stability self-heal. **DONE**, load-tested at 1M cases (1m15.8s).
+6. **B4 — DuckDB view instead of table-copy materialization.** One-line fix in `query-service`; live-verified against real MinIO/Iceberg data that it registers a VIEW and DuckDB pushes column projection into the parquet scan. **DONE**, added after the original roadmap — see BRD 58 log.
+7. **B8 — audit-service batch insert + lock scope.** Still open — the highest-volume consumer (`chstore.Insert` → `InsertBatch([]{r})`, one record at a time) has never been touched.
 
 ---
 
 ## 3. Implementation & Test
-Not started — this is the analysis + roadmap. Each item to be taken through
-analyze→design→implement→test as its own initiative doc. Verification for each
-must include a load test at the target row count, not just unit tests.
+See [BRD 58 WS4](../brd/58_production_hardening_BRD.md#ws4--scalability-blockers-from-the-audit-gates-millionstenant)
+for the full implement/test log per item, including live-data and 1M-row
+load-test evidence. B8 and the RISK tier below remain unaddressed and still
+need the same rigor: a load test at the target row count, not just unit tests.
 
-**Verdict:** cannot handle millions/tenant today; can to ~100k. Items 1–5 move it
-to "scales to millions." Read path is largely production-grade already.
+**Verdict (updated 2026-07-23):** 6 of 7 BLOCKER-tier items are done, two of
+them load-test-proven at 1M rows (B1: 25MB peak memory regardless of scale;
+B5: 1M-case reindex in 1m15.8s). B9/B10 is partial (AWS only, no ClickHouse
+HA). B8 (audit-service batching) and the full RISK tier are still open — those
+are what stands between "scales to millions on the read/ingest/reindex path"
+and "scales to millions everywhere."

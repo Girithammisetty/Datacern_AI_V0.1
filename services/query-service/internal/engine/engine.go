@@ -26,9 +26,12 @@ type Sink interface {
 }
 
 // TableSource is a dataset materialization request: the engine-quoted
-// identifier (e.g. `"main"."claims"`) to (re)create as a table over the given
-// physical object-store URIs before the user SQL runs (QRY-FR-005). Idents are
-// server-supplied by the resolver, never user text (BR-1).
+// identifier (e.g. `"main"."claims"`) to (re)register as a queryable relation
+// over the given physical object-store URIs before the user SQL runs
+// (QRY-FR-005). The DuckDB engine backs this with a VIEW, not a physical
+// table copy, so the user query's own projection/filter pushes down into the
+// parquet scan instead of paying for a full-dataset materialization. Idents
+// are server-supplied by the resolver, never user text (BR-1).
 type TableSource struct {
 	Ident  string   // engine-quoted, e.g. "main"."claims"
 	URIs   []string // physical files, e.g. s3://bucket/.../file.parquet

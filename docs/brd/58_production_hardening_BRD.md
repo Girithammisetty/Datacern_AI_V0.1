@@ -97,7 +97,11 @@ Full analysis in [scalability-audit](../initiatives/scalability-audit.md). Prior
 ### Implement / Test
 - [x] **B2** upload size/row cap · [x] **B7** `processed_events` retention + index
   · [x] **B6** outbox reaper · [x] **B3** LIMIT-all-callers · [x] **B1** streaming commit
-  · [x] **B5** bulk reindex + `(tenant_id,created_at)` index · [x] **B9/B10** (partial — see log below).
+  · [x] **B5** bulk reindex + `(tenant_id,created_at)` index · [x] **B9/B10** (partial — see log below)
+  · [x] **B4** DuckDB view materialization (see log below).
+  Still open: **B8** (audit-service per-record ClickHouse insert + per-tenant/date
+  Redis lock — highest-volume consumer, no batching yet) and the full B9/B10
+  ClickHouse-HA + GCP/Azure managed-search parity.
 
 ---
 
@@ -354,6 +358,44 @@ struct-alignment drift in `opensearch.go`'s `Doc` type, untouched by this
 change). OpenSearch had to be started for this dev stack (it wasn't running;
 confirmed with the user before booting it — a stopped datastore container
 only, no application service touched).
+
+### B4 — DuckDB view materialization instead of a full-table copy — DONE
+
+**Root cause confirmed by reading the code, not assumed:** `DuckDB.materialize()`
+(`services/query-service/internal/engine/duckdb.go`) ran
+`CREATE OR REPLACE TABLE %s AS SELECT * FROM read_parquet(%s)` for every
+dataset a query referenced — a physical copy of every row and every column
+of the source parquet file(s) into the worker's private catalog, executed
+*before* the user's actual SQL ever ran. A chart or case-detail lookup that
+only needs 1 of 20 columns, or 50 of 2M rows, still paid for the whole file.
+This engine handles "small/interactive execution" (queries route to Trino
+above a size threshold), so the blast radius is every chart resolve and every
+case-detail read that stays under that threshold — the common path, not the
+tail.
+
+**Fix:** changed the one line to `CREATE OR REPLACE VIEW %s AS SELECT * FROM
+read_parquet(%s)`. A view is metadata-only — DuckDB's optimizer inlines it
+when the user's query runs and pushes that query's own projection and filter
+predicates straight into the `read_parquet` scan, so only the columns/row
+groups the query actually touches are read. Each worker is single-connection
+and recycled after one query (BR-7 isolation), so there is no cross-query
+state a view could leak, and nothing here writes to the materialized
+relation — a read-only view is a strict improvement with no observed
+downside for this access pattern.
+
+**Test — live, against real MinIO/Iceberg data (not just unit tests):**
+`go test ./...` (query-service, full suite) green, 0 fails. Ran a temporary
+verification probe against a real ingested parquet file in the dev MinIO
+(`bronze.<tenant>/ds_<dataset>/data/...parquet`, 20 columns / 48 rows):
+confirmed `information_schema.tables.table_type = 'VIEW'` (not `BASE TABLE`);
+`EXPLAIN` on `SELECT payer_type, count(*) FROM "main"."claims" GROUP BY 1`
+shows the physical `READ_PARQUET` node's `Projections:` lists only
+`payer_type` — the one column the query needs, not all 20; the aggregate
+result itself (`commercial=19, managed_care=9, medicaid=10,
+medicare_advantage=10`, total 48) matches the file's real row count,
+proving the view returns identical data to the old table-copy path. Probe
+file removed after verification — this is a one-line production fix, not new
+permanent test surface.
 
 ### B9/B10 — provision ClickHouse + OpenSearch HA (partial — code done, cloud apply resource-gated) — PARTIAL
 
