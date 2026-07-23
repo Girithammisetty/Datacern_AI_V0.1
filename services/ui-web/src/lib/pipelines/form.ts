@@ -100,7 +100,7 @@ export function collect(params: PipelineStepParam[], values: ParamValues): Colle
       } else {
         parameters[p.name] = s;
       }
-    } else if (p.type === "object" || p.type === "array") {
+    } else if (p.type === "object" || p.type === "array" || p.type === "dictionary") {
       try {
         parameters[p.name] = JSON.parse(s);
       } catch {

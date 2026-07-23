@@ -84,6 +84,19 @@ describe("pipeline step-param form helpers", () => {
     });
   });
 
+  it("parses a `dictionary` param (non-string values, no key_value format) as JSON", () => {
+    // linear-combination.weights is dict[str,float] — can't be key_value (str→str),
+    // so it's a bare `dictionary`. The UI must still JSON-parse it, not store a string.
+    const params: PipelineStepParam[] = [
+      { name: "weights", type: "dictionary", required: true, default: null, enumValues: null, min: null, max: null, help: null },
+    ];
+    const r = collect(params, { weights: '{"x":1.0,"y":2.5}' });
+    expect(r.ok).toBe(true);
+    expect(r.parameters.weights).toEqual({ x: 1.0, y: 2.5 });
+    // malformed JSON is a real error, not a silent raw-string pass-through
+    expect(collect(params, { weights: "{bad" }).errors.weights).toBeTruthy();
+  });
+
   it("errors on malformed JSON in a columns/key_value format field", () => {
     const params: PipelineStepParam[] = [
       { name: "features", type: "array", required: true, default: null, enumValues: null, min: null, max: null, help: null, format: "columns" },

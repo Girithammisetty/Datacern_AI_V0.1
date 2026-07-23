@@ -221,7 +221,7 @@ export function valuesFromParameters(
     }
     if (raw === null || raw === undefined) continue;
     const fmt = p.format ?? "";
-    if (p.type === "object" || p.type === "array" || fmt === "columns" || fmt === "key_value") {
+    if (p.type === "object" || p.type === "array" || p.type === "dictionary" || fmt === "columns" || fmt === "key_value") {
       values[p.name] = typeof raw === "string" ? raw : JSON.stringify(raw);
     } else {
       values[p.name] = String(raw);

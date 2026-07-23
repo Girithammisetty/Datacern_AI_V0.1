@@ -139,7 +139,10 @@ export function SchemaField({
         ))}
       </select>
     );
-  } else if (param.type === "object" || param.type === "array") {
+  } else if (param.type === "object" || param.type === "array" || param.type === "dictionary") {
+    // `dictionary` = a JSON object with non-string values (e.g. numeric weights),
+    // so it can't be a `key_value` string-map; edit it as raw JSON like `object`.
+    const isArray = param.type === "array";
     widget = (
       <Textarea
         {...common}
@@ -149,7 +152,7 @@ export function SchemaField({
         aria-label={param.name}
         value={strValue}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={param.type === "array" ? "[ ]" : "{ }"}
+        placeholder={isArray ? "[ ]" : "{ }"}
         className="font-mono text-xs"
       />
     );

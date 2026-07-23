@@ -150,6 +150,21 @@ describe("SchemaField data-aware formats", () => {
     expect(ta.className).toContain("font-mono");
   });
 
+  it("renders a `dictionary` param (non-string values, no key_value format) as a JSON textarea", () => {
+    // linear-combination.weights is dict[str,float] — not a key_value string map,
+    // so it must still get the raw-JSON widget, not a plain text input.
+    renderWithProviders(
+      <SchemaField
+        param={param({ name: "weights", type: "dictionary" })}
+        value='{"x":1}'
+        onChange={vi.fn()}
+      />,
+    );
+    const ta = screen.getByLabelText("weights");
+    expect(ta.tagName).toBe("TEXTAREA");
+    expect(ta.className).toContain("font-mono");
+  });
+
   it("degrades an UNKNOWN format to the base type widget (integer → number input)", () => {
     renderWithProviders(
       <SchemaField

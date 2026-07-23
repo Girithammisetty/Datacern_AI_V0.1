@@ -185,3 +185,19 @@ DATA_PREP operator has an authoring param case), a validation sweep proving one
 realistic param set per operator passes `validate_definition` with **zero PARAM
 errors**, and the exact `group-by`-with-params case that used to fail now both
 validates AND executes. Full pipeline-orchestrator suite green (**165**).
+
+**All-layer closure (UI → BFF → core).** The new schemas flow the whole stack:
+core exposes them on `GET /components` (`schemas.py` `component_payload`), the BFF
+maps every field — `format` / `item_format` / `enum` / `minimum` / `maximum` —
+onto `PipelineStepParam` (`map.ts` `mapStepParams`), and the no-code builder's
+`SchemaField` renderer dispatches a widget per `(type, format)` so each new param
+gets the right control (column pickers, key/value editors, enum selects). One
+real UI-layer gap surfaced while tracing this: a bare **`dictionary`** param with
+non-string values (e.g. `linear-combination.weights` = dict[str,float], which
+*can't* be `key_value` since that requires str→str) fell through to a plain-text
+widget and was stored as a raw string — it would fail backend validation. Fixed
+by treating `dictionary` like `object` (raw-JSON widget + JSON parse) in all three
+UI spots: `SchemaField.tsx` (widget), `form.ts` (serialize), `canvas.ts`
+(load round-trip). Tests: `SchemaField.test.tsx` (+1, asserts the JSON textarea)
+and `form.test.ts` (+1, asserts JSON parse + malformed-JSON error) — **33** UI
+unit tests green across the three pipeline-form files.
