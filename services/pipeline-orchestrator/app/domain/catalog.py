@@ -41,13 +41,20 @@ _OVERRIDES: dict[str, dict] = {
             "split_size": {"type": "number", "minimum": 0.0, "maximum": 1.0,
                            "required": True, "default": 0.8},
             "shuffle": {"type": "boolean", "required": False, "default": True},
+            # BRD 62 (P5): stratified split — keep the label distribution across
+            # train/test; forces shuffle. random_state makes the split reproducible.
+            "stratify_columns": {"type": "array", "format": "columns",
+                                 "item_format": "column", "required": False,
+                                 "item_description": "column to stratify on"},
+            "random_state": {"type": "int", "required": False, "default": 42},
         },
     },
     "join-data": {
         "min_inputs": 2, "max_inputs": 2,
         "parameters": {
             "join_type": {"type": "string", "format": "enum",
-                          "enum": ["inner", "left", "outer"],
+                          # BRD 62 (P3): 'right' added for Nemesis parity.
+                          "enum": ["inner", "left", "outer", "right"],
                           "required": True, "default": "inner"},
             # A column of the input dataset (data-aware: resolved against its schema).
             "on": {"type": "string", "format": "column", "required": True},
@@ -66,8 +73,12 @@ _OVERRIDES: dict[str, dict] = {
     },
     "handle-missing-values": {
         "parameters": {
-            "strategy": {"type": "string", "enum": ["mean", "median", "most_frequent",
-                                                    "constant", "drop"],
+            # BRD 62 (P4): linear_interpolation / expression / previous_existing /
+            # next_existing added for Nemesis parity.
+            "strategy": {"type": "string",
+                         "enum": ["mean", "median", "most_frequent", "constant", "drop",
+                                  "linear_interpolation", "expression",
+                                  "previous_existing", "next_existing"],
                          "required": True, "default": "mean"},
         },
     },
