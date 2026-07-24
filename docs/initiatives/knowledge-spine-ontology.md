@@ -1,7 +1,7 @@
 # The Knowledge Spine — operationalizing DataCern's ontology
 
 **Status:** analysis + design done · Increment 1 (WS1) built + unit-verified — 2026-07-23
-**Commits:** `<pending>`  ·  **Related:** [BRD 56](../brd/56_entity_resolution_BRD.md) (entity resolution), semantic-service (semantic models), dataset-service ontology (inc11), [BRD 57](../brd/57_standards_interop_BRD.md) (standards), memories `project_windrose_ontology`, `project_windrose_pack_blueprint`
+**Commits:** `ac14fcc` (WS1 code — absorbed into a concurrent commit via a broad `git add`), `2a68815` (initiative doc + tests)  ·  **Related:** [BRD 56](../brd/56_entity_resolution_BRD.md) (entity resolution), semantic-service (semantic models), dataset-service ontology (inc11), [BRD 57](../brd/57_standards_interop_BRD.md) (standards), memories `project_windrose_ontology`, `project_windrose_pack_blueprint`
 **Source of inspiration:** B. Ciric, "The Knowledge Spine: Why Your Ontology Needs to Grow a Backbone" (LinkedIn, 2025).
 
 > This is a design/analysis initiative. Every "current state" claim is cited to
