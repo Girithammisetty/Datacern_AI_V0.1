@@ -17,8 +17,10 @@ import {
   GraduationCap,
   HardHat,
   HeartPulse,
+  History,
   Home,
   Landmark,
+  ListChecks,
   MessageSquareText,
   Network,
   Plane,
@@ -31,6 +33,7 @@ import {
   Sprout,
   Truck,
   Umbrella,
+  Users,
   Workflow,
   X,
   Zap,
@@ -92,6 +95,15 @@ const CAPS = [
     points: ["Draft dispositions with cited evidence", "Route work to the right specialist", "Open proposals, never silent writes"],
   },
   {
+    key: "worklist",
+    icon: ListChecks,
+    eyebrow: "Governed queue",
+    title: "A worklist built for decisions",
+    body:
+      "Every case lands pre-scored by risk and age, with the evidence and the agent's draft already attached — so your reviewers open a case ready to decide, not to dig for context.",
+    points: ["Auto-prioritized by risk and SLA", "Evidence and draft attached on open", "Assign, escalate or approve in one place"],
+  },
+  {
     key: "copilot",
     icon: MessageSquareText,
     eyebrow: "Conversational",
@@ -126,6 +138,15 @@ const CAPS = [
     body:
       "Business metrics are defined once, reviewed, and reused everywhere — so dashboards agree. Click any bar, slice or row and the whole board filters to match.",
     points: ["One trusted definition per metric", "Cross-filter the entire board", "From a chart straight into a work queue"],
+  },
+  {
+    key: "audit",
+    icon: History,
+    eyebrow: "Tamper-evident",
+    title: "An audit trail for every decision",
+    body:
+      "Every proposal, approval and override is time-stamped and chained together — so when a regulator or auditor asks why a call was made, the answer is already written down.",
+    points: ["Immutable, chained record", "A second reviewer on sensitive changes", "Exportable evidence, case by case"],
   },
   {
     key: "ml",
@@ -171,13 +192,57 @@ const INDUSTRIES = [
     blurb:
       "From prior authorization to payment integrity, specialist agents do the reading and your clinicians and analysts make the call — with the evidence and the rules on the record.",
     outcomes: ["Faster prior-auth turnaround", "Higher clean-claim rates", "Audit-ready determinations"],
-    useCases: [
-      ["Claims Adjudication & Appeals", "Resolve denials, appeals and prior authorizations faster."],
-      ["Provider Revenue Cycle", "Lift clean-claim rates and recover the revenue you've earned."],
-      ["Payment Integrity (FWA / SIU)", "Surface suspect claims and providers, then close each case defensibly."],
-      ["Care Management", "Enroll, track and bill chronic-care and remote-monitoring programs."],
-      ["Pharmacy Benefits (PBM)", "Speed authorization turnaround while protecting safety and rebates."],
-      ["Post-Acute Care", "Run episodes and assessments cleanly and stay ahead of readmissions."],
+    segments: [
+      {
+        id: "payer",
+        name: "Payer",
+        useCases: [
+          ["Claims Adjudication & Appeals", "Resolve denials, appeals and prior authorizations faster."],
+          ["Payment Integrity (FWA / SIU)", "Surface suspect claims and providers, then close each case defensibly."],
+          ["Care Management", "Enroll, track and bill chronic-care and remote-monitoring programs."],
+        ],
+        workflow: {
+          kpis: [["Open cases", "482"], ["Clean-claim rate", "94%"], ["Auto-drafted", "76%"]],
+          rows: [
+            ["PA-48213", "Prior authorization · duplicate flag", "hi", "VP"],
+            ["FWA-1187", "Payment integrity · suspect billing", "md", "AC"],
+            ["CM-3390", "Care management · enrollment review", "lo", "JR"],
+          ],
+        },
+      },
+      {
+        id: "provider",
+        name: "Provider",
+        useCases: [
+          ["Provider Revenue Cycle", "Lift clean-claim rates and recover the revenue you've earned."],
+          ["Post-Acute Care", "Run episodes and assessments cleanly and stay ahead of readmissions."],
+        ],
+        workflow: {
+          kpis: [["Open cases", "318"], ["Clean-claim rate", "91%"], ["Recovered revenue", "$640K"]],
+          rows: [
+            ["RCM-77021", "Denial · timely filing appeal", "hi", "DL"],
+            ["RCM-77088", "Underpayment · recovery review", "md", "NT"],
+            ["PAC-2201", "Post-acute episode · assessment due", "lo", "KM"],
+          ],
+        },
+      },
+      {
+        id: "pharmacy",
+        name: "Pharmacy & Life Sciences",
+        useCases: [
+          ["Pharmacy Benefits (PBM)", "Speed authorization turnaround while protecting safety and rebates."],
+          ["Pharmacovigilance", "Triage and assess adverse-event reports on the regulatory clock."],
+          ["Device Complaints", "Route and assess medical-device complaints toward an MDR call."],
+        ],
+        workflow: {
+          kpis: [["Open cases", "203"], ["PA turnaround", "−31%"], ["Safety signals triaged", "58"]],
+          rows: [
+            ["PBM-5510", "Prior auth · specialty drug", "hi", "SW"],
+            ["ICSR-9042", "Adverse event · causality review", "md", "RB"],
+            ["DEV-1187", "Device complaint · MDR assessment", "lo", "HP"],
+          ],
+        },
+      },
     ],
   },
   {
@@ -190,12 +255,54 @@ const INDUSTRIES = [
     blurb:
       "Route alerts and cases to the right specialist, cut false positives, and reach determinations a regulator can follow — every step logged with the evidence it stood on.",
     outcomes: ["Fewer false positives", "Consistent filing decisions", "Regulator-ready trails"],
-    useCases: [
-      ["Financial Crime & AML", "Monitor transactions, screen sanctions and reach defensible filing decisions."],
-      ["Card Disputes & Chargebacks", "Adjudicate disputes and representment with the evidence attached."],
-      ["Credit Bureau Disputes", "Investigate and resolve consumer disputes inside the regulatory clock."],
-      ["Mortgage Loss Mitigation", "Work borrowers through options consistently and on time."],
-      ["Underwriting Intake", "Turn messy application packages into a clean, ranked decision."],
+    segments: [
+      {
+        id: "fraud-aml",
+        name: "Fraud & AML",
+        useCases: [
+          ["Financial Crime & AML", "Monitor transactions, screen sanctions and reach defensible filing decisions."],
+        ],
+        workflow: {
+          kpis: [["Open alerts", "318"], ["False positives", "−42%"], ["Filing SLA", "On track"]],
+          rows: [
+            ["AML-90142", "Structuring pattern · escalate", "hi", "MK"],
+            ["SAR-2207", "Suspicious activity · filing review", "md", "JB"],
+            ["SCR-8810", "Sanctions screening · auto-cleared", "lo", "RS"],
+          ],
+        },
+      },
+      {
+        id: "disputes",
+        name: "Disputes",
+        useCases: [
+          ["Card Disputes & Chargebacks", "Adjudicate disputes and representment with the evidence attached."],
+          ["Credit Bureau Disputes", "Investigate and resolve consumer disputes inside the regulatory clock."],
+        ],
+        workflow: {
+          kpis: [["Open disputes", "540"], ["Reg E SLA", "98%"], ["Recovery rate", "61%"]],
+          rows: [
+            ["DSP-33871", "Card dispute · evidence attached", "hi", "LT"],
+            ["CBK-1290", "Chargeback · representment drafted", "md", "FS"],
+            ["CBD-4471", "Credit bureau dispute · reinvestigation", "lo", "AN"],
+          ],
+        },
+      },
+      {
+        id: "lending",
+        name: "Lending",
+        useCases: [
+          ["Mortgage Loss Mitigation", "Work borrowers through options consistently and on time."],
+          ["Underwriting Intake", "Turn messy application packages into a clean, ranked decision."],
+        ],
+        workflow: {
+          kpis: [["Open applications", "276"], ["Time to decision", "−38%"], ["Loss mit. on track", "89%"]],
+          rows: [
+            ["UW-6621", "Underwriting · income verification", "hi", "TC"],
+            ["LM-3390", "Loss mitigation · options review", "md", "PV"],
+            ["UW-6688", "Underwriting · auto-ranked", "lo", "EG"],
+          ],
+        },
+      },
     ],
   },
   {
@@ -208,11 +315,53 @@ const INDUSTRIES = [
     blurb:
       "Score severity on arrival, route each claim to the right desk, and settle with the coverage read and the reasoning captured — so outcomes hold up on review.",
     outcomes: ["Less claims leakage", "Right-desk routing", "Consistent settlements"],
-    useCases: [
-      ["Auto & Trucking Claims", "Triage severity, spot leakage and route each claim to the right desk."],
-      ["Workers' Compensation", "Manage claims and reserves with the reasoning captured end to end."],
-      ["Construction & Property", "Handle defect and property claims with the evidence in one place."],
-      ["Warranty Claims", "Validate coverage and settle warranty claims at scale."],
+    segments: [
+      {
+        id: "claims",
+        name: "Auto & Property Claims",
+        useCases: [
+          ["Auto & Trucking Claims", "Triage severity, spot leakage and route each claim to the right desk."],
+          ["Construction & Property", "Handle defect and property claims with the evidence in one place."],
+        ],
+        workflow: {
+          kpis: [["Open claims", "647"], ["Leakage caught", "$1.2M"], ["Right-desk routing", "98%"]],
+          rows: [
+            ["CLM-55210", "Auto claim · high severity", "hi", "DW"],
+            ["PROP-9021", "Construction claim · defect review", "md", "IK"],
+            ["CLM-55344", "Property claim · standard review", "lo", "BT"],
+          ],
+        },
+      },
+      {
+        id: "workers-comp",
+        name: "Workers' Compensation",
+        useCases: [
+          ["Workers' Compensation", "Manage claims and reserves with the reasoning captured end to end."],
+        ],
+        workflow: {
+          kpis: [["Open claims", "214"], ["Reserve accuracy", "92%"], ["Return-to-work", "+18%"]],
+          rows: [
+            ["WC-19042", "Workers' comp · reserve review", "hi", "NB"],
+            ["WC-19088", "Workers' comp · medical review", "md", "OL"],
+            ["WC-19110", "Workers' comp · closed, validated", "lo", "QF"],
+          ],
+        },
+      },
+      {
+        id: "warranty",
+        name: "Warranty",
+        useCases: [
+          ["Warranty Claims", "Validate coverage and settle warranty claims at scale."],
+        ],
+        workflow: {
+          kpis: [["Open claims", "389"], ["Validation rate", "96%"], ["Cycle time", "−27%"]],
+          rows: [
+            ["WAR-8821", "Warranty · coverage validated", "hi", "EK"],
+            ["WAR-8855", "Warranty · parts dispute", "md", "GC"],
+            ["WAR-8890", "Warranty · auto-approved", "lo", "ZM"],
+          ],
+        },
+      },
     ],
   },
   {
@@ -225,11 +374,53 @@ const INDUSTRIES = [
     blurb:
       "Invoice audit, screening, appeals and notices are all the same shape: read the evidence, apply the policy, decide. Datacern runs each as a governed queue your team can trust.",
     outcomes: ["Shorter backlogs", "Policy applied consistently", "Every call defensible"],
-    useCases: [
-      ["AP Invoice Audit", "Catch duplicate, non-compliant and over-billed invoices before they pay."],
-      ["Background & Seller Vetting", "Adjudicate screening and marketplace-vetting cases against policy."],
-      ["Trust & Safety Appeals", "Review enforcement appeals quickly and consistently."],
-      ["Tax Notice Resolution", "Classify notices, draft the response and track each to closure."],
+    segments: [
+      {
+        id: "invoice-vetting",
+        name: "Invoice & Vetting",
+        useCases: [
+          ["AP Invoice Audit", "Catch duplicate, non-compliant and over-billed invoices before they pay."],
+          ["Background & Seller Vetting", "Adjudicate screening and marketplace-vetting cases against policy."],
+        ],
+        workflow: {
+          kpis: [["Open cases", "890"], ["Duplicate billing caught", "$310K"], ["Backlog", "−58%"]],
+          rows: [
+            ["INV-40213", "Invoice audit · duplicate billing", "hi", "TS"],
+            ["SCR-9042", "Seller vetting · flagged pattern", "md", "GH"],
+            ["INV-40255", "Invoice audit · auto-cleared", "lo", "WD"],
+          ],
+        },
+      },
+      {
+        id: "trust-safety",
+        name: "Trust & Safety",
+        useCases: [
+          ["Trust & Safety Appeals", "Review enforcement appeals quickly and consistently."],
+        ],
+        workflow: {
+          kpis: [["Open appeals", "412"], ["Review SLA", "94%"], ["Consistency score", "99%"]],
+          rows: [
+            ["APP-2201", "Enforcement appeal · standard review", "hi", "CP"],
+            ["APP-2244", "Enforcement appeal · escalated", "md", "YB"],
+            ["APP-2290", "Enforcement appeal · upheld", "lo", "MR"],
+          ],
+        },
+      },
+      {
+        id: "tax-compliance",
+        name: "Tax & Compliance",
+        useCases: [
+          ["Tax Notice Resolution", "Classify notices, draft the response and track each to closure."],
+        ],
+        workflow: {
+          kpis: [["Open notices", "1,204"], ["Response SLA", "100%"], ["Auto-classified", "82%"]],
+          rows: [
+            ["TAX-7710", "Notice · deadline this week", "hi", "JL"],
+            ["TAX-7744", "Notice · response drafted", "md", "VK"],
+            ["TAX-7790", "Notice · closed", "lo", "SF"],
+          ],
+        },
+      },
     ],
   },
 ] as const;
@@ -316,7 +507,7 @@ function Dot({ className = "" }: { className?: string }) {
 function HeroMock() {
   return (
     <div className="wr-float relative w-full max-w-md">
-      <div className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/30 via-emerald-500/20 to-lime-400/20 blur-3xl" />
+      <div className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/30 via-[#a78bfa]/25 to-[#8ab4ff]/20 blur-3xl" />
       <div className="wr-glass wr-ring wr-glow rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -375,11 +566,13 @@ function CapVisual({ k }: { k: string }) {
               <Bot className="size-3.5" />
             </span>
             <span className="font-medium">{a}</span>
-            <Dot className={`ml-auto ${i % 2 ? "bg-primary" : "bg-emerald-500"} wr-pulse`} />
+            <Dot className={`ml-auto ${i % 2 ? "bg-primary" : "bg-[#a78bfa]"} wr-pulse`} />
           </div>
         ))}
       </div>
     );
+  if (k === "worklist")
+    return <WorklistRows />;
   if (k === "copilot")
     return (
       <div className="space-y-2">
@@ -446,6 +639,24 @@ function CapVisual({ k }: { k: string }) {
         </div>
       </div>
     );
+  if (k === "audit")
+    return (
+      <div className="space-y-2.5">
+        {[
+          ["Agent proposed", "disposition drafted · evidence attached"],
+          ["A. Chen approved", "second reviewer signed off"],
+          ["Action executed", "logged to the immutable trail"],
+        ].map(([title, sub]) => (
+          <div key={title} className="flex items-start gap-2.5 text-xs">
+            <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+            <div>
+              <div className="font-semibold text-foreground">{title}</div>
+              <div className="text-muted-foreground">{sub}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   // ml
   return (
     <div className="flex items-center gap-1.5 text-[11px]">
@@ -457,6 +668,146 @@ function CapVisual({ k }: { k: string }) {
           {i < 2 && <ArrowRight className="size-3 text-muted-foreground" />}
         </div>
       ))}
+    </div>
+  );
+}
+
+/* shared case-row mockup: risk tag + human-reviewer avatar chip, reused by
+ * both the "worklist" capability tab and each industry spotlight's
+ * "In your workflow" panel. Rows are clearly illustrative placeholder data
+ * (Rule #1 — no invented stats presented as real). */
+type WfRow = readonly [id: string, desc: string, tag: "hi" | "md" | "lo", initials: string];
+
+const TAG_LABEL: Record<WfRow[2], string> = { hi: "High", md: "Med", lo: "Low" };
+const TAG_CLASS: Record<WfRow[2], string> = {
+  hi: "bg-red-500/12 text-red-700 dark:text-red-400",
+  md: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  lo: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+};
+
+function WfRowItem({ row }: { row: WfRow }) {
+  const [id, desc, tag, initials] = row;
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg border border-border/70 bg-background/60 px-2.5 py-2 transition-transform hover:translate-x-0.5">
+      <span className="w-[4.75rem] shrink-0 font-mono text-[11px] font-semibold text-foreground">{id}</span>
+      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{desc}</span>
+      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${TAG_CLASS[tag]}`}>{TAG_LABEL[tag]}</span>
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+        {initials}
+      </span>
+    </div>
+  );
+}
+
+function WorklistRows() {
+  const rows: WfRow[] = [
+    ["#48213", "Prior auth · duplicate flag", "hi", "VP"],
+    ["#48219", "Appeal · missing docs", "md", "AC"],
+    ["#48224", "Claim · ready to pay", "lo", "JR"],
+  ];
+  return (
+    <div className="space-y-2">
+      {rows.map((r) => (
+        <WfRowItem key={r[0]} row={r} />
+      ))}
+    </div>
+  );
+}
+
+/* per-industry deep dive: pick a sub-vertical (segment), then flip between
+ * its "Solutions that ship" and "In your workflow" views. Segments are the
+ * real sub-verticals a buyer actually navigates by (e.g. Healthcare's Payer
+ * vs. Provider vs. Pharmacy teams run different queues) — so this is the
+ * primary intra-industry navigation, not decoration. */
+function IndustryShipsCard({ ind }: { ind: (typeof INDUSTRIES)[number] }) {
+  const [segIdx, setSegIdx] = useState(0);
+  const [view, setView] = useState<"solutions" | "workflow">("solutions");
+  const seg = ind.segments[segIdx];
+
+  return (
+    <div className="wr-glass wr-ring rounded-2xl p-6 shadow-[0_24px_70px_-40px_hsl(var(--primary)/0.5)]">
+      {ind.segments.length > 1 && (
+        <div role="tablist" aria-label={`${ind.name} sub-verticals`} className="flex flex-wrap gap-1.5">
+          {ind.segments.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              aria-selected={i === segIdx}
+              onClick={() => setSegIdx(i)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                i === segIdx
+                  ? "border-primary/50 bg-primary text-primary-foreground"
+                  : "border-border/70 bg-background/60 text-muted-foreground hover:border-primary/30"
+              }`}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className={`flex gap-1.5 ${ind.segments.length > 1 ? "mt-3" : ""}`}>
+        <button
+          type="button"
+          onClick={() => setView("solutions")}
+          className={`flex-1 rounded-lg border px-2.5 py-2 text-xs font-semibold transition-colors ${
+            view === "solutions"
+              ? "border-primary/50 bg-primary/10 text-primary"
+              : "border-border/70 text-muted-foreground hover:border-primary/30"
+          }`}
+        >
+          Solutions that ship
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("workflow")}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition-colors ${
+            view === "workflow"
+              ? "border-primary/50 bg-primary/10 text-primary"
+              : "border-border/70 text-muted-foreground hover:border-primary/30"
+          }`}
+        >
+          <Users className="size-3.5" />
+          In your workflow
+        </button>
+      </div>
+
+      {view === "solutions" ? (
+        <ul key={seg.id} className="wr-swap mt-5 space-y-4">
+          {seg.useCases.map(([name, body]) => (
+            <li key={name} className="flex gap-3">
+              <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Check className="size-3.5" />
+              </span>
+              <div>
+                <div className="text-sm font-semibold leading-snug">{name}</div>
+                <div className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{body}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div key={seg.id} className="wr-swap mt-5">
+          <div className="grid grid-cols-3 gap-2">
+            {seg.workflow.kpis.map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-border/70 bg-background/60 px-2 py-2 text-center">
+                <div className="text-sm font-bold text-foreground">{value}</div>
+                <div className="mt-0.5 text-[10px] uppercase leading-tight tracking-wide text-muted-foreground">{label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 space-y-2">
+            {seg.workflow.rows.map((r) => (
+              <WfRowItem key={r[0]} row={r} />
+            ))}
+          </div>
+          <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+            <Check className="size-3.5 shrink-0 text-primary" />
+            Reviewed and approved by your team — logged automatically
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -480,7 +831,7 @@ export default function WelcomeContent() {
   const Cap = CAPS[tab];
 
   return (
-    <main id="main" className="dark relative isolate min-h-screen bg-background text-foreground">
+    <main id="main" className="relative isolate min-h-screen bg-background text-foreground">
       <style>{WR_CSS}</style>
 
       {/* page-wide next-gen backdrop: deep gradient wash + subtle grid + drifting aurora */}
@@ -611,17 +962,13 @@ export default function WelcomeContent() {
                   <h3 className="mt-4 text-lg font-bold tracking-tight">{ind.name}</h3>
                   <div className="text-xs font-medium uppercase tracking-wide text-primary">{ind.who}</div>
                   <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{ind.tag}</p>
+                  {/* sub-vertical preview — the real navigation inside this industry */}
                   <div className="mt-4 flex flex-wrap gap-1.5">
-                    {ind.useCases.slice(0, 3).map(([n]) => (
-                      <span key={n} className="rounded-full border border-border/70 bg-background/60 px-2.5 py-0.5 text-[11px] text-muted-foreground">
-                        {n}
+                    {ind.segments.map((s) => (
+                      <span key={s.id} className="rounded-full border border-border/70 bg-background/60 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {s.name}
                       </span>
                     ))}
-                    {ind.useCases.length > 3 && (
-                      <span className="px-1 py-0.5 text-[11px] font-medium text-primary">
-                        +{ind.useCases.length - 3} more
-                      </span>
-                    )}
                   </div>
                 </a>
               </Reveal>
@@ -715,7 +1062,7 @@ export default function WelcomeContent() {
           {/* active panel */}
           <div className="wr-glass wr-ring wr-glow relative overflow-hidden rounded-2xl p-7">
             <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-primary/20 blur-2xl" />
-            <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-16 size-48 rounded-full bg-emerald-500/15 blur-2xl" />
+            <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-16 size-48 rounded-full bg-[#a78bfa]/20 blur-2xl" />
             <div key={Cap.key} className="wr-swap relative">
               <div className="text-xs font-semibold uppercase tracking-widest text-primary">{Cap.eyebrow}</div>
               <h3 className="mt-2 text-xl font-bold tracking-tight">{Cap.title}</h3>
@@ -908,26 +1255,9 @@ export default function WelcomeContent() {
                   </Button>
                 </Reveal>
 
-                {/* solutions that ship */}
+                {/* solutions that ship / in your workflow */}
                 <Reveal delay={90}>
-                  <div className="wr-glass wr-ring rounded-2xl p-6 shadow-[0_24px_70px_-40px_hsl(var(--primary)/0.5)]">
-                    <div className="text-xs font-semibold uppercase tracking-widest text-primary">
-                      Solutions that ship
-                    </div>
-                    <ul className="mt-4 space-y-4">
-                      {ind.useCases.map(([name, body]) => (
-                        <li key={name} className="flex gap-3">
-                          <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                            <Check className="size-3.5" />
-                          </span>
-                          <div>
-                            <div className="text-sm font-semibold leading-snug">{name}</div>
-                            <div className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{body}</div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <IndustryShipsCard ind={ind} />
                 </Reveal>
               </div>
             </section>
@@ -1213,24 +1543,25 @@ const WR_CSS = `
 .wr-marquee-wrap{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);}
 .wr-marquee{width:max-content;animation:wr-marquee 26s linear infinite;}
 @keyframes wr-marquee{to{transform:translateX(-50%)}}
-/* NVIDIA-style palette: near-black canvas + signature green (~#76B900), scoped to
- * the marketing page. #main (id) overrides the .dark class it also carries. */
+/* Light blue / lavender / white palette — matches the standalone marketing
+ * site (deploy/marketing site index.html). #main (id) scopes the override so
+ * the rest of the (light-mode-default) app is unaffected. */
 #main{
-  --background:0 0% 4%;
-  --foreground:0 0% 96%;
-  --card:0 0% 8%;
-  --card-foreground:0 0% 96%;
-  --primary:82 95% 43%;
-  --primary-foreground:0 0% 6%;
-  --border:0 0% 16%;
-  --muted:0 0% 13%;
-  --muted-foreground:0 0% 62%;
+  --background:227 69% 97%;
+  --foreground:232 31% 15%;
+  --card:0 0% 100%;
+  --card-foreground:232 31% 15%;
+  --primary:235 60% 56%;
+  --primary-foreground:0 0% 100%;
+  --border:243 47% 93%;
+  --muted:231 62% 96%;
+  --muted-foreground:229 13% 41%;
 }
-/* accent hues: green (primary ~82) → emerald (146) → lime (95), on black */
+/* accent hues: primary indigo (235) → lavender (255) → sky blue (218) */
 .wr-mesh{background:
-  radial-gradient(55rem 42rem at 10% -12%, hsl(var(--primary) / 0.26), transparent 60%),
-  radial-gradient(46rem 40rem at 92% -8%, hsl(146 80% 42% / 0.20), transparent 58%),
-  radial-gradient(50rem 44rem at 58% 6%, hsl(95 90% 50% / 0.12), transparent 62%);}
+  radial-gradient(55rem 42rem at 10% -12%, hsl(var(--primary) / 0.22), transparent 60%),
+  radial-gradient(46rem 40rem at 92% -8%, hsl(255 92% 76% / 0.22), transparent 58%),
+  radial-gradient(50rem 44rem at 58% 6%, hsl(218 100% 77% / 0.16), transparent 62%);}
 .wr-grid{background-image:
   linear-gradient(hsl(var(--primary) / 0.06) 1px, transparent 1px),
   linear-gradient(90deg, hsl(var(--primary) / 0.06) 1px, transparent 1px);
@@ -1238,22 +1569,21 @@ const WR_CSS = `
   -webkit-mask-image:radial-gradient(120% 90% at 50% -5%, #000, transparent 72%);
   mask-image:radial-gradient(120% 90% at 50% -5%, #000, transparent 72%);}
 .wr-aurora{background:linear-gradient(115deg,
-  hsl(var(--primary) / 0.5), hsl(146 80% 42% / 0.45), hsl(95 90% 50% / 0.38), hsl(var(--primary) / 0.5));
+  hsl(var(--primary) / 0.5), hsl(255 92% 76% / 0.45), hsl(218 100% 77% / 0.38), hsl(var(--primary) / 0.5));
   background-size:300% 300%;filter:blur(64px);animation:wr-aurora 20s ease infinite;}
 @keyframes wr-aurora{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-.wr-glass{background:linear-gradient(180deg, hsl(var(--card) / 0.75), hsl(var(--card) / 0.4));
-  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  border:1px solid hsl(var(--primary) / 0.08);}
-.wr-glow{box-shadow:0 0 0 1px hsl(var(--primary) / 0.16), 0 24px 70px -28px hsl(var(--primary) / 0.5);}
-.wr-glow-soft{box-shadow:0 20px 60px -30px hsl(146 80% 45% / 0.5);}
+.wr-glass{background:hsl(var(--card));
+  border:1px solid hsl(var(--primary) / 0.14);}
+.wr-glow{box-shadow:0 1px 2px hsl(232 31% 15% / 0.04), 0 24px 70px -28px hsl(var(--primary) / 0.32);}
+.wr-glow-soft{box-shadow:0 20px 60px -30px hsl(255 92% 66% / 0.5);}
 /* gradient border ring drawn with a masked pseudo-element */
 .wr-ring{position:relative;}
 .wr-ring::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
-  background:linear-gradient(140deg, hsl(var(--primary) / 0.7), transparent 42%, hsl(146 80% 46% / 0.6));
+  background:linear-gradient(140deg, hsl(var(--primary) / 0.35), transparent 45%, hsl(255 92% 66% / 0.35));
   -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;}
-.wr-grad{background-image:linear-gradient(100deg, hsl(var(--primary)), hsl(95 90% 55%), hsl(146 80% 50%));}
-.wr-glowtext{text-shadow:0 0 34px hsl(var(--primary) / 0.3);}
+.wr-grad{background-image:linear-gradient(100deg, hsl(var(--primary)), hsl(218 100% 72%), hsl(255 92% 76%));}
+.wr-glowtext{text-shadow:none;}
 @media (prefers-reduced-motion: reduce){
   .wr-float,.wr-pulse,.wr-grow,.wr-marquee,.wr-swap,.wr-aurora{animation:none!important;}
   .wr-reveal{opacity:1!important;transform:none!important;}
