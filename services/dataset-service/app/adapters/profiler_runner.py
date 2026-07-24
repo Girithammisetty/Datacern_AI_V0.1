@@ -62,7 +62,20 @@ class InProcessProfilerRunner:
     async def _run(self, spec: ProfileJobSpec) -> dict[str, Any]:
         base = {"tenant_id": spec.tenant_id, "profiler_version": self.profiler_version}
         try:
-            df = await self.catalog.read_snapshot(spec.iceberg_table, spec.iceberg_snapshot_id)
+            # Bound the read at the catalog so a 10M-row snapshot is never fully
+            # materialized into a pandas DataFrame just to be sampled back down to
+            # `max_rows` afterwards (the previous `read_snapshot` call loaded the
+            # whole table before profile_dataframe's own max_rows cap ever ran —
+            # same class of bug as domain/services.py's read_rows/resolve_entities,
+            # which already use this bounded reader). Note this makes the read a
+            # bounded HEAD slice rather than a true whole-table reservoir sample
+            # when the snapshot exceeds max_rows; profile_dataframe's own
+            # sample_strategy/fraction reporting reflects that (fraction ~1.0 of
+            # the rows actually read), trading exact reservoir randomness for a
+            # memory bound that can never be exceeded.
+            df = await self.catalog.read_snapshot_head(
+                spec.iceberg_table, spec.iceberg_snapshot_id, self.max_rows
+            )
             doc = profile_dataframe(
                 df,
                 dataset_urn=spec.dataset_urn,

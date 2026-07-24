@@ -28,6 +28,25 @@ from app.container import Container, build_container
 configure_json_logging("ai-gateway")  # MASTER-FR-050: JSON stdout, mirrors Go's slog handler
 logger = logging.getLogger(__name__)
 
+
+async def _run_retention_loop(
+    session_factory, specs: list, *, interval_seconds: float = 3600
+) -> None:
+    """B6/B7 (BRD 58) retention sweep: standalone (module-level, not a nested
+    closure) so it is directly unit-testable without booting the whole
+    lifespan/Kafka stack."""
+    from datacern_common.retention import prune_table
+
+    while True:
+        await asyncio.sleep(interval_seconds)
+        for spec in specs:
+            try:
+                n = await prune_table(session_factory, spec)
+                if n:
+                    logger.info("retention pruned", extra={"table": spec.table, "deleted": n})
+            except Exception:  # noqa: BLE001
+                logger.exception("retention prune failed", extra={"table": spec.table})
+
 # topic -> container handler attribute driving it (in-memory bus wiring parity).
 CONSUMED_TOPICS = {
     "identity.events.v1": "identity_handler",
@@ -89,6 +108,30 @@ async def _start_workers(container: Container):
     if consumers:
         logger.info("ai-gateway kafka consumers started for %s",
                     list(CONSUMED_TOPICS))
+
+    # B6/B7 (BRD 58): outbox rows are drained above but never pruned, and
+    # processed_events (usage/identity consumer dedup) has no TTL -- both grow
+    # unboundedly forever. Both tables gate cross-tenant access behind
+    # app.worker='true' (outbox: migration 0001 worker_outbox; processed_events:
+    # migration 0004 worker_processed_events) -- the SAME GUC this service's own
+    # OutboxDispatcher/ledger already set. Sweep both hourly.
+    session_factory = container.extras.get("session_factory")
+    if session_factory is not None:
+        from datetime import timedelta
+
+        from datacern_common.retention import RetentionSpec
+
+        specs = [
+            RetentionSpec(table="outbox", ts_col="published_at",
+                          retention=timedelta(days=30), require_not_null=True,
+                          worker_guc="app.worker", worker_val="true"),
+            RetentionSpec(table="processed_events", ts_col="created_at",
+                          retention=timedelta(hours=48),
+                          worker_guc="app.worker", worker_val="true"),
+        ]
+        tasks.append(asyncio.create_task(_run_retention_loop(session_factory, specs)))
+        logger.info("ai-gateway retention reaper started (outbox + processed_events)")
+
     return producer, consumers, tasks
 
 
@@ -116,6 +159,7 @@ def build_runtime_container(settings: Settings | None = None) -> Container:
     )
     container.extras["engine"] = engine
     container.extras["redis"] = redis
+    container.extras["session_factory"] = session_factory
     return container
 
 

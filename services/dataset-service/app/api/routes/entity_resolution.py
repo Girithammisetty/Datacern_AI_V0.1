@@ -33,7 +33,10 @@ class ResolutionConfigIn(BaseModel):
 class ResolveRequest(BaseModel):
     pk_column: str
     config: ResolutionConfigIn
-    row_limit: int = 20000
+    # ge=1 so 0/negative can never reach dataset_service.resolve_entities's
+    # `if limit and limit > 0:` falsy-check, which otherwise silently takes the
+    # UNBOUNDED read_rows branch instead of the bounded read_snapshot_head.
+    row_limit: int = Field(default=20000, ge=1)
     # inc2: persist the run (versioned config + clusters + lineage + candidates)
     # so decisions can read the resolved entities and stewards can review merges.
     persist: bool = True

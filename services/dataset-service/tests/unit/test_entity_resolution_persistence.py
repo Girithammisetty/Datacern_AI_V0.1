@@ -9,7 +9,7 @@ import pytest
 
 from app.domain.errors import NotFound, ValidationFailed
 from app.domain.services import CallCtx
-from tests.conftest import TENANT_A, TENANT_B
+from tests.conftest import TENANT_A, TENANT_B, auth, create_dataset
 
 # A small record set: three records for one real person (shared national_id),
 # one clean duplicate by name+dob (probabilistic), and two distinct people.
@@ -228,3 +228,60 @@ async def test_materialize_requires_warehouse_writer(svc, container):
     with pytest.raises(ValidationFailed):
         await container.dataset_service.materialize_resolved_entities(
             _ctx(), out["run_id"], workspace_id="ws-claims")
+
+
+class TestRowLimitValidation:
+    """`row_limit=0` (or negative) must never reach dataset_service.resolve_entities:
+    the falsy-check at app/domain/services.py's `read_rows` (`if limit and limit
+    > 0:`) silently takes the UNBOUNDED `read_snapshot` branch for a limit of 0,
+    so the route rejects it at the request-validation layer (422) instead."""
+
+    async def test_zero_row_limit_rejected(self, client):
+        ds = await create_dataset(client, name="RowLimitZero")
+        resp = await client.post(
+            f"/api/v1/datasets/{ds['id']}/entity-resolution",
+            json={
+                "pk_column": "pk",
+                "config": {
+                    "entity_type": "person",
+                    "deterministic_keys": [["national_id"]],
+                },
+                "row_limit": 0,
+            },
+            headers=auth(),
+        )
+        assert resp.status_code == 422, resp.text
+
+    async def test_negative_row_limit_rejected(self, client):
+        ds = await create_dataset(client, name="RowLimitNeg")
+        resp = await client.post(
+            f"/api/v1/datasets/{ds['id']}/entity-resolution",
+            json={
+                "pk_column": "pk",
+                "config": {
+                    "entity_type": "person",
+                    "deterministic_keys": [["national_id"]],
+                },
+                "row_limit": -5,
+            },
+            headers=auth(),
+        )
+        assert resp.status_code == 422, resp.text
+
+    async def test_default_row_limit_still_accepted(self, client):
+        """No regression: omitting row_limit keeps the 20000 default."""
+        ds = await create_dataset(client, name="RowLimitDefault")
+        resp = await client.post(
+            f"/api/v1/datasets/{ds['id']}/entity-resolution",
+            json={
+                "pk_column": "pk",
+                "config": {
+                    "entity_type": "person",
+                    "deterministic_keys": [["national_id"]],
+                },
+            },
+            headers=auth(),
+        )
+        # The dataset has no readable version yet -> a domain 404, not a 422 --
+        # proving validation passed and the request reached the service layer.
+        assert resp.status_code == 404, resp.text

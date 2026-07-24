@@ -61,12 +61,19 @@ async def _lifespan(app: FastAPI):
         except Exception:  # noqa: BLE001
             logger.exception("experiment action registration error")
 
-        from app.workers.loops import expiry_loop, inbox_loop, outbox_loop, reconcile_loop
+        from app.workers.loops import (
+            expiry_loop,
+            inbox_loop,
+            outbox_loop,
+            reconcile_loop,
+            retention_loop,
+        )
 
         tasks.append(asyncio.create_task(outbox_loop(container, stop)))
         tasks.append(asyncio.create_task(inbox_loop(container, stop)))
         tasks.append(asyncio.create_task(expiry_loop(container, stop)))
         tasks.append(asyncio.create_task(reconcile_loop(container, stop)))
+        tasks.append(asyncio.create_task(retention_loop(container, stop)))
 
         try:
             from datacern_common.kafka import KafkaConfig, KafkaProducerClient

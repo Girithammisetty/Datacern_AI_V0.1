@@ -91,6 +91,41 @@ async def outbox_loop(container, stop: asyncio.Event) -> None:
         await _sleep_or_stop(stop, 1.0)
 
 
+async def retention_loop(container, stop: asyncio.Event) -> None:
+    """B6/B7 (BRD 58): outbox rows are drained by outbox_loop above but never
+    pruned, and processed_events (consumer dedup) has no TTL -- both grow
+    unboundedly forever. Both tables gate cross-tenant access behind
+    app.worker='true' (outbox: migration 0001 worker_outbox; processed_events:
+    migration 0004 worker_processed_events) -- the SAME GUC this service's own
+    OutboxDispatcher/_distinct_tenants already set. Sweep both hourly."""
+    sf = container.extras.get("session_factory")
+    if sf is None:
+        return
+    from datetime import timedelta
+
+    from datacern_common.retention import RetentionSpec, prune_table
+
+    specs = [
+        RetentionSpec(table="outbox", ts_col="published_at",
+                      retention=timedelta(days=30), require_not_null=True,
+                      worker_guc="app.worker", worker_val="true"),
+        RetentionSpec(table="processed_events", ts_col="created_at",
+                      retention=timedelta(hours=48),
+                      worker_guc="app.worker", worker_val="true"),
+    ]
+    while not stop.is_set():
+        await _sleep_or_stop(stop, 3600)
+        if stop.is_set():
+            return
+        for spec in specs:
+            try:
+                n = await prune_table(sf, spec)
+                if n:
+                    logger.info("retention pruned", extra={"table": spec.table, "deleted": n})
+            except Exception:  # noqa: BLE001
+                logger.exception("retention prune failed", extra={"table": spec.table})
+
+
 async def _sleep_or_stop(stop: asyncio.Event, seconds: float) -> None:
     try:
         await asyncio.wait_for(stop.wait(), timeout=seconds)

@@ -36,6 +36,25 @@ from app.domain.entities import CallCtx
 configure_json_logging("eval-service")  # MASTER-FR-050: JSON stdout, mirrors Go's slog handler
 logger = logging.getLogger(__name__)
 
+
+async def _run_retention_loop(
+    session_factory, specs: list, *, interval_seconds: float = 3600
+) -> None:
+    """B6/B7 (BRD 58) retention sweep: standalone (module-level, not a nested
+    closure) so it is directly unit-testable without booting the whole
+    lifespan/Kafka stack."""
+    from datacern_common.retention import prune_table
+
+    while True:
+        await asyncio.sleep(interval_seconds)
+        for spec in specs:
+            try:
+                n = await prune_table(session_factory, spec)
+                if n:
+                    logger.info("retention pruned", extra={"table": spec.table, "deleted": n})
+            except Exception:  # noqa: BLE001
+                logger.exception("retention prune failed", extra={"table": spec.table})
+
 # Flywheel + SLO source topics (BRD §6).
 _FLYWHEEL_TOPICS = [
     ("semantic.events.v1", "verified-query"),
@@ -103,6 +122,28 @@ def create_app(container: Container | None = None) -> FastAPI:
                         await asyncio.sleep(0.5 if n else 1.0)
 
                 tasks.append(asyncio.create_task(_relay_loop()))
+
+                # B6/B7 (BRD 58): outbox rows are drained above but never
+                # pruned, and processed_events (flywheel/SLO consumer dedup)
+                # has no TTL -- both grow unboundedly forever. Both tables
+                # gate cross-tenant access behind app.worker='true' (outbox:
+                # migration 0001 worker_outbox; processed_events: migration
+                # 0002 worker_processed_events) -- the SAME GUC this
+                # service's own OutboxDispatcher sets. Sweep both hourly.
+                from datetime import timedelta
+
+                from datacern_common.retention import RetentionSpec
+
+                retention_specs = [
+                    RetentionSpec(table="outbox", ts_col="published_at",
+                                  retention=timedelta(days=30), require_not_null=True,
+                                  worker_guc="app.worker", worker_val="true"),
+                    RetentionSpec(table="processed_events", ts_col="created_at",
+                                  retention=timedelta(hours=48),
+                                  worker_guc="app.worker", worker_val="true"),
+                ]
+                tasks.append(asyncio.create_task(_run_retention_loop(sf, retention_specs)))
+                logger.info("eval retention reaper started (outbox + processed_events)")
             # Flywheel + SLO Kafka consumers.
             try:
                 from datacern_common.kafka import KafkaConfig, KafkaProducerClient

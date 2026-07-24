@@ -46,6 +46,25 @@ configure_json_logging("agent-runtime")  # MASTER-FR-050: JSON stdout, mirrors G
 logger = logging.getLogger("agent-runtime")
 
 
+async def _run_retention_loop(
+    session_factory, specs: list, *, interval_seconds: float = 3600
+) -> None:
+    """B6/B7 (BRD 58) retention sweep: standalone (module-level, not a nested
+    closure) so it is directly unit-testable without booting the whole
+    lifespan/Kafka/Temporal stack."""
+    from datacern_common.retention import prune_table
+
+    while True:
+        await asyncio.sleep(interval_seconds)
+        for spec in specs:
+            try:
+                n = await prune_table(session_factory, spec)
+                if n:
+                    logger.info("retention pruned", extra={"table": spec.table, "deleted": n})
+            except Exception:  # noqa: BLE001
+                logger.exception("retention prune failed", extra={"table": spec.table})
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     c: Container = app.state.container
@@ -101,6 +120,29 @@ async def _lifespan(app: FastAPI):
         except Exception:
             c.extras["outbox_relay"] = False
             logger.exception("outbox relay FAILED to start — events will pile up unpublished")
+
+        # B6 (BRD 58): outbox rows are drained above but never pruned, so the
+        # table grows unboundedly forever. agent-runtime has no processed_events
+        # table (no consumer-dedup store), so only `outbox` is swept here. Same
+        # helper + GUC as dataset-service/memory-service's retention reaper
+        # (worker_outbox policy, migration 0002).
+        try:
+            from datetime import timedelta
+
+            from datacern_common.retention import RetentionSpec
+
+            session_factory = c.extras["session_factory"]
+            specs = [
+                RetentionSpec(
+                    table="outbox", ts_col="published_at",
+                    retention=timedelta(days=30), require_not_null=True,
+                    worker_guc="app.worker", worker_val="true",
+                ),
+            ]
+            tasks.append(asyncio.create_task(_run_retention_loop(session_factory, specs)))
+            logger.info("agent-runtime retention reaper started (outbox)")
+        except Exception:
+            logger.exception("agent-runtime retention reaper FAILED to start")
 
     # Scheduled drift-driven retrain loop (BRD 52 inc3): tick due retrain-watches,
     # compute the correction-rate drift signal, and open governance retrain
