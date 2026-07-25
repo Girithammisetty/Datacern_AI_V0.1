@@ -17,7 +17,13 @@ type commercialFixture struct {
 	clock      time.Time
 	plans      *domain.PlanService
 	commercial *domain.CommercialService
-	actor      domain.Actor
+	// trials/sweep: BRD 66 slice 2 (CPL-FR-021/022/023) trial lifecycle +
+	// leader-elected sweep, sharing this fixture's store/clock so
+	// commercial_trial_test.go can exercise start/extend/convert/sweep
+	// against the same plan-catalog helpers this file already has.
+	trials *domain.TrialService
+	sweep  *domain.TrialSweep
+	actor  domain.Actor
 }
 
 func newCommercialFixture(t *testing.T) *commercialFixture {
@@ -29,8 +35,13 @@ func newCommercialFixture(t *testing.T) *commercialFixture {
 	now := func() time.Time { return f.clock }
 	f.plans = &domain.PlanService{Store: f.store, Clock: now}
 	f.commercial = &domain.CommercialService{Store: f.store, Clock: now}
+	f.trials = &domain.TrialService{Store: f.store, Clock: now}
+	f.sweep = &domain.TrialSweep{Store: f.store, Clock: now}
 	return f
 }
+
+// advance moves the fixture's fake clock forward (trial expiry/threshold tests).
+func (f *commercialFixture) advance(d time.Duration) { f.clock = f.clock.Add(d) }
 
 func (f *commercialFixture) newTenant(name string) *domain.Tenant {
 	f.t.Helper()
