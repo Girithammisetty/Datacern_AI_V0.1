@@ -3565,6 +3565,23 @@ export function useTenant(id: string) {
   });
 }
 
+/** BRD 66 slice 3 (CPL-FR-033): the commercial plane for gating + upsell UI
+ * (lib/authz/useCapabilities.ts merges `lockedFeatureKeys` into the viewer's
+ * CapabilitySet). Reachable by any authenticated caller — the BFF degrades
+ * to the minimal shape rather than erroring for a non-admin viewer, so this
+ * never needs a capability check of its own. */
+export function useTenantCommercial(tenantId: string) {
+  return useQuery({
+    queryKey: qk.tenantCommercial(tenantId),
+    queryFn: () =>
+      graphqlRequest<ops.TenantCommercialResult>(ops.TENANT_COMMERCIAL, { id: tenantId }).then(
+        (r) => r.tenantCommercial,
+      ),
+    enabled: !!tenantId,
+    staleTime: 60_000,
+  });
+}
+
 /** (Re)generates the tenant's embed secret — the response's embedSecret is
  * shown exactly once by the caller; it cannot be re-fetched afterward. */
 export function useSetEmbedConfig(tenantId: string) {

@@ -135,6 +135,7 @@ import type {
   SiemConfigState,
   TenantIdpConfig,
   Tenant,
+  TenantCommercial,
   UpdateChartInput,
   UpdateDashboardInput,
   UpdatePipelineInput,

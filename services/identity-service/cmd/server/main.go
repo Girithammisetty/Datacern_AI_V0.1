@@ -33,12 +33,12 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/datacern-ai/identity-service/internal/adapters/keycloak"
-	"github.com/datacern-ai/identity-service/internal/blob"
-	"github.com/datacern-ai/identity-service/internal/adapters/oidc"
 	"github.com/datacern-ai/identity-service/internal/adapters/localinfra"
+	"github.com/datacern-ai/identity-service/internal/adapters/oidc"
 	"github.com/datacern-ai/identity-service/internal/adapters/vault"
 	"github.com/datacern-ai/identity-service/internal/api"
 	"github.com/datacern-ai/identity-service/internal/authz"
+	"github.com/datacern-ai/identity-service/internal/blob"
 	"github.com/datacern-ai/identity-service/internal/domain"
 	"github.com/datacern-ai/identity-service/internal/events"
 	"github.com/datacern-ai/identity-service/internal/keys"
@@ -67,7 +67,7 @@ func main() {
 	// from coming up "healthy" while provisioning users into a map.
 	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
 	mustReal := func(realEnv, adapter string) {
-		log.Error("REQUIRE_REAL_ADAPTERS=true but "+realEnv+" is unset — refusing to boot on the "+adapter+" fallback")
+		log.Error("REQUIRE_REAL_ADAPTERS=true but " + realEnv + " is unset — refusing to boot on the " + adapter + " fallback")
 		os.Exit(1)
 	}
 

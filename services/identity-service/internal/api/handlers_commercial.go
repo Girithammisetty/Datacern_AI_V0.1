@@ -81,9 +81,9 @@ func (s *Server) handleCreatePlan(w http.ResponseWriter, r *http.Request) {
 type patchPlanReq struct {
 	Name             *string                        `json:"name,omitempty"`
 	Description      *string                        `json:"description,omitempty"`
-	TrialDaysDefault *int                            `json:"trial_days_default,omitempty"`
-	Status           *string                         `json:"status,omitempty"`
-	Entitlements     *[]domain.PlanEntitlementInput  `json:"entitlements,omitempty"`
+	TrialDaysDefault *int                           `json:"trial_days_default,omitempty"`
+	Status           *string                        `json:"status,omitempty"`
+	Entitlements     *[]domain.PlanEntitlementInput `json:"entitlements,omitempty"`
 }
 
 // PATCH /platform/plans/{key} (CPL-FR-002)

@@ -119,12 +119,12 @@ type EffectiveEntitlement struct {
 // against. Shared by the HTTP handler and the entitlements_flat projection
 // worker so both compute from the identical code path.
 type EffectiveSet struct {
-	TenantID        uuid.UUID               `json:"tenant_id"`
-	PlanKey         string                  `json:"plan_key,omitempty"`
-	PlanVersion     int                     `json:"plan_version,omitempty"`
-	CommercialState CommercialState         `json:"commercial_state"`
-	TrialEndsAt     *time.Time              `json:"trial_ends_at,omitempty"`
-	Entitlements    []EffectiveEntitlement  `json:"entitlements"`
+	TenantID        uuid.UUID              `json:"tenant_id"`
+	PlanKey         string                 `json:"plan_key,omitempty"`
+	PlanVersion     int                    `json:"plan_version,omitempty"`
+	CommercialState CommercialState        `json:"commercial_state"`
+	TrialEndsAt     *time.Time             `json:"trial_ends_at,omitempty"`
+	Entitlements    []EffectiveEntitlement `json:"entitlements"`
 }
 
 // EntitlementReader abstracts a read of the tenant's entitlements_flat

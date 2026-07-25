@@ -104,10 +104,10 @@ func (s *Server) Router() http.Handler {
 		r.Post("/invitations/{token}/accept", s.handleAcceptInvitation)
 		r.Post("/token/obo", s.handleOBO) // subject_token carries the auth
 		r.Post("/token/apikey", s.handleAPIKeyExchange)
-		r.Post("/token/embed", s.handleEmbedToken)       // tenant embed secret in body
-		r.Post("/token/embed/oidc", s.handleEmbedOIDC)   // embed-federated SSO: user OIDC id_token (task #84)
-		r.Post("/token/oidc", s.handleOIDCLogin)         // external OIDC id_token in body (BYO-P4)
-		r.Post("/token/agent", s.handleAgentToken) // SPIFFE-gated
+		r.Post("/token/embed", s.handleEmbedToken)     // tenant embed secret in body
+		r.Post("/token/embed/oidc", s.handleEmbedOIDC) // embed-federated SSO: user OIDC id_token (task #84)
+		r.Post("/token/oidc", s.handleOIDCLogin)       // external OIDC id_token in body (BYO-P4)
+		r.Post("/token/agent", s.handleAgentToken)     // SPIFFE-gated
 		// BRD 60 WS2: a customer's own agent exchanges a tenant-admin-minted
 		// external-agent key (wr_xa_...) for a short-lived agent_autonomous
 		// token. The key IS the credential (like /token/embed); no bearer.
