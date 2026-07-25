@@ -325,6 +325,32 @@ export interface Tenant {
   embedConfig?: EmbedConfig | null;
 }
 
+/** BRD 66 slice 3 (CPL-FR-011): one row of a tenant's effective commercial
+ * entitlement set. Only present in the FULL-detail shape of TenantCommercial
+ * (tenant-admin capability required). */
+export interface CommercialEntitlement {
+  kind: string;
+  key: string;
+  value?: Record<string, unknown> | null;
+  provenance: string; // plan_default | override
+}
+
+/** BRD 66 slice 3 (CPL-FR-033): the commercial plane's tenant-facing view.
+ * A non-admin caller gets only commercialState + lockedFeatureKeys populated
+ * (everything else null) — that minimal shape is what drives ui-web's
+ * `entitlement` Gate (lib/authz/registry.ts) so locked features render a
+ * preview + upsell CTA for ANY authenticated caller, never a blank/hidden
+ * control. Full plan/trial/entitlement detail additionally needs the
+ * identity.user.admin capability. */
+export interface TenantCommercial {
+  commercialState: string | null;
+  lockedFeatureKeys: string[];
+  planKey?: string | null;
+  planVersion?: number | null;
+  trialEndsAt?: string | null;
+  entitlements?: CommercialEntitlement[] | null;
+}
+
 /** A tenant's embedded-UI (iframe) configuration. The secret is never
  * readable after generation — only its presence (configured) is exposed. */
 export interface EmbedConfig {

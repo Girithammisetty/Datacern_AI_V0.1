@@ -3162,6 +3162,22 @@ export interface TenantResult {
   tenant: Tenant | null;
 }
 
+/** BRD 66 slice 3 (CPL-FR-033): commercial plane. Any authenticated caller
+ * may issue this — the BFF returns the minimal {commercialState,
+ * lockedFeatureKeys} shape (everything else null) for a non-admin caller,
+ * never a 403. */
+export const TENANT_COMMERCIAL = /* GraphQL */ `
+  query TenantCommercial($id: ID!) {
+    tenantCommercial(id: $id) {
+      commercialState lockedFeatureKeys planKey planVersion trialEndsAt
+      entitlements { kind key value provenance }
+    }
+  }
+`;
+export interface TenantCommercialResult {
+  tenantCommercial: TenantCommercial | null;
+}
+
 /** All tenants (platform-admin only; identity requireSuperAdmin enforces). */
 export const TENANTS = /* GraphQL */ `
   query Tenants($limit: Int) {

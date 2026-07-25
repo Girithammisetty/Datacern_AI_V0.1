@@ -145,6 +145,8 @@ export const qk = {
   serviceAccounts: () => ["admin", "serviceAccounts"] as const,
   tenant: (id: string) => ["admin", "tenant", id] as const,
   tenantLabels: () => ["admin", "tenantLabels"] as const,
+  // BRD 66 slice 3: commercial plane (plan/trial/entitlements).
+  tenantCommercial: (id: string) => ["platform", "tenantCommercial", id] as const,
   // Tier 4b: identity/rbac admin — effective access lookup per resource URN.
   contentGrants: (resourceUrn: string) => ["admin", "contentGrants", resourceUrn] as const,
   auditEvents: (filters: unknown) => ["admin", "auditEvents", filters] as const,
