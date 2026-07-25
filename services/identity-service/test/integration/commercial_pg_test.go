@@ -281,9 +281,16 @@ func TestCommercialProjection_RedisRoundTrip(t *testing.T) {
 	tn := newTenantRow(t, store, domain.TenantActive)
 	commercial := &domain.CommercialService{Store: store, Clock: time.Now}
 
-	if err := store.AssignTenantPlan(ctx, &domain.TenantPlan{
-		TenantID: tn.ID, PlanKey: "pilot", PlanVersionSnapshot: 1, AssignedAt: time.Now().UTC(), AssignedBy: "test",
-	}); err != nil {
+	// commercial.AssignPlan, not the raw store.AssignTenantPlan: the store
+	// method only writes the tenant_plan row. CommercialService.AssignPlan
+	// is the orchestration layer that ALSO transitions commercial_state
+	// none -> active as a side effect (commercial_service.go's AssignPlan,
+	// gated by CanTransitionCommercial for the tenant's profile) -- calling
+	// the store method directly, as this test originally did, silently skips
+	// that transition, so the projected snapshot correctly showed
+	// commercial_state=none (the column's default) rather than a bug in the
+	// worker/writer path this test actually exists to prove.
+	if _, err := commercial.AssignPlan(ctx, tn.ID, "pilot", domain.Actor{Type: "user", ID: "op"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -324,17 +331,28 @@ func TestCommercialProjection_RedisRoundTrip(t *testing.T) {
 		t.Errorf("projected commercial_state = %v, want active", payload["commercial_state"])
 	}
 
+	// ProcessOnce drains every dirty tenant in one pass (see the n>=1 note
+	// above), publishing one ent.invalidate message per tenant it processed
+	// -- not just this test's own. Read messages until this tenant's shows
+	// up (or the timeout elapses), rather than assuming the channel's very
+	// first message is ours.
 	msgCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	msg, err := sub.ReceiveMessage(msgCtx)
-	if err != nil {
-		t.Fatalf("ent.invalidate not published: %v", err)
-	}
-	var inv struct {
-		Tenant string `json:"tenant"`
-	}
-	if err := json.Unmarshal([]byte(msg.Payload), &inv); err != nil || inv.Tenant != tn.ID.String() {
-		t.Errorf("ent.invalidate payload = %q, want tenant=%s", msg.Payload, tn.ID)
+	found := false
+	var lastPayload string
+	for !found {
+		msg, err := sub.ReceiveMessage(msgCtx)
+		if err != nil {
+			t.Fatalf("ent.invalidate for %s not published (last seen: %q): %v", tn.ID, lastPayload, err)
+		}
+		lastPayload = msg.Payload
+		var inv struct {
+			Tenant string `json:"tenant"`
+		}
+		if err := json.Unmarshal([]byte(msg.Payload), &inv); err != nil {
+			t.Fatalf("ent.invalidate payload %q: %v", msg.Payload, err)
+		}
+		found = inv.Tenant == tn.ID.String()
 	}
 
 	// The dirty queue is now empty for this tenant: a second pass is a no-op.
