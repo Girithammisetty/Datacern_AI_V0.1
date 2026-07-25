@@ -4,10 +4,14 @@ import { renderHook, act } from "@testing-library/react";
 /** The hub stream is a boundary (EventSource) — doubled here; the assertion
  * target is the REAL request body posted to /api/copilot/message. */
 const streamCloses: ReturnType<typeof vi.fn>[] = [];
+/** Captured `onEvent` callbacks, so a test can push a hub event through the
+ * real handler chain exactly as realtime-hub would. */
+const streamHandlers: ((topic: string, data: any) => void)[] = [];
 vi.mock("@/lib/realtime/connection", () => ({
-  openHubStream: vi.fn(() => {
+  openHubStream: vi.fn((opts: any) => {
     const close = vi.fn();
     streamCloses.push(close);
+    if (opts?.handlers?.onEvent) streamHandlers.push(opts.handlers.onEvent);
     return { close };
   }),
 }));
@@ -19,6 +23,7 @@ const fetchCalls: { url: string; body: any }[] = [];
 beforeEach(() => {
   fetchCalls.length = 0;
   streamCloses.length = 0;
+  streamHandlers.length = 0;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init: any) => {
@@ -58,6 +63,47 @@ describe("useCopilotThread agentKey routing (Tier 2b)", () => {
       await result.current.send("hello");
     });
     expect(fetchCalls[0].body.agentKey).toBeNull();
+  });
+
+  it("surfaces a proposal_created hub event as a Review-proposal action", async () => {
+    // agent-runtime publishes {type:"proposal_created", proposal_id, tool_id}
+    // when a governed write lands as a pending proposal. That payload matches
+    // none of the token/citation/done branches, so before this fix it was
+    // silently dropped and the user never got a link to the approval.
+    const { result } = renderHook(() => useCopilotThread("wr:t:case:case/c-1"));
+    await act(async () => {
+      await result.current.send("triage this dispute");
+    });
+
+    act(() => {
+      streamHandlers[0]("agent_run:run-1", {
+        type: "proposal_created",
+        proposal_id: "prop-42",
+        tool_id: "case.apply_disposition",
+      });
+    });
+
+    const assistant = result.current.messages.find((m) => m.role === "assistant")!;
+    expect(assistant.actions).toHaveLength(1);
+    expect(assistant.actions![0].proposalId).toBe("prop-42");
+    expect(assistant.actions![0].label).toBe("Review proposal");
+  });
+
+  it("still accepts a camelCase action-shaped payload", async () => {
+    const { result } = renderHook(() => useCopilotThread("wr:t:workspace:ws"));
+    await act(async () => {
+      await result.current.send("design a dashboard");
+    });
+    act(() => {
+      streamHandlers[0]("agent_run:run-1", {
+        type: "action",
+        proposalId: "prop-7",
+        label: "Approve dashboard",
+      });
+    });
+    const assistant = result.current.messages.find((m) => m.role === "assistant")!;
+    expect(assistant.actions![0].proposalId).toBe("prop-7");
+    expect(assistant.actions![0].label).toBe("Approve dashboard");
   });
 
   it("closes the live SSE stream on unmount (no leak)", async () => {

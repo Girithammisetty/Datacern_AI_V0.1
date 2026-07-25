@@ -6,6 +6,16 @@ import { openHubStream, type HubStream } from "@/lib/realtime/connection";
  * message array (and its per-render re-scroll/re-map cost) without limit. */
 const MAX_RETAINED_MESSAGES = 200;
 
+/** How long to wait for the FIRST event on the run topic before declaring no
+ * response. The runtime does not stream per-token — it publishes the whole
+ * answer as one `token` event once the model finishes (agent-runtime
+ * `engine.publish_final_stream`), so this budget must cover full model latency,
+ * not time-to-first-token. A local Ollama answer routinely takes ~45s (the
+ * repo's own capture spec budgets 45s: tests-live/zz-capture-copilot.spec.ts),
+ * so the previous 20s ceiling fired *before* a perfectly good answer landed and
+ * showed "didn't return a response" over a run that then succeeded. */
+const NO_RESPONSE_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_COPILOT_TIMEOUT_MS ?? 120000);
+
 export interface Citation {
   urn: string;
   label?: string;
@@ -105,7 +115,7 @@ export function useCopilotThread(contextUrn: string | null, agentKey?: string | 
       if (noResponseTimerRef.current) clearTimeout(noResponseTimerRef.current);
       const noResponseTimer = setTimeout(() => {
         if (!sawEvent) finishWithError(assistantId, "The copilot didn't return a response.");
-      }, 20000);
+      }, NO_RESPONSE_TIMEOUT_MS);
       noResponseTimerRef.current = noResponseTimer;
       streamRef.current = openHubStream({
         topics,
@@ -129,7 +139,17 @@ export function useCopilotThread(contextUrn: string | null, agentKey?: string | 
                     : msg,
                 ),
               );
-            } else if (String(kind).includes("action")) {
+            } else if (String(kind).includes("proposal") || String(kind).includes("action")) {
+              // A governed write never executes from chat — it lands as a pending
+              // proposal for a second human. The runtime announces that as
+              // `proposal_created` with a snake_case `proposal_id`
+              // (agent-runtime `ProposalService.create_from_intent`); older/other
+              // producers may send an `action`-shaped payload with `proposalId`.
+              // Accept both, so the "Review proposal" card actually renders and
+              // deep-links to the approval instead of leaving the user to find it.
+              const proposalId = data?.proposal_id ?? data?.proposalId;
+              sawEvent = true;
+              clearTimeout(noResponseTimer);
               setMessages((m) =>
                 m.map((msg) =>
                   msg.id === assistantId
@@ -137,7 +157,7 @@ export function useCopilotThread(contextUrn: string | null, agentKey?: string | 
                         ...msg,
                         actions: [
                           ...(msg.actions ?? []),
-                          { label: data?.label ?? "Review proposal", proposalId: data?.proposalId, href: data?.href },
+                          { label: data?.label ?? "Review proposal", proposalId, href: data?.href },
                         ],
                       }
                     : msg,

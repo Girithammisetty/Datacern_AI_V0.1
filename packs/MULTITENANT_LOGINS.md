@@ -452,3 +452,18 @@ Each tenant is a fully isolated (RLS) vertical with its own users.
 | chargeback-specialist@verify.datacern | Chargeback Specialist |
 | dispute-operations-manager@verify.datacern | Dispute Operations Manager |
 | dispute-compliance-auditor@verify.datacern | Dispute Compliance Auditor |
+
+## Card Disputes Demo  (`wr-demo-card-disputes`)
+- tenant id: `019f96b0-d308-70d2-8b3b-eee60a7249e0`
+- workspace: `019f96b0-db9b-7d04-ba96-4df2a66bcde1`
+- packs: card-disputes
+
+| login email | role |
+|---|---|
+| admin@carddisputes.datacern | Tenant Admin (author) |
+| approver@carddisputes.datacern | Tenant Admin (four-eyes approver) |
+| dispute-intake-analyst@carddisputes.datacern | Dispute Intake Analyst |
+| fraud-investigator@carddisputes.datacern | Fraud Investigator |
+| chargeback-specialist@carddisputes.datacern | Chargeback Specialist |
+| dispute-operations-manager@carddisputes.datacern | Dispute Operations Manager |
+| dispute-compliance-auditor@carddisputes.datacern | Dispute Compliance Auditor |

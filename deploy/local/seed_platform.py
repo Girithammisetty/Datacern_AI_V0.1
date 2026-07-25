@@ -199,6 +199,53 @@ RBAC_DSN = os.environ.get("RBAC_DATABASE_URL", "postgres://{u}:{pw}@{h}:{p}/rbac
     u=os.environ.get("PGUSER", "datacern"), pw=os.environ.get("PGPASSWORD", "datacern_dev"),
     h=os.environ.get("PGHOST", "localhost"), p=os.environ.get("PGPORT", "5432")))
 
+# identity-service's own Postgres. Same bootstrap reasoning as RBAC_DSN below:
+# the personas' user ids are PINNED constants (see PERSONAS) that every other
+# store already references, but identity's POST /users/invite generates the id
+# server-side (domain.InviteRequest carries only email/full_name/groups), so the
+# pinned ids cannot be re-created through the API after an identity rebuild.
+IDENTITY_DSN = os.environ.get("IDENTITY_DATABASE_URL",
+    "postgres://{u}:{pw}@{h}:{p}/identity".format(
+        u=os.environ.get("PGUSER", "datacern"), pw=os.environ.get("PGPASSWORD", "datacern_dev"),
+        h=os.environ.get("PGHOST", "localhost"), p=os.environ.get("PGPORT", "5432")))
+
+
+def ensure_persona_users():
+    """Make sure each persona exists as a REAL identity-service user row.
+
+    Why this exists: PERSONAS pins each persona's `sub` to a literal uuid, because
+    those ids are foreign-keyed all over the estate (case-service assigned_to_id,
+    rbac group members, tool-plane per-resource OBO grants, personas.json). But
+    identity generates user ids server-side on invite, so once identity's database
+    is rebuilt the pinned users are simply gone and cannot be recreated with the
+    same ids through the API. Symptom when that happens (observed 2026-07-24 on a
+    fresh identity DB): `activate` 404s "user not found" for all five personas,
+    /users/assignable returns [], and the Cases assign/reassign picker is EMPTY —
+    while login and capabilities both still work, because dev-login mints from
+    personas.json and rbac reads its own member rows. So the failure is silent
+    exactly where a demo notices it last.
+
+    Rows are written as the same shape identity's own Invite writes (status
+    'invited', idp_subject NULL until an IdP binds it), for the same documented
+    reason seed_persona_grants() writes rbac member rows directly — the pinned id
+    is unreachable through the public API. activate_personas() then flips them
+    invited -> active through identity's REAL admin endpoint, so the API is still
+    the thing that produces the active state. Idempotent.
+    """
+    say("ensuring persona users exist in identity (pinned ids -> assignable)")
+    now = "now()"
+    created = 0
+    with psycopg.connect(IDENTITY_DSN, autocommit=True) as conn:
+        for email, p in PERSONAS.items():
+            cur = conn.execute(
+                f"""INSERT INTO users (id, tenant_id, email, full_name, status,
+                                       idp_subject, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, 'invited', NULL, {now}, {now})
+                    ON CONFLICT (id) DO NOTHING""",
+                (p["sub"], TENANT, email, p["role"].replace("_", " ").title()))
+            created += cur.rowcount or 0
+    ok(f"{created} persona user row(s) created, {len(PERSONAS) - created} already present")
+
 
 def _ensure_tenant_seeded():
     """Ensure the tenant's system permission groups (one per system role) + the
@@ -426,6 +473,10 @@ def ensure_platform_seeded():
     # they must be 'active' — an invited-forever account is not assignable, which
     # breaks case assign/reassign (needs >=2 active users). A real user activates
     # by accepting the invite / first login; do the admin-path equivalent here.
+    # The user rows must EXIST before they can be activated: on a rebuilt identity
+    # database they do not, and activate silently 404s five times (see
+    # ensure_persona_users).
+    ensure_persona_users()
     activate_personas()
 
     # REAL grant path for the four personas: group memberships -> rbac's worker
