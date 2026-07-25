@@ -3575,7 +3575,7 @@ export function useTenantCommercial(tenantId: string) {
     queryKey: qk.tenantCommercial(tenantId),
     queryFn: () =>
       graphqlRequest<ops.TenantCommercialResult>(ops.TENANT_COMMERCIAL, { id: tenantId }).then(
-        (r) => r.tenantCommercial,
+        (r) => r.tenantCommercial ?? null,
       ),
     enabled: !!tenantId,
     staleTime: 60_000,
