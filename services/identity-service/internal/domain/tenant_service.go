@@ -38,6 +38,15 @@ type CreateTenantRequest struct {
 	Modules     []string `json:"modules,omitempty"`
 	AutoUpgrade bool     `json:"auto_upgrade"`
 	Publish     bool     `json:"publish"`
+	// Profile/DemoPack/TTLDays are Go-only (json:"-"): never settable via the
+	// public POST /tenants wire body. Only DemoService.Create (POST
+	// /demo-tenants, BRD 70 DSP-FR-010) populates them, so profile=demo
+	// tenants are creatable through exactly one path -- the same
+	// immutability-by-absence-from-the-mutable-surface pattern
+	// PatchTenantRequest already uses for Profile (see Patch below).
+	Profile  TenantProfile `json:"-"`
+	DemoPack string        `json:"-"`
+	TTLDays  *int          `json:"-"`
 }
 
 // Create validates and creates a tenant (IDN-FR-001/002/004/005, BR-1:
@@ -69,6 +78,12 @@ func (s *TenantService) Create(ctx context.Context, req CreateTenantRequest, act
 			return nil, "", EValidation("invalid quotas", FieldError{Field: "quotas", Message: "cpu values must be positive"})
 		}
 	}
+	profile := req.Profile
+	if profile == "" {
+		profile = ProfileStandard
+	} else if !ValidTenantProfiles[profile] {
+		return nil, "", EValidation("invalid profile", FieldError{Field: "profile", Message: "must be standard|demo|poc"})
+	}
 	now := s.now()
 	id, _ := uuid.NewV7()
 	t := &Tenant{
@@ -78,6 +93,11 @@ func (s *TenantService) Create(ctx context.Context, req CreateTenantRequest, act
 		SchemaPrefix: prefix, AutoUpgrade: req.AutoUpgrade, Modules: modules,
 		CreatedBy: actor.ID, CreatedAt: now, UpdatedAt: now,
 		CommercialState: CommercialNone, // CPL-FR-020: every tenant starts with no commercial relationship
+		// DSP-FR-001: Profile is set ONCE here and never appears in
+		// PatchTenantRequest below -- immutable by construction.
+		Profile:  profile,
+		DemoPack: req.DemoPack,
+		TTLDays:  req.TTLDays,
 	}
 	// BR-1 / AC-4: uniqueness of name and every derived identifier is
 	// enforced in one transaction; a duplicate (case-insensitive, since

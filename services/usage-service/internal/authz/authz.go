@@ -63,6 +63,19 @@ const (
 
 	ActionReconRead   = "usage.reconciliation.read"
 	ActionReconUpdate = "usage.reconciliation.update"
+
+	// ActionAssumptionsUpdate gates PUT /value/assumptions (BRD 69 ROI-FR-002).
+	// The design doc names this action "usage.report.manage", but the
+	// platform's closed verb grammar (RBC-FR-022, rbac-service/internal/
+	// domain/catalog.go AllVerbs) does not include "manage" — binding a
+	// non-closed verb fails rbac's EnsureSystemRoles at boot (see the
+	// eval.canary.manage / eval.suite.write precedent documented in
+	// rbac-service/seed/roles_actions.yaml as an unresolved follow-up, NOT a
+	// pattern to repeat). "update" on a new "assumptions" resource is the
+	// closed-grammar-compliant equivalent of the same intent (edit
+	// value-reporting assumptions), verified against the CURRENT repo state
+	// rather than the design doc's literal string.
+	ActionAssumptionsUpdate = "usage.assumptions.update"
 )
 
 // ManifestEntry is one action for rbac catalog registration (RBC-FR-022).
@@ -88,6 +101,7 @@ func Manifest() []ManifestEntry {
 		{ActionAnomalyUpdate, false, false},
 		{ActionReconRead, false, true},
 		{ActionReconUpdate, false, true},
+		{ActionAssumptionsUpdate, false, false},
 	}
 }
 

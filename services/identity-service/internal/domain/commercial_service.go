@@ -199,11 +199,19 @@ func (s *CommercialService) AssignPlan(ctx context.Context, tenantID uuid.UUID, 
 		return nil, err
 	}
 	if t.CommercialState == CommercialNone {
-		cev := NewEvent(EvCommercialEntitlementChanged, tenantID, actor, t.URN(), now, map[string]any{
-			"commercial_state_before": string(CommercialNone), "commercial_state_after": string(CommercialActive),
-		})
-		if err := s.Store.TransitionTenantCommercial(ctx, tenantID, CommercialNone, CommercialActive, cev); err != nil {
-			return nil, err
+		// DSP-FR-003: a demo/poc tenant assigned a plan (e.g. the forced
+		// internal-demo plan, DSP-FR-001) stays commercial_state=none --
+		// CanTransitionCommercial's non-convertible table has no none->active
+		// edge for those profiles, so this is a silent no-op for them rather
+		// than an error, matching "demo tenants have no commercial
+		// relationship" (BRD 70 §2.1).
+		if CanTransitionCommercial(t.Profile, CommercialNone, CommercialActive) {
+			cev := NewEvent(EvCommercialEntitlementChanged, tenantID, actor, t.URN(), now, map[string]any{
+				"commercial_state_before": string(CommercialNone), "commercial_state_after": string(CommercialActive),
+			})
+			if err := s.Store.TransitionTenantCommercial(ctx, tenantID, t.Profile, CommercialNone, CommercialActive, cev); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return tp, nil

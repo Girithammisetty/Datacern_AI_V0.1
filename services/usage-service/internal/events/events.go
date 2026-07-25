@@ -59,6 +59,15 @@ const (
 
 	EvCrossTenantDenied = "security.cross_tenant_denied" // MASTER-FR-003
 	EvPermissionDenied  = "security.permission_denied"   // MASTER-FR-040
+
+	// EvAssumptionsUpdated fires on every value_assumptions insert (BRD 69
+	// ROI-FR-002, design §2.1 point 4) with {before, after} version summaries.
+	EvAssumptionsUpdated = "value_assumptions.updated"
+	// EvValueReportExported fires on export generation (BRD 69 ROI-FR-021,
+	// design §2.8 step 6). Named without the ".v1" suffix the design doc's
+	// prose uses, matching this file's existing convention (event TYPE names
+	// carry no version suffix; only the outbox TOPIC does — EmitTopic above).
+	EvValueReportExported = "value.report_exported"
 )
 
 // Envelope is the platform event envelope (MASTER-FR-031); partition key is

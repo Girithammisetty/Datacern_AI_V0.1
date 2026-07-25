@@ -189,6 +189,9 @@ func (s *Store) ListTenants(_ context.Context, f domain.TenantFilter, page domai
 		if f.CellID != "" && (t.CellID == nil || t.CellID.String() != f.CellID) {
 			continue
 		}
+		if f.Profile != "" && string(t.Profile) != f.Profile {
+			continue
+		}
 		cp := *t
 		all = append(all, &cp)
 	}
@@ -233,7 +236,7 @@ func (s *Store) TransitionTenant(_ context.Context, id uuid.UUID, from, to domai
 
 // --- commercial: tenant commercial-state (CPL-FR-020) ---
 
-func (s *Store) TransitionTenantCommercial(_ context.Context, id uuid.UUID, from, to domain.CommercialState, evs ...domain.OutboxEvent) error {
+func (s *Store) TransitionTenantCommercial(_ context.Context, id uuid.UUID, profile domain.TenantProfile, from, to domain.CommercialState, evs ...domain.OutboxEvent) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t, ok := s.tenants[id]
@@ -243,7 +246,7 @@ func (s *Store) TransitionTenantCommercial(_ context.Context, id uuid.UUID, from
 	if t.CommercialState != from {
 		return domain.EConflict("tenant commercial_state is " + string(t.CommercialState) + ", expected " + string(from))
 	}
-	if !domain.CanTransitionCommercial(from, to) {
+	if !domain.CanTransitionCommercial(profile, from, to) {
 		return domain.EConflict("invalid commercial state transition " + string(from) + " -> " + string(to))
 	}
 	t.CommercialState = to

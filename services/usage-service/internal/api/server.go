@@ -47,6 +47,12 @@ type Store interface {
 	AcknowledgeReconciliation(ctx context.Context, id uuid.UUID) error
 	RecordAdjustment(ctx context.Context, op domain.Op, a domain.Adjustment) (domain.Adjustment, error)
 
+	// Value & ROI reporting (BRD 69).
+	PutAssumptions(ctx context.Context, op domain.Op, minutesPerDecision map[string]float64, loadedHourlyRateUSD float64) (domain.ValueAssumptions, error)
+	ResolveAssumptions(ctx context.Context, tenant uuid.UUID, at time.Time) (*domain.ValueAssumptions, bool, error)
+	AssumptionHistory(ctx context.Context, tenant uuid.UUID) ([]domain.ValueAssumptions, error)
+	ValueSummaryInputs(ctx context.Context, tenant uuid.UUID, monthStart time.Time, workspaceID string) (domain.DecisionsBreakdown, float64, domain.Adoption, bool, error)
+
 	Ping(ctx context.Context) error
 }
 
@@ -107,6 +113,15 @@ func (s *Server) Router() http.Handler {
 		r.With(s.RequireAction(authz.ActionReconRead)).Get("/reconciliations", s.handleListReconciliations)
 		r.With(s.RequireAction(authz.ActionReconUpdate)).Post("/reconciliations/{id}/acknowledge", s.handleAckReconciliation)
 		r.With(s.RequireAction(authz.ActionReconUpdate)).Post("/adjustments", s.handleCreateAdjustment)
+
+		// Value & ROI reporting (BRD 69). Read surfaces share usage.report.read
+		// (viewing/exporting current figures is read-shaped); only editing the
+		// assumptions that drive FUTURE figures needs the stronger grant
+		// (design §2.9).
+		r.With(s.RequireAction(authz.ActionReportRead)).Get("/value/summary", s.handleValueSummary)
+		r.With(s.RequireAction(authz.ActionReportRead)).Get("/value/assumptions", s.handleGetAssumptions)
+		r.With(s.RequireAction(authz.ActionAssumptionsUpdate)).Put("/value/assumptions", s.handlePutAssumptions)
+		r.With(s.RequireAction(authz.ActionReportRead)).Get("/value/assumptions/history", s.handleGetAssumptionHistory)
 	})
 
 	return r

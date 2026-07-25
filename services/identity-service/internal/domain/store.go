@@ -156,8 +156,11 @@ type Store interface {
 
 	// --- commercial: tenant commercial-state (columns on tenants; CPL-FR-020) ---
 	// TransitionTenantCommercial is a compare-and-set change guarded by
-	// CanTransitionCommercial, mirroring TransitionTenant.
-	TransitionTenantCommercial(ctx context.Context, id uuid.UUID, from, to CommercialState, evs ...OutboxEvent) error
+	// CanTransitionCommercial, mirroring TransitionTenant. profile is the
+	// tenant's TenantProfile (DSP-FR-003 non-convertibility): callers already
+	// hold the tenant record (via GetTenant) so this never requires an extra
+	// round-trip to look it up.
+	TransitionTenantCommercial(ctx context.Context, id uuid.UUID, profile TenantProfile, from, to CommercialState, evs ...OutboxEvent) error
 
 	// --- commercial: entitlements_flat projection dirty queue (CPL-FR-011),
 	// same ClaimDirty/SKIP LOCKED shape as rbac-service's projection_dirty ---
@@ -188,9 +191,10 @@ type UserFilter struct {
 
 // TenantFilter per MASTER-FR-023 (only indexed fields are filterable).
 type TenantFilter struct {
-	Status string
-	CellID string
-	Cloud  string
+	Status  string
+	CellID  string
+	Cloud   string
+	Profile string // DSP-FR-013: the TTL reaper lists profile=demo tenants
 }
 
 // PlatformAdmin is a first-class, cross-tenant platform operator. It lives in a

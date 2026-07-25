@@ -21,7 +21,7 @@ func TestCommercialTransitionMatrix(t *testing.T) {
 	now := time.Now()
 	for _, from := range AllCommercialStates {
 		for _, to := range AllCommercialStates {
-			tn := &Tenant{CommercialState: from}
+			tn := &Tenant{Profile: ProfileStandard, CommercialState: from}
 			err := tn.TransitionCommercial(to, now)
 			want := allowed[[2]CommercialState{from, to}]
 			if want && err != nil {
@@ -43,9 +43,64 @@ func TestCommercialTransitionMatrix(t *testing.T) {
 	}
 	// churned is terminal: no outbound edges at all.
 	for _, to := range AllCommercialStates {
-		if CanTransitionCommercial(CommercialChurned, to) {
+		if CanTransitionCommercial(ProfileStandard, CommercialChurned, to) {
 			t.Errorf("churned should be terminal, but ->%s is allowed", to)
 		}
+	}
+}
+
+// TestCommercialTransitionMatrix_NonConvertible is BRD 70's DSP-FR-003/AC-3
+// test: demo/poc tenants can never reach commercial_state=trial or active,
+// enforced as a missing map entry (409 CONFLICT) rather than a scattered
+// runtime `if profile == "demo"` check -- see docs/initiatives/
+// demo-sandbox-poc-mode.md §2.1. Exhaustive over every (from, to) pair for
+// BOTH non-standard profiles, mirroring TestCommercialTransitionMatrix's
+// shape exactly so the two tables stay comparably audited.
+func TestCommercialTransitionMatrix_NonConvertible(t *testing.T) {
+	allowed := map[[2]CommercialState]bool{
+		{CommercialTrial, CommercialSuspendedCommercial}:   true,
+		{CommercialActive, CommercialChurned}:               true,
+		{CommercialSuspendedCommercial, CommercialChurned}: true,
+	}
+	now := time.Now()
+	for _, profile := range []TenantProfile{ProfileDemo, ProfilePOC} {
+		for _, from := range AllCommercialStates {
+			for _, to := range AllCommercialStates {
+				tn := &Tenant{Profile: profile, CommercialState: from}
+				err := tn.TransitionCommercial(to, now)
+				want := allowed[[2]CommercialState{from, to}]
+				if want && err != nil {
+					t.Errorf("profile=%s %s -> %s: expected allowed, got %v", profile, from, to, err)
+				}
+				if !want {
+					de, ok := AsError(err)
+					if !ok || de.HTTP != 409 || de.Code != CodeConflict {
+						t.Errorf("profile=%s %s -> %s: expected 409 CONFLICT, got %v", profile, from, to, err)
+					}
+					if tn.CommercialState != from {
+						t.Errorf("profile=%s %s -> %s: commercial_state mutated on rejected transition", profile, from, to)
+					}
+				}
+			}
+		}
+	}
+	// AC-3 literally: "attempt demo->trial transition -> rejected". none is
+	// where every demo tenant starts (TenantService.Create), so this is the
+	// one edge a real caller could actually attempt.
+	if CanTransitionCommercial(ProfileDemo, CommercialNone, CommercialTrial) {
+		t.Error("AC-3: demo tenant none->trial must be rejected")
+	}
+	if CanTransitionCommercial(ProfileDemo, CommercialNone, CommercialActive) {
+		t.Error("AC-3: demo tenant none->active must be rejected")
+	}
+	if CanTransitionCommercial(ProfilePOC, CommercialTrial, CommercialActive) {
+		t.Error("AC-3: poc tenant trial->active must be rejected (non-convertible even mid-trial)")
+	}
+	// The SAME (from,to) pair a standard tenant may take must be rejected for
+	// demo/poc -- proves the guard is profile-sensitive, not just a narrower
+	// global table.
+	if !CanTransitionCommercial(ProfileStandard, CommercialNone, CommercialActive) {
+		t.Fatal("sanity: standard none->active must remain allowed (regression in the standard table)")
 	}
 }
 

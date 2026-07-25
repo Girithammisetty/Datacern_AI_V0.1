@@ -87,16 +87,17 @@ func isUnique(err error) bool {
 
 const tenantCols = `id, name, display_name, owner_email, tier, cell_id, cloud, status, quotas,
 	platform_version, subdomain, k8s_namespace, schema_prefix, auto_upgrade, modules, created_by,
-	created_at, updated_at, deleted_at, deletion_scheduled_at, commercial_state, trial_started_at, trial_ends_at`
+	created_at, updated_at, deleted_at, deletion_scheduled_at, commercial_state, trial_started_at, trial_ends_at,
+	profile, demo_pack, ttl_days`
 
 func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 	var t domain.Tenant
 	var quotas []byte
-	var status, commercialState string
+	var status, commercialState, profile string
 	err := row.Scan(&t.ID, &t.Name, &t.DisplayName, &t.OwnerEmail, &t.Tier, &t.CellID, &t.Cloud,
 		&status, &quotas, &t.PlatformVersion, &t.Subdomain, &t.K8sNamespace, &t.SchemaPrefix,
 		&t.AutoUpgrade, &t.Modules, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt, &t.DeletionScheduledAt,
-		&commercialState, &t.TrialStartedAt, &t.TrialEndsAt)
+		&commercialState, &t.TrialStartedAt, &t.TrialEndsAt, &profile, &t.DemoPack, &t.TTLDays)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ENotFound("tenant")
 	}
@@ -105,6 +106,7 @@ func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 	}
 	t.Status = domain.TenantStatus(status)
 	t.CommercialState = domain.CommercialState(commercialState)
+	t.Profile = domain.TenantProfile(profile)
 	if err := json.Unmarshal(quotas, &t.Quotas); err != nil {
 		return nil, err
 	}
@@ -117,14 +119,19 @@ func (s *Store) CreateTenant(ctx context.Context, t *domain.Tenant, evs ...domai
 	if commercialState == "" {
 		commercialState = string(domain.CommercialNone) // defensive default (column also has a DB default)
 	}
+	profile := string(t.Profile)
+	if profile == "" {
+		profile = string(domain.ProfileStandard) // defensive default (column also has a DB default)
+	}
 	err := s.plainTx(ctx, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO tenants (`+tenantCols+`)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`,
 			t.ID, t.Name, t.DisplayName, t.OwnerEmail, t.Tier, t.CellID, t.Cloud, string(t.Status), quotas,
 			t.PlatformVersion, t.Subdomain, t.K8sNamespace, t.SchemaPrefix, t.AutoUpgrade, t.Modules,
 			t.CreatedBy, t.CreatedAt, t.UpdatedAt, t.DeletedAt, t.DeletionScheduledAt,
-			commercialState, t.TrialStartedAt, t.TrialEndsAt); err != nil {
+			commercialState, t.TrialStartedAt, t.TrialEndsAt,
+			profile, t.DemoPack, t.TTLDays); err != nil {
 			return err
 		}
 		return insertOutbox(ctx, tx, evs)
@@ -429,6 +436,9 @@ func (s *Store) ListTenants(ctx context.Context, f domain.TenantFilter, page dom
 	if f.CellID != "" {
 		add("cell_id::text", f.CellID)
 	}
+	if f.Profile != "" {
+		add("profile", f.Profile)
+	}
 	if page.AfterID != nil {
 		n++
 		q += fmt.Sprintf(" AND id > $%d", n)
@@ -498,8 +508,8 @@ func (s *Store) TransitionTenant(ctx context.Context, id uuid.UUID, from, to dom
 
 // --- commercial: tenant commercial-state (CPL-FR-020) ---
 
-func (s *Store) TransitionTenantCommercial(ctx context.Context, id uuid.UUID, from, to domain.CommercialState, evs ...domain.OutboxEvent) error {
-	if !domain.CanTransitionCommercial(from, to) {
+func (s *Store) TransitionTenantCommercial(ctx context.Context, id uuid.UUID, profile domain.TenantProfile, from, to domain.CommercialState, evs ...domain.OutboxEvent) error {
+	if !domain.CanTransitionCommercial(profile, from, to) {
 		return domain.EConflict("invalid commercial state transition " + string(from) + " -> " + string(to))
 	}
 	return s.platformTx(ctx, func(tx pgx.Tx) error {

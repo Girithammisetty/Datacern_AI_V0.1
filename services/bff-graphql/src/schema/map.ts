@@ -73,6 +73,9 @@ import type {
 } from "../clients/audit.js";
 import { budgetScopeString, type BudgetDTO, type RateCardDTO, type AnomalyDTO } from "../clients/usage.js";
 import type {
+  ValueSummaryDTO, ValueTrendDTO, ValueAssumptionsDTO, ValueExportDTO, EstimatedValueDTO,
+} from "../clients/value.js";
+import type {
   ConnectorTypeDTO, ConnectionDTO, ConnectionTestDTO, IngestionDTO, UploadDTO,
   ScheduleDTO, ScheduleFireDTO, ConnectionPreviewDTO, WritebackDTO,
 } from "../clients/ingestion.js";
@@ -1713,6 +1716,97 @@ export function mapAnomaly(ctx: GraphQLContext, d: AnomalyDTO) {
     status: d.status,
     dismissedBy: d.dismissed_by ?? null,
     suppressedReason: d.suppressed_reason ?? null,
+    createdAt: d.created_at,
+  };
+}
+
+// --- value & ROI reporting (BRD 69) ------------------------------------------
+
+/** ROI-NFR-004 null-propagation: usage-service serializes a nil
+ * *EstimatedValue as JSON null (never a bare number) — this passes that
+ * through unchanged rather than coercing to 0, all the way to the GraphQL
+ * layer (design §2.6's null-propagation test-plan requirement). */
+function mapEstimatedValue(d: EstimatedValueDTO | null | undefined) {
+  if (d == null) return null;
+  return { value: d.value, assumptionVersion: d.assumption_version };
+}
+
+export function mapValueSummary(d: ValueSummaryDTO) {
+  return {
+    __typename: "ValueSummary" as const,
+    period: d.period,
+    workspaceId: d.workspace_id ?? null,
+    decisions: d.decisions == null ? null : {
+      total: d.decisions.total,
+      byDecision: d.decisions.by_decision ?? {},
+      byKind: d.decisions.by_kind ?? {},
+      byAgent: d.decisions.by_agent ?? {},
+      byPack: d.decisions.by_pack ?? {},
+    },
+    hoursSavedEst: mapEstimatedValue(d.hours_saved_est),
+    laborValueEstUsd: mapEstimatedValue(d.labor_value_est_usd),
+    aiCostUsd: d.ai_cost_usd,
+    costPerDecision: d.cost_per_decision == null ? null : {
+      value: d.cost_per_decision.value, basis: d.cost_per_decision.basis,
+    },
+    humanBaselineCostUsd: mapEstimatedValue(d.human_baseline_cost_usd),
+    netValueEstUsd: mapEstimatedValue(d.net_value_est_usd),
+    ladderSavingsUsd: d.ladder_savings_usd ?? null,
+    adoption: {
+      activeUsers: d.adoption?.active_users ?? 0,
+      byWorkspace: d.adoption?.by_workspace ?? {},
+    },
+    provenance: {
+      rollupVersion: d.provenance?.rollup_version ?? "",
+      assumptionVersion: d.provenance?.assumption_version ?? null,
+      meterGap: d.provenance?.meter_gap ?? null,
+    },
+  };
+}
+
+export function mapValueTrend(d: ValueTrendDTO) {
+  return {
+    __typename: "ValueTrend" as const,
+    metric: d.metric,
+    granularity: d.granularity,
+    points: (d.points ?? []).map((p) => ({
+      period: p.period,
+      value: p.value ?? null,
+      basis: p.basis ?? null,
+      rollupVersion: p.rollup_version,
+      distilledRungShare: p.distilled_rung_share ?? null,
+    })),
+  };
+}
+
+export function mapValueAssumptions(ctx: GraphQLContext, d: ValueAssumptionsDTO) {
+  return {
+    __typename: "ValueAssumptions" as const,
+    id: d.id,
+    urn: urn(ctx, "usage", "value_assumptions", d.id),
+    version: d.version,
+    minutesPerDecision: d.minutes_per_decision ?? {},
+    loadedHourlyRateUsd: d.loaded_hourly_rate_usd,
+    effectiveFrom: d.effective_from,
+    status: d.status,
+    createdBy: d.created_by,
+    createdAt: d.created_at,
+  };
+}
+
+export function mapValueExport(ctx: GraphQLContext, d: ValueExportDTO) {
+  return {
+    __typename: "ValueExport" as const,
+    id: d.id,
+    urn: urn(ctx, "usage", "value_export", d.id),
+    period: d.period,
+    workspaceId: d.workspace_id ?? null,
+    version: d.version,
+    jsonUrl: d.json_url ?? null,
+    jsonSha256: d.json_sha256,
+    csvUrl: d.csv_url ?? null,
+    csvSha256: d.csv_sha256,
+    assumptionVersion: d.assumption_version ?? null,
     createdAt: d.created_at,
   };
 }

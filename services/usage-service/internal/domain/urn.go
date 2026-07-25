@@ -22,3 +22,13 @@ func RateCardURN(id uuid.UUID) string {
 func AdjustmentURN(tenant, id uuid.UUID) string {
 	return "wr:" + tenant.String() + ":usage:adjustment/" + id.String()
 }
+
+// ValueAssumptionsURN identifies a value_assumptions version (BRD 69 design §2.1).
+func ValueAssumptionsURN(tenant, id uuid.UUID) string {
+	return "wr:" + tenant.String() + ":usage:value_assumptions/" + id.String()
+}
+
+// ValueExportURN identifies a value-report export (BRD 69 design §2.8).
+func ValueExportURN(tenant, id uuid.UUID) string {
+	return "wr:" + tenant.String() + ":usage:value_export/" + id.String()
+}

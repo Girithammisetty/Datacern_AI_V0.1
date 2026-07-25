@@ -24,8 +24,8 @@ func TestAC01_ProvisioningHappyPath(t *testing.T) {
 		t.Fatalf("provisioning status: %d", r.status)
 	}
 	steps := r.body["steps"].([]any)
-	if len(steps) != 7 {
-		t.Fatalf("expected 7 steps, got %d", len(steps))
+	if len(steps) != 8 {
+		t.Fatalf("expected 8 steps, got %d", len(steps))
 	}
 	for _, s := range steps {
 		st := s.(map[string]any)

@@ -95,4 +95,16 @@ const (
 	// are slice 2.
 	EvCommercialPlanAssigned      = "commercial.plan_assigned"
 	EvCommercialEntitlementChanged = "commercial.entitlement_changed"
+
+	// EvDemoTenantReaped (BRD 70 §2.5, DSP-FR-013): emitted when the
+	// leader-elected TTL reaper deprovisions an expired profile=demo tenant
+	// through the REAL deprovision saga (never a raw-SQL purge). Versioned
+	// ("v1" in the type itself, matching this event's own naming rather than
+	// an envelope-level version field) because DSP-FR-013 names it literally.
+	EvDemoTenantReaped = "demo.tenant_reaped.v1"
+	// EvDemoTenantReset/EvDemoTenantCloned (BRD 70 §2.4, DSP-FR-012) audit
+	// the two other demo-lifecycle mutations the same way every other
+	// tenant-affecting action already is (MASTER-FR-031).
+	EvDemoTenantReset  = "demo.tenant_reset"
+	EvDemoTenantCloned = "demo.tenant_cloned"
 )

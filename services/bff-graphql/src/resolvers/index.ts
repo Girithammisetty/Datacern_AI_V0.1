@@ -40,6 +40,7 @@ import {
   // Tier 4b: identity/rbac admin (lifecycle, roles, grants, bulk membership).
   mapCreatedServiceAccount, mapEffectiveAccessEntry, mapContentGrant, mapBulkGroupMembershipResult,
   mapBudget, mapRateCard, mapAnomaly, mapReportSubscription,
+  mapValueSummary, mapValueTrend, mapValueAssumptions, mapValueExport,
   mapChainVerifyResult, mapComplianceJob, mapEvidencePack, mapSiemConfig, mapSiemConfigState,
   decisionAction, urnId,
   mapEvalSuite, mapEvalRun, mapEvalCaseResult, mapEvalDataset, mapEvalCase, mapEvalScorer,
