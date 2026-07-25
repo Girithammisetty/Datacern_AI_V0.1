@@ -3123,3 +3123,86 @@ export interface AgentRunListItem {
   error?: JSONValue;
   createdAt?: string | null;
 }
+
+// ============================================================================
+// BRD 68 slice 1: Agent Control Tower fleet aggregation (bff-graphql
+// Query.agentFleet / agentFleetSummary — docs/initiatives/
+// agent-control-tower.md).
+// ============================================================================
+export type AgentFleetKind = "PLATFORM" | "CUSTOM" | "EXTERNAL";
+export type AgentFleetLifecycle = "ACTIVE" | "KILLED" | "QUARANTINED" | "DEPRECATED";
+export type AgentFleetRollout = "STABLE" | "CANARY" | "SHADOW" | "PINNED" | "UNKNOWN";
+export type EvalGateStatusValue = "PASS" | "FAIL" | "STALE" | "NONE";
+
+export interface AgentFleetVersion {
+  id: number;
+  graphDigest?: string | null;
+  rollout: AgentFleetRollout;
+}
+
+export interface AgentFleetGuardrails {
+  dataScope?: JSONValue;
+  tokenBudget?: number | null;
+  piiEgress?: string | null;
+  ruleOfTwo: boolean;
+}
+
+export interface AgentFleetEvalGate {
+  status: EvalGateStatusValue;
+  lastRunAt?: string | null;
+  suiteKey?: string | null;
+  unavailable: boolean;
+}
+
+export interface AgentFleetKillSwitchState {
+  state: string;
+  updatedAt?: string | null;
+  actor?: string | null;
+}
+
+export interface AgentFleetSpend {
+  periodUsd?: number | null;
+  trend7dPct?: number | null;
+  unavailable: boolean;
+}
+
+export interface AgentFleetDecisions {
+  proposed?: number | null;
+  approved?: number | null;
+  edited?: number | null;
+  rejected?: number | null;
+  period: string;
+  unavailable: boolean;
+}
+
+export interface AgentFleetExternalInfo {
+  allowListScope: string[];
+  sdkPrincipal: string;
+  autoExecute: string;
+}
+
+export interface AgentFleetRow {
+  key: ID;
+  kind: AgentFleetKind;
+  display: string;
+  lifecycle: AgentFleetLifecycle;
+  activeVersion: AgentFleetVersion;
+  guardrails: AgentFleetGuardrails;
+  toolset: string[];
+  evalGate: AgentFleetEvalGate;
+  killSwitch: AgentFleetKillSwitchState;
+  spend?: AgentFleetSpend | null;
+  decisions: AgentFleetDecisions;
+  lastIncidentAt?: string | null;
+  external?: AgentFleetExternalInfo | null;
+  liveUpdates: { hubUrl: string; topics: string[] };
+}
+
+export interface AgentFleetSummary {
+  totalByKind: JSONValue;
+  activeCount: number;
+  killedCount: number;
+  quarantinedCount: number;
+  periodSpendUsd?: number | null;
+  periodDecisions?: number | null;
+}

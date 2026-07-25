@@ -184,6 +184,10 @@ export const qk = {
   tenantAgentConfig: (agentKey: string) => ["agentic", "tenantConfig", agentKey] as const,
   agentRuns: (filters: unknown) => ["agentic", "runs", filters] as const,
 
+  // BRD 68 slice 1: Agent Control Tower fleet aggregation
+  agentFleet: (filters: unknown) => ["agentic", "fleet", filters] as const,
+  agentFleetSummary: (filters: unknown) => ["agentic", "fleetSummary", filters] as const,
+
   // Tier 2a: ai-gateway admin
   aiProviders: () => ["aigateway", "providers"] as const,
   aiLadder: (requestClass: string) => ["aigateway", "ladder", requestClass] as const,

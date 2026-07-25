@@ -4841,6 +4841,44 @@ export function useAgentRunsList(vars: { agentKey?: string } = {}) {
   });
 }
 
+// ============================================================================
+// BRD 68 slice 1: Agent Control Tower fleet aggregation
+// (docs/initiatives/agent-control-tower.md).
+// ============================================================================
+export interface AgentFleetFilters {
+  workspace?: string;
+  periodFrom?: string;
+  periodTo?: string;
+}
+
+/** `includeSpend` selects between two query documents (AGENT_FLEET vs
+ * AGENT_FLEET_WITH_SPEND) rather than always requesting `spend` — per
+ * docs/initiatives/agent-control-tower.md §2.4, a caller lacking
+ * usage.report.read who asks for `spend` gets a real downstream 403 on that
+ * field, and graphqlRequest throws on ANY GraphQL error (see
+ * lib/graphql/client.ts), which would fail the WHOLE fleet query rather than
+ * just hiding one column. The caller (the fleet table) decides `includeSpend`
+ * from FEATURE_GATES.viewAgentFleetSpend. */
+export function useAgentFleet(filters: AgentFleetFilters = {}, includeSpend = false) {
+  return useQuery({
+    queryKey: qk.agentFleet({ ...filters, includeSpend }),
+    queryFn: () =>
+      graphqlRequest<ops.AgentFleetResult>(includeSpend ? ops.AGENT_FLEET_WITH_SPEND : ops.AGENT_FLEET, filters).then(
+        (r) => r.agentFleet,
+      ),
+  });
+}
+
+export function useAgentFleetSummary(filters: AgentFleetFilters = {}) {
+  return useQuery({
+    queryKey: qk.agentFleetSummary(filters),
+    queryFn: () =>
+      graphqlRequest<ops.AgentFleetSummaryResult>(ops.AGENT_FLEET_SUMMARY, filters).then(
+        (r) => r.agentFleetSummary,
+      ),
+  });
+}
+
 // ---- inc11: domain ontology (governed entity-TYPE registry) -----------------
 export function useOntologyEntities(workspaceId?: string) {
   return useQuery({

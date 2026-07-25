@@ -3718,11 +3718,16 @@ export const typeDefs = gql`
   type AgentFleetKillSwitch { state: String! updatedAt: String actor: String }
 
   """Null when the caller's query omitted the field (ui-web's FEATURE_GATES
-  hides the column without usage.report.read); present with unavailable:true
-  when usage-service could not be reached for a caller who DOES hold the
-  capability. A caller who lacks the capability but requests the field anyway
-  gets a real PERMISSION_DENIED field error from usage-service, not a silent
-  null (see docs/initiatives/agent-control-tower.md §2.4)."""
+  hides the column without usage.report.read — the primary AC-5 mechanism);
+  present with unavailable:true whenever usage-service could not be reached
+  OR the caller lacks the capability but requested the field anyway. The
+  design's ideal (docs/initiatives/agent-control-tower.md §2.4 mechanism 2) is
+  a distinct PERMISSION_DENIED field error for the latter case; this resolver
+  builds each row as one plain object rather than per-field lazy resolvers
+  (matching this file's existing monolithic-resolver style), so any error
+  there would fail the whole non-null agentFleet list rather than just this
+  nullable field — degrading to unavailable:true avoids that collateral
+  failure. See resolvers/index.ts buildAgentFleetRows for the full tradeoff."""
   type AgentFleetSpend { periodUsd: Float trend7dPct: Float unavailable: Boolean! }
 
   """No agent-runtime aggregate endpoint and no BRD 67 meter exist yet

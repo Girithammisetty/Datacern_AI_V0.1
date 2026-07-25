@@ -527,10 +527,23 @@ async function buildAgentFleetRows(
     spendByAgent = bucketSpendByAgent(current);
     priorSpendByAgent = bucketSpendByAgent(prior);
   } catch (e) {
-    if (e instanceof DownstreamError && (e.httpStatus >= 500 || e.httpStatus === 0)) {
+    // NB: this ALSO catches a 403 (no usage.report.read), not just 5xx/
+    // transport. The design's ideal (2.4 mechanism 2) is a distinct
+    // PERMISSION_DENIED field error on `spend` for a caller who lacks the
+    // capability but asks anyway — achievable only with a lazy per-field
+    // resolver. AgentFleetRow is built as one plain object per request here
+    // (matching this file's existing monolithic-resolver style, e.g.
+    // workspaceCostPanel), so ANY error thrown inside buildAgentFleetRows
+    // fails the whole non-null `agentFleet`/`agentFleetSummary` root field,
+    // not just one row's nullable `spend`. Degrading to unavailable:true for
+    // every DownstreamError (not only 5xx) avoids that collateral failure.
+    // The PRIMARY AC-5 mechanism — ui-web omitting `spend` from the query
+    // selection set for a capability-less caller (useAgentFleet's
+    // `includeSpend`) — is unaffected and is what actually satisfies AC-5.
+    if (e instanceof DownstreamError) {
       spendUnavailable = true;
     } else {
-      throw e; // e.g. a real 403 (no usage.report.read) — surfaces verbatim, never silently degraded.
+      throw e;
     }
   }
 

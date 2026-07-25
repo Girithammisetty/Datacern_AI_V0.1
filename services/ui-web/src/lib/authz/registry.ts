@@ -561,6 +561,24 @@ export const FEATURE_GATES = {
   viewAgentRunHistory: cap("ai.proposal.read"),
 
   // ==========================================================================
+  // BRD 68 slice 1: Agent Control Tower fleet table (docs/initiatives/
+  // agent-control-tower.md §2.4). ACT-FR-002 names the capability
+  // "agent.registry.read" in the BRD text; the capability actually seeded and
+  // enforced downstream (agent-runtime registry.py _require_agent_cap) is
+  // "ai.agent.read" — same reconciliation already made for viewAgentCatalog
+  // above. The BFF adds no authz layer of its own (bff-graphql README): this
+  // gate only controls what the UI renders/requests, never what's enforced.
+  // ==========================================================================
+  /** Top-level fleet-table gate (Query.agentFleet / agentFleetSummary). */
+  viewAgentFleet: cap("ai.agent.read"),
+  /** Spend column — additionally needs usage.report.read (ACT-FR-002),
+   * mirroring viewCostPanel above. Absence of this capability makes the fleet
+   * table OMIT the `spend` field from its query entirely (useAgentFleet's
+   * `includeSpend` param) rather than request-then-hide, since a downstream
+   * 403 on `spend` would fail the whole agentFleet query. */
+  viewAgentFleetSpend: cap("usage.report.read"),
+
+  // ==========================================================================
   // Tier 4a: data-plane secondary CRUD/lifecycle — saved-query authoring,
   // execution history, ingestion schedules + run lifecycle, connection edit,
   // dataset consumers/versions/re-profile, verified NL↔SQL pairs, semantic

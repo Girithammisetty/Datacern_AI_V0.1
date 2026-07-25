@@ -5,6 +5,8 @@
  */
 import type {
   AgentRun,
+  AgentFleetRow,
+  AgentFleetSummary,
   AlgorithmTemplate,
   AuditEvent,
   Case,
@@ -3532,6 +3534,55 @@ export const DELETE_TOOL_KILL_SWITCH = /* GraphQL */ `
 `;
 export interface DeleteToolKillSwitchResult {
   deleteToolKillSwitch: KillSwitchLiftResult;
+}
+
+// ---- BRD 68 slice 1: Agent Control Tower fleet aggregation ------------------
+// Two documents: AGENT_FLEET (no spend) and AGENT_FLEET_WITH_SPEND (adds the
+// spend field group). Per docs/initiatives/agent-control-tower.md §2.4, spend
+// column visibility is enforced by OMITTING the field from the selection set
+// entirely for a caller without usage.report.read — asking anyway and getting
+// a downstream 403 would fail the WHOLE query (graphqlRequest throws on any
+// GraphQL error), not just null out the one column.
+const AGENT_FLEET_ROW_FIELDS = /* GraphQL */ `
+  key kind display lifecycle
+  activeVersion { id graphDigest rollout }
+  guardrails { dataScope tokenBudget piiEgress ruleOfTwo }
+  toolset
+  evalGate { status lastRunAt suiteKey unavailable }
+  killSwitch { state updatedAt actor }
+  decisions { proposed approved edited rejected period unavailable }
+  lastIncidentAt
+  external { allowListScope sdkPrincipal autoExecute }
+`;
+
+export const AGENT_FLEET = /* GraphQL */ `
+  query AgentFleet($workspace: ID, $periodFrom: String, $periodTo: String) {
+    agentFleet(workspace: $workspace, periodFrom: $periodFrom, periodTo: $periodTo) {
+      ${AGENT_FLEET_ROW_FIELDS}
+    }
+  }
+`;
+export const AGENT_FLEET_WITH_SPEND = /* GraphQL */ `
+  query AgentFleet($workspace: ID, $periodFrom: String, $periodTo: String) {
+    agentFleet(workspace: $workspace, periodFrom: $periodFrom, periodTo: $periodTo) {
+      ${AGENT_FLEET_ROW_FIELDS}
+      spend { periodUsd trend7dPct unavailable }
+    }
+  }
+`;
+export interface AgentFleetResult {
+  agentFleet: AgentFleetRow[];
+}
+
+export const AGENT_FLEET_SUMMARY = /* GraphQL */ `
+  query AgentFleetSummary($workspace: ID, $periodFrom: String, $periodTo: String) {
+    agentFleetSummary(workspace: $workspace, periodFrom: $periodFrom, periodTo: $periodTo) {
+      totalByKind activeCount killedCount quarantinedCount periodSpendUsd periodDecisions
+    }
+  }
+`;
+export interface AgentFleetSummaryResult {
+  agentFleetSummary: AgentFleetSummary;
 }
 
 // ---- memory (memory-service) ------------------------------------------------
