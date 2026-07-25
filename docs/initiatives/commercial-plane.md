@@ -155,16 +155,82 @@ Payment collection/invoicing (BRD 67); self-serve signup/trial creation by an un
 
 ## 3. Implementation & Test
 
-Pending — implementation phase next. Proposed slices:
+**Status: Slice 1 built and unit/API-tested; integration tier written but not executed (no Docker in this environment); slices 2–3 not started.**
 
-- **Slice 1 — schema + plan catalog + assignment + effective-entitlements API + projection.** Migrations for `plans`, `plan_entitlements`, `tenant_plan`, `tenant_entitlement_overrides`, and the three commercial columns on `tenants`; plan CRUD + assignment + override endpoints; `GET /tenants/{id}/entitlements`; the `entitlements_flat` projection worker + `ent.invalidate` channel. No enforcement yet — read-only surface, safe to ship dark.
-- **Slice 2 — trials + sweep.** `commercial_state` transition guard + `trial_events` table; `POST .../trial`, `/trial/extend`, `/convert`; the leader-elected sweep job (T-14/T-7/T-1 threshold events + expiry); `commercial.events.v1` event types on the outbox.
-- **Slice 3 — enforcement hooks.** pack-service `pack_sku` gate (dry-run `blocked` + execute `403`), identity-service `seat_cap` / rbac-service `workspace_cap` gates, BFF `tenantCommercial` resolver, ui-web `entitlement` gate + locked-feature UI, fail-open/fail-closed behavior per the NFR-004 matrix.
+### Pre-implementation verification: the lease.go citation
 
-**Test plan shape** (per MASTER-FR-070/071 and repo convention):
-- **Unit** (`internal/domain`, no external deps, mirrors `provisioning_test.go`/existing tenant tests): commercial-state transition guard table (exhaustive, like `AllTenantStatuses` in `tenant.go:47-49`), effective-entitlement resolution (override-wins-by-kind+key), plan version snapshot/resync semantics.
-- **Integration** (Testcontainers Postgres + Redis, mirrors `services/identity-service/test/integration/*_test.go` and rbac-service's projection tests): RLS isolation on `tenant_entitlement_overrides`/`trial_events` (cross-tenant A-vs-B per MASTER-FR-004), outbox → projection worker → Redis round-trip staleness assertion (≤60s), sweep exactly-once under simulated concurrent leader contention (two workers racing the lease), idempotency-key replay on `/trial`, `/trial/extend`, `/convert`.
-- **E2E** (`deploy/e2e`): a scripted journey — assign `pilot` plan, start trial, attempt pack install without `pack_sku` (expect `blocked`/`403 ENTITLEMENT_REQUIRED`), add override, retry install (succeeds), fast-forward sweep past `trial_ends_at` (or force via operator override in test), assert `403 TRIAL_EXPIRED` on a write while reads still succeed, assert `commercial.trial_expired.v1` observed exactly once on the bus — directly exercising AC-1/AC-2/AC-3 from the BRD.
-- **Contract tests** for `commercial.events.v1` schemas (per MASTER-FR-070's "contract tests for every published event schema") and for the `entitlements_flat` JSON shape consumed by pack-service/BFF/ui-web.
+Before writing code, the design's citation of `services/realtime-hub/internal/fanout/lease.go` as an existing Redis `SET NX PX` leader-election lease was checked directly against another design agent's report that no leader election exists in the codebase. **The design doc is correct; the other report was wrong (or stale).** `lease.go` exists (2247 bytes, last modified with the rest of `realtime-hub/internal/fanout/`) and matches the design's description exactly: `NewLease(rdb, resource, holder)` builds a lease keyed `rt:leader:<resource>`, `Run` acquires via `SetNX` and renews on a ticker at half the 5s TTL via a Lua CAS script (`renewScript`, value-match `GET`+`PEXPIRE`), and releases via a matching Lua `GET`+`DEL` (`releaseScript`). This is the exact shape the design proposes reusing for the slice-2 trial sweep (`commercial:trial-sweep`, 5s TTL). Since leader election is only needed for the trial sweep (slice 2), this finding doesn't block slice 1, but it's recorded here as requested: **no fix needed, the primitive is real and ready to reuse.**
 
-Honest scope note: this document is design-only; no code has been written or verified running. All citations above were read directly from the current `main` tree at the time of writing.
+### Slice plan (unchanged from the design; slice 1 is this build)
+
+- **Slice 1 — schema + plan catalog + assignment + effective-entitlements API + projection.** ✅ **Built this pass.** Migrations for `plans`, `plan_entitlements`, `tenant_plan`, `tenant_entitlement_overrides`, and the three commercial columns on `tenants`; plan CRUD + assignment + override endpoints; `GET /tenants/{id}/entitlements`; the `entitlements_flat` projection worker + `ent.invalidate` channel. No enforcement yet — read-only surface, shipped dark (nothing calls `ENTITLEMENT_REQUIRED`/`CAP_EXCEEDED`/etc. yet).
+- **Slice 2 — trials + sweep.** ❌ Not started. `commercial_state` already supports the `none→trial→active→suspended_commercial→churned` edges in the guard table (`domain.CanTransitionCommercial`), but no `trial_events` table, no `POST .../trial`/`/trial/extend`/`/convert` endpoints, and no leader-elected sweep job exist yet.
+- **Slice 3 — enforcement hooks.** ❌ Not started. pack-service `pack_sku` gate, identity-service `seat_cap`/rbac-service `workspace_cap` gates, BFF `tenantCommercial` resolver, ui-web `entitlement` gate are all not built; the four stable error codes exist (`domain/errors.go`) but nothing raises them yet.
+
+### Files touched (slice 1)
+
+30 files across identity-service (the only service this slice touches — rbac-service/bff-graphql/ui-web are slice 3):
+
+**Migrations** (new): `services/identity-service/migrations/0010_commercial_plans.{up,down}.sql` (plans, plan_entitlements, seeds the four plans + starter seat/workspace caps), `0011_commercial_tenant.{up,down}.sql` (tenants.commercial_state/trial_started_at/trial_ends_at, tenant_plan, tenant_entitlement_overrides, commercial_dirty — all with RLS per MASTER-FR-001, mirroring `0002_rls.up.sql`'s policy shape).
+
+**Domain** (new): `internal/domain/commercial.go` (EntitlementKind, Plan, PlanEntitlement, TenantPlan, TenantEntitlementOverride, `ResolveEffectiveEntitlements`), `internal/domain/commercial_service.go` (`PlanService`, `CommercialService`). **Edited**: `internal/domain/tenant.go` (`CommercialState` + `commercialTransitions` guard table + `Tenant.TransitionCommercial`, new `Tenant` fields), `internal/domain/tenant_service.go` (new tenants start `CommercialState: CommercialNone`), `internal/domain/errors.go` (`ENTITLEMENT_REQUIRED`/`TRIAL_EXPIRED`/`CAP_EXCEEDED`/`ENTITLEMENT_UNAVAILABLE` codes + constructors), `internal/domain/events.go` (`commercial.plan_assigned`/`commercial.entitlement_changed` event types), `internal/domain/store.go` (`Store` interface: plan CRUD, tenant plan/override CRUD, `TransitionTenantCommercial`, commercial-dirty claim/delete).
+
+**Store**: `internal/store/memory/memory.go` and `internal/store/postgres/postgres.go` both implement every new `Store` method (plan catalog, tenant_plan, tenant_entitlement_overrides, commercial_state CAS transition, `commercial_dirty` SKIP-LOCKED claim queue mirroring rbac-service's `projection_dirty`).
+
+**Projection** (new package): `internal/projection/{keys,redis,worker}.go` — `ent:{tenant}:flat` key, versioned-CAS Redis writer (byte-identical script to rbac's `permissions_flat` CAS), `ent.invalidate` pub/sub, and a `Worker`/`Loader`/`Writer`-interface recompute loop structurally identical to `rbac-service/internal/projection/worker.go`.
+
+**API**: `internal/api/handlers_commercial.go` (new — plan CRUD, assign/resync, override upsert/delete, `GET /tenants/{id}/entitlements`), `internal/api/server.go` (routes: plan CRUD + assignment under the existing `requireSuperAdmin` group at `/platform/...`; entitlements read under the existing `ActUserAdmin`-gated `/tenants/{id}/...` group with the same cross-tenant-404 pattern as `handleGetTenant`), `internal/api/fixture_test.go` (wired `Plans`/`Commercial` into the shared test fixture).
+
+**Events**: `internal/events/kafka.go` (routes `commercial.`-prefixed event types to a new `commercial.events.v1` topic, separate from `identity.events.v1`, per CPL-FR-014/BRD §6), `events/commercial_event.avsc` (new — same envelope shape as `identity_event.avsc`, documents the new topic).
+
+**Wiring**: `cmd/server/main.go` (`PlanService`/`CommercialService` construction, `Server.Plans`/`Commercial` fields, projection worker started when `REDIS_ADDR` is set — dark/no-op otherwise since nothing reads the projection synchronously until slice 3).
+
+**Docs**: `services/identity-service/api/openapi.yaml` (new paths + schemas for every slice-1 endpoint), `services/identity-service/README.md` (layout note for `internal/projection/`, new "BRD 66 — Commercial plane" FR-traceability table), this file.
+
+**Tests** (new): `internal/domain/commercial_test.go`, `internal/domain/commercial_service_test.go`, `internal/api/handlers_commercial_test.go`, `internal/projection/worker_test.go`, `internal/events/kafka_test.go`, `test/integration/commercial_pg_test.go`.
+
+**Dependency added**: `github.com/testcontainers/testcontainers-go/modules/redis` (identity-service's `go.mod`/`go.sum`) — needed for the integration-tier Redis round-trip test; identity-service's integration suite previously only stood up Postgres.
+
+### Test commands + results
+
+```
+cd services/identity-service
+
+make build            # go build -o bin/identity-service ./cmd/server  → PASS (no errors)
+make vet               # go vet ./... && go vet -tags integration ./...  → PASS (no findings)
+make lint              # → environment error, NOT a code issue: the installed golangci-lint
+                       #   binary (go1.25) is older than the module's go1.26.5 toolchain and
+                       #   refuses to load config. Pre-existing environment mismatch, unrelated
+                       #   to this change; `go vet` (the Makefile's own fallback path) is clean.
+make test-unit         # go test ./internal/... ./migrations/...  → PASS, all packages ok
+go test -count=1 ./...  → PASS, 94 test functions across internal/domain, internal/api,
+                          internal/projection, internal/events (21 new, 73 pre-existing,
+                          0 failures, 0 broken by this change)
+
+make test-integration  # go test -tags integration -timeout 600s ./test/integration/...
+                        # → the `integration` package itself: ok, 1.7s, every test SKIPs
+                        #   cleanly with "Docker unavailable" (this sandbox has no Docker
+                        #   daemon: `docker ps` → "dial unix /var/run/docker.sock: connect:
+                        #   no such file or directory"). This includes every new commercial
+                        #   test (TestCommercialMigrationSeedsPlans, TestCommercialRLSIsolation,
+                        #   TestCommercialAPI_Authz, TestCommercialProjection_RedisRoundTrip)
+                        #   and the pre-existing pg_test.go/api_pg_test.go/restart_test.go suite.
+                        # → the Makefile target as a WHOLE exits non-zero because a SEPARATE,
+                        #   PRE-EXISTING subpackage (test/integration/secretsigner) panics
+                        #   instead of skipping when Docker is entirely absent (its TestMain
+                        #   calls testcontainers' MustExtractDockerSocket directly, which
+                        #   panics rather than returning an error the way tcpg.Run does).
+                        #   Confirmed pre-existing via `git log -- .../secretsigner/signer_
+                        #   contract_test.go` (untouched by this change, last touched in an
+                        #   unrelated pack-wave commit). Not fixed here — out of BRD 66 scope.
+```
+
+### Verified vs written-but-not-run vs deferred
+
+- **Verified (executed, green):** state-machine guards (`TestCommercialTransitionMatrix`, exhaustive over all 25 `(from,to)` pairs, matching `TestTenantTransitionMatrix`'s style); effective-entitlement resolution incl. override-wins-by-kind+key and additive overrides (`TestResolveEffectiveEntitlements_*`); plan create/patch/version-bump-only-on-entitlements-change (`TestPlanService_*`); assignment snapshot semantics — a plan-default change after assignment does NOT alter the already-resolved effective set until an explicit resync (`TestCommercialService_AssignPlan_SnapshotSemantics`); override upsert/remove round-trip; the four new error constructors; the projection worker's claim→snapshot→write→delete→publish orchestration against fake `Loader`/`Writer` seams, including the "leave dirty rows claimed on snapshot/write failure" at-least-once behavior (`TestWorker_ProcessOnce_*`); the `commercial.events.v1` topic-routing decision (`TestKafkaPublisher_TopicFor`); full API-layer authz — plan CRUD requires super-admin (tenant-admin token → 403, unauthenticated → 401), plan assign/override/resync round-trip through the real chi router + in-memory store, and `GET /tenants/{id}/entitlements` authz matrix (own-tenant admin → 200, cross-tenant admin → 404 + `security.cross_tenant_denied` audited, super-admin → 200 for any tenant, unassigned tenant → 200 with an empty effective set) (`handlers_commercial_test.go`).
+- **Written but not executed (no Docker in this environment):** `TestCommercialMigrationSeedsPlans` (0010/0011 apply cleanly, all four plans + their seed entitlements present), `TestCommercialRLSIsolation` (tenant_plan/tenant_entitlement_overrides cross-tenant reads blocked at both the store and raw-SQL level, mirroring the existing `TestRLSIsolation`), `TestCommercialAPI_Authz` (the same authz matrix as above, but against real Postgres/RLS instead of the in-memory store), `TestCommercialProjection_RedisRoundTrip` (a real Redis testcontainer: `AssignTenantPlan` enqueues a `commercial_dirty` row in the same transaction, the worker claims and writes `ent:{tenant}:flat`, `ent.invalidate` is observed on a live subscription, and a second pass is a no-op). All four compile clean under `go vet -tags integration ./...` and are wired into the existing `requirePG`/Docker-unavailable auto-skip convention — they simply haven't been able to run end-to-end here.
+- **Deferred / explicitly out of slice 1 (per the task's scope, not a gap):** trial start/extend/convert, the leader-elected sweep, `trial_events`, and the T-14/T-7/T-1 threshold events (slice 2); pack-service's `pack_sku` install gate, identity-service's `seat_cap` invite gate, rbac-service's `workspace_cap` gate, the BFF `tenantCommercial` resolver, and ui-web's `entitlement` Gate variant (slice 3, all consumers of the codes/projection this slice defines but doesn't wire up); contract tests for `commercial.events.v1` beyond the schema file itself (no consumer exists yet to contract-test against); the E2E journey in `deploy/e2e` (requires the full compose stack; not run here per the task's "do not run the full stack" instruction — noted as pending live verification, hook is `GET /tenants/{id}/entitlements` returning the assigned plan's entitlements after `POST /platform/tenants/{id}/plan`, both of which exist and are unit/API-tested above).
+
+### A note on git state
+
+While this work was in progress, the environment auto-created two intermediate "wip" commits (`fe34803`, `eabadc7`) capturing snapshots of the in-flight implementation — these were not `git commit` calls made by this agent (no commit was issued at any point in this session; the task explicitly says not to commit). Flagging this for the orchestrator's awareness since it affects what "uncommitted diff" means when reviewing this change: the full slice-1 diff is best viewed as `git diff fe34803^..HEAD -- services/identity-service` plus the working tree (which additionally has this documentation update, the `commercial.events.v1` Avro schema, `internal/events/kafka_test.go`, and OpenAPI/README polish).

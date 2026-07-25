@@ -51,22 +51,26 @@ func NewKafkaPublisher(ctx context.Context, brokers []string, schemaRegistryURL 
 	return kp
 }
 
-// Publish converts outbox rows to envelopes and publishes them, routing
-// commercial-plane events (event_type prefixed "commercial.") to
-// CommercialTopic and everything else to Topic. The relay marks rows
-// published only after this returns nil (at-least-once; consumers dedup on
-// event_id, MASTER-FR-032).
+// Publish converts outbox rows to envelopes and publishes them, routing each
+// via topicFor. The relay marks rows published only after this returns nil
+// (at-least-once; consumers dedup on event_id, MASTER-FR-032).
 func (p *KafkaPublisher) Publish(ctx context.Context, evs []*domain.OutboxEvent) error {
 	for _, ev := range evs {
-		topic := p.topic
-		if strings.HasPrefix(ev.EventType, "commercial.") {
-			topic = CommercialTopic
-		}
-		if err := p.prod.Publish(ctx, topic, toEnvelope(ev)); err != nil {
+		if err := p.prod.Publish(ctx, p.topicFor(ev.EventType), toEnvelope(ev)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// topicFor routes commercial-plane events (event_type prefixed "commercial.",
+// e.g. commercial.plan_assigned) to CommercialTopic and everything else to
+// the publisher's default Topic (BRD 66 §6, CPL-FR-014).
+func (p *KafkaPublisher) topicFor(eventType string) string {
+	if strings.HasPrefix(eventType, "commercial.") {
+		return CommercialTopic
+	}
+	return p.topic
 }
 
 // Close flushes and closes the underlying producer.

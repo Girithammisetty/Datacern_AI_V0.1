@@ -1,0 +1,30 @@
+{
+  "type": "record",
+  "name": "CommercialEvent",
+  "namespace": "ai.datacern.commercial.events.v1",
+  "doc": "Same master event envelope (MASTER-FR-031) as identity_event.avsc, published to the SEPARATE topic commercial.events.v1 (BRD 66 §6, CPL-FR-014) so commercial-plane consumers (billing exports, audit-service) can subscribe without receiving every tenant/user/service-account lifecycle event. Partition key = tenant_id. event_type values, slice 1: commercial.plan_assigned|entitlement_changed. Slice 2 adds commercial.trial_started|trial_ending|trial_expired|converted. Routed by internal/events/kafka.go's \"commercial.\" event_type prefix match.",
+  "fields": [
+    {"name": "event_id", "type": {"type": "string", "logicalType": "uuid"}, "doc": "uuidv7; consumer dedup key (MASTER-FR-032)"},
+    {"name": "event_type", "type": "string"},
+    {"name": "tenant_id", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "actor", "type": {
+      "type": "record", "name": "Actor",
+      "fields": [
+        {"name": "type", "type": "string", "doc": "user|agent|service|platform"},
+        {"name": "id", "type": "string"},
+        {"name": "scope", "type": ["null", "string"], "default": null, "doc": "'platform' for super-admin actions (IDN-FR-025)"}
+      ]
+    }},
+    {"name": "via_agent", "type": ["null", {
+      "type": "record", "name": "ViaAgent",
+      "fields": [
+        {"name": "agent_id", "type": "string"},
+        {"name": "version", "type": "string"}
+      ]
+    }], "default": null, "doc": "dual attribution for OBO writes (MASTER-FR-041)"},
+    {"name": "resource_urn", "type": "string", "doc": "wr:<tenant>:identity:<type>/<id> (MASTER-FR-013)"},
+    {"name": "occurred_at", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "trace_id", "type": "string", "default": ""},
+    {"name": "payload", "type": "string", "default": "{}", "doc": "JSON payload; before/after diff for entitlement_changed (CPL-FR-014); no PII beyond resource references (MASTER-FR-042)"}
+  ]
+}

@@ -49,9 +49,12 @@ internal/adapters/    keycloak (fake + HTTP), terraform (fake),
                       vault (REAL transit signer), denylist (memory + REAL redis)
 internal/authz/       Authorizer port: ScopeAuthorizer (active), OPA adapter
 internal/events/      outbox poller + publisher port (log publisher active)
+internal/projection/  entitlements_flat Redis projection (BRD 66): CAS writer,
+                      dirty-queue worker, mirrors rbac-service's permissions_flat
 internal/temporalwf/  real Temporal workflow skeleton (compiles, not wired)
 migrations/           forward-only SQL (embedded; RLS policies in 0002)
 api/openapi.yaml      REST contract        events/identity_event.avsc  event schema
+                                            events/commercial_event.avsc BRD 66 event schema
 test/integration/     testcontainers suite (build tag `integration`)
 ```
 
@@ -153,6 +156,27 @@ Other documented deviations:
 | MASTER-FR-024 error envelope | ✅ | `api/respond.go` (asserted in every AC test via `errCode`) |
 | MASTER-FR-025 idempotency keys | ✅ | `api/idempotency.go` · `TestIdempotencyReplay` |
 | MASTER-FR-034 transactional outbox | ✅ | store `evs ...OutboxEvent` in-tx · `TestOutboxTransactional` (PG) |
+
+## BRD 66 — Commercial plane (slice 1 of 3)
+
+Plan catalog, tenant plan assignment, effective-entitlement resolution, and
+the `entitlements_flat` projection. Trials/sweep (slice 2) and enforcement
+hooks in pack-service/BFF/UI (slice 3) are **not** built here — see
+`docs/initiatives/commercial-plane.md` §3 for the full slice plan and honest
+verified/written/deferred breakdown.
+
+| FR | Status | Where (code / test) |
+|---|---|---|
+| CPL-FR-001 plan catalog, seeded plans, super-admin CRUD | ✅ | `migrations/0010_commercial_plans.up.sql`, `domain/commercial.go` (`Plan`), `domain/commercial_service.go` (`PlanService`), `api/handlers_commercial.go` · `TestPlanService_CreateAndGet`, `TestPlanCRUD_RequiresSuperAdmin` |
+| CPL-FR-002 plan versioning, snapshot semantics | ✅ | `PlanService.Patch` (version bump only when entitlements present), `CommercialService.AssignPlan`/`Resync` · `TestPlanService_PatchBumpsVersionOnlyWhenEntitlementsSet`, `TestCommercialService_AssignPlan_SnapshotSemantics` |
+| CPL-FR-010 effective entitlements, override wins by kind+key | ✅ | `domain/commercial.go` `ResolveEffectiveEntitlements` · `TestResolveEffectiveEntitlements_OverrideWinsByKindKey` |
+| CPL-FR-011 `GET /tenants/{id}/entitlements` + `entitlements_flat` projection | ✅ | `api/handlers_commercial.go` `handleGetTenantEntitlements`, `internal/projection/` (keys/redis/worker) · `TestGetTenantEntitlements_Authz`, `TestWorker_ProcessOnce_*` (unit), `TestCommercialProjection_RedisRoundTrip` (integration, written/not run — no Docker here) |
+| CPL-FR-012 stable error codes (enforcement is slice 3) | ✅ codes only | `domain/errors.go` `ENTITLEMENT_REQUIRED`/`TRIAL_EXPIRED`/`CAP_EXCEEDED`/`ENTITLEMENT_UNAVAILABLE` · `TestErrorConstructors_CommercialCodes` |
+| CPL-FR-014 `commercial.entitlement_changed`/`plan_assigned` on the outbox | ✅ | `domain/events.go`, `internal/events/kafka.go` topic routing to `commercial.events.v1` · `TestKafkaPublisher_TopicFor` |
+| CPL-FR-020 `commercial_state` second state machine | ✅ | `domain/tenant.go` `CommercialState`/`CanTransitionCommercial` · `TestCommercialTransitionMatrix` |
+| CPL-NFR-002 RLS on new tables | ✅ | `migrations/0011_commercial_tenant.up.sql` · `TestCommercialRLSIsolation` (integration, written/not run) |
+| CPL-FR-021/022/023 trials + sweep | ❌ slice 2 | not built |
+| CPL-FR-030/031/032/033 enforcement hooks | ❌ slice 3 | not built (codes exist, no caller raises them yet) |
 
 ## AC traceability
 
