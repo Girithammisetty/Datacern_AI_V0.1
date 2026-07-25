@@ -18,40 +18,48 @@ import (
 // overwritten in place (USG-FR-021); late events reopen them via reconciliation.
 func (s *PG) RefreshRollups(ctx context.Context, since time.Time) error {
 	return s.withPlatform(ctx, func(tx pgx.Tx) error {
+		// Dimension tuple widened by BRD 67 slice 1 (design §2.2): pack_name/
+		// decision are new rollup-worthy columns (governed_decision/
+		// auto_executed_action; NULL -> '' via COALESCE for every other
+		// meter, same sentinel convention as the pre-existing dims, so this
+		// is a no-op for every infra meter's rollup rows).
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO usage_hourly
-			  (bucket, tenant_id, meter_key, workspace_id, user_id, agent_id, model, cloud, quantity_sum, refreshed_at)
+			  (bucket, tenant_id, meter_key, workspace_id, user_id, agent_id, model, cloud, pack_name, decision, quantity_sum, refreshed_at)
 			SELECT date_trunc('hour', time), tenant_id, meter_key,
 			       COALESCE(workspace_id,''), COALESCE(user_id,''), COALESCE(agent_id,''),
-			       COALESCE(model,''), COALESCE(cloud,''), SUM(quantity), now()
+			       COALESCE(model,''), COALESCE(cloud,''), COALESCE(pack_name,''), COALESCE(decision,''),
+			       SUM(quantity), now()
 			FROM usage_raw WHERE time >= $1
-			GROUP BY 1,2,3,4,5,6,7,8
-			ON CONFLICT (tenant_id, meter_key, bucket, workspace_id, user_id, agent_id, model, cloud)
+			GROUP BY 1,2,3,4,5,6,7,8,9,10
+			ON CONFLICT (tenant_id, meter_key, bucket, workspace_id, user_id, agent_id, model, cloud, pack_name, decision)
 			DO UPDATE SET quantity_sum=EXCLUDED.quantity_sum, refreshed_at=now()`, since); err != nil {
 			return fmt.Errorf("hourly refresh: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO usage_daily
-			  (bucket, tenant_id, meter_key, workspace_id, user_id, agent_id, model, cloud, quantity_sum, refreshed_at)
+			  (bucket, tenant_id, meter_key, workspace_id, user_id, agent_id, model, cloud, pack_name, decision, quantity_sum, refreshed_at)
 			SELECT time::date, tenant_id, meter_key,
 			       COALESCE(workspace_id,''), COALESCE(user_id,''), COALESCE(agent_id,''),
-			       COALESCE(model,''), COALESCE(cloud,''), SUM(quantity), now()
+			       COALESCE(model,''), COALESCE(cloud,''), COALESCE(pack_name,''), COALESCE(decision,''),
+			       SUM(quantity), now()
 			FROM usage_raw WHERE time >= $1
-			GROUP BY 1,2,3,4,5,6,7,8
-			ON CONFLICT (tenant_id, meter_key, bucket, workspace_id, user_id, agent_id, model, cloud)
+			GROUP BY 1,2,3,4,5,6,7,8,9,10
+			ON CONFLICT (tenant_id, meter_key, bucket, workspace_id, user_id, agent_id, model, cloud, pack_name, decision)
 			DO UPDATE SET quantity_sum=EXCLUDED.quantity_sum, refreshed_at=now()
 			WHERE usage_daily.finalized_at IS NULL`, since); err != nil {
 			return fmt.Errorf("daily refresh: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO usage_monthly
-			  (bucket, tenant_id, meter_key, workspace_id, user_id, agent_id, model, cloud, quantity_sum, refreshed_at)
+			  (bucket, tenant_id, meter_key, workspace_id, user_id, agent_id, model, cloud, pack_name, decision, quantity_sum, refreshed_at)
 			SELECT date_trunc('month', time)::date, tenant_id, meter_key,
 			       COALESCE(workspace_id,''), COALESCE(user_id,''), COALESCE(agent_id,''),
-			       COALESCE(model,''), COALESCE(cloud,''), SUM(quantity), now()
+			       COALESCE(model,''), COALESCE(cloud,''), COALESCE(pack_name,''), COALESCE(decision,''),
+			       SUM(quantity), now()
 			FROM usage_raw WHERE time >= $1
-			GROUP BY 1,2,3,4,5,6,7,8
-			ON CONFLICT (tenant_id, meter_key, bucket, workspace_id, user_id, agent_id, model, cloud)
+			GROUP BY 1,2,3,4,5,6,7,8,9,10
+			ON CONFLICT (tenant_id, meter_key, bucket, workspace_id, user_id, agent_id, model, cloud, pack_name, decision)
 			DO UPDATE SET quantity_sum=EXCLUDED.quantity_sum, refreshed_at=now()
 			WHERE usage_monthly.finalized_at IS NULL`, since); err != nil {
 			return fmt.Errorf("monthly refresh: %w", err)

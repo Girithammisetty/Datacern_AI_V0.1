@@ -10,10 +10,11 @@ transition emits ``ai.proposal.v1`` (ART-FR-046).
 
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, datetime
 
 from app.constants import TOPIC_PROPOSAL
 from app.domain import guardrail as guardrail_mod
+from app.domain import metering as metering_mod
 from app.domain import policy as policy_mod
 from app.domain.canonical import args_digest as compute_digest
 from app.domain.entities import Proposal, new_uuid, now
@@ -139,14 +140,19 @@ class ProposalService:
         if effect.get("low_confidence"):
             auto = False
         if auto:
+            auto_decided_at = now()
             decided = await self._store.decide_proposal(
                 tenant_id=run.tenant_id, proposal_id=pid, new_status="approved",
                 decision={"actor": "policy:auto", "action": "approve",
-                          "decided_at": now().isoformat()}, decided_at=now())
+                          "decided_at": auto_decided_at.isoformat()},
+                decided_at=auto_decided_at)
             if decided:
                 await self._execute(decided, decided_by="policy:auto",
                                     obo_user=obo_user, args=decided.args)
-                await self._emit(decided, "proposal.approved", decision=decided.decision)
+                metering = self._governed_decision_metering(
+                    decided, "approved", auto_decided_at, decided.decision)
+                await self._emit(decided, "proposal.approved", decision=decided.decision,
+                                 metering=metering)
                 return decided, True
         return prop, False
 
@@ -226,9 +232,10 @@ class ProposalService:
         if action in ("approve", "edit_args"):
             await self._check_eligibility(prop, actor_sub, self_approval_allowed)
 
+        decided_at_dt = now()
         exec_args = prop.args
         decision: dict = {"actor": f"user:{actor_sub}", "action": action,
-                          "decided_at": now().isoformat()}
+                          "decided_at": decided_at_dt.isoformat()}
         if message:
             decision["message"] = message
 
@@ -252,7 +259,7 @@ class ProposalService:
 
         decided = await self._store.decide_proposal(
             tenant_id=tenant_id, proposal_id=proposal_id, new_status=new_status,
-            decision=decision, decided_at=now())
+            decision=decision, decided_at=decided_at_dt)
         if decided is None:  # lost the race (BR-12)
             fresh = await self._store.get_proposal(tenant_id, proposal_id)
             raise Conflict("proposal already decided",
@@ -282,8 +289,51 @@ class ProposalService:
 
         event = {"approved": "proposal.approved", "edited_approved": "proposal.edited_approved",
                  "rejected": "proposal.rejected", "cancelled": "proposal.cancelled"}[new_status]
-        await self._emit(decided, event, decision=decision)
+        # Value metering (VMB-FR-002/003, BRD 67 slice 1): computed here, at the
+        # exact commit point, and carried on the SAME outbox-enqueued envelope
+        # `_emit` writes below — no second emission, no second transaction.
+        # None for "cancelled" (respond action) and for any non-terminal path —
+        # `decision_label` returns None there, so no metering fields are added
+        # and no governed_decision meter record is producible downstream.
+        metering = self._governed_decision_metering(decided, new_status, decided_at_dt, decision)
+        await self._emit(decided, event, decision=decision, metering=metering)
         return decided
+
+    def _governed_decision_metering(
+        self, prop: Proposal, new_status: str, decided_at: datetime, decision: dict,
+    ) -> dict | None:
+        """VMB-FR-002 metering fields for a terminal HUMAN (or policy:auto)
+        decision. Returns None for anything that is not one of
+        approved/edited_approved/rejected — in particular "cancelled" (the
+        `respond` action) and, by construction, supersede/expiry (which never
+        call `_emit` at all — `store.supersede_pending` is a bare SQL UPDATE
+        with no event, and proposal expiry is a Temporal `finalize_run` on the
+        RUN, not a `decide_proposal` transition — so there is no call site to
+        even reach this method for either)."""
+        label = metering_mod.decision_label(new_status)
+        if label is None:
+            return None
+        fields: dict = {
+            "proposal_kind": metering_mod.proposal_kind(prop.tool_id),
+            # pack_name: deferred (design §2.1) — agent-runtime does not yet
+            # persist a pack-origin marker on TenantAgentConfig/AgentVersion,
+            # so this stays nullable until that plumbing lands (tracked as a
+            # slice 1 follow-on, not fabricated here).
+            "pack_name": None,
+            # Named decision_label (not "decision") — the payload already has
+            # a "decision" key (the ProposalDecision record: actor/action/
+            # diff/decided_at); reusing that name here would silently
+            # overwrite it via the dict.update() in _emit(). usage-service's
+            # ingest mapping reads payload.decision_label into the
+            # governed_decision meter's `decision` dimension.
+            "decision_label": label,
+            "decision_latency_ms": metering_mod.decision_latency_ms(
+                prop.created_at, decided_at),
+        }
+        if new_status == "edited_approved":
+            fields["edit_distance_bucket"] = metering_mod.edit_distance_bucket(
+                decision.get("diff"))
+        return fields
 
     async def _check_eligibility(self, prop: Proposal, actor_sub: str,
                                  self_approval_allowed: bool) -> None:
@@ -372,12 +422,20 @@ class ProposalService:
         return result
 
     # ---- events ------------------------------------------------------------
-    async def _emit(self, prop: Proposal, event_type: str, *, decision: dict | None) -> None:
+    async def _emit(self, prop: Proposal, event_type: str, *, decision: dict | None,
+                    metering: dict | None = None) -> None:
         payload = {"proposal_id": prop.proposal_id, "agent_key": prop.agent_key,
                    "agent_version": prop.agent_version, "tool_id": prop.tool_id,
                    "affected_urns": prop.affected_urns}
         if decision:
             payload["decision"] = decision
+        # Value-metering fields (BRD 67 slice 1, VMB-FR-002) — only present on
+        # a terminal metered decision (see _governed_decision_metering); every
+        # other event_type (proposal.created, proposal.cancelled) carries none
+        # of these keys, matching the design's additive-fields-not-a-new-topic
+        # choice (docs/initiatives/value-metering-billing-export.md §2.1).
+        if metering:
+            payload.update(metering)
         actor = {"type": "agent", "id": prop.agent_key}
         if decision and decision.get("actor", "").startswith("user:"):
             actor = {"type": "user", "id": decision["actor"].split(":", 1)[1]}

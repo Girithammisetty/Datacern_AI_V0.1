@@ -77,6 +77,7 @@ func (s *TenantService) Create(ctx context.Context, req CreateTenantRequest, act
 		Quotas: quotas, PlatformVersion: "latest", Subdomain: sub, K8sNamespace: ns,
 		SchemaPrefix: prefix, AutoUpgrade: req.AutoUpgrade, Modules: modules,
 		CreatedBy: actor.ID, CreatedAt: now, UpdatedAt: now,
+		CommercialState: CommercialNone, // CPL-FR-020: every tenant starts with no commercial relationship
 	}
 	// BR-1 / AC-4: uniqueness of name and every derived identifier is
 	// enforced in one transaction; a duplicate (case-insensitive, since

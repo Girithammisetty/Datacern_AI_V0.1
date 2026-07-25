@@ -87,4 +87,12 @@ const (
 	EvTokenOBOIssued        = "token.obo_issued"
 	EvSigningKeyRotated     = "signing_key.rotated"
 	EvCrossTenantDenied     = "security.cross_tenant_denied"
+
+	// Commercial plane events (BRD 66 §6, CPL-FR-014): topic
+	// commercial.events.v1 (routed by the "commercial." prefix -- see
+	// internal/events/kafka.go). Slice 1 emits plan_assigned and
+	// entitlement_changed; trial_started/trial_ending/trial_expired/converted
+	// are slice 2.
+	EvCommercialPlanAssigned      = "commercial.plan_assigned"
+	EvCommercialEntitlementChanged = "commercial.entitlement_changed"
 )

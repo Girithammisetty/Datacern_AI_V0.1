@@ -25,6 +25,16 @@ const (
 	CodeInvitationExpired = "INVITATION_EXPIRED"
 	CodeCellCapacity      = "CELL_CAPACITY"
 	CodeNotImplemented    = "NOT_IMPLEMENTED"
+
+	// Commercial plane stable error codes (BRD 66, CPL-FR-012/020/031,
+	// MASTER-FR-024). Defined in slice 1 even though the enforcement hooks
+	// that raise them (pack-service install gate, seat/workspace cap checks,
+	// trial-expired write block) are slice 3 -- the design's slice plan calls
+	// for the codes to exist now so consumers can code against them early.
+	CodeEntitlementRequired   = "ENTITLEMENT_REQUIRED"
+	CodeTrialExpired          = "TRIAL_EXPIRED"
+	CodeCapExceeded           = "CAP_EXCEEDED"
+	CodeEntitlementUnavailable = "ENTITLEMENT_UNAVAILABLE"
 )
 
 // Error is the domain error type. The API layer maps it onto the master BRD
@@ -96,6 +106,41 @@ func EInternal(msg string) *Error {
 
 func ENotImplemented(msg string) *Error {
 	return &Error{Code: CodeNotImplemented, HTTP: 501, Message: msg}
+}
+
+// EEntitlementRequired: a commercial gate blocked a write because the tenant
+// lacks a required pack_sku entitlement (CPL-FR-012/030, AC-1). 403, listing
+// the missing SKU (design doc "Enforcement hook contracts").
+func EEntitlementRequired(missingSKU string) *Error {
+	return &Error{
+		Code: CodeEntitlementRequired, HTTP: 403,
+		Message: "entitlement required: " + missingSKU,
+		Details: map[string]string{"missing_sku": missingSKU},
+	}
+}
+
+// ETrialExpired: a write was attempted by a tenant whose trial has expired
+// and moved to suspended_commercial (CPL-FR-022, AC-2). 403; reads still
+// succeed (NFR-004 fail-open-on-read).
+func ETrialExpired() *Error {
+	return &Error{Code: CodeTrialExpired, HTTP: 403, Message: "trial has expired"}
+}
+
+// ECapExceeded: a seat_cap/workspace_cap gate blocked a write (CPL-FR-031,
+// AC-3). 403, current/limit in the details envelope.
+func ECapExceeded(current, limit int) *Error {
+	return &Error{
+		Code: CodeCapExceeded, HTTP: 403,
+		Message: "capacity exceeded",
+		Details: map[string]int{"current": current, "limit": limit},
+	}
+}
+
+// EEntitlementUnavailable: the entitlements_flat projection could not be read
+// and the caller is on the fail-closed side of NFR-004 (entitlement-gated
+// writes; reads instead fail open and proceed unchecked).
+func EEntitlementUnavailable() *Error {
+	return &Error{Code: CodeEntitlementUnavailable, HTTP: 503, Message: "entitlement projection unavailable"}
 }
 
 // AsError unwraps err into a *domain.Error if possible.

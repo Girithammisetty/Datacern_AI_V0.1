@@ -49,6 +49,54 @@ var AllTenantStatuses = []TenantStatus{
 	TenantActive, TenantSuspended, TenantDeleting, TenantDeleted,
 }
 
+// CommercialState is the tenant's commercial lifecycle (CPL-FR-020, BRD 66).
+// It is a SECOND, INDEPENDENT state machine from TenantStatus: TenantStatus
+// answers "is this tenant's infrastructure provisioned", CommercialState
+// answers "does this tenant have a paying/trial relationship". The two axes
+// compose (a tenant can be TenantActive+CommercialTrial, or
+// TenantSuspended+CommercialActive if ops-suspended for abuse while its
+// contract is still valid) rather than sharing a transition table — see
+// docs/initiatives/commercial-plane.md "Options considered and rejected" for
+// why threading commercial states into TenantStatus was rejected.
+type CommercialState string
+
+const (
+	CommercialNone                CommercialState = "none"
+	CommercialTrial               CommercialState = "trial"
+	CommercialActive              CommercialState = "active"
+	CommercialSuspendedCommercial CommercialState = "suspended_commercial"
+	CommercialChurned             CommercialState = "churned"
+)
+
+// commercialTransitions is the guarded transition table (CPL-FR-020). Slice 1
+// (this build) only drives none->active (direct plan assignment, no trial);
+// the trial/suspend/convert edges are wired now so the guard table is
+// exhaustively testable from day one, but are only reachable once slice 2
+// adds the trial start/sweep/convert endpoints.
+var commercialTransitions = map[CommercialState][]CommercialState{
+	CommercialNone:                {CommercialTrial, CommercialActive},
+	CommercialTrial:                {CommercialActive, CommercialSuspendedCommercial},
+	CommercialActive:              {CommercialChurned},
+	CommercialSuspendedCommercial: {CommercialActive, CommercialChurned},
+}
+
+// CanTransitionCommercial reports whether from -> to is an allowed
+// commercial-state transition. Any pair not present is rejected with 409
+// CONFLICT, mirroring CanTransition.
+func CanTransitionCommercial(from, to CommercialState) bool {
+	for _, t := range commercialTransitions[from] {
+		if t == to {
+			return true
+		}
+	}
+	return false
+}
+
+// AllCommercialStates is exported for the transition-matrix test.
+var AllCommercialStates = []CommercialState{
+	CommercialNone, CommercialTrial, CommercialActive, CommercialSuspendedCommercial, CommercialChurned,
+}
+
 // Quotas per IDN-FR-004 (V1 defaults).
 type Quotas struct {
 	CPU              int    `json:"cpu"`
@@ -83,6 +131,14 @@ type Tenant struct {
 	UpdatedAt           time.Time    `json:"updated_at"`
 	DeletedAt           *time.Time   `json:"deleted_at,omitempty"`
 	DeletionScheduledAt *time.Time   `json:"deletion_scheduled_at,omitempty"`
+
+	// Commercial plane fields (BRD 66 slice 1, CPL-FR-020): a second,
+	// independent state machine from Status (see CommercialState doc). The
+	// tenant's assigned plan is NOT duplicated here -- it lives in
+	// tenant_plan (single source of truth), read via domain.Store.GetTenantPlan.
+	CommercialState CommercialState `json:"commercial_state"`
+	TrialStartedAt  *time.Time      `json:"trial_started_at,omitempty"`
+	TrialEndsAt     *time.Time      `json:"trial_ends_at,omitempty"`
 }
 
 func (t *Tenant) URN() string { return "wr:" + t.ID.String() + ":identity:tenant/" + t.ID.String() }
@@ -93,6 +149,18 @@ func (t *Tenant) Transition(to TenantStatus, now time.Time) error {
 		return EConflict("invalid tenant status transition " + string(t.Status) + " -> " + string(to))
 	}
 	t.Status = to
+	t.UpdatedAt = now.UTC()
+	return nil
+}
+
+// TransitionCommercial applies a guarded commercial-state change
+// (CPL-FR-020). Independent of Transition (TenantStatus) -- see
+// CommercialState doc for why the two axes don't share a transition table.
+func (t *Tenant) TransitionCommercial(to CommercialState, now time.Time) error {
+	if !CanTransitionCommercial(t.CommercialState, to) {
+		return EConflict("invalid commercial state transition " + string(t.CommercialState) + " -> " + string(to))
+	}
+	t.CommercialState = to
 	t.UpdatedAt = now.UTC()
 	return nil
 }

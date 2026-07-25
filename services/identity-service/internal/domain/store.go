@@ -131,6 +131,47 @@ type Store interface {
 	// ListOutbox returns unpublished events, oldest first (poller + tests).
 	ListOutbox(ctx context.Context, limit int) ([]*OutboxEvent, error)
 	MarkOutboxPublished(ctx context.Context, eventIDs []uuid.UUID, at time.Time) error
+
+	// --- commercial: plan catalog (platform-scoped, no RLS; CPL-FR-001) ---
+	// CreatePlan persists the plan row and its version-1 default entitlements
+	// in one transaction.
+	CreatePlan(ctx context.Context, p *Plan, entitlements []PlanEntitlement) error
+	GetPlan(ctx context.Context, key string) (*Plan, error)
+	ListPlans(ctx context.Context) ([]*Plan, error)
+	// UpdatePlan persists metadata changes and, when entitlements is non-nil,
+	// the new versioned default set (CPL-FR-002: never mutates a prior
+	// version's rows, so existing tenant_plan snapshots are unaffected).
+	UpdatePlan(ctx context.Context, p *Plan, entitlements []PlanEntitlement) error
+	ListPlanEntitlements(ctx context.Context, planKey string, planVersion int) ([]PlanEntitlement, error)
+
+	// --- commercial: tenant plan assignment + overrides (tenant-scoped, RLS;
+	// CPL-FR-002/010) ---
+	// AssignTenantPlan upserts the tenant's single tenant_plan row (snapshot
+	// semantics) and enqueues an entitlements_flat recompute.
+	AssignTenantPlan(ctx context.Context, tp *TenantPlan, evs ...OutboxEvent) error
+	GetTenantPlan(ctx context.Context, tenantID uuid.UUID) (*TenantPlan, error)
+	UpsertEntitlementOverride(ctx context.Context, o *TenantEntitlementOverride, evs ...OutboxEvent) error
+	DeleteEntitlementOverride(ctx context.Context, tenantID uuid.UUID, kind EntitlementKind, key string, evs ...OutboxEvent) error
+	ListEntitlementOverrides(ctx context.Context, tenantID uuid.UUID) ([]TenantEntitlementOverride, error)
+
+	// --- commercial: tenant commercial-state (columns on tenants; CPL-FR-020) ---
+	// TransitionTenantCommercial is a compare-and-set change guarded by
+	// CanTransitionCommercial, mirroring TransitionTenant.
+	TransitionTenantCommercial(ctx context.Context, id uuid.UUID, from, to CommercialState, evs ...OutboxEvent) error
+
+	// --- commercial: entitlements_flat projection dirty queue (CPL-FR-011),
+	// same ClaimDirty/SKIP LOCKED shape as rbac-service's projection_dirty ---
+	ClaimCommercialDirty(ctx context.Context, workerID string, batch int, visibility time.Duration) ([]CommercialDirtyClaim, error)
+	DeleteCommercialDirty(ctx context.Context, ids []int64) error
+}
+
+// CommercialDirtyClaim is one claimed batch of commercial_dirty rows for a
+// single tenant (the entitlements_flat projection has no per-user dimension,
+// so unlike rbac's DirtyClaim there is no user grouping).
+type CommercialDirtyClaim struct {
+	TenantID       uuid.UUID
+	IDs            []int64
+	OldestEnqueued time.Time
 }
 
 // UserFilter narrows ListUsers. IDs is the `filter[id]` batch-hydration

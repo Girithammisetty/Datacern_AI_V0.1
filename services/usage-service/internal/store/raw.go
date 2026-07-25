@@ -20,14 +20,26 @@ func (s *PG) InsertRaw(ctx context.Context, recs []domain.MeterRecord) (int, err
 	inserted := 0
 	err := s.withTenant(ctx, tenant, func(tx pgx.Tx) error {
 		for _, r := range recs {
+			// meta defaults to '{}' (bounded JSONB, BRD 67 design §2.2) — a
+			// nil Meta must marshal to an empty object, never JSON `null`
+			// (encoding/json marshals a nil map as `null`), so every meter
+			// (including every pre-existing infra meter, which never sets
+			// Meta) gets a well-formed value.
+			meta := r.Meta
+			if meta == nil {
+				meta = map[string]any{}
+			}
+			metaJSON := mustJSON(meta)
 			tag, err := tx.Exec(ctx, `
 				INSERT INTO usage_raw
 				  (time, tenant_id, meter_key, quantity, workspace_id, user_id,
-				   agent_id, model, cloud, resource_urn, event_id, late)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+				   agent_id, model, cloud, resource_urn, event_id, late,
+				   pack_name, decision, meta)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 				ON CONFLICT (tenant_id, event_id, meter_key, time) DO NOTHING`,
 				r.Time, r.TenantID, r.MeterKey, r.Quantity, r.WorkspaceID, r.UserID,
-				r.AgentID, r.Model, r.Cloud, r.ResourceURN, r.EventID, r.Late)
+				r.AgentID, r.Model, r.Cloud, r.ResourceURN, r.EventID, r.Late,
+				r.PackName, r.Decision, metaJSON)
 			if err != nil {
 				return err
 			}

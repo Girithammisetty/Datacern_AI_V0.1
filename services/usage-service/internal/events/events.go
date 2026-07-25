@@ -25,6 +25,11 @@ const (
 	TopicAIToolInvoked = "ai.tool_invoked.v1"
 	TopicAIAgentRun    = "ai.agent_run.v1"
 	TopicAITokenUsage  = "ai.token_usage.v1" // ai-gateway LLM token metering
+	// TopicAIProposal is agent-runtime's proposal-decision topic (BRD 67 slice
+	// 1, VMB-FR-003): governed_decision/auto_executed_action source from its
+	// proposal.approved|edited_approved|rejected event types (design §2.1 —
+	// extends the existing topic rather than minting ai.proposal_decided.v1).
+	TopicAIProposal = "ai.proposal.v1"
 
 	IngestGroup = "usage-ingest"
 )
@@ -33,7 +38,7 @@ const (
 func ConsumedTopics() []string {
 	return []string{
 		TopicUsageMetering, TopicQueryEvents, TopicPipeline,
-		TopicAIToolInvoked, TopicAIAgentRun, TopicAITokenUsage,
+		TopicAIToolInvoked, TopicAIAgentRun, TopicAITokenUsage, TopicAIProposal,
 	}
 }
 

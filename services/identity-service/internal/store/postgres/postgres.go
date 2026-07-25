@@ -87,15 +87,16 @@ func isUnique(err error) bool {
 
 const tenantCols = `id, name, display_name, owner_email, tier, cell_id, cloud, status, quotas,
 	platform_version, subdomain, k8s_namespace, schema_prefix, auto_upgrade, modules, created_by,
-	created_at, updated_at, deleted_at, deletion_scheduled_at`
+	created_at, updated_at, deleted_at, deletion_scheduled_at, commercial_state, trial_started_at, trial_ends_at`
 
 func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 	var t domain.Tenant
 	var quotas []byte
-	var status string
+	var status, commercialState string
 	err := row.Scan(&t.ID, &t.Name, &t.DisplayName, &t.OwnerEmail, &t.Tier, &t.CellID, &t.Cloud,
 		&status, &quotas, &t.PlatformVersion, &t.Subdomain, &t.K8sNamespace, &t.SchemaPrefix,
-		&t.AutoUpgrade, &t.Modules, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt, &t.DeletionScheduledAt)
+		&t.AutoUpgrade, &t.Modules, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt, &t.DeletedAt, &t.DeletionScheduledAt,
+		&commercialState, &t.TrialStartedAt, &t.TrialEndsAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ENotFound("tenant")
 	}
@@ -103,6 +104,7 @@ func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 		return nil, err
 	}
 	t.Status = domain.TenantStatus(status)
+	t.CommercialState = domain.CommercialState(commercialState)
 	if err := json.Unmarshal(quotas, &t.Quotas); err != nil {
 		return nil, err
 	}
@@ -111,13 +113,18 @@ func scanTenant(row pgx.Row) (*domain.Tenant, error) {
 
 func (s *Store) CreateTenant(ctx context.Context, t *domain.Tenant, evs ...domain.OutboxEvent) error {
 	quotas, _ := json.Marshal(t.Quotas)
+	commercialState := string(t.CommercialState)
+	if commercialState == "" {
+		commercialState = string(domain.CommercialNone) // defensive default (column also has a DB default)
+	}
 	err := s.plainTx(ctx, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO tenants (`+tenantCols+`)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
 			t.ID, t.Name, t.DisplayName, t.OwnerEmail, t.Tier, t.CellID, t.Cloud, string(t.Status), quotas,
 			t.PlatformVersion, t.Subdomain, t.K8sNamespace, t.SchemaPrefix, t.AutoUpgrade, t.Modules,
-			t.CreatedBy, t.CreatedAt, t.UpdatedAt, t.DeletedAt, t.DeletionScheduledAt); err != nil {
+			t.CreatedBy, t.CreatedAt, t.UpdatedAt, t.DeletedAt, t.DeletionScheduledAt,
+			commercialState, t.TrialStartedAt, t.TrialEndsAt); err != nil {
 			return err
 		}
 		return insertOutbox(ctx, tx, evs)
@@ -486,6 +493,317 @@ func (s *Store) TransitionTenant(ctx context.Context, id uuid.UUID, from, to dom
 			return domain.EConflict("tenant status is " + cur + ", expected " + string(from))
 		}
 		return insertOutbox(ctx, tx, evs)
+	})
+}
+
+// --- commercial: tenant commercial-state (CPL-FR-020) ---
+
+func (s *Store) TransitionTenantCommercial(ctx context.Context, id uuid.UUID, from, to domain.CommercialState, evs ...domain.OutboxEvent) error {
+	if !domain.CanTransitionCommercial(from, to) {
+		return domain.EConflict("invalid commercial state transition " + string(from) + " -> " + string(to))
+	}
+	return s.platformTx(ctx, func(tx pgx.Tx) error {
+		// CAS at the persistence boundary, mirroring TransitionTenant.
+		ct, err := tx.Exec(ctx, `UPDATE tenants SET commercial_state=$3, updated_at=now() WHERE id=$1 AND commercial_state=$2`,
+			id, string(from), string(to))
+		if err != nil {
+			return err
+		}
+		if ct.RowsAffected() == 0 {
+			var cur string
+			if err := tx.QueryRow(ctx, `SELECT commercial_state FROM tenants WHERE id=$1`, id).Scan(&cur); err != nil {
+				return domain.ENotFound("tenant")
+			}
+			return domain.EConflict("tenant commercial_state is " + cur + ", expected " + string(from))
+		}
+		if err := insertOutbox(ctx, tx, evs); err != nil {
+			return err
+		}
+		return markCommercialDirtyTx(ctx, tx, id)
+	})
+}
+
+// --- commercial: plan catalog (platform-scoped, no RLS; CPL-FR-001) ---
+
+const planCols = `key, name, description, trial_days_default, status, version, created_at, updated_at`
+
+func scanPlan(row pgx.Row) (*domain.Plan, error) {
+	var p domain.Plan
+	err := row.Scan(&p.Key, &p.Name, &p.Description, &p.TrialDaysDefault, &p.Status, &p.Version, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ENotFound("plan")
+	}
+	return &p, err
+}
+
+func (s *Store) CreatePlan(ctx context.Context, p *domain.Plan, ents []domain.PlanEntitlement) error {
+	err := s.plainTx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO plans (`+planCols+`) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+			p.Key, p.Name, p.Description, p.TrialDaysDefault, p.Status, p.Version, p.CreatedAt, p.UpdatedAt); err != nil {
+			return err
+		}
+		return insertPlanEntitlements(ctx, tx, ents)
+	})
+	if isUnique(err) {
+		return domain.EValidation("plan key already exists", domain.FieldError{Field: "key", Message: "already in use"})
+	}
+	return err
+}
+
+func insertPlanEntitlements(ctx context.Context, tx pgx.Tx, ents []domain.PlanEntitlement) error {
+	for _, e := range ents {
+		val, err := json.Marshal(e.Value)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO plan_entitlements (id, plan_key, plan_version, kind, entitlement_key, value_json, created_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+			e.ID, e.PlanKey, e.PlanVersion, string(e.Kind), e.Key, val, e.CreatedAt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) GetPlan(ctx context.Context, key string) (*domain.Plan, error) {
+	return scanPlan(s.pool.QueryRow(ctx, `SELECT `+planCols+` FROM plans WHERE key=$1`, key))
+}
+
+func (s *Store) ListPlans(ctx context.Context) ([]*domain.Plan, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+planCols+` FROM plans ORDER BY key`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*domain.Plan
+	for rows.Next() {
+		p, err := scanPlan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) UpdatePlan(ctx context.Context, p *domain.Plan, ents []domain.PlanEntitlement) error {
+	return s.plainTx(ctx, func(tx pgx.Tx) error {
+		ct, err := tx.Exec(ctx, `
+			UPDATE plans SET name=$2, description=$3, trial_days_default=$4, status=$5, version=$6, updated_at=$7
+			WHERE key=$1`,
+			p.Key, p.Name, p.Description, p.TrialDaysDefault, p.Status, p.Version, p.UpdatedAt)
+		if err != nil {
+			return err
+		}
+		if ct.RowsAffected() == 0 {
+			return domain.ENotFound("plan")
+		}
+		if ents != nil {
+			return insertPlanEntitlements(ctx, tx, ents)
+		}
+		return nil
+	})
+}
+
+func (s *Store) ListPlanEntitlements(ctx context.Context, planKey string, planVersion int) ([]domain.PlanEntitlement, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, plan_key, plan_version, kind, entitlement_key, value_json, created_at
+		FROM plan_entitlements WHERE plan_key=$1 AND plan_version=$2 ORDER BY kind, entitlement_key`, planKey, planVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.PlanEntitlement
+	for rows.Next() {
+		var e domain.PlanEntitlement
+		var kind string
+		var val []byte
+		if err := rows.Scan(&e.ID, &e.PlanKey, &e.PlanVersion, &kind, &e.Key, &val, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		e.Kind = domain.EntitlementKind(kind)
+		if len(val) > 0 {
+			if err := json.Unmarshal(val, &e.Value); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// --- commercial: tenant plan assignment + overrides (tenant-scoped, RLS; CPL-FR-002/010) ---
+
+func (s *Store) AssignTenantPlan(ctx context.Context, tp *domain.TenantPlan, evs ...domain.OutboxEvent) error {
+	return s.tenantTx(ctx, tp.TenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO tenant_plan (tenant_id, plan_key, plan_version_snapshot, assigned_at, assigned_by)
+			VALUES ($1,$2,$3,$4,$5)
+			ON CONFLICT (tenant_id) DO UPDATE SET
+				plan_key=EXCLUDED.plan_key, plan_version_snapshot=EXCLUDED.plan_version_snapshot,
+				assigned_at=EXCLUDED.assigned_at, assigned_by=EXCLUDED.assigned_by`,
+			tp.TenantID, tp.PlanKey, tp.PlanVersionSnapshot, tp.AssignedAt, tp.AssignedBy); err != nil {
+			return err
+		}
+		if err := insertOutbox(ctx, tx, evs); err != nil {
+			return err
+		}
+		return markCommercialDirtyTx(ctx, tx, tp.TenantID)
+	})
+}
+
+func (s *Store) GetTenantPlan(ctx context.Context, tenantID uuid.UUID) (*domain.TenantPlan, error) {
+	var tp domain.TenantPlan
+	err := s.tenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT tenant_id, plan_key, plan_version_snapshot, assigned_at, assigned_by
+			FROM tenant_plan WHERE tenant_id=$1`, tenantID).
+			Scan(&tp.TenantID, &tp.PlanKey, &tp.PlanVersionSnapshot, &tp.AssignedAt, &tp.AssignedBy)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ENotFound("tenant plan assignment")
+	}
+	return &tp, err
+}
+
+func (s *Store) UpsertEntitlementOverride(ctx context.Context, o *domain.TenantEntitlementOverride, evs ...domain.OutboxEvent) error {
+	val, err := json.Marshal(o.Value)
+	if err != nil {
+		return err
+	}
+	return s.tenantTx(ctx, o.TenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO tenant_entitlement_overrides (id, tenant_id, kind, entitlement_key, value_json, granted_by, granted_at, reason)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+			ON CONFLICT (tenant_id, kind, entitlement_key) DO UPDATE SET
+				value_json=EXCLUDED.value_json, granted_by=EXCLUDED.granted_by,
+				granted_at=EXCLUDED.granted_at, reason=EXCLUDED.reason`,
+			o.ID, o.TenantID, string(o.Kind), o.Key, val, o.GrantedBy, o.GrantedAt, o.Reason); err != nil {
+			return err
+		}
+		if err := insertOutbox(ctx, tx, evs); err != nil {
+			return err
+		}
+		return markCommercialDirtyTx(ctx, tx, o.TenantID)
+	})
+}
+
+func (s *Store) DeleteEntitlementOverride(ctx context.Context, tenantID uuid.UUID, kind domain.EntitlementKind, key string, evs ...domain.OutboxEvent) error {
+	return s.tenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		ct, err := tx.Exec(ctx, `DELETE FROM tenant_entitlement_overrides WHERE tenant_id=$1 AND kind=$2 AND entitlement_key=$3`,
+			tenantID, string(kind), key)
+		if err != nil {
+			return err
+		}
+		if ct.RowsAffected() == 0 {
+			return domain.ENotFound("entitlement override")
+		}
+		if err := insertOutbox(ctx, tx, evs); err != nil {
+			return err
+		}
+		return markCommercialDirtyTx(ctx, tx, tenantID)
+	})
+}
+
+func (s *Store) ListEntitlementOverrides(ctx context.Context, tenantID uuid.UUID) ([]domain.TenantEntitlementOverride, error) {
+	var out []domain.TenantEntitlementOverride
+	err := s.tenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT id, tenant_id, kind, entitlement_key, value_json, granted_by, granted_at, reason
+			FROM tenant_entitlement_overrides WHERE tenant_id=$1 ORDER BY kind, entitlement_key`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var o domain.TenantEntitlementOverride
+			var kind string
+			var val []byte
+			if err := rows.Scan(&o.ID, &o.TenantID, &kind, &o.Key, &val, &o.GrantedBy, &o.GrantedAt, &o.Reason); err != nil {
+				return err
+			}
+			o.Kind = domain.EntitlementKind(kind)
+			if len(val) > 0 {
+				if err := json.Unmarshal(val, &o.Value); err != nil {
+					return err
+				}
+			}
+			out = append(out, o)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// --- commercial: entitlements_flat dirty queue (CPL-FR-011), mirrors
+// rbac-service's projection_dirty ClaimDirty/DeleteDirty shape ---
+
+// markCommercialDirtyTx enqueues a recompute row in the SAME transaction as
+// the mutation that made the projection stale (plan assignment, override
+// upsert/delete, commercial-state transition).
+func markCommercialDirtyTx(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `INSERT INTO commercial_dirty (tenant_id) VALUES ($1)`, tenantID)
+	return err
+}
+
+func (s *Store) ClaimCommercialDirty(ctx context.Context, workerID string, batch int, visibility time.Duration) ([]domain.CommercialDirtyClaim, error) {
+	byTenant := map[uuid.UUID]*domain.CommercialDirtyClaim{}
+	var order []uuid.UUID
+	err := s.platformTx(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			WITH c AS (
+				SELECT id FROM commercial_dirty
+				WHERE claimed_at IS NULL OR claimed_at < now() - $1::interval
+				ORDER BY id
+				LIMIT $2
+				FOR UPDATE SKIP LOCKED
+			)
+			UPDATE commercial_dirty d SET claimed_at = now(), claimed_by = $3
+			FROM c WHERE d.id = c.id
+			RETURNING d.id, d.tenant_id, d.enqueued_at`,
+			visibility.String(), batch, workerID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id int64
+			var tenant uuid.UUID
+			var enq time.Time
+			if err := rows.Scan(&id, &tenant, &enq); err != nil {
+				return err
+			}
+			c, ok := byTenant[tenant]
+			if !ok {
+				c = &domain.CommercialDirtyClaim{TenantID: tenant, OldestEnqueued: enq}
+				byTenant[tenant] = c
+				order = append(order, tenant)
+			}
+			c.IDs = append(c.IDs, id)
+			if enq.Before(c.OldestEnqueued) {
+				c.OldestEnqueued = enq
+			}
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.CommercialDirtyClaim, 0, len(order))
+	for _, t := range order {
+		out = append(out, *byTenant[t])
+	}
+	return out, nil
+}
+
+func (s *Store) DeleteCommercialDirty(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return s.platformTx(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM commercial_dirty WHERE id = ANY($1)`, ids)
+		return err
 	})
 }
 

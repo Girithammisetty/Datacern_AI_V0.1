@@ -96,6 +96,20 @@ func (p *Pipeline) Handle(ctx context.Context, env gcevent.Envelope) error {
 		rec.AgentID = dimPtr(env.Payload, m.DimPaths["agent_id"])
 		rec.Model = dimPtr(env.Payload, m.DimPaths["model"])
 		rec.ResourceURN = dimPtr(env.Payload, m.DimPaths["resource_urn"])
+		// Value-meter dimensions (BRD 67 slice 1, design §2.2).
+		rec.PackName = dimPtr(env.Payload, m.DimPaths["pack_name"])
+		rec.Decision = dimPtr(env.Payload, m.DimPaths["decision"])
+		if len(m.MetaPaths) > 0 {
+			meta := map[string]any{}
+			for key, path := range m.MetaPaths {
+				if v, ok := getPath(env.Payload, path); ok {
+					meta[key] = v
+				}
+			}
+			if len(meta) > 0 {
+				rec.Meta = meta
+			}
+		}
 		recs = append(recs, rec)
 		meterKeys[m.MeterKey] = true
 	}

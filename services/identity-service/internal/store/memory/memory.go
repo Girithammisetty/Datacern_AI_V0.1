@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,25 @@ type Store struct {
 	labels       map[uuid.UUID]map[string]*domain.DisplayLabel
 	idempotency  map[string]*domain.IdempotencyRecord
 	outbox       []*domain.OutboxEvent
+
+	// --- commercial plane (BRD 66 slice 1) ---
+	plans            map[string]*domain.Plan
+	planEntitlements map[string][]*domain.PlanEntitlement // "planKey/version" -> rows
+	tenantPlans      map[uuid.UUID]*domain.TenantPlan
+	overrides        map[uuid.UUID]map[string]*domain.TenantEntitlementOverride // tenantID -> "kind/key" -> row
+	commercialDirty  []*commercialDirtyRow
+	dirtySeq         int64
+}
+
+// commercialDirtyRow mirrors the postgres commercial_dirty table for the
+// in-memory unit tier (SKIP LOCKED semantics reduced to a mutex + a claimed
+// flag, since there is only ever one goroutine per test).
+type commercialDirtyRow struct {
+	id         int64
+	tenantID   uuid.UUID
+	enqueuedAt time.Time
+	claimedAt  *time.Time
+	claimedBy  string
 }
 
 func New() *Store {
@@ -59,6 +79,11 @@ func New() *Store {
 		idpConfigs:   map[uuid.UUID]*domain.TenantIdpConfig{},
 		labels:       map[uuid.UUID]map[string]*domain.DisplayLabel{},
 		idempotency:  map[string]*domain.IdempotencyRecord{},
+
+		plans:            map[string]*domain.Plan{},
+		planEntitlements: map[string][]*domain.PlanEntitlement{},
+		tenantPlans:      map[uuid.UUID]*domain.TenantPlan{},
+		overrides:        map[uuid.UUID]map[string]*domain.TenantEntitlementOverride{},
 	}
 }
 
@@ -203,6 +228,241 @@ func (s *Store) TransitionTenant(_ context.Context, id uuid.UUID, from, to domai
 	t.Status = to
 	t.UpdatedAt = time.Now().UTC()
 	s.appendOutboxLocked(evs)
+	return nil
+}
+
+// --- commercial: tenant commercial-state (CPL-FR-020) ---
+
+func (s *Store) TransitionTenantCommercial(_ context.Context, id uuid.UUID, from, to domain.CommercialState, evs ...domain.OutboxEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tenants[id]
+	if !ok {
+		return domain.ENotFound("tenant")
+	}
+	if t.CommercialState != from {
+		return domain.EConflict("tenant commercial_state is " + string(t.CommercialState) + ", expected " + string(from))
+	}
+	if !domain.CanTransitionCommercial(from, to) {
+		return domain.EConflict("invalid commercial state transition " + string(from) + " -> " + string(to))
+	}
+	t.CommercialState = to
+	t.UpdatedAt = time.Now().UTC()
+	s.appendOutboxLocked(evs)
+	s.markCommercialDirtyLocked(id)
+	return nil
+}
+
+// --- commercial: plan catalog (CPL-FR-001) ---
+
+func planEntKey(key string, version int) string { return key + "/" + strconv.Itoa(version) }
+
+func (s *Store) CreatePlan(_ context.Context, p *domain.Plan, ents []domain.PlanEntitlement) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.plans[p.Key]; ok {
+		return domain.EValidation("plan key already exists", domain.FieldError{Field: "key", Message: "already in use"})
+	}
+	cp := *p
+	s.plans[p.Key] = &cp
+	s.setPlanEntitlementsLocked(p.Key, p.Version, ents)
+	return nil
+}
+
+func (s *Store) GetPlan(_ context.Context, key string) (*domain.Plan, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p, ok := s.plans[key]
+	if !ok {
+		return nil, domain.ENotFound("plan")
+	}
+	cp := *p
+	return &cp, nil
+}
+
+func (s *Store) ListPlans(_ context.Context) ([]*domain.Plan, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*domain.Plan, 0, len(s.plans))
+	for _, p := range s.plans {
+		cp := *p
+		out = append(out, &cp)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out, nil
+}
+
+func (s *Store) UpdatePlan(_ context.Context, p *domain.Plan, ents []domain.PlanEntitlement) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.plans[p.Key]; !ok {
+		return domain.ENotFound("plan")
+	}
+	cp := *p
+	s.plans[p.Key] = &cp
+	if ents != nil {
+		s.setPlanEntitlementsLocked(p.Key, p.Version, ents)
+	}
+	return nil
+}
+
+func (s *Store) setPlanEntitlementsLocked(key string, version int, ents []domain.PlanEntitlement) {
+	rows := make([]*domain.PlanEntitlement, 0, len(ents))
+	for _, e := range ents {
+		cp := e
+		rows = append(rows, &cp)
+	}
+	s.planEntitlements[planEntKey(key, version)] = rows
+}
+
+func (s *Store) ListPlanEntitlements(_ context.Context, planKey string, planVersion int) ([]domain.PlanEntitlement, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows := s.planEntitlements[planEntKey(planKey, planVersion)]
+	out := make([]domain.PlanEntitlement, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, *r)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return out[i].Key < out[j].Key
+	})
+	return out, nil
+}
+
+// --- commercial: tenant plan assignment + overrides (CPL-FR-002/010) ---
+
+func (s *Store) AssignTenantPlan(_ context.Context, tp *domain.TenantPlan, evs ...domain.OutboxEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := *tp
+	s.tenantPlans[tp.TenantID] = &cp
+	s.appendOutboxLocked(evs)
+	s.markCommercialDirtyLocked(tp.TenantID)
+	return nil
+}
+
+func (s *Store) GetTenantPlan(_ context.Context, tenantID uuid.UUID) (*domain.TenantPlan, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	tp, ok := s.tenantPlans[tenantID]
+	if !ok {
+		return nil, domain.ENotFound("tenant plan assignment")
+	}
+	cp := *tp
+	return &cp, nil
+}
+
+func overrideMapKey(kind domain.EntitlementKind, key string) string { return string(kind) + "/" + key }
+
+func (s *Store) UpsertEntitlementOverride(_ context.Context, o *domain.TenantEntitlementOverride, evs ...domain.OutboxEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.overrides[o.TenantID] == nil {
+		s.overrides[o.TenantID] = map[string]*domain.TenantEntitlementOverride{}
+	}
+	cp := *o
+	s.overrides[o.TenantID][overrideMapKey(o.Kind, o.Key)] = &cp
+	s.appendOutboxLocked(evs)
+	s.markCommercialDirtyLocked(o.TenantID)
+	return nil
+}
+
+func (s *Store) DeleteEntitlementOverride(_ context.Context, tenantID uuid.UUID, kind domain.EntitlementKind, key string, evs ...domain.OutboxEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.overrides[tenantID]
+	k := overrideMapKey(kind, key)
+	if m == nil || m[k] == nil {
+		return domain.ENotFound("entitlement override")
+	}
+	delete(m, k)
+	s.appendOutboxLocked(evs)
+	s.markCommercialDirtyLocked(tenantID)
+	return nil
+}
+
+func (s *Store) ListEntitlementOverrides(_ context.Context, tenantID uuid.UUID) ([]domain.TenantEntitlementOverride, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]domain.TenantEntitlementOverride, 0, len(s.overrides[tenantID]))
+	for _, o := range s.overrides[tenantID] {
+		out = append(out, *o)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return out[i].Key < out[j].Key
+	})
+	return out, nil
+}
+
+// --- commercial: entitlements_flat dirty queue (CPL-FR-011) ---
+
+// markCommercialDirtyLocked enqueues a dirty row; caller holds s.mu.
+func (s *Store) markCommercialDirtyLocked(tenantID uuid.UUID) {
+	s.dirtySeq++
+	s.commercialDirty = append(s.commercialDirty, &commercialDirtyRow{
+		id: s.dirtySeq, tenantID: tenantID, enqueuedAt: time.Now().UTC(),
+	})
+}
+
+func (s *Store) ClaimCommercialDirty(_ context.Context, workerID string, batch int, visibility time.Duration) ([]domain.CommercialDirtyClaim, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	byTenant := map[uuid.UUID]*domain.CommercialDirtyClaim{}
+	var order []uuid.UUID
+	claimed := 0
+	for _, row := range s.commercialDirty {
+		if claimed >= batch {
+			break
+		}
+		if row.claimedAt != nil && now.Sub(*row.claimedAt) < visibility {
+			continue // claimed recently by another worker; not yet reclaimable
+		}
+		t := now
+		row.claimedAt = &t
+		row.claimedBy = workerID
+		claimed++
+		c, ok := byTenant[row.tenantID]
+		if !ok {
+			c = &domain.CommercialDirtyClaim{TenantID: row.tenantID, OldestEnqueued: row.enqueuedAt}
+			byTenant[row.tenantID] = c
+			order = append(order, row.tenantID)
+		}
+		c.IDs = append(c.IDs, row.id)
+		if row.enqueuedAt.Before(c.OldestEnqueued) {
+			c.OldestEnqueued = row.enqueuedAt
+		}
+	}
+	out := make([]domain.CommercialDirtyClaim, 0, len(order))
+	for _, t := range order {
+		out = append(out, *byTenant[t])
+	}
+	return out, nil
+}
+
+func (s *Store) DeleteCommercialDirty(_ context.Context, ids []int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(ids) == 0 {
+		return nil
+	}
+	del := map[int64]bool{}
+	for _, id := range ids {
+		del[id] = true
+	}
+	kept := s.commercialDirty[:0]
+	for _, row := range s.commercialDirty {
+		if !del[row.id] {
+			kept = append(kept, row)
+		}
+	}
+	s.commercialDirty = kept
 	return nil
 }
 

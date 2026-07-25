@@ -21,6 +21,11 @@ type Mapping struct {
 	QuantityConst float64           // used when QuantityPath is empty
 	QuantityPath  string            // dotted path into payload
 	DimPaths      map[string]string // dim name -> dotted payload path
+	// MetaPaths maps a usage_raw.meta JSONB key to a dotted payload path
+	// (BRD 67 slice 1, design §2.2 "raw-detail-only" fields — e.g.
+	// proposal_kind, decision_latency_ms, edit_distance_bucket). Never rolled
+	// up; absent/empty for every meter that has no meta fields.
+	MetaPaths map[string]string
 	// Filter, when non-nil, must return true for the event to be metered.
 	Filter func(payload map[string]any) bool
 }
@@ -109,6 +114,81 @@ func Catalog() []Mapping {
 				return s == "succeeded"
 			},
 		},
+
+		// ---- governed_decision (BRD 67 slice 1, VMB-FR-001/002/003) --------
+		// Source: agent-runtime's ai.proposal.v1, extending the existing topic
+		// rather than a new one (design §2.1). Metering fields are only present
+		// on the payload for a terminal metered decision (proposals/service.py
+		// _governed_decision_metering) — approve/edit-approve/reject. Quantity
+		// extraction still requires SOME quantity source per ValidateCatalog,
+		// so QuantityConst=1 (one row per decision, a count meter) even though
+		// the real "does this event carry a decision" gate is that the payload
+		// simply won't be emitted with these fields otherwise (proposal.created
+		// and proposal.cancelled never reach this mapping's event_types at all).
+		{
+			Topic: events.TopicAIProposal, EventType: "proposal.approved",
+			MeterKey: domain.MeterGovernedDecision, QuantityConst: 1,
+			DimPaths: governedDecisionDims(),
+			MetaPaths: governedDecisionMeta(),
+		},
+		{
+			Topic: events.TopicAIProposal, EventType: "proposal.edited_approved",
+			MeterKey: domain.MeterGovernedDecision, QuantityConst: 1,
+			DimPaths: governedDecisionDims(),
+			MetaPaths: governedDecisionMeta(),
+		},
+		{
+			Topic: events.TopicAIProposal, EventType: "proposal.rejected",
+			MeterKey: domain.MeterGovernedDecision, QuantityConst: 1,
+			DimPaths: governedDecisionDims(),
+			MetaPaths: governedDecisionMeta(),
+		},
+
+		// ---- auto_executed_action (BRD 67 slice 1, VMB-FR-001) -------------
+		// Same source event as governed_decision's "approved" entry — an
+		// auto-executed proposal is ALSO a governed_decision (no actor
+		// exclusion there, design §2.1/§2.2) — this mapping additionally,
+		// separately counts the auto-executed subset via the same filter
+		// pattern already used for agent_run.completed's status=='succeeded'
+		// above (design §2.1 "mirrors the existing filter pattern").
+		{
+			Topic: events.TopicAIProposal, EventType: "proposal.approved",
+			MeterKey: domain.MeterAutoExecutedAction, QuantityConst: 1,
+			DimPaths:  governedDecisionDims(),
+			MetaPaths: governedDecisionMeta(),
+			Filter: func(p map[string]any) bool {
+				d, _ := p["decision"].(map[string]any)
+				actor, _ := d["actor"].(string)
+				return actor == "policy:auto"
+			},
+		},
+	}
+}
+
+// governedDecisionDims: agent-runtime's ai.proposal.v1 payload carries the
+// proposing agent under "agent_key" (not "agent_id" — the std-dims default),
+// and has no workspace_id/user_id/model/resource_urn fields (a proposal's
+// affected resources are a list, "affected_urns", not a single resource_urn) —
+// those std dims resolve to NULL for this meter, same as any other meter
+// missing a dim (USG-FR-002: unknown dims stored as nil, never dropped).
+// pack_name/decision are the physical rollup columns (design §2.2).
+func governedDecisionDims() map[string]string {
+	return stdDims(map[string]string{
+		"agent_id":  "agent_key",
+		"pack_name": "pack_name",
+		"decision":  "decision_label",
+	})
+}
+
+// governedDecisionMeta: raw-detail-only fields (design §2.2), carried in
+// usage_raw.meta and never rolled up. edit_distance_bucket is absent from the
+// payload for approve/reject (only edited_approved carries it) — getPath
+// simply omits the key from meta when the path is missing.
+func governedDecisionMeta() map[string]string {
+	return map[string]string{
+		"proposal_kind":        "proposal_kind",
+		"decision_latency_ms":  "decision_latency_ms",
+		"edit_distance_bucket": "edit_distance_bucket",
 	}
 }
 
