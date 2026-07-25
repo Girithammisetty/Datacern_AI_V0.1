@@ -124,6 +124,27 @@ export interface TenantBrandingDTO {
   updated_at?: string | null;
 }
 
+/** One row of GET /api/v1/tenants/{id}/entitlements' effective set
+ * (identity domain.EffectiveEntitlement, CPL-FR-011). */
+export interface TenantEntitlementDTO {
+  kind: string;
+  key: string;
+  value?: Record<string, unknown>;
+  provenance: string; // plan_default | override
+}
+
+/** GET /api/v1/tenants/{id}/entitlements response (BRD 66, CPL-FR-011) —
+ * identity-service gates this endpoint on identity.user.admin (tenant
+ * admin) or platform super-admin; a lower-privilege caller's JWT gets a
+ * downstream 403, which tenantCommercial (resolvers/index.ts) catches and
+ * degrades to the minimal shape rather than erroring the whole query. */
+export interface TenantEntitlementsDTO {
+  data: TenantEntitlementDTO[];
+  plan?: { key: string; version: number } | null;
+  commercial_state: string;
+  trial_ends_at?: string | null;
+}
+
 export class IdentityClient {
   constructor(private readonly http: ServiceClient) {}
 
@@ -215,6 +236,17 @@ export class IdentityClient {
   /** GET /api/v1/tenants/{id} — the tenant object + its settings. */
   tenant(id: string): Promise<TenantDTO> {
     return this.http.get<TenantDTO>(`/api/v1/tenants/${encodeURIComponent(id)}`);
+  }
+
+  /** GET /api/v1/tenants/{id}/entitlements (BRD 66 slice 3, CPL-FR-011/033):
+   * the tenant's effective commercial entitlement set + plan/trial/commercial
+   * -state context. identity.user.admin (or platform super-admin) only —
+   * the tenantCommercial resolver forwards the caller's JWT and degrades to
+   * the minimal shape on a downstream permission denial instead of erroring. */
+  tenantCommercial(id: string): Promise<TenantEntitlementsDTO> {
+    return this.http.get<TenantEntitlementsDTO>(
+      `/api/v1/tenants/${encodeURIComponent(id)}/entitlements`,
+    );
   }
 
   /** GET /api/v1/tenants/{id}/embed-config — 404s (via nullOn404 at the

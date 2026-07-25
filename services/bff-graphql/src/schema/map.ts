@@ -56,6 +56,8 @@ import type {
   UserDTO, ServiceAccountDTO, TenantDTO,
   // Tier 4b: identity/rbac admin (service-account create/rotate carries api_key once).
   CreatedServiceAccountDTO,
+  // BRD 66 slice 3 (CPL-FR-033): commercial plane (plan/trial/entitlements).
+  TenantEntitlementsDTO,
 } from "../clients/identity.js";
 import type {
   WorkspaceDTO, GroupDTO, MemberDTO, RoleDTO, ExplainAuthzDTO,
@@ -273,6 +275,63 @@ export function mapTenant(ctx: GraphQLContext, d: TenantDTO) {
     updatedAt: d.updated_at ?? null,
   };
 }
+
+// --- BRD 66 slice 3 (CPL-FR-033): commercial plane --------------------------
+
+/** Named commercial `feature` entitlement keys the platform currently
+ * defines (mirrors ui-web's FEATURE_GATES registration pattern). Empty
+ * today: no plan seeds a `feature`-kind entitlement yet (see
+ * services/identity-service/migrations/0010_commercial_plans.up.sql --
+ * only pack_sku/seat_cap/workspace_cap are seeded), so there is nothing to
+ * lock. This is the registration point for future named commercial
+ * features; until an entry is added here (and to a plan's defaults),
+ * lockedFeatureKeys is always []. CPL-FR-013 is a Should, not a Must, for
+ * this slice. */
+const KNOWN_COMMERCIAL_FEATURE_KEYS: readonly string[] = [];
+
+/** Locked = a known commercial feature key the tenant's effective set does
+ * NOT carry as an owned `feature` entitlement. Never hidden by ui-web
+ * (CPL-FR-013) -- this list drives a preview + upsell CTA, not a hide. */
+function computeLockedFeatureKeys(entitlements: TenantEntitlementsDTO["data"]): string[] {
+  const owned = new Set(entitlements.filter((e) => e.kind === "feature").map((e) => e.key));
+  return KNOWN_COMMERCIAL_FEATURE_KEYS.filter((k) => !owned.has(k));
+}
+
+/** Full-detail mapping (tenant-admin capability confirmed by the resolver) --
+ * every TenantCommercial field populated from identity-service's
+ * GET /tenants/{id}/entitlements (CPL-FR-011). */
+export function mapTenantCommercial(d: TenantEntitlementsDTO) {
+  return {
+    __typename: "TenantCommercial" as const,
+    commercialState: d.commercial_state,
+    lockedFeatureKeys: computeLockedFeatureKeys(d.data ?? []),
+    planKey: d.plan?.key ?? null,
+    planVersion: d.plan?.version ?? null,
+    trialEndsAt: d.trial_ends_at ?? null,
+    entitlements: (d.data ?? []).map((e) => ({
+      __typename: "CommercialEntitlement" as const,
+      kind: e.kind,
+      key: e.key,
+      value: e.value ?? null,
+      provenance: e.provenance,
+    })),
+  };
+}
+
+/** Minimal public shape (CPL-FR-033's "for gating locked UI regardless of
+ * role"): only commercialState + lockedFeatureKeys, everything else null.
+ * Used both when the caller lacks tenant-admin capability and as the
+ * fail-safe fallback on a downstream error (mirrors this file's other
+ * degrade-to-empty mappers, e.g. viewerBranding in resolvers/index.ts). */
+export const EMPTY_TENANT_COMMERCIAL = {
+  __typename: "TenantCommercial" as const,
+  commercialState: null,
+  lockedFeatureKeys: [] as string[],
+  planKey: null,
+  planVersion: null,
+  trialEndsAt: null,
+  entitlements: null,
+};
 
 // --- admin: audit trail -----------------------------------------------------
 /** Flatten the audit eventDTO (nested actor / via_agent objects) into the flat
