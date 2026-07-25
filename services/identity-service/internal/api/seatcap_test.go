@@ -43,11 +43,16 @@ func entReaderUnavailable() domain.EntitlementReaderFunc {
 	}
 }
 
-// TestSeatCap_UnderLimitSucceeds: current(1) < limit(2) -> invite proceeds.
+// Note: f.activeTenant provisions a "Tenant Owner" user as part of the real
+// provisioning saga (engine_steps.go), so a freshly activated tenant already
+// has 1 active user before any test-added invites -- every seat count below
+// accounts for that baseline explicitly rather than assuming zero.
+
+// TestSeatCap_UnderLimitSucceeds: current(1, the provisioned owner) <
+// limit(2) -> invite proceeds.
 func TestSeatCap_UnderLimitSucceeds(t *testing.T) {
 	f := newFixture(t)
 	tn := f.activeTenant("capco1")
-	f.activeUser(tn, "existing@capco1.com")
 	f.srv.Users.Entitlements = entReaderWithCap(2)
 
 	r := f.do(http.MethodPost, "/api/v1/users/invite", f.adminToken(tn.ID), map[string]any{"email": "new@capco1.com"})
@@ -56,14 +61,13 @@ func TestSeatCap_UnderLimitSucceeds(t *testing.T) {
 	}
 }
 
-// TestSeatCap_AtLimitBlocked covers AC-3 exactly: seat_cap{n:5}-shaped
-// scenario reduced to n=1 for a fast test -- 1 active user, invite a 2nd ->
-// 403 CAP_EXCEEDED {current, limit}; after the cap is raised, the request
-// succeeds.
+// TestSeatCap_AtLimitBlocked covers AC-3 exactly: seat_cap{n:5} reduced to
+// n=1 for a fast test -- the provisioned owner already occupies the tenant's
+// 1 seat, so inviting a 2nd user is blocked with 403 CAP_EXCEEDED
+// {current:1, limit:1}; after the cap is raised, the same request succeeds.
 func TestSeatCap_AtLimitBlocked(t *testing.T) {
 	f := newFixture(t)
 	tn := f.activeTenant("capco2")
-	f.activeUser(tn, "existing@capco2.com")
 	f.srv.Users.Entitlements = entReaderWithCap(1)
 
 	r := f.do(http.MethodPost, "/api/v1/users/invite", f.adminToken(tn.ID), map[string]any{"email": "blocked@capco2.com"})
@@ -86,13 +90,12 @@ func TestSeatCap_AtLimitBlocked(t *testing.T) {
 	}
 }
 
-// TestSeatCap_OverLimitBlocked: 2 existing users, limit 2 -> blocked with the
-// right current/limit even when current > 0 and well past the boundary.
+// TestSeatCap_OverLimitBlocked: owner + 1 invited user = 2 seats in use,
+// limit 2 -> blocked with the right current/limit at the boundary.
 func TestSeatCap_OverLimitBlocked(t *testing.T) {
 	f := newFixture(t)
 	tn := f.activeTenant("capco3")
 	f.activeUser(tn, "a@capco3.com")
-	f.activeUser(tn, "b@capco3.com")
 	f.srv.Users.Entitlements = entReaderWithCap(2)
 
 	r := f.do(http.MethodPost, "/api/v1/users/invite", f.adminToken(tn.ID), map[string]any{"email": "c@capco3.com"})

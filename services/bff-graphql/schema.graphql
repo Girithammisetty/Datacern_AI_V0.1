@@ -550,6 +550,54 @@ type EmbedConfig {
 }
 
 """
+One row of the tenant's effective entitlement set (BRD 66, CPL-FR-011),
+as returned by identity-service GET /tenants/{id}/entitlements. Only
+present in the FULL-detail shape (tenant-admin capability required —
+CPL-FR-033).
+"""
+type CommercialEntitlement {
+  """pack_sku | meter_allowance | seat_cap | workspace_cap | feature."""
+  kind: String!
+  key: String!
+  value: JSON
+  """plan_default | override."""
+  provenance: String!
+}
+
+"""
+The commercial plane's tenant-facing view (BRD 66 slice 3, CPL-FR-033):
+plan, trial, and effective entitlements for gating + upsell UI. Two shapes
+share this one type: a caller WITHOUT tenant-admin capability
+(identity.user.admin) sees only commercialState + lockedFeatureKeys
+(everything else null/empty) — enough for ui-web's entitlement Gate to
+render a locked-feature preview without exposing plan/trial/entitlement
+detail; a tenant admin (or platform admin) sees every field, sourced from
+identity-service's GET /tenants/{id}/entitlements (CPL-FR-011).
+"""
+type TenantCommercial {
+  """
+  none | trial | active | suspended_commercial | churned. Null when the
+  caller lacks visibility (see the type doc above) — this is a BFF-side
+  capability gate, not a real "unknown" state.
+  """
+  commercialState: String
+  """
+  `feature`-kind entitlement keys NOT present in the tenant's effective
+  set — i.e. platform features the tenant's plan doesn't include.
+  ui-web's Gate({kind:"entitlement"}) consumes this directly to decide
+  locked-preview vs normal rendering (never hidden, CPL-FR-013).
+  """
+  lockedFeatureKeys: [String!]!
+  """
+  Full detail below — tenant-admin capability only; null/empty otherwise.
+  """
+  planKey: String
+  planVersion: Int
+  trialEndsAt: DateTime
+  entitlements: [CommercialEntitlement!]
+}
+
+"""
 PUT /tenants/{id}/embed-config response — embedSecret is shown exactly
 once, at generation/rotation time; store it immediately, it cannot be
 retrieved again.
@@ -4782,6 +4830,15 @@ type Query {
   All tenants (identity-service GET /tenants). Platform-admin only (identity's requireSuperAdmin enforces).
   """
   tenants(limit: Int): [Tenant!]!
+  """
+  BRD 66 slice 3 (CPL-FR-033): the tenant's commercial plane (plan,
+  trial, effective entitlements) for gating + upsell UI. Reachable by ANY
+  authenticated caller in the tenant (returns the minimal
+  commercialState/lockedFeatureKeys shape); full plan/trial/entitlement
+  detail additionally needs the identity.user.admin capability. Cross-tenant
+  reads return null (mirrors `tenant`'s 404-as-null pattern).
+  """
+  tenantCommercial(id: ID!): TenantCommercial
   """
   Search the WORM audit trail (audit-service GET /audit/search). Admin only.
   `from`/`to` are RFC3339; when omitted the resolver defaults to the last 7
