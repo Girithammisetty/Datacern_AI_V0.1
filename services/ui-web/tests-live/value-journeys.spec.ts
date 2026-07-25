@@ -68,7 +68,13 @@ test.describe("Value & ROI reporting (BRD 69)", () => {
     await page.goto("/admin/value");
     await expect(page.getByRole("heading", { name: "Value & ROI" })).toBeVisible();
     await expect(page.getByText(/\$180\.00\/hr/)).toBeVisible();
-    await expect(page.getByText("claims_disposition=20")).toBeVisible();
+    // .first(): the same value legitimately renders twice -- once in the
+    // current-assumptions panel, once in the assumption edit-history panel
+    // below it -- so a plain getByText is a Playwright strict-mode
+    // violation (2-3 matches depending on retry-accumulated history).
+    // Asserting at least one instance is visible is sufficient to prove the
+    // value rendered; which panel isn't what this step is checking.
+    await expect(page.getByText("claims_disposition=20").first()).toBeVisible();
 
     // 3. Headline tiles render (may legitimately show the "not set"/gap empty
     // state for hours-saved if no governed_decision data with a matching
