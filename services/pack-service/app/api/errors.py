@@ -35,7 +35,8 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError):  # noqa: ANN202
         trace_id = getattr(request.state, "trace_id", "")
-        return error_response(exc.status, exc.code, exc.message, trace_id, getattr(exc, "details", None))
+        details = getattr(exc, "details", None)
+        return error_response(exc.status, exc.code, exc.message, trace_id, details)
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception):  # noqa: ANN202

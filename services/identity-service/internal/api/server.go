@@ -210,6 +210,12 @@ func (s *Server) Router() http.Handler {
 				r.Post("/platform/tenants/{id}/plan/resync", s.handleResyncTenantPlan)
 				r.Post("/platform/tenants/{id}/entitlements/overrides", s.handleUpsertOverride)
 				r.Delete("/platform/tenants/{id}/entitlements/overrides/{kind}/{key}", s.handleDeleteOverride)
+				// BRD 66 slice 2: trial lifecycle (CPL-FR-021, US-3). Paths per
+				// the design doc's endpoint table -- NOT under /platform/... (unlike
+				// plan CRUD above), but same requireSuperAdmin scope.
+				r.Post("/tenants/{id}/trial", s.handleStartTrial)
+				r.Post("/tenants/{id}/trial/extend", s.handleExtendTrial)
+				r.Post("/tenants/{id}/convert", s.handleConvertTrial)
 				// IDN-FR-009 (Should): platform version registry — stub.
 				r.Get("/platform-versions", s.handleNotImplemented("platform version registry (IDN-FR-009)"))
 			})

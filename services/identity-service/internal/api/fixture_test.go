@@ -128,6 +128,8 @@ func newFixtureOpt(t *testing.T, trustSpiffe bool) *fixture {
 		KM: f.km, Verifier: f.issuer, Authz: authz.ScopeAuthorizer{},
 		Plans:      &domain.PlanService{Store: f.store, Clock: f.clock.Now},
 		Commercial: commercial,
+		// BRD 66 slice 2: trial lifecycle (start/extend/convert).
+		Trials: &domain.TrialService{Store: f.store, Clock: f.clock.Now},
 		// BRD 70 slice 1/2: demo-sandbox lifecycle over the same fake
 		// bundle-loader/seed-runner the provisioning saga's SeedDemoContent
 		// step uses above.

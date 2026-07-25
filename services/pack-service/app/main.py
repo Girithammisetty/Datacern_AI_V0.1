@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
+from datacern_common.redisx import build_redis
 from fastapi import FastAPI
 
 from app.api.auth import LocalScopeAuthz, OpaAuthzClient, TokenVerifier

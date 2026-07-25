@@ -301,6 +301,8 @@ func main() {
 	// entitlement overrides / effective-entitlements resolution.
 	plans := &domain.PlanService{Store: store, Clock: clock}
 	commercial := &domain.CommercialService{Store: store, Clock: clock}
+	// BRD 66 slice 2: trial lifecycle (start/extend/convert).
+	trials := &domain.TrialService{Store: store, Clock: clock}
 	// BRD 70 slice 1/2: demo-sandbox lifecycle (create/reset/clone).
 	demo := &domain.DemoService{
 		Store: store, Tenants: tenants, Commercial: commercial,
@@ -385,7 +387,7 @@ func main() {
 	srv := &api.Server{
 		Store: store, Tenants: tenants, Users: users, SAs: sas, Tokens: tokens,
 		KM: km, Verifier: issuer, Authz: authorizer,
-		Plans: plans, Commercial: commercial, Demo: demo,
+		Plans: plans, Commercial: commercial, Demo: demo, Trials: trials,
 		TrustedSpiffeIDs: trusted,
 		// F-2: only honor X-Spiffe-Id when explicitly enabled (mesh strips +
 		// re-injects it). TRUST_SPIFFE_HEADER=true to enable.
@@ -433,8 +435,25 @@ func main() {
 		worker.Log = log
 		go worker.Run(ctx)
 		log.Info("commercial projection worker: redis", "addr", redisAddr)
+
+		// BRD 66 slice 2 (CPL-FR-031): identity-service's own invite-path
+		// seat_cap gate reads entitlements_flat directly (CPL-NFR-001, no
+		// synchronous call to this service's own HTTP API) via the same Redis
+		// connection as the projection worker above. Unlike the worker itself
+		// (which is allowed to ship "dark" -- nothing reads it yet in slice
+		// 1), this IS a live enforcement point, so an unset REDIS_ADDR in
+		// strict/production mode fails closed at boot (mustReal) rather than
+		// silently shipping an unenforced cap.
+		users.Entitlements = domain.EntitlementReaderFunc(
+			func(rctx context.Context, tenantID uuid.UUID) (domain.EffectiveSet, bool, error) {
+				return projection.ReadSet(rctx, projRDB.R, tenantID.String())
+			})
 	} else {
+		if requireReal {
+			mustReal("REDIS_ADDR", "seat_cap invite enforcement (CPL-FR-031) has no entitlements_flat to read")
+		}
 		log.Warn("commercial projection worker: disabled (set REDIS_ADDR) — entitlements_flat will not be populated")
+		log.Warn("seat_cap invite enforcement: disabled (set REDIS_ADDR) — invites will not be capped")
 	}
 
 	// BRD 70 §2.5 (DSP-FR-013): the demo-tenant TTL reaper. Real leader
@@ -469,6 +488,44 @@ func main() {
 					log.Error("demo TTL reaper sweep failed", "error", err)
 				} else if n > 0 {
 					log.Info("demo TTL reaper: tenants reaped", "count", n)
+				}
+			}
+		}
+	}()
+
+	// BRD 66 slice 2 (CPL-FR-022, design doc "Trial sweep job"): the
+	// leader-elected trial-expiry + T-14/T-7/T-1 threshold-event sweep.
+	// Copies the demo reaper's exact leaderlease.NewLease wiring above, but
+	// with the design's own literal parameters: resource "commercial:
+	// trial-sweep", 5s TTL (renewed at half-TTL = 2.5s by Lease.Run, matching
+	// "5s TTL, 2.5s renew" verbatim) rather than the reaper's coarser 15s.
+	sweep := &domain.TrialSweep{Store: store, Clock: clock, Log: log}
+	if redisAddr := os.Getenv("REDIS_ADDR"); redisAddr != "" {
+		trialLease := leaderlease.NewLease(redisx.NewFromEnv(redisAddr, os.Getenv).R,
+			"commercial:trial-sweep", "identity-"+uuid.NewString(), 5*time.Second)
+		go trialLease.Run(ctx)
+		sweep.Lease = trialLease
+		log.Info("trial sweep: leader-elected (redis)", "addr", redisAddr)
+	} else {
+		if requireReal {
+			mustReal("REDIS_ADDR", "single-replica trial sweep (not leader-elected; a second replica could double-transition/double-emit)")
+		}
+		log.Warn("trial sweep: single-replica (set REDIS_ADDR for real leader election across replicas)")
+	}
+	go func() { // 1-minute ticker: tight enough that CPL-NFR-003's "exactly-once
+		// per tenant/day" holds even with the ≤60s projection staleness budget
+		// elsewhere (design doc "Trial sweep job").
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if expired, ending, err := sweep.SweepOnce(ctx); err != nil {
+					log.Error("trial sweep failed", "error", err)
+				} else if expired > 0 || ending > 0 {
+					log.Info("trial sweep: tick complete", "expired", expired, "threshold_events", ending)
 				}
 			}
 		}

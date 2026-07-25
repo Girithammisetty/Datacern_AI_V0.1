@@ -94,7 +94,9 @@ def build_client(settings: Settings, tenant_id: str, workspace_id: str, user_jwt
 
 # ---- dry-run plan -----------------------------------------------------------
 
-def plan(client, manifest, bindings: dict[str, str] | None = None, entitled: bool = True) -> list[dict]:
+def plan(
+    client, manifest, bindings: dict[str, str] | None = None, entitled: bool = True,
+) -> list[dict]:
     """Compute what an install WOULD do without any side effect (PKG-FR-020):
     per component, `create` (new) or `exists` (idempotent no-op); kinds inc1
     doesn't materialize are `deferred` with a reason. File-less dataset
@@ -109,7 +111,8 @@ def plan(client, manifest, bindings: dict[str, str] | None = None, entitled: boo
     design's phrasing ("prepend to the ops list instead of proceeding into
     the existing per-component loop")."""
     if not entitled:
-        return [{"kind": "root", "identity": manifest.name, "action": "blocked", "detail": "entitlement"}]
+        return [{"kind": "root", "identity": manifest.name,
+                 "action": "blocked", "detail": "entitlement"}]
 
     from packctl.manifest import load_component_file  # noqa: PLC0415
 

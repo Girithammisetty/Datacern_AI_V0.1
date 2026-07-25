@@ -8,7 +8,12 @@ from pydantic import BaseModel
 
 from app.api.auth import Principal, get_bearer, require
 from app.domain import catalog, entitlements, installer
-from app.domain.errors import EntitlementRequired, EntitlementUnavailable, NotFound, ValidationFailed
+from app.domain.errors import (
+    EntitlementRequired,
+    EntitlementUnavailable,
+    NotFound,
+    ValidationFailed,
+)
 from app.store import repo
 
 router = APIRouter(prefix="/api/v1")
@@ -63,7 +68,9 @@ async def create_install(
 
     client = installer.build_client(settings, principal.tenant_id, ws, user_jwt)
 
-    plan = await asyncio.to_thread(installer.plan, client, manifest, body.dataset_bindings, entitled)
+    plan = await asyncio.to_thread(
+        installer.plan, client, manifest, body.dataset_bindings, entitled,
+    )
     if body.dry_run:
         return {"data": {"pack": manifest.name, "version": manifest.version,
                          "workspace_id": ws, "dry_run": True, "plan": plan}}
