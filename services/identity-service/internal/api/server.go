@@ -45,6 +45,11 @@ type Server struct {
 	KM       *keys.KeyManager
 	Verifier domain.TokenVerifier
 	Authz    authz.Authorizer
+	// Plans/Commercial: commercial plane (BRD 66 slice 1) plan catalog +
+	// tenant plan assignment / entitlement overrides / effective-entitlements
+	// resolution.
+	Plans      *domain.PlanService
+	Commercial *domain.CommercialService
 	// TrustedSpiffeIDs may call POST /token/agent (IDN-FR-042: agent-runtime).
 	TrustedSpiffeIDs map[string]bool
 	// TrustSpiffeHeader (F-2) must be explicitly true for the X-Spiffe-Id
@@ -134,6 +139,11 @@ func (s *Server) Router() http.Handler {
 			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/self/labels", s.handleSetTenantLabels)
 			r.With(s.requireScope(ActUserAdmin)).Delete("/tenants/self/labels/{key}", s.handleDeleteTenantLabel)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}", s.handleGetTenant)
+			// BRD 66 slice 1 (CPL-FR-011, US-4/US-7): a tenant admin reads its own
+			// tenant's effective entitlements; super-admin (below) reads any
+			// tenant's. Same ActUserAdmin + cross-tenant-404 pattern as
+			// GET /tenants/{id} (handleGetTenant, AC-12).
+			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/entitlements", s.handleGetTenantEntitlements)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/embed-config", s.handleGetEmbedConfig)
 			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/{id}/embed-config", s.handleSetEmbedConfig)
 			// BYO-P4: a tenant admin registers their OWN OIDC IdP (self-scoped;
@@ -172,6 +182,19 @@ func (s *Server) Router() http.Handler {
 				r.Get("/platform/admins", s.handleListPlatformAdmins)
 				r.Post("/platform/admins", s.handleCreatePlatformAdmin)
 				r.Delete("/platform/admins/{id}", s.handleDeletePlatformAdmin)
+				// BRD 66 slice 1: commercial plan catalog CRUD (CPL-FR-001/002,
+				// action label platform.plan.manage -- enforced by this same
+				// requireSuperAdmin middleware, not a new RBAC action, mirroring
+				// the /platform/admins precedent).
+				r.Get("/platform/plans", s.handleListPlans)
+				r.Post("/platform/plans", s.handleCreatePlan)
+				r.Get("/platform/plans/{key}", s.handleGetPlan)
+				r.Patch("/platform/plans/{key}", s.handlePatchPlan)
+				// Tenant plan assignment + entitlement overrides (CPL-FR-002/010, US-2).
+				r.Post("/platform/tenants/{id}/plan", s.handleAssignTenantPlan)
+				r.Post("/platform/tenants/{id}/plan/resync", s.handleResyncTenantPlan)
+				r.Post("/platform/tenants/{id}/entitlements/overrides", s.handleUpsertOverride)
+				r.Delete("/platform/tenants/{id}/entitlements/overrides/{kind}/{key}", s.handleDeleteOverride)
 				// IDN-FR-009 (Should): platform version registry — stub.
 				r.Get("/platform-versions", s.handleNotImplemented("platform version registry (IDN-FR-009)"))
 			})

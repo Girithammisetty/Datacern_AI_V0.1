@@ -3649,6 +3649,115 @@ export const typeDefs = gql`
   }
   type AgentRunListItemConnection { nodes: [AgentRunListItem!]! pageInfo: PageInfo! }
 
+  # ==========================================================================
+  # BRD 68 slice 1: Agent Control Tower fleet aggregation. BFF-side composition
+  # over agent-runtime (catalog/versions/kill-switches/tenant config) +
+  # eval-service (gate results) + usage-service (spend); no new business logic,
+  # no new authz layer — every downstream call forwards the caller's JWT
+  # verbatim (see docs/initiatives/agent-control-tower.md §2.3/§2.4).
+  # ==========================================================================
+  enum AgentFleetKind { PLATFORM CUSTOM EXTERNAL }
+  enum AgentFleetLifecycle { ACTIVE KILLED QUARANTINED DEPRECATED }
+  """STABLE/CANARY/SHADOW/PINNED per the design; UNKNOWN is a deliberate
+  addition (docs/initiatives/agent-control-tower.md §2.6 flags NO backend GET
+  route exists for live rollout state — only PINNED is honestly derivable
+  today, from TenantAgentConfig.pinnedVersion). CANARY/SHADOW cannot be told
+  apart from STABLE without that route, so they resolve to UNKNOWN rather than
+  a fabricated STABLE guess."""
+  enum AgentFleetRollout { STABLE CANARY SHADOW PINNED UNKNOWN }
+  enum EvalGateStatusValue { PASS FAIL STALE NONE }
+
+  """One row in the fleet aggregation (BRD 68 ACT-FR-001). Field groups that
+  carry their own \`unavailable: Boolean!\` sibling (evalGate/spend/decisions)
+  degrade independently when their source is down — data null, unavailable
+  true, never a fabricated zero. Groups without that sibling (guardrails,
+  activeVersion) have no representable "down" state in this schema revision;
+  a hard outage on their source fails the whole query rather than inventing a
+  value (see docs/initiatives/agent-control-tower.md §3 for the tradeoff)."""
+  type AgentFleetRow {
+    key: ID!
+    kind: AgentFleetKind!
+    display: String!
+    lifecycle: AgentFleetLifecycle!
+    activeVersion: AgentFleetVersion!
+    guardrails: AgentFleetGuardrails!
+    toolset: [String!]!
+    evalGate: AgentFleetEvalGate!
+    killSwitch: AgentFleetKillSwitch!
+    spend: AgentFleetSpend
+    decisions: AgentFleetDecisions!
+    lastIncidentAt: String
+    external: AgentFleetExternalInfo
+    """Pointer at realtime-hub (StreamHandle, reused from AgentRun.tokenStream).
+    The client connects directly with its own JWT. Slice 1 exposes the handle;
+    the \`list:agent\` patcher that consumes it is slice 2 work."""
+    liveUpdates: StreamHandle!
+  }
+
+  type AgentFleetVersion { id: Int! graphDigest: String! rollout: AgentFleetRollout! }
+
+  """No \`unavailable\` sibling (see AgentFleetRow doc): a downstream outage on
+  the tenant-config source nulls dataScope/tokenBudget/piiEgress directly."""
+  type AgentFleetGuardrails {
+    dataScope: JSON
+    tokenBudget: Int
+    """"blocked" | "redact" | "off", derived from pii.{block_pii_egress,redact}."""
+    piiEgress: String
+    """Static platform truth (four-eyes is always on) — not a live query; no
+    \`rule_of_two\` field exists in agent-runtime's data model."""
+    ruleOfTwo: Boolean!
+  }
+
+  type AgentFleetEvalGate {
+    status: EvalGateStatusValue!
+    lastRunAt: String
+    suiteKey: String
+    unavailable: Boolean!
+  }
+
+  type AgentFleetKillSwitch { state: String! updatedAt: String actor: String }
+
+  """Null when the caller's query omitted the field (ui-web's FEATURE_GATES
+  hides the column without usage.report.read); present with unavailable:true
+  when usage-service could not be reached for a caller who DOES hold the
+  capability. A caller who lacks the capability but requests the field anyway
+  gets a real PERMISSION_DENIED field error from usage-service, not a silent
+  null (see docs/initiatives/agent-control-tower.md §2.4)."""
+  type AgentFleetSpend { periodUsd: Float trend7dPct: Float unavailable: Boolean! }
+
+  """No agent-runtime aggregate endpoint and no BRD 67 meter exist yet
+  (docs/initiatives/agent-control-tower.md §1b/§2.6) — always unavailable:true
+  in slice 1. Kept as its own field group (not removed) so a future backend
+  swap-in needs no schema change, per the BRD's own fallback language."""
+  type AgentFleetDecisions {
+    proposed: Int
+    approved: Int
+    edited: Int
+    rejected: Int
+    period: String!
+    unavailable: Boolean!
+  }
+
+  type AgentFleetExternalInfo {
+    allowListScope: [String!]!
+    sdkPrincipal: String!
+    """Constant "denied" (BRD 60) — external agents never auto-execute."""
+    autoExecute: String!
+  }
+
+  """Fleet totals for the header tiles (ACT-FR-011). periodSpendUsd/
+  periodDecisions are null when their source is unavailable/unbuilt rather
+  than a fabricated 0 (decisions is always null in slice 1 — see
+  AgentFleetDecisions)."""
+  type AgentFleetSummary {
+    totalByKind: JSON!
+    activeCount: Int!
+    killedCount: Int!
+    quarantinedCount: Int!
+    periodSpendUsd: Float
+    periodDecisions: Int
+  }
+
   # ============================ roots =========================================
   type Query {
     """The authenticated viewer (from the JWT; no downstream call)."""
@@ -4227,6 +4336,19 @@ export const typeDefs = gql`
     """Run history for the caller's tenant (agent-runtime GET /runs), newest
     first. Any tenant principal; tenant-scoped downstream by RLS."""
     agentRuns(agentKey: String, first: Int = 50): AgentRunListItemConnection!
+
+    # ---- BRD 68 slice 1: Agent Control Tower fleet aggregation -----------------
+    """ACT-FR-001. Requires agent.registry.read downstream (enforced as
+    ai.agent.read by agent-runtime today — see docs/initiatives/
+    agent-control-tower.md §2.4 on the naming reconciliation). \`workspace\` is
+    accepted for forward compatibility with tenant-custom/external workspace
+    scoping but unused in slice 1 (platform agents are always tenant-wide;
+    agent-runtime's registry has no workspace dimension yet). periodFrom/
+    periodTo bound the spend + decisions period (default: trailing 30 days)."""
+    agentFleet(workspace: ID, periodFrom: String, periodTo: String): [AgentFleetRow!]!
+    """ACT-FR-011 header-tile totals, aggregated over the same rows agentFleet
+    would build (same sources, same degradation rules)."""
+    agentFleetSummary(workspace: ID, periodFrom: String, periodTo: String): AgentFleetSummary!
 
     # ---- BRD 54 inc2: governed decision tables --------------------------------
     """Tenant decision tables (agent-runtime GET /decision-models). Needs

@@ -121,6 +121,15 @@ export interface TenantAgentConfigDTO {
   prompt_params?: Record<string, unknown>;
   auto_execute_policy?: Record<string, unknown>;
   self_approval: boolean;
+  /** _tenant_config_view (registry.py) already returns this — {data_scope,
+   * budget, pii} per app/domain/guardrail.py — but it wasn't previously read
+   * by any BFF field. BRD 68 slice 1 (AgentFleetGuardrails) is the first
+   * consumer. */
+  guardrail_policy?: {
+    data_scope?: { workspaces?: string[]; dataset_urns?: string[] };
+    budget?: { max_tokens_per_session?: number };
+    pii?: { block_pii_egress?: boolean; redact?: boolean };
+  };
 }
 
 export interface PutTenantAgentConfigBody {

@@ -102,6 +102,8 @@ func newFixtureOpt(t *testing.T, trustSpiffe bool) *fixture {
 	f.srv = &api.Server{
 		Store: f.store, Tenants: tenants, Users: users, SAs: sas, Tokens: f.tokens,
 		KM: f.km, Verifier: f.issuer, Authz: authz.ScopeAuthorizer{},
+		Plans:      &domain.PlanService{Store: f.store, Clock: f.clock.Now},
+		Commercial: &domain.CommercialService{Store: f.store, Clock: f.clock.Now},
 		TrustedSpiffeIDs:  map[string]bool{testSpiffeAgentRuntime: true},
 		TrustSpiffeHeader: trustSpiffe, // F-2
 		Clock:             f.clock.Now,

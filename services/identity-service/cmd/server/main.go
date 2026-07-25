@@ -39,6 +39,7 @@ import (
 	"github.com/datacern-ai/identity-service/internal/domain"
 	"github.com/datacern-ai/identity-service/internal/events"
 	"github.com/datacern-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/identity-service/internal/projection"
 	"github.com/datacern-ai/identity-service/internal/rbacclient"
 	"github.com/datacern-ai/identity-service/internal/store/memory"
 	"github.com/datacern-ai/identity-service/internal/store/postgres"
@@ -276,6 +277,10 @@ func main() {
 	}
 	users := &domain.UserService{Store: store, Keycloak: kc, LastAdmin: lastAdmin, Clock: clock}
 	sas := &domain.ServiceAccountService{Store: store, Denylist: deny, Clock: clock}
+	// BRD 66 slice 1: commercial plan catalog + tenant plan assignment /
+	// entitlement overrides / effective-entitlements resolution.
+	plans := &domain.PlanService{Store: store, Clock: clock}
+	commercial := &domain.CommercialService{Store: store, Clock: clock}
 	tokens := &domain.TokenService{
 		Store: store, Issuer: issuer, Verifier: issuer, Denylist: deny,
 		Limiter: domain.NewSlidingWindowLimiter(domain.OBORateLimit, domain.OBORateWindow), Clock: clock,
@@ -355,6 +360,7 @@ func main() {
 	srv := &api.Server{
 		Store: store, Tenants: tenants, Users: users, SAs: sas, Tokens: tokens,
 		KM: km, Verifier: issuer, Authz: authorizer,
+		Plans: plans, Commercial: commercial,
 		TrustedSpiffeIDs: trusted,
 		// F-2: only honor X-Spiffe-Id when explicitly enabled (mesh strips +
 		// re-injects it). TRUST_SPIFFE_HEADER=true to enable.
@@ -386,6 +392,25 @@ func main() {
 	}
 	poller := &events.Poller{Store: store, Publisher: publisher, Interval: 2 * time.Second, BatchSize: 100, Log: log}
 	go poller.Run(ctx)
+
+	// entitlements_flat projection worker (BRD 66 slice 1, CPL-FR-011):
+	// mirrors rbac-service's permissions_flat discipline (outbox/dirty-queue
+	// -driven recompute, ent.invalidate pub/sub). Slice 1 ships this dark --
+	// no consumer reads it synchronously yet (that's slice 3's enforcement
+	// hooks) -- so an unset REDIS_ADDR just leaves the projection uncomputed
+	// rather than blocking boot; identity-service's own
+	// GET /tenants/{id}/entitlements reads live from Postgres, not this cache.
+	if redisAddr := os.Getenv("REDIS_ADDR"); redisAddr != "" {
+		projRDB := redisx.NewFromEnv(redisAddr, os.Getenv)
+		loader := projection.StoreLoader{Store: store, Commercial: commercial, Now: clock}
+		writer := projection.NewRedisWriter(projRDB.R, projection.DefaultTTL)
+		worker := projection.NewWorker("identity-"+uuid.NewString(), loader, writer)
+		worker.Log = log
+		go worker.Run(ctx)
+		log.Info("commercial projection worker: redis", "addr", redisAddr)
+	} else {
+		log.Warn("commercial projection worker: disabled (set REDIS_ADDR) — entitlements_flat will not be populated")
+	}
 	go func() { // key-cache refresh so retirements take effect (AC-8)
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()
