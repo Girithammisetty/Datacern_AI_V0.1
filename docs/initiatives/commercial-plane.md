@@ -218,41 +218,51 @@ All within `services/identity-service/**` (file-ownership split for this pass; t
 ```
 cd services/identity-service
 
-make build            # go build -o bin/identity-service ./cmd/server  → PASS (no errors)
-make vet               # go vet ./... && go vet -tags integration ./...  → PASS (no findings)
-make lint              # → environment error, NOT a code issue: the installed golangci-lint
-                       #   binary (go1.25) is older than the module's go1.26.5 toolchain and
-                       #   refuses to load config. Pre-existing environment mismatch, unrelated
-                       #   to this change; `go vet` (the Makefile's own fallback path) is clean.
-make test-unit         # go test ./internal/... ./migrations/...  → PASS, all packages ok
-go test -count=1 ./...  → PASS, 94 test functions across internal/domain, internal/api,
-                          internal/projection, internal/events (21 new, 73 pre-existing,
-                          0 failures, 0 broken by this change)
+go build ./...                                          → PASS (no errors)
+go vet ./...                                             → PASS (no findings)
+go vet -tags integration ./...                           → PASS (no findings)
+go test -count=1 $(go list ./... | grep -v test/integration)
+                                                          → PASS, 159 test functions across
+                                                            internal/domain, internal/api,
+                                                            internal/projection, internal/events,
+                                                            internal/authz, internal/keys,
+                                                            internal/adapters/{demobundle,keycloak,oidc},
+                                                            internal/rbacclient (24 new this pass,
+                                                            135 pre-existing — matches the
+                                                            orchestrator-provided baseline exactly —
+                                                            0 failures, 0 broken by this change)
 
-make test-integration  # go test -tags integration -timeout 600s ./test/integration/...
-                        # → the `integration` package itself: ok, 1.7s, every test SKIPs
-                        #   cleanly with "Docker unavailable" (this sandbox has no Docker
-                        #   daemon: `docker ps` → "dial unix /var/run/docker.sock: connect:
-                        #   no such file or directory"). This includes every new commercial
-                        #   test (TestCommercialMigrationSeedsPlans, TestCommercialRLSIsolation,
-                        #   TestCommercialAPI_Authz, TestCommercialProjection_RedisRoundTrip)
-                        #   and the pre-existing pg_test.go/api_pg_test.go/restart_test.go suite.
-                        # → the Makefile target as a WHOLE exits non-zero because a SEPARATE,
-                        #   PRE-EXISTING subpackage (test/integration/secretsigner) panics
-                        #   instead of skipping when Docker is entirely absent (its TestMain
-                        #   calls testcontainers' MustExtractDockerSocket directly, which
-                        #   panics rather than returning an error the way tcpg.Run does).
-                        #   Confirmed pre-existing via `git log -- .../secretsigner/signer_
-                        #   contract_test.go` (untouched by this change, last touched in an
-                        #   unrelated pack-wave commit). Not fixed here — out of BRD 66 scope.
+docker info                                              → confirmed no Docker daemon in this
+                                                            environment ("dial unix
+                                                            /var/run/docker.sock: connect: no
+                                                            such file or directory"), re-verified
+                                                            fresh this pass rather than assumed
+                                                            from the slice-1 note.
+
+go test -tags integration -run 'TestTrial|TestInviteOverCap' ./test/integration/... -v
+                                                          → the 3 new integration tests
+                                                            (TestTrialSweep_ExpiresEndToEnd,
+                                                            TestTrialEventsRLSIsolation,
+                                                            TestInviteOverCap_ReturnsCorrectCurrentLimit)
+                                                            all SKIP cleanly via requirePG's
+                                                            Docker-unavailable auto-skip.
+                                                            (The pre-existing, unrelated
+                                                            test/integration/secretsigner panic
+                                                            on a totally Docker-less host — noted
+                                                            in the slice-1 pass, confirmed still
+                                                            present and still out of BRD 66 scope
+                                                            — is orthogonal to these 3 tests,
+                                                            which import testcontainers-go
+                                                            differently and skip via the
+                                                            established requirePG path instead.)
 ```
 
 ### Verified vs written-but-not-run vs deferred
 
-- **Verified (executed, green):** state-machine guards (`TestCommercialTransitionMatrix`, exhaustive over all 25 `(from,to)` pairs, matching `TestTenantTransitionMatrix`'s style); effective-entitlement resolution incl. override-wins-by-kind+key and additive overrides (`TestResolveEffectiveEntitlements_*`); plan create/patch/version-bump-only-on-entitlements-change (`TestPlanService_*`); assignment snapshot semantics — a plan-default change after assignment does NOT alter the already-resolved effective set until an explicit resync (`TestCommercialService_AssignPlan_SnapshotSemantics`); override upsert/remove round-trip; the four new error constructors; the projection worker's claim→snapshot→write→delete→publish orchestration against fake `Loader`/`Writer` seams, including the "leave dirty rows claimed on snapshot/write failure" at-least-once behavior (`TestWorker_ProcessOnce_*`); the `commercial.events.v1` topic-routing decision (`TestKafkaPublisher_TopicFor`); full API-layer authz — plan CRUD requires super-admin (tenant-admin token → 403, unauthenticated → 401), plan assign/override/resync round-trip through the real chi router + in-memory store, and `GET /tenants/{id}/entitlements` authz matrix (own-tenant admin → 200, cross-tenant admin → 404 + `security.cross_tenant_denied` audited, super-admin → 200 for any tenant, unassigned tenant → 200 with an empty effective set) (`handlers_commercial_test.go`).
-- **Written but not executed (no Docker in this environment):** `TestCommercialMigrationSeedsPlans` (0010/0011 apply cleanly, all four plans + their seed entitlements present), `TestCommercialRLSIsolation` (tenant_plan/tenant_entitlement_overrides cross-tenant reads blocked at both the store and raw-SQL level, mirroring the existing `TestRLSIsolation`), `TestCommercialAPI_Authz` (the same authz matrix as above, but against real Postgres/RLS instead of the in-memory store), `TestCommercialProjection_RedisRoundTrip` (a real Redis testcontainer: `AssignTenantPlan` enqueues a `commercial_dirty` row in the same transaction, the worker claims and writes `ent:{tenant}:flat`, `ent.invalidate` is observed on a live subscription, and a second pass is a no-op). All four compile clean under `go vet -tags integration ./...` and are wired into the existing `requirePG`/Docker-unavailable auto-skip convention — they simply haven't been able to run end-to-end here.
-- **Deferred / explicitly out of slice 1 (per the task's scope, not a gap):** trial start/extend/convert, the leader-elected sweep, `trial_events`, and the T-14/T-7/T-1 threshold events (slice 2); pack-service's `pack_sku` install gate, identity-service's `seat_cap` invite gate, rbac-service's `workspace_cap` gate, the BFF `tenantCommercial` resolver, and ui-web's `entitlement` Gate variant (slice 3, all consumers of the codes/projection this slice defines but doesn't wire up); contract tests for `commercial.events.v1` beyond the schema file itself (no consumer exists yet to contract-test against); the E2E journey in `deploy/e2e` (requires the full compose stack; not run here per the task's "do not run the full stack" instruction — noted as pending live verification, hook is `GET /tenants/{id}/entitlements` returning the assigned plan's entitlements after `POST /platform/tenants/{id}/plan`, both of which exist and are unit/API-tested above).
+- **Verified (executed, green) — slice 2 + identity-service's slice-3 piece:** trial start (explicit `trial_days` and plan-default fallback; "no days, no plan default" → clean `VALIDATION_FAILED`; illegal state transition → `CONFLICT`), extend (additive from the *current* end date, not "now"; reason required; requires `commercial_state=trial`; NO bus event per BRD §6's closed topic list), convert (target-plan snapshot, `trial_ends_at` cleared, rejects a deprecated plan) — all at the domain layer (`TestTrialService_*`, 8 tests) and end-to-end through the real chi router + in-memory store (`TestTrialLifecycle_HappyPath`, `TestTrialEndpoints_RequireSuperAdmin`, `TestStartTrial_NoDaysNoPlanDefault_Rejected`, `TestExtendTrial_RequiresActiveTrial`, `TestConvertTrial_RejectsUnknownPlan`, `TestStartTrial_IdempotencyReplay` — the last confirms the new POST routes participate in the existing `Idempotency-Key` middleware with zero extra plumbing). Sweep idempotency (`TestTrialSweep_ExpiresTrialAndIsIdempotent`: expires exactly once, emits `commercial.trial_expired.v1` exactly once, a re-run after the transition is a silent no-op, a still-valid trial is never touched), leader-election gating (`TestTrialSweep_NotLeaderSkips`), and T-14/T-7/T-1 threshold-event dedup (`TestTrialSweep_ThresholdEventsAndDedup`: fires once per threshold, a same-tick re-run does not re-fire, advancing the clock to the next threshold fires exactly the new one). The `commercial_state` JWT claim at mint time (`TestOIDCLogin_CarriesCommercialStateClaim`: present and correct for both a `trial` and a `none` tenant — unlike `profile`, never omitted). Seat_cap enforcement (`TestSeatCap_*`, 6 cases: under limit succeeds, at limit blocks with `403 CAP_EXCEEDED {current,limit}` then succeeds after the cap is raised — AC-3 verbatim, over limit blocks with the right numbers, no projection row for the tenant is unenforced (not unavailability), a projection read failure fails closed with `503 ENTITLEMENT_UNAVAILABLE` per CPL-NFR-004, and the fixture's default nil `EntitlementReader` — mirroring dev/single-replica-without-Redis — never blocks).
+- **Written but not executed (no Docker in this environment, confirmed via `docker info`):** `TestTrialSweep_ExpiresEndToEnd` (a trial started via `TrialService.Start` against real Postgres, backdated past `trial_ends_at` with a direct SQL `UPDATE` since there is no fake-clock seam at the Postgres boundary, then swept exactly once with the outbox row and `trial_events` row both asserted directly against `appPool`, and a second sweep pass confirmed as a no-op), `TestTrialEventsRLSIsolation` (mirrors `TestCommercialRLSIsolation` for the new `trial_events` table: store-level cross-tenant read returns empty, raw-SQL-under-tenant-A-session proof sees zero rows), `TestInviteOverCap_ReturnsCorrectCurrentLimit` (a real Postgres tenant + a real Redis-backed `entitlements_flat` projection populated by the actual projection worker + identity-service's own HTTP invite handler wired to a real `projection.ReadSet`-backed `EntitlementReader` — the provisioned "Tenant Owner" already occupies a `seat_cap:1` tenant's one seat, so the very first invite call is blocked with the correct `{current:1, limit:1}`). All three compile clean under `go vet -tags integration ./...` and are wired into the existing `requirePG`/Docker-unavailable auto-skip convention (confirmed: they SKIP cleanly rather than fail or hang).
+- **Deferred / explicitly out of this pass's scope (not a gap):** pack-service's `pack_sku` install gate, rbac-service's `workspace_cap` gate, the BFF `tenantCommercial` resolver, and ui-web's `entitlement` Gate variant — the rest of slice 3, owned by a different, concurrently-run agent per this pass's `services/identity-service/**`-only file ownership; self-serve trial creation by an unauthenticated user (explicitly out of BRD 66's scope entirely, per the BRD's own §1 "Out of scope"); CPL-FR-024's conversion-snapshot sales evidence (Could-priority, the design doc itself defers it past slice 1-3); `trial_events` table partitioning per MASTER-FR-062 (documented deferral in the migration file itself — row volume doesn't warrant it yet); a `GET` endpoint for a tenant's `trial_events` history (US-4's "full history" — the `Store.ListTrialEvents` method exists and is exercised by every test above, but no HTTP surface was added since it's not in the design doc's endpoint table); contract tests for `commercial.trial_*`/`commercial.converted` beyond the schema file itself (no consumer exists yet to contract-test against, same reasoning as slice 1's `commercial.plan_assigned`/`entitlement_changed`); the E2E journey in `deploy/e2e` (requires the full compose stack; not run here, same as slice 1).
 
 ### A note on git state
 
-While this work was in progress, the environment auto-created two intermediate "wip" commits (`fe34803`, `eabadc7`) capturing snapshots of the in-flight implementation — these were not `git commit` calls made by this agent (no commit was issued at any point in this session; the task explicitly says not to commit). Flagging this for the orchestrator's awareness since it affects what "uncommitted diff" means when reviewing this change: the full slice-1 diff is best viewed as `git diff fe34803^..HEAD -- services/identity-service` plus the working tree (which additionally has this documentation update, the `commercial.events.v1` Avro schema, `internal/events/kafka_test.go`, and OpenAPI/README polish).
+Per the same pattern already flagged after slice 1: this environment auto-creates intermediate "wip" commits capturing snapshots of in-flight work (`git log` shows a run of `wip: BRD 66 slice 2/3 continues (snapshot; not yet test-verified)` commits accumulated during this pass) — these are NOT `git commit` calls made by this agent; no commit was issued at any point in this session, per the task's explicit instruction not to commit. Flagging this again for the orchestrator's awareness since `git status`/`git diff` against the working tree alone will undercount this pass's changes — most of the identity-service edits already landed in one of the auto-created wip commits by the time this document was updated. The full slice-2 diff is best viewed as the accumulated delta across those wip commits plus the working tree (which at minimum has this documentation update, the OpenAPI additions, the Avro schema doc-comment update, and the README traceability table).
