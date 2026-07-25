@@ -94,12 +94,30 @@ test.describe("Value & ROI reporting (BRD 69)", () => {
 
     // 4. Export a report for the current period through the real UI control.
     await page.getByRole("button", { name: "Export this period" }).click();
-    // "gridcell", not "cell": DataTable (components/primitives/DataTable.tsx)
-    // renders the ARIA grid pattern (role="grid"/"row"/"gridcell"), not real
-    // <table>/<td> markup -- "cell" is a distinct ARIA role from "gridcell"
-    // and Playwright's role matching is exact, so it never matched anything
-    // (a plain "element(s) not found" timeout, not a strict-mode violation).
-    await expect(page.getByRole("gridcell", { name: "v1" }).first()).toBeVisible({ timeout: 30_000 });
+    // Scoped to the exports table specifically (DataTable's role="grid"
+    // aria-label="Value report exports", set by ExportsCard) -- an earlier,
+    // unscoped `page.getByRole("gridcell", { name: "v1" })` searched the
+    // whole page and false-positived against the *assumption edit-history*
+    // table a few rows up, whose own "Version" column (page.tsx
+    // historyColumns) also renders `v${a.version}`. Step 1 of this very test
+    // is that tenant's first-ever assumption save, i.e. version 1 -- an
+    // unrelated "v1" gridcell already on the page before the export button
+    // was even clicked. That collision is what let this step pass while the
+    // export mutation was silently failing underneath it (see the CI
+    // evidence in the diagnostic block below, which proved zero rows ever
+    // landed in value_exports for this tenant/session).
+    const exportsGrid = page.getByRole("grid", { name: "Value report exports" });
+    const exportError = page.locator("p.text-destructive");
+    try {
+      await expect(exportsGrid.getByRole("gridcell", { name: "v1" }).first()).toBeVisible({ timeout: 30_000 });
+    } catch (e) {
+      const errText = await exportError.first().textContent().catch(() => null);
+      throw new Error(
+        `export row never appeared in the "Value report exports" table within 30s` +
+          (errText ? ` -- the UI surfaced a mutation error: ${errText}` : " -- and no error message rendered either") +
+          `\n\noriginal timeout error: ${e}`,
+      );
+    }
 
     // 5. Fetch the exports list, follow the JSON download link, and verify
     // the SHA256 of the served bytes matches the checksum the API reported
