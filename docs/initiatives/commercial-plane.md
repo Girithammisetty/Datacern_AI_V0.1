@@ -191,6 +191,28 @@ Before writing code, the design's citation of `services/realtime-hub/internal/fa
 
 **Dependency added**: `github.com/testcontainers/testcontainers-go/modules/redis` (identity-service's `go.mod`/`go.sum`) — needed for the integration-tier Redis round-trip test; identity-service's integration suite previously only stood up Postgres.
 
+### Files touched (slice 2 + identity-service's slice-3 piece)
+
+All within `services/identity-service/**` (file-ownership split for this pass; the rest of slice 3 belongs to a different, concurrently-run agent):
+
+**Migrations** (new): `migrations/0013_trial_events.{up,down}.sql` — `trial_events` table (`started|extended|expired|converted|ending_t14|ending_t7|ending_t1`), RLS with the same dual tenant-isolation/platform-bypass policy shape as `commercial_dirty` (0011), NOT partitioned by month despite MASTER-FR-062 in principle applying (row volume is one entry per trial lifecycle transition per tenant, nowhere near a metering stream's cardinality — documented deferral, not a silent gap).
+
+**Domain** (new): `internal/domain/trial.go` (`TrialEvent`, event-type consts, `newTrialEvent`), `internal/domain/trial_service.go` (`TrialService`: `Start`/`Extend`/`Convert`), `internal/domain/trial_sweep.go` (`TrialSweep`: `SweepOnce`, mirrors `DemoReaper`'s `LeaseChecker` seam). **Edited**: `internal/domain/store.go` (`Store` interface: `CountUsers`, `StartTrial`/`ExtendTrial`/`ConvertTrial`/`SweepExpireTrial`/`InsertTrialEvent`/`ListExpiredTrials`/`ListTrialsForThreshold`/`ListTrialEvents`), `internal/domain/commercial.go` (`EntitlementReader` port + `EntitlementReaderFunc` adapter — the seat_cap gate's testable seam), `internal/domain/user_service.go` (`UserService.Entitlements` field, `checkSeatCap`/`seatCapLimit`, called from `Invite`), `internal/domain/events.go` (`commercial.trial_started`/`commercial.trial_ending.v1`/`commercial.trial_expired.v1`/`commercial.converted` event types — `.v1` suffix only where CPL-FR-022/023's own text names the event literally, matching the `demo.tenant_reaped.v1` precedent), `internal/domain/token.go` (`Claims.CommercialState`), `internal/domain/token_oidc.go`/`token_embed.go`/`token_embed_oidc.go`/`token_service.go` (mint the claim at every site that already loads the tenant).
+
+**Store**: `internal/store/memory/memory.go` and `internal/store/postgres/postgres.go` both implement every new `Store` method. The Postgres trial methods run under `tenantTx` scoped to the one target tenant (satisfies `trial_events`' RLS with no cross-tenant exposure, mirroring `AssignTenantPlan`); the sweep's two cross-tenant LIST queries (`ListExpiredTrials` — reads only the RLS-exempt `tenants` table; `ListTrialsForThreshold` — needs a cross-tenant dedup read) use a plain pool query and `platformTx` respectively.
+
+**Leader election**: no new adapter — `internal/adapters/leaderlease` (BRD 70's `Lease`, `NewLease(rdb, resource, holder, ttl)`) turned out to be already fully generic (parametrized resource name and TTL, no demo-reaping coupling anywhere in its ~100 lines) and is reused **verbatim**, called as `leaderlease.NewLease(rdb, "commercial:trial-sweep", holder, 5*time.Second)` in `cmd/server/main.go` — no fork needed.
+
+**API**: `internal/api/handlers_commercial.go` (added — `handleStartTrial`/`handleExtendTrial`/`handleConvertTrial`), `internal/api/server.go` (`Server.Trials` field; routes `POST /tenants/{id}/trial`, `/trial/extend`, `/convert` mounted in the existing `requireSuperAdmin` group — per the design's endpoint table these are NOT under `/platform/...` unlike plan CRUD, but same scope and same `idempotencyMiddleware` group so `Idempotency-Key` works automatically, no new plumbing needed), `internal/api/fixture_test.go` (wired `Trials` into the shared test fixture).
+
+**Wiring**: `cmd/server/main.go` — `TrialService` construction + `Server.Trials`; a real `projection.ReadSet`-backed `EntitlementReader` wired onto `users.Entitlements` whenever `REDIS_ADDR` is set (`mustReal`-fails boot in strict/production mode otherwise — this is a live enforcement point, unlike the projection worker itself which is allowed to ship dark); a leader-elected `TrialSweep` + 1-minute ticker goroutine, gated the same `REDIS_ADDR`/`mustReal` way as the demo reaper.
+
+**Contracts**: `api/openapi.yaml` (3 new paths: `/tenants/{id}/trial`, `/trial/extend`, `/convert`), `events/commercial_event.avsc` (doc-comment updated to mark the slice-2 event types as built — the envelope itself needed no schema change, it was already generic).
+
+**Docs**: `services/identity-service/README.md` (BRD 66 FR-traceability table extended through CPL-FR-021/022/023/031 and the `commercial_state` claim), this file.
+
+**Tests** (new): `internal/domain/commercial_trial_test.go` (11 tests: start/extend/convert happy+error paths, sweep idempotency, leader-election skip, threshold dedup), `internal/domain/token_oidc_pertenant_test.go` (+1: `TestOIDCLogin_CarriesCommercialStateClaim`), `internal/api/handlers_trial_test.go` (6 tests: happy path, authz, validation, idempotency), `internal/api/seatcap_test.go` (6 tests: under/at/over limit, no-cap-configured, fail-closed-on-unavailable, nil-reader), `test/integration/trial_pg_test.go` (3 tests: sweep end-to-end against real Postgres, `trial_events` RLS isolation, invite-over-cap against a real Postgres+Redis projection).
+
 ### Test commands + results
 
 ```

@@ -9,6 +9,9 @@ import {
   role,
   publicGate,
   platformGate,
+  entitlementGate,
+  isEntitlementLocked,
+  EMPTY_CAPABILITIES,
   ADMIN_ROLE,
 } from "./registry";
 
@@ -252,6 +255,49 @@ describe("platform gate (orthogonal to tenant admin)", () => {
     // admin (anyOf) — the per-card gates split what each one sees inside.
     expect(allows(gateForPath("/admin/users"), tenantAdmin)).toBe(true);
     expect(allows(gateForPath("/admin/users"), platformAdmin)).toBe(true);
+  });
+});
+
+describe("entitlement gate (BRD 66 slice 3, CPL-FR-013 — commercial, not RBAC)", () => {
+  const noneLocked = toCapabilitySet({ roles: [ADMIN_ROLE], capabilities: ["*"] });
+  const packLocked = toCapabilitySet({
+    roles: ["Case Analyst"],
+    capabilities: ["case.case.read"],
+    lockedFeatureKeys: ["banking-aml"],
+  });
+
+  it("allows() passes when the key is NOT in the locked set", () => {
+    expect(allows(entitlementGate("banking-aml"), noneLocked)).toBe(true);
+    expect(isEntitlementLocked("banking-aml", noneLocked)).toBe(false);
+  });
+
+  it("allows() denies (and isEntitlementLocked confirms) a locked key", () => {
+    expect(allows(entitlementGate("banking-aml"), packLocked)).toBe(false);
+    expect(isEntitlementLocked("banking-aml", packLocked)).toBe(true);
+  });
+
+  it("admin status does NOT unlock an entitlement — commercial gating is orthogonal to RBAC", () => {
+    const admin = toCapabilitySet({
+      roles: [ADMIN_ROLE], capabilities: ["*"], lockedFeatureKeys: ["banking-aml"],
+    });
+    expect(admin.isAdmin).toBe(true);
+    expect(allows(entitlementGate("banking-aml"), admin)).toBe(false);
+  });
+
+  it("platform-admin status does NOT unlock an entitlement either", () => {
+    const platformAdmin = toCapabilitySet({
+      roles: [], capabilities: [], isPlatformAdmin: true, lockedFeatureKeys: ["banking-aml"],
+    });
+    expect(allows(entitlementGate("banking-aml"), platformAdmin)).toBe(false);
+  });
+
+  it("a key NOT in the locked set passes even for a non-admin viewer", () => {
+    expect(allows(entitlementGate("some-other-feature"), packLocked)).toBe(true);
+  });
+
+  it("EMPTY_CAPABILITIES has no locked entitlements (renders unlocked before data loads)", () => {
+    expect(isEntitlementLocked("banking-aml", EMPTY_CAPABILITIES)).toBe(false);
+    expect(allows(entitlementGate("banking-aml"), EMPTY_CAPABILITIES)).toBe(true);
   });
 });
 
