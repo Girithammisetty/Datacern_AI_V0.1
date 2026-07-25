@@ -109,7 +109,25 @@ test.describe("Value & ROI reporting (BRD 69)", () => {
       `query($period: String) { valueExports(period: $period) { jsonUrl jsonSha256 version } }`,
       { period },
     );
-    const latest = exportsData.valueExports.find((e) => e.version === Math.max(...exportsData.valueExports.map((x) => x.version)));
+    let latest = exportsData.valueExports.find((e) => e.version === Math.max(...exportsData.valueExports.map((x) => x.version)));
+    if (!latest) {
+      // Diagnostic fallback (not a behavior change): the period-filtered query
+      // came back empty even though step 4 just showed the row rendered in the
+      // UI via this exact same query/period. Widen to an unfiltered query
+      // (same tenant/session) to tell apart "nothing was ever created" from
+      // "created under a period value that doesn't string-match `period`" --
+      // surfacing the real stored period value in the failure message instead
+      // of guessing blind from a bare `undefined`.
+      const allData = await graphql<{ valueExports: Array<{ jsonUrl: string; jsonSha256: string; version: number; period?: string }> }>(
+        page,
+        `query { valueExports { period version jsonUrl jsonSha256 } }`,
+      );
+      throw new Error(
+        `at least one export must exist after step 4 for period=${JSON.stringify(period)}, ` +
+          `but the period-filtered valueExports query returned []. Unfiltered valueExports for this ` +
+          `tenant/session: ${JSON.stringify(allData.valueExports)}`,
+      );
+    }
     expect(latest, "at least one export must exist after step 4").toBeTruthy();
     expect(latest!.jsonUrl, "export must carry a downloadable json_url").toBeTruthy();
 
