@@ -26,6 +26,15 @@ type UserService struct {
 	Keycloak  KeycloakAdmin
 	LastAdmin LastAdminChecker
 	Clock     func() time.Time
+	// Entitlements reads the entitlements_flat projection for the invite
+	// path's seat_cap gate (BRD 66 slice 2, CPL-FR-031). Nil is a valid,
+	// honest "not configured" state -- Invite skips the cap check entirely,
+	// matching every other optional adapter's convention in this package
+	// (Logo/Demo/Lease). main.go wires a real Redis-backed reader whenever
+	// REDIS_ADDR is set, and mustReal-fails boot in strict/production mode
+	// when it is not (this is a live enforcement point, unlike the
+	// projection worker which is allowed to ship "dark").
+	Entitlements EntitlementReader
 }
 
 func (s *UserService) now() time.Time { return s.Clock().UTC() }
@@ -52,6 +61,9 @@ func (s *UserService) Invite(ctx context.Context, tenant *Tenant, req InviteRequ
 	}
 	if _, err := s.Store.GetUserByEmail(ctx, tenant.ID, email); err == nil {
 		return nil, EConflict("a user with this email already exists")
+	}
+	if err := s.checkSeatCap(ctx, tenant.ID); err != nil {
+		return nil, err // 403 CAP_EXCEEDED or 503 ENTITLEMENT_UNAVAILABLE (CPL-FR-031/NFR-004)
 	}
 	now := s.now()
 	idp, err := s.Keycloak.CreateUser(ctx, tenant.Name, email, req.FullName)
