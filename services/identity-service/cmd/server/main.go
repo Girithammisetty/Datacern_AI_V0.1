@@ -264,6 +264,7 @@ func main() {
 		PythonBin:  envOr("DEMO_SEED_PYTHON", "python3"),
 		ScriptPath: envOr("DEMO_SEED_SCRIPT", "packs/demo_seed_runner.py"),
 		Timeout:    8 * time.Minute,
+		Issuer:     issuer,
 	}
 	deps := domain.StepDeps{
 		Store: store, Keycloak: kc, Terraform: tf, DB: db, Prober: prober, Clock: clock,

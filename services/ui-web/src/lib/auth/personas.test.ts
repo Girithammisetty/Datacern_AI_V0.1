@@ -20,6 +20,20 @@ describe("dev-login persona resolution (fail-closed)", () => {
     }
   });
 
+  it("threads a persona's BRD 70 demo profile through to the resolved persona", () => {
+    const personas = JSON.stringify({
+      "se@demo.datacern": {
+        sub: "user-se", tenantId: "t-demo", workspaceId: "ws-demo",
+        scopes: [], profile: "demo",
+      },
+    });
+    const r = resolveLogin("se@demo.datacern", personas);
+    expect(r.kind).toBe("persona");
+    if (r.kind === "persona") {
+      expect(r.persona.profile).toBe("demo");
+    }
+  });
+
   it("REJECTS an unknown email when a personas map is configured (no ghost-tenant fallback)", () => {
     expect(resolveLogin("bogus@demo.datacern", PERSONAS)).toEqual({ kind: "unknown-user" });
   });

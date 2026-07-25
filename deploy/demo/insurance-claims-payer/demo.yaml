@@ -1,0 +1,17 @@
+# BRD 70 demo bundle manifest (§2.2). Bound explicitly to `pack` +
+# `pack_version` (not "whatever's currently installed") so this bundle is
+# reproducible independent of what the product pack has moved on to since —
+# the same discipline packs/<pack>'s own dataset_bindings use at install
+# time. Never installed by `packctl install` — only by
+# packs/demo_seed_runner.py (BRD 70 SeedDemoContent step) and validated
+# offline by `packctl demo-lint`.
+demo_manifest: 1
+pack: insurance-claims-payer
+pack_version: 1.0.0
+version: 1.0.0
+provenance: >
+  All rows are synthetic, hand-authored for this demo bundle. Member names,
+  provider names, NPIs, member ids, and claim/denial/appeal/PA identifiers
+  are fictional (no real PII, no real provider registry NPIs). Dollar
+  amounts and dates are plausible but invented. Generated 2026-07-25 for
+  BRD 70 (Demo Sandbox & POC Mode) slice 1.

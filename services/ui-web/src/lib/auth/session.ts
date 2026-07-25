@@ -32,6 +32,11 @@ export interface SessionClaims {
   scopes: string[];
   type: string;
   exp?: number;
+  /** BRD 70 DSP-FR-014: standard|demo|poc, mirrored straight from the
+   * signed JWT `profile` claim (identity-service token.go's Profile field,
+   * §2.6) — never a tenant lookup. Undefined/"standard" both mean "not a
+   * demo tenant"; the watermark banner renders only when this is "demo". */
+  profile?: string;
 }
 
 export async function getSessionToken(): Promise<string | null> {
@@ -53,6 +58,9 @@ export function parseClaims(token: string): SessionClaims | null {
         : [],
       type: String((c as Record<string, unknown>).typ ?? "user"),
       exp: typeof c.exp === "number" ? c.exp : undefined,
+      profile: typeof (c as Record<string, unknown>).profile === "string"
+        ? ((c as Record<string, unknown>).profile as string)
+        : undefined,
     };
   } catch {
     return null;

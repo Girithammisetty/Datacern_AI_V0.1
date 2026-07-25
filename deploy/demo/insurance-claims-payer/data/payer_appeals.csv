@@ -1,0 +1,5 @@
+appeal_id,denial_id,claim_id,level,submitted_by,submitted_month,status,verdict_by,member_state,denial_reason_code,cpt_code,potential_value
+APL-4001,DEN-3001,CLM-2001,first,provider,2026-05,pending,,TX,CO-50,29881,5200.00
+APL-4002,DEN-3003,CLM-2004,first,provider,2026-05,overturned,md-review,TX,CO-50,29881,5200.00
+APL-4003,DEN-3004,CLM-2006,first,member,2026-06,pending,,OK,PR-204,72148,980.00
+APL-4004,DEN-3005,CLM-2008,second,provider,2026-06,overturned,md-review,NM,CO-151,27447,18900.00

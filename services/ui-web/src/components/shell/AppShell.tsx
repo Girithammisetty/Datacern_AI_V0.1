@@ -5,6 +5,7 @@ import { TopBar } from "./TopBar";
 import { ToastHost } from "./ToastHost";
 import { CommandPalette } from "./CommandPalette";
 import { CopilotDrawer } from "@/components/copilot/CopilotDrawer";
+import { DemoWatermarkBanner } from "@/components/demo/DemoWatermarkBanner";
 import { SessionProvider, type SessionInfo } from "@/lib/session/SessionContext";
 import { useProposalsInbox } from "@/lib/graphql/hooks";
 import { useCostPanel, useMe } from "@/lib/graphql/hooks";
@@ -94,6 +95,7 @@ function ShellInner({ children, session }: { children: React.ReactNode; session:
       <Sidebar pendingCount={pendingCount} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
+        <DemoWatermarkBanner />
         <main id="main" className="flex-1 overflow-auto p-4 md:p-6" tabIndex={-1}>
           <RouteGuard>{children}</RouteGuard>
         </main>

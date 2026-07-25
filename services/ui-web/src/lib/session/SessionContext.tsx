@@ -6,6 +6,10 @@ export interface SessionInfo {
   tenantId: string;
   workspaceId: string;
   scopes: string[];
+  /** BRD 70 DSP-FR-014: carried straight through from the session claim
+   * (lib/auth/session.ts SessionClaims.profile) — see components/demo/
+   * DemoWatermarkBanner.tsx, the one consumer. */
+  profile?: string;
 }
 
 const Ctx = createContext<SessionInfo | null>(null);

@@ -17,6 +17,7 @@ export default async function AppGroupLayout({ children }: { children: React.Rea
         tenantId: claims.tenantId,
         workspaceId: claims.workspaceId,
         scopes: claims.scopes,
+        profile: claims.profile,
       }}
     >
       {children}

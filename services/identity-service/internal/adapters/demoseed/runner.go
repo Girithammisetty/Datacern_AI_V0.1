@@ -36,6 +36,20 @@ type SubprocessRunner struct {
 	// Timeout bounds one Seed() invocation (DSP-NFR-001's ≤10 min creation
 	// budget includes seeding, so this must stay comfortably under it).
 	Timeout time.Duration
+	// Issuer mints the real, short-lived bearer token the subprocess drives
+	// every downstream API call with -- identity-service already holds the
+	// platform's real signing authority in-process (keys.Issuer), so no
+	// separate credential-minting hop is needed. nil is honestly refused
+	// (EInternal below) rather than seeding with no credential at all.
+	//
+	// KNOWN GAP (flagged, not hidden): the token is minted with a broad
+	// service-typed scope set (the same wildcard pattern deploy/e2e's
+	// harness already uses for its own seed/admin operations) rather than
+	// the tightest per-call scope each downstream service would ideally
+	// check. This has NOT been verified against a live stack (no Docker in
+	// this build environment) -- see docs/initiatives/
+	// demo-sandbox-poc-mode.md §3 honest gaps.
+	Issuer domain.TokenIssuer
 }
 
 // seedInput is the JSON contract packs/demo_seed_runner.py reads on stdin.
@@ -57,6 +71,9 @@ type datasetInput struct {
 }
 
 func (r *SubprocessRunner) Seed(ctx context.Context, t *domain.Tenant, bundle *domain.DemoBundle) error {
+	if r.Issuer == nil {
+		return domain.EInternal("demo seeding is not configured: no TokenIssuer to mint the subprocess's bearer credential")
+	}
 	pyBin := r.PythonBin
 	if pyBin == "" {
 		pyBin = "python3"
@@ -67,6 +84,19 @@ func (r *SubprocessRunner) Seed(ctx context.Context, t *domain.Tenant, bundle *d
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+
+	// A real, short-lived (TokenTTL, 5 min per MASTER-FR-010) service-typed
+	// credential scoped to the tenant, minted the same way every other
+	// service-to-service call on this platform is -- never a fake/shared
+	// secret. Passed via env (DEMO_SEED_BEARER_TOKEN), never argv, so it
+	// never lands in a process listing.
+	tok, _, err := r.Issuer.Issue(domain.Claims{
+		Subject: "svc:demo-seed-runner", TenantID: t.ID, Typ: domain.TypService,
+		Scopes: []string{"*"}, // mirrors deploy/e2e's own harness seed/admin scope pattern
+	})
+	if err != nil {
+		return fmt.Errorf("mint demo seed bearer token: %w", err)
+	}
 
 	datasets := make([]datasetInput, 0, len(bundle.Datasets))
 	for _, d := range bundle.Datasets {
@@ -83,8 +113,9 @@ func (r *SubprocessRunner) Seed(ctx context.Context, t *domain.Tenant, bundle *d
 
 	cmd := exec.CommandContext(runCtx, pyBin, r.ScriptPath)
 	cmd.Stdin = bytes.NewReader(payload)
+	cmd.Env = append(os.Environ(), "DEMO_SEED_BEARER_TOKEN="+tok)
 	if len(r.Env) > 0 {
-		cmd.Env = append(os.Environ(), r.Env...)
+		cmd.Env = append(cmd.Env, r.Env...)
 	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
