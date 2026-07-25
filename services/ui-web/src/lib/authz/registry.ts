@@ -285,6 +285,14 @@ export const FEATURE_GATES = {
   viewAnomalies: cap("usage.anomaly.read"),
   /** Dismiss a detected anomaly (usage-service POST /anomalies/{id}/dismiss). */
   dismissAnomaly: cap("usage.anomaly.update"),
+  /** Edit value-reporting assumptions (usage-service PUT /value/assumptions,
+   * BRD 69 ROI-FR-002). Read access to the whole /admin/value page reuses
+   * viewCostPanel (usage.report.read) above per design §2.7 — this gate only
+   * covers the assumptions edit form. Maps to usage.assumptions.update, not
+   * the design doc's literal "usage.report.manage" — see usage-service's
+   * internal/authz/authz.go doc comment for why (rbac's closed verb
+   * grammar has no "manage" verb). */
+  manageValueAssumptions: cap("usage.assumptions.update"),
   /** Archive a dataset (dataset-service DELETE /datasets/{id}). */
   archiveDataset: cap("dataset.dataset.delete"),
   /** Restore an archived dataset (dataset-service POST /datasets/{id}/restore). */

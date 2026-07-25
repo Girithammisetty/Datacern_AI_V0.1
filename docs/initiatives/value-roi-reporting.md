@@ -645,69 +645,244 @@ per §2.0).
 
 ## 3. Implementation & Test
 
-**Status:** pending — implementation next.
+**Status:** slices 1-3 implemented — 2026-07-25.
 
-### Slice plan
+### Repo-state finding that changed the plan: BRD 67 slice 1 shipped mid-flight
 
-- **Slice 1 — assumptions CRUD + summary API from existing rollups.**
-  Migration `000004_value_assumptions.up.sql`; `ResolveAssumptions`;
-  `PUT/GET /value/assumptions`, `GET /value/assumptions/history`; new
-  `usage.report.manage` authz action; `GET /api/v1/value/summary` returning
-  Tier 0 (decisions/cost-per-decision/estimates all null with `meter_gap` set,
-  `ai_cost_usd`/`adoption` populated from existing rollups). No UI yet, no
-  export yet. This is independently shippable and valuable (assumptions can be
-  set ahead of BRD 67 landing).
-- **Slice 2 — UI page.** `/admin/value` per §2.7, wired to slice 1's API
-  (empty-state-heavy given Tier 0), `EstimatedValue` type + `MarshalJSON`
-  guarantee in place and unit-tested.
-  `manageValueAssumptions`/`viewCostPanel` gating live.
-- **Slice 3 — trend + export.** `GET /api/v1/value/trend`; `value-report.v1`
-  JSON + CSV export flow (§2.8); `value_exports` table + list endpoint;
-  scheduled export (ROI-FR-022, Could) explicitly deferred. Tier 1/2 wiring
-  for `decisions`/`cost_per_decision`/`ladder_savings_usd` lands here or in a
-  follow-up once BRD 67 slice(s) actually ship — tracked as an open
-  dependency, not assumed complete.
+This design's §2.0 was written when BRD 67 was 0% built. Since then, BRD 67
+slice 1 (commit 417afd2) shipped the `governed_decision`/`auto_executed_action`
+meters end-to-end: ingest mapping
+([internal/ingest/mapping.go](../../services/usage-service/internal/ingest/mapping.go)),
+catalog entries
+([internal/domain/types.go:66-67](../../services/usage-service/internal/domain/types.go)),
+and — critically — it widened the **generic** `usage_hourly/daily/monthly`
+rollup tuple with `pack_name`/`decision` columns
+([migrations/000004_value_meters.up.sql](../../services/usage-service/migrations/000004_value_meters.up.sql)),
+which is **option (a)** from this design's own §2.5 ("Options weighed") —
+the option §2.5 explicitly rejected in favor of a dedicated
+`governed_decision_daily`/`monthly` rollup pair keyed by `proposal_kind` among
+other dims. The as-shipped BRD 67 took the other fork.
 
-### Test plan
+Two consequences, verified against the current schema before writing slice 1:
 
-- **Go unit** (usage-service): `ResolveAssumptions` version-pinning
-  (edit after period close doesn't change closed-period figures — AC-3);
-  `EstimatedValue` nil-vs-populated `MarshalJSON` round-trip (the
-  ROI-NFR-004 guarantee, tested directly rather than only via HTTP);
-  Tier 0/1/2 branch selection in the summary builder.
-- **Go integration** (real Postgres via Testcontainers, following the
-  existing harness at
-  [services/usage-service/test/integration/harness_test.go](../../services/usage-service/test/integration/harness_test.go)
-  and the isolation-suite convention in
-  [rls_authz_test.go](../../services/usage-service/test/integration/rls_authz_test.go)):
-  AC-1 (set/unset assumptions), AC-3 (edit-after-close pinning), AC-5
-  (`usage.report.read`-only user gets 403 on assumption write), RLS
-  cross-tenant denial on every new endpoint (MASTER-FR-004), export
-  checksum/version-increment on re-export (mirrors AC-5 of BRD 67's own export
-  semantics).
-- **BFF** (`services/bff-graphql/tests/unit/`, new `value.test.ts` alongside
-  the existing `usage-admin.test.ts`/`usage-anomalies.test.ts`): resolver
-  field-mapping, `EstimatedValue`/`ValueSummary` null-propagation through the
-  GraphQL layer (a Tier-0 summary must not turn `null` into `0` anywhere in
-  the resolver chain).
-- **ui-web component tests**: `/admin/value` page — empty state when
-  assumptions unset, tile rendering when set, chart empty-state when
-  `decisions` is null (Tier 0), assumption-edit form gating by
-  `manageValueAssumptions`. Same testing-library pattern as
-  [admin/usage/usage.test.tsx](<../../services/ui-web/src/app/(app)/admin/usage/usage.test.tsx>).
-- **One live Playwright flow** in `services/ui-web/tests-live/` (following
-  the existing convention —
-  [playwright.live.config.ts](../../services/ui-web/playwright.live.config.ts),
-  siblings like
-  [cases-journeys.spec.ts](../../services/ui-web/tests-live/cases-journeys.spec.ts)):
-  tenant admin sets assumptions → sees tiles populate → exports a report →
-  downloads and verifies the checksum matches the served bytes, against a
-  live cell.
+1. **The repo is at Tier 1 today, not Tier 0.** `decisions.total`,
+   `by_decision` (the `decision` column), `by_agent`, and `by_pack` are all
+   computable from `usage_monthly` right now, no waiting on BRD 67.
+   `cost_per_decision` is blended (`ai_cost_usd / decisions.total`).
+2. **`decisions.by_kind` is a genuine, currently-open gap beyond what §2.0
+   anticipated.** `proposal_kind` was kept raw-detail-only in
+   `usage_raw.meta` (never rolled up — see that migration's own doc comment),
+   because BRD 67 didn't ship the dedicated rollup this design's §2.5 wanted.
+   Consequently `hours_saved_est`/`labor_value_est_usd`/
+   `human_baseline_cost_usd`/`net_value_est_usd` — which need per-kind decision
+   counts to apply `minutes_per_decision[kind]` — **cannot be honestly
+   computed from the real store today**, even with assumptions set. Per the
+   honesty invariant, they render `null` with `provenance.meter_gap` naming
+   the gap explicitly, rather than fabricating a blended-minutes estimate
+   nobody asked this design to invent. The computation logic itself (the
+   per-kind formula, AC-1's exact numbers) is implemented and unit-tested
+   against a synthetic by-kind fixture in `internal/valuecalc` — the design's
+   own test-plan language anticipated exactly this ("Tier 1/2 behavior is
+   currently only unit-testable against a synthetic fixture, not a real
+   emitter"), it just didn't foresee that `by_kind` specifically would be the
+   piece missing a real emitter. Closing this needs BRD 67 to add
+   `proposal_kind` as a rollup-worthy dimension — tracked here as an open
+   dependency, not assumed complete.
 
-**Known limits, stated up front:** decision counts, true per-decision cost,
-and ladder savings cannot be verified end-to-end until BRD 67 ships
-`governed_decision` (and, for savings, an ai-gateway estimate that doesn't
-exist in any BRD yet). Everything in slice 1/2 is independently testable
-today against Tier 0 behavior; Tier 1/2 behavior is currently only
-unit-testable against a synthetic `governed_decision_daily` fixture, not a
-real emitter.
+### Deviation: `usage.assumptions.update`, not `usage.report.manage`
+
+§2.9 named the new authz action `usage.report.manage`. Verified against
+`rbac-service/internal/domain/catalog.go` (`AllVerbs`, RBC-FR-022's closed verb
+grammar) and `rbac-service/seed/roles_actions.yaml`'s own comment that
+non-closed verbs like `eval.canary.manage` "would fail EnsureSystemRoles at
+boot" if bound to a role: **`manage` is not a closed-grammar verb anywhere on
+this platform.** Shipping `usage.report.manage` would register successfully
+(rbac's registration endpoint validates verbs) but fail the moment any role
+tried to bind it. Implemented instead as **`usage.assumptions.update`** — a
+new `assumptions` resource with the canonical `update` verb, same intent,
+grammar-compliant. See the doc comment on `authz.ActionAssumptionsUpdate`
+([internal/authz/authz.go](../../services/usage-service/internal/authz/authz.go)).
+**Follow-up, out of this task's scope (rbac-service ownership):** no seeded
+role binds `usage.assumptions.update` yet in
+`rbac-service/seed/roles_actions.yaml` — a Tenant Admin binding needs adding
+there before a non-platform-admin persona can exercise it in a live cell.
+
+### Slice 1 — assumptions CRUD + summary API — DONE
+
+- Migration `services/usage-service/migrations/000005_value_assumptions.{up,down}.sql`
+  (numbered 000005, not the design's illustrative 000004 — BRD 67 slice 1
+  already claimed 000004). `value_assumptions` table + RLS policy, mirroring
+  `rate_cards`' append-only versioning.
+- `internal/domain/value.go`: `ValueAssumptions`, `EstimatedValue` (the
+  §2.2 null-guarantee, verbatim), `DecisionsBreakdown`, `Adoption`,
+  `ValueSummary` and view types, `CostPerDecision`, `ValueProvenance`.
+- `internal/valuecalc/valuecalc.go`: pure `BuildSummary` — the tier-branch
+  logic (Tier 0 / by-kind-gap / full), independent of the store.
+- `internal/store/value_assumptions.go`: `PutAssumptions` (version+supersede
+  in one tx), `ResolveAssumptions` (as-of lookup, AC-3 pinning),
+  `AssumptionHistory`.
+- `internal/store/value_summary.go`: `ValueSummaryInputs` — reads
+  `usage_monthly` only (ROI-NFR-001), no raw scans.
+- `internal/api/handlers_value.go`: `PUT/GET /value/assumptions`,
+  `GET /value/assumptions/history`, `GET /value/summary`.
+- `internal/authz/authz.go`: `usage.assumptions.update` (see deviation above).
+- `internal/events/events.go`: `value_assumptions.updated`.
+- `internal/domain/urn.go`: `ValueAssumptionsURN`, `ValueExportURN`.
+- Routing: `internal/api/server.go` (Store interface + routes).
+
+### Slice 2 — UI page — DONE
+
+- `services/ui-web/src/app/(app)/admin/value/page.tsx`: headline tiles
+  (decisions, hours saved, cost/decision, net value) each independently
+  wrapped in `AsyncBoundary` so a `null` estimate renders its own honest empty
+  state; decision-mix `BarChart`; tenure-trend `LineChart` with the
+  distilled-rung-share annotation (always "not available yet" today, see
+  §2.4); adoption `DataTable`; assumptions panel (inline form, no modal,
+  gated by `manageValueAssumptions`) + edit-history table; exports card.
+- `services/ui-web/src/lib/graphql/{types,operations,hooks,keys}.ts`:
+  additive — `ValueSummary`/`ValueTrend`/`ValueAssumptions`/`ValueExport`
+  types, the six query/mutation documents, `useValue*` hooks.
+- `services/ui-web/src/lib/authz/registry.ts`: additive —
+  `manageValueAssumptions: cap("usage.assumptions.update")`. Read access
+  reuses the existing `viewCostPanel` gate per §2.7 (no new read gate).
+- **Not done, deliberately out of scope:** no link was added to the
+  `/admin` hub (`services/ui-web/src/app/(app)/admin/page.tsx`) — that file
+  is not in this task's file-ownership list and is a shared file a
+  concurrently-running BRD 70 agent may also be touching; adding a link there
+  risked an edit collision on a file neither agent exclusively owns. The page
+  is fully functional and gated at `/admin/value` directly. Follow-up: add
+  the hub link once BRD 70's concurrent work lands.
+- **bff-graphql** (`schema.graphql`/`typeDefs.ts` regenerated via
+  `pnpm run schema:snapshot`, not hand-edited — this repo generates the SDL
+  snapshot from `typeDefs.ts`, discovered while wiring the schema):
+  `ValueClient` in `src/clients/value.ts`, wired into `ctx.clients.value`
+  (same usage-service base URL as `ctx.clients.usage`), resolvers + mappers
+  in `src/resolvers/index.ts` / `src/schema/map.ts`.
+
+### Slice 3 — trend + export — DONE
+
+- `internal/store/value_trend.go`: `ValueTrendPoints` (one point/month,
+  reusing `ValueSummaryInputs`; `distilled_rung_share` always `null` today —
+  the ai-gateway `rung` dimension isn't wired to usage-service's
+  `MeterRecord`, exactly the gap §2.4 names as a Should-tier follow-up).
+- `internal/valueexport/export.go`: `WriteCSV` (RFC 4180 + BOM, leading
+  `#`-comment rows disclosing assumptions), `SHA256Hex`, `ObjectStore`/
+  `FSStore` — reimplemented locally (not shared) per §2.8's own note that
+  services don't share Go packages across DB-per-service boundaries, mirrored
+  from chart-service's `internal/export/export.go`.
+- Migration `000006_value_exports.{up,down}.sql`: `value_exports` table + RLS.
+- `internal/store/value_exports.go`: `CreateValueExport` (version+1 per
+  (tenant, period, workspace), never overwrites), `ListValueExports`.
+- `internal/api/handlers_value.go` (`handleValueTrend`) and
+  `internal/api/handlers_value_export.go` (`handleExportValueReport`,
+  `handleListValueReports`, `handleDownloadValueExport` — HMAC-signed, not
+  JWT, mirroring chart-service's `GET /exports/*`).
+- `cmd/server/main.go`: wires a real `valueexport.FSStore` (`VALUE_EXPORT_ROOT`/
+  `VALUE_EXPORT_SIGNING_SECRET` env vars, same shape as chart-service's
+  `EXPORT_ROOT`/`EXPORT_SIGNING_SECRET`).
+- **Explicitly deferred, as the design anticipated:** ROI-FR-022 (scheduled
+  monthly export to notification-service) — Could-tier, not started. Tier 2
+  (`usage_decisions`/`savings_usd_est`/true `attributed` cost basis /
+  `ladder_savings_usd`) remains fully unbuilt, tracked as a BRD 67 dependency
+  as before.
+
+### Test plan — results
+
+All commands below were actually run in this environment; pass/fail counts
+are observed, not projected. Docker is unavailable in this environment (the
+daemon cannot start — confirmed via `docker ps` and `service docker start`
+failing with a permissions error), so the Go integration tier could not be
+executed here; it auto-skips per this repo's convention
+(`docs/platform/CONVENTIONS.md` "must auto-skip with a clear message when
+Docker is unavailable") rather than being silently omitted.
+
+**Go unit — VERIFIED (run):**
+```
+cd services/usage-service && go build ./... && go vet ./... && go test -short ./...
+```
+Result: build clean, vet clean, **35 tests pass, 0 fail** across
+`internal/valuecalc` (7 — `TestBuildSummary_Tier0`, `_Tier1_NoByKind`,
+`_Tier1_WithByKind_AC1` reproducing AC-1's exact $740,400/4,113.3 numbers,
+`_AssumptionsUnset`, `_ZeroDecisions_NoCostPerDecision`,
+`TestEstimatedValue_MarshalJSON_NilVsPopulated`,
+`TestValueSummary_JSONRoundTrip_AllTiers`), `internal/valueexport` (4 —
+CSV/BOM/leading-comments, SHA256 determinism, FSStore put/sign/read round
+trip including tampered-signature and expired-link rejection, re-export
+never-overwrites), plus every pre-existing package (`internal/api`'s
+`drift_test.go` confirms `usage.assumptions.update` registers as a valid
+`<service>.<resource>.<verb>` action) — no regressions.
+
+**Go integration — WRITTEN, COMPILE-CHECKED, NOT RUN (Docker unavailable):**
+```
+cd services/usage-service && go vet ./... && go test ./test/integration/... -v -run 'TestAC1_AssumptionsSetAndUnset|TestAC2_AssumptionHistory|TestAC3_ResolveAssumptions|TestAC5_ReadOnlyUser|TestAC_RLS_ValueAssumptions|TestAC4_ExportValueReport|TestValueTrend_ReturnsMonthlyPoints'
+```
+Result: compiles clean; all 7 new tests print `--- SKIP` with the harness's
+standard "real infra unavailable" message (22 total integration tests skip
+the same way, 15 pre-existing + 7 new — none fail). New tests, in
+`test/integration/value_test.go` and `value_export_test.go`:
+`TestAC1_AssumptionsSetAndUnset_ValueSummary`,
+`TestAC2_AssumptionHistory_RecordsVersionsWithActor`,
+`TestAC3_ResolveAssumptions_PinsToVersionActiveAtPeriodClose`,
+`TestAC5_ReadOnlyUser_Denied403OnAssumptionWrite` (real OPA),
+`TestAC_RLS_ValueAssumptionsCrossTenantEmpty`,
+`TestAC4_ExportValueReport_ChecksumAndVersionIncrement` (downloads the signed
+artifact and asserts the served bytes' SHA256 matches the API's reported
+checksum), `TestValueTrend_ReturnsMonthlyPoints`. The harness itself
+(`harness_test.go`) was extended to wire a real `valueexport.FSStore` onto
+the shared test server.
+
+**bff-graphql unit — VERIFIED (run):**
+```
+cd services/bff-graphql && npm run typecheck && npx vitest run
+```
+Result: typecheck clean; **331 tests pass, 0 fail across 41 files** (up from
+322/40 pre-existing), including the schema-snapshot drift gate (confirms
+`typeDefs.ts` and the checked-in `schema.graphql` agree) and the new
+`tests/unit/value.test.ts` (9 tests): field-for-field mapping of a populated
+summary, and — the load-bearing assertion — a Tier-0/gap-shaped summary
+round-trips through the resolver chain with every `null` staying `null`
+(`decisions`, `hoursSavedEst`, `costPerDecision`, `ladderSavingsUsd`,
+`provenance.assumptionVersion` all asserted `null`, never `0`/`{}`), plus
+`updateValueAssumptions`/`valueAssumptionHistory`/`exportValueReport`/
+`valueExports` resolver wiring.
+
+**ui-web component tests — VERIFIED (run):**
+```
+cd services/ui-web && npm run typecheck && npm run lint && npx vitest run
+```
+Result: typecheck clean; lint clean (no new warnings); **496 tests pass, 0
+fail across 80 files** (up from 488/79 pre-existing), including the new
+`src/app/(app)/admin/value/value.test.tsx` (8 tests): populated-tile
+rendering, the Tier-0/gap empty states (decisions tile, decision-mix chart,
+hours-saved/net-value tiles all show their honest empty state, never a
+fabricated `0`), the assumptions-panel empty state ("No assumptions set.",
+never a default rate), `manageValueAssumptions` gating (an admin sees "Set
+assumptions"; a `usage.report.read`-only viewer sees the tiles but not the
+edit control — AC-5 at the UI layer), the assumption-edit submit flow, and
+the export button wiring.
+
+**Live Playwright — WRITTEN, PENDING LIVE VERIFICATION (stack not started):**
+`services/ui-web/tests-live/value-journeys.spec.ts`, following
+`cases-journeys.spec.ts`'s fixtures/conventions exactly: tenant admin sets
+assumptions via the real mutation → the `/admin/value` page reflects them (no
+fabricated defaults) → headline tiles render → exports a report through the
+real UI button → the exports list's `jsonUrl` is fetched and its SHA256
+verified against the API-reported `jsonSha256` (AC-4's literal "downloads and
+verifies the checksum matches the served bytes"); a second test covers a
+lower-privilege persona seeing the page without the edit control. Not
+executed — this task did not boot `deploy/local/up.sh`, and per
+`docs/platform/CONVENTIONS.md`, real infra here requires Docker, which this
+environment cannot run.
+
+### Known limits, carried forward and updated
+
+Tier 2 (`usage_decisions`, `savings_usd_est`, true `attributed` cost basis,
+`ladder_savings_usd`) remains fully unbuilt — a BRD 67 dependency, unchanged
+from the original plan. **New finding this pass:** `decisions.by_kind` and
+every assumption-derived `*_est` figure are ALSO blocked today, not by BRD 67
+being unbuilt, but by a schema choice BRD 67 slice 1 already made (generic
+rollup widening instead of this design's preferred dedicated
+`governed_decision` rollup with `proposal_kind`) — see "Repo-state finding"
+above. The math itself is implemented and proven correct against AC-1's exact
+numbers via a synthetic fixture (`internal/valuecalc`); only the real-store
+wiring for `by_kind` is pending a BRD 67 schema change.

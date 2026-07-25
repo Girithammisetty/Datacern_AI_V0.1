@@ -115,6 +115,14 @@ export const qk = {
   rateCards: () => ["usage", "rateCards"] as const,
   anomalies: (status?: string) => ["usage", "anomalies", status ?? null] as const,
 
+  valueSummary: (period: string, workspaceId?: string) =>
+    ["value", "summary", period, workspaceId ?? null] as const,
+  valueTrend: (metric: string, from?: string, to?: string, workspaceId?: string) =>
+    ["value", "trend", metric, from ?? null, to ?? null, workspaceId ?? null] as const,
+  valueAssumptions: () => ["value", "assumptions"] as const,
+  valueAssumptionHistory: () => ["value", "assumptionHistory"] as const,
+  valueExports: (period?: string) => ["value", "exports", period ?? null] as const,
+
   // semantic model authoring
   semanticModelList: (filters: unknown) => ["semantic", "models", filters] as const,
   semanticModelDetail: (id: string) => ["semantic", "model", id] as const,

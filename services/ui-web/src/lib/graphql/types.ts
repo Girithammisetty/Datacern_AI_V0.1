@@ -1539,6 +1539,103 @@ export interface CreateRateCardInput {
   items: Record<string, number>;
 }
 
+/* ------- value & ROI reporting (BRD 69) ------- */
+
+/** A derived figure that only exists paired with its assumption version
+ * (ROI-NFR-004). null means "not computable" — assumptions unset, or a
+ * genuine data gap (see ValueSummary.provenance.meterGap) — never a
+ * fabricated zero. */
+export interface EstimatedValue {
+  value: number;
+  assumptionVersion: number;
+}
+
+export interface CostPerDecision {
+  value: number;
+  /** "blended" (tenant/period average) | "attributed" (true per-decision grain, not built yet). */
+  basis: string;
+}
+
+export interface ValueDecisions {
+  total: number;
+  byDecision: JSONValue;
+  byKind: JSONValue;
+  byAgent: JSONValue;
+  byPack: JSONValue;
+}
+
+export interface ValueAdoption {
+  activeUsers: number;
+  byWorkspace: JSONValue;
+}
+
+export interface ValueProvenance {
+  rollupVersion: string;
+  assumptionVersion?: number | null;
+  /** Present = "here's what's missing and why"; null = fully available. */
+  meterGap?: string | null;
+}
+
+export interface ValueSummary {
+  period: string;
+  workspaceId?: string | null;
+  decisions?: ValueDecisions | null;
+  hoursSavedEst?: EstimatedValue | null;
+  laborValueEstUsd?: EstimatedValue | null;
+  aiCostUsd: number;
+  costPerDecision?: CostPerDecision | null;
+  humanBaselineCostUsd?: EstimatedValue | null;
+  netValueEstUsd?: EstimatedValue | null;
+  ladderSavingsUsd?: number | null;
+  adoption: ValueAdoption;
+  provenance: ValueProvenance;
+}
+
+export interface ValueTrendPoint {
+  period: string;
+  value?: number | null;
+  basis?: string | null;
+  rollupVersion: string;
+  distilledRungShare?: number | null;
+}
+
+export interface ValueTrend {
+  metric: string;
+  granularity: string;
+  points: ValueTrendPoint[];
+}
+
+export interface ValueAssumptions {
+  id: ID;
+  urn: string;
+  version: number;
+  minutesPerDecision: JSONValue;
+  loadedHourlyRateUsd: number;
+  effectiveFrom: string;
+  status: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface UpdateValueAssumptionsInput {
+  minutesPerDecision: Record<string, number>;
+  loadedHourlyRateUsd: number;
+}
+
+export interface ValueExport {
+  id: ID;
+  urn: string;
+  period: string;
+  workspaceId?: string | null;
+  version: number;
+  jsonUrl?: string | null;
+  jsonSha256: string;
+  csvUrl?: string | null;
+  csvSha256: string;
+  assumptionVersion?: number | null;
+  createdAt: string;
+}
+
 export interface Connection<T> {
   nodes: T[];
   pageInfo: PageInfo;

@@ -32,6 +32,11 @@ import type {
   RateCard,
   CreateRateCardInput,
   Anomaly,
+  ValueSummary,
+  ValueTrend,
+  ValueAssumptions,
+  UpdateValueAssumptionsInput,
+  ValueExport,
   CreateChartInput,
   CreateConnectionInput,
   CreateDashboardInput,
@@ -2606,6 +2611,94 @@ export const DISMISS_ANOMALY = /* GraphQL */ `
 `;
 export interface DismissAnomalyResult {
   dismissAnomaly: Anomaly;
+}
+
+/* ------- value & ROI reporting (BRD 69) ------- */
+
+const ESTIMATED_VALUE_FIELDS = /* GraphQL */ `value assumptionVersion`;
+const VALUE_SUMMARY_FIELDS = /* GraphQL */ `
+  period workspaceId
+  decisions { total byDecision byKind byAgent byPack }
+  hoursSavedEst { ${ESTIMATED_VALUE_FIELDS} }
+  laborValueEstUsd { ${ESTIMATED_VALUE_FIELDS} }
+  aiCostUsd
+  costPerDecision { value basis }
+  humanBaselineCostUsd { ${ESTIMATED_VALUE_FIELDS} }
+  netValueEstUsd { ${ESTIMATED_VALUE_FIELDS} }
+  ladderSavingsUsd
+  adoption { activeUsers byWorkspace }
+  provenance { rollupVersion assumptionVersion meterGap }
+`;
+
+export const VALUE_SUMMARY = /* GraphQL */ `
+  query ValueSummary($period: String!, $workspaceId: String) {
+    valueSummary(period: $period, workspaceId: $workspaceId) { ${VALUE_SUMMARY_FIELDS} }
+  }
+`;
+export interface ValueSummaryResult {
+  valueSummary: ValueSummary;
+}
+
+export const VALUE_TREND = /* GraphQL */ `
+  query ValueTrend($metric: String!, $granularity: String, $from: String, $to: String, $workspaceId: String) {
+    valueTrend(metric: $metric, granularity: $granularity, from: $from, to: $to, workspaceId: $workspaceId) {
+      metric granularity
+      points { period value basis rollupVersion distilledRungShare }
+    }
+  }
+`;
+export interface ValueTrendResult {
+  valueTrend: ValueTrend;
+}
+
+const VALUE_ASSUMPTIONS_FIELDS = /* GraphQL */ `id urn version minutesPerDecision loadedHourlyRateUsd effectiveFrom status createdBy createdAt`;
+
+export const VALUE_ASSUMPTIONS = /* GraphQL */ `
+  query ValueAssumptions {
+    valueAssumptions { ${VALUE_ASSUMPTIONS_FIELDS} }
+  }
+`;
+export interface ValueAssumptionsResult {
+  valueAssumptions: ValueAssumptions | null;
+}
+
+export const VALUE_ASSUMPTION_HISTORY = /* GraphQL */ `
+  query ValueAssumptionHistory {
+    valueAssumptionHistory { ${VALUE_ASSUMPTIONS_FIELDS} }
+  }
+`;
+export interface ValueAssumptionHistoryResult {
+  valueAssumptionHistory: ValueAssumptions[];
+}
+
+export const UPDATE_VALUE_ASSUMPTIONS = /* GraphQL */ `
+  mutation UpdateValueAssumptions($input: UpdateValueAssumptionsInput!) {
+    updateValueAssumptions(input: $input) { ${VALUE_ASSUMPTIONS_FIELDS} }
+  }
+`;
+export interface UpdateValueAssumptionsResult {
+  updateValueAssumptions: ValueAssumptions;
+}
+export type { UpdateValueAssumptionsInput };
+
+const VALUE_EXPORT_FIELDS = /* GraphQL */ `id urn period workspaceId version jsonUrl jsonSha256 csvUrl csvSha256 assumptionVersion createdAt`;
+
+export const VALUE_EXPORTS = /* GraphQL */ `
+  query ValueExports($period: String) {
+    valueExports(period: $period) { ${VALUE_EXPORT_FIELDS} }
+  }
+`;
+export interface ValueExportsResult {
+  valueExports: ValueExport[];
+}
+
+export const EXPORT_VALUE_REPORT = /* GraphQL */ `
+  mutation ExportValueReport($period: String!, $workspaceId: String, $idempotencyKey: String) {
+    exportValueReport(period: $period, workspaceId: $workspaceId, idempotencyKey: $idempotencyKey) { ${VALUE_EXPORT_FIELDS} }
+  }
+`;
+export interface ExportValueReportResult {
+  exportValueReport: ValueExport;
 }
 
 export const USER = /* GraphQL */ `

@@ -51,6 +51,7 @@ import type {
   CreateBudgetInput,
   UpdateBudgetInput,
   CreateRateCardInput,
+  UpdateValueAssumptionsInput,
   CreateIngestionInput,
   CreateUploadInput,
   CompleteUploadInput,
@@ -2997,6 +2998,86 @@ export function useDismissAnomaly() {
   return useMutation({
     mutationFn: (id: string) => graphqlRequest<ops.DismissAnomalyResult>(ops.DISMISS_ANOMALY, { id }).then((r) => r.dismissAnomaly),
     onSuccess: () => client.invalidateQueries({ queryKey: ["usage", "anomalies"] }),
+  });
+}
+
+/* ------- value & ROI reporting (BRD 69) ------- */
+
+/** Value/ROI summary for a period (usage-service GET /value/summary,
+ * ROI-FR-010). `period` is YYYY-MM. */
+export function useValueSummary(period: string, workspaceId?: string) {
+  return useQuery({
+    queryKey: qk.valueSummary(period, workspaceId),
+    queryFn: () =>
+      graphqlRequest<ops.ValueSummaryResult>(ops.VALUE_SUMMARY, { period, workspaceId }).then((r) => r.valueSummary),
+    enabled: !!period,
+  });
+}
+
+/** Tenure trend of cost_per_decision (usage-service GET /value/trend, ROI-FR-011). */
+export function useValueTrend(
+  metric: string,
+  params: { from?: string; to?: string; workspaceId?: string } = {},
+) {
+  return useQuery({
+    queryKey: qk.valueTrend(metric, params.from, params.to, params.workspaceId),
+    queryFn: () =>
+      graphqlRequest<ops.ValueTrendResult>(ops.VALUE_TREND, {
+        metric, granularity: "month", from: params.from, to: params.to, workspaceId: params.workspaceId,
+      }).then((r) => r.valueTrend),
+  });
+}
+
+/** The tenant's active value-reporting assumptions, or null if never set
+ * (ROI-FR-001 "ships absent" — a legitimate, expected empty state). */
+export function useValueAssumptions() {
+  return useQuery({
+    queryKey: qk.valueAssumptions(),
+    queryFn: () => graphqlRequest<ops.ValueAssumptionsResult>(ops.VALUE_ASSUMPTIONS, {}).then((r) => r.valueAssumptions),
+  });
+}
+
+export function useValueAssumptionHistory() {
+  return useQuery({
+    queryKey: qk.valueAssumptionHistory(),
+    queryFn: () =>
+      graphqlRequest<ops.ValueAssumptionHistoryResult>(ops.VALUE_ASSUMPTION_HISTORY, {}).then(
+        (r) => r.valueAssumptionHistory,
+      ),
+  });
+}
+
+export function useUpdateValueAssumptions() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateValueAssumptionsInput) =>
+      graphqlRequest<ops.UpdateValueAssumptionsResult>(ops.UPDATE_VALUE_ASSUMPTIONS, { input }).then(
+        (r) => r.updateValueAssumptions,
+      ),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: qk.valueAssumptions() });
+      client.invalidateQueries({ queryKey: qk.valueAssumptionHistory() });
+      // Assumption edits change future *_est figures — drop cached summaries.
+      client.invalidateQueries({ queryKey: ["value", "summary"] });
+    },
+  });
+}
+
+export function useValueExports(period?: string) {
+  return useQuery({
+    queryKey: qk.valueExports(period),
+    queryFn: () => graphqlRequest<ops.ValueExportsResult>(ops.VALUE_EXPORTS, { period }).then((r) => r.valueExports),
+  });
+}
+
+export function useExportValueReport() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ period, workspaceId }: { period: string; workspaceId?: string }) =>
+      graphqlRequest<ops.ExportValueReportResult>(ops.EXPORT_VALUE_REPORT, {
+        period, workspaceId, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.exportValueReport),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["value", "exports"] }),
   });
 }
 
