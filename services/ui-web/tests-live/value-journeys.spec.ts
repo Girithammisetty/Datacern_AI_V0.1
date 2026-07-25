@@ -94,7 +94,12 @@ test.describe("Value & ROI reporting (BRD 69)", () => {
 
     // 4. Export a report for the current period through the real UI control.
     await page.getByRole("button", { name: "Export this period" }).click();
-    await expect(page.getByRole("cell", { name: "v1" }).first()).toBeVisible({ timeout: 30_000 });
+    // "gridcell", not "cell": DataTable (components/primitives/DataTable.tsx)
+    // renders the ARIA grid pattern (role="grid"/"row"/"gridcell"), not real
+    // <table>/<td> markup -- "cell" is a distinct ARIA role from "gridcell"
+    // and Playwright's role matching is exact, so it never matched anything
+    // (a plain "element(s) not found" timeout, not a strict-mode violation).
+    await expect(page.getByRole("gridcell", { name: "v1" }).first()).toBeVisible({ timeout: 30_000 });
 
     // 5. Fetch the exports list, follow the JSON download link, and verify
     // the SHA256 of the served bytes matches the checksum the API reported
