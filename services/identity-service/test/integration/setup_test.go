@@ -61,10 +61,23 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	// Non-superuser app role: RLS actually applies (FORCE + NOBYPASSRLS).
+	//
+	// This role is deliberately separate from the real runtime role
+	// (identity_app, granted in migrations/0003_app_role.up.sql) -- it's
+	// harness-only, so its privileges are set up here rather than via a
+	// migration. commercial_dirty (migrations/0011) is the first BIGSERIAL
+	// table this harness has ever exercised: table-level DML was already
+	// covered by the "ALL TABLES" grant below, but nextval() on its
+	// implicit sequence needs its own USAGE grant -- GRANT on a table never
+	// implies it on the sequence backing an identity column. Confirmed live:
+	// CI failed with "permission denied for sequence commercial_dirty_id_seq"
+	// even after the runtime role (identity_app) was separately fixed in
+	// 0011.up.sql, because that fix doesn't reach this harness-only role.
 	for _, q := range []string{
 		`CREATE ROLE app_user WITH LOGIN PASSWORD 'app_pw' NOSUPERUSER NOBYPASSRLS`,
 		`GRANT USAGE ON SCHEMA public TO app_user`,
 		`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user`,
+		`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user`,
 	} {
 		if _, err := adminPool.Exec(ctx, q); err != nil {
 			fmt.Println("role setup failed:", err)
