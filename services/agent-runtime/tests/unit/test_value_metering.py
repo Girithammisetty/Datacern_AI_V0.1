@@ -16,13 +16,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
+from app.container import build_container
 from app.domain import metering
 from app.domain.entities import Run, new_uuid
 from app.graphs.base import WriteIntent
 from tests.conftest import TENANT_A, make_settings
-from app.container import build_container
 
 
 def _container():

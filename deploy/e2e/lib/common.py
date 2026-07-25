@@ -50,6 +50,7 @@ AI_GATEWAY = _u("AI_GATEWAY_URL", "http://localhost:8312")
 PIPELINE = _u("PIPELINE_URL", "http://localhost:8313")
 EXPERIMENT = _u("EXPERIMENT_URL", "http://localhost:8314")
 INFERENCE = _u("INFERENCE_URL", "http://localhost:8316")
+USAGE = _u("USAGE_URL", "http://localhost:8321")
 
 # ---- infra ----
 PG = _u("E2E_PG", "postgres://datacern:datacern_dev@localhost:5432")
