@@ -817,6 +817,245 @@ func (s *Store) DeleteCommercialDirty(ctx context.Context, ids []int64) error {
 	})
 }
 
+// --- commercial: trial lifecycle (BRD 66 slice 2, CPL-FR-020..023) ---
+//
+// StartTrial/ExtendTrial/ConvertTrial/SweepExpireTrial/InsertTrialEvent all
+// run under tenantTx scoped to the ONE tenant they act on (mirroring
+// AssignTenantPlan): the tenants CAS update itself needs no RLS (platform-
+// scoped table), but trial_events is tenant-scoped RLS, and every one of
+// these calls already has a single, known target tenant id -- so scoping the
+// whole transaction to that tenant satisfies trial_events' tenant_isolation
+// policy with no cross-tenant exposure. Only the sweep's LISTING queries
+// (ListExpiredTrials/ListTrialsForThreshold) genuinely need to see across all
+// tenants in one query -- those use platformTx + trial_events' platform
+// bypass policy instead, mirroring ClaimCommercialDirty.
+
+func insertTrialEventTx(ctx context.Context, tx pgx.Tx, tev domain.TrialEvent) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO trial_events (id, tenant_id, event_type, trial_days, reason, actor, occurred_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		tev.ID, tev.TenantID, tev.EventType, tev.TrialDays, tev.Reason, tev.Actor, tev.OccurredAt)
+	return err
+}
+
+func (s *Store) StartTrial(ctx context.Context, id uuid.UUID, profile domain.TenantProfile, startedAt, endsAt time.Time, tev domain.TrialEvent, evs ...domain.OutboxEvent) error {
+	return s.tenantTx(ctx, id, func(tx pgx.Tx) error {
+		var cur string
+		if err := tx.QueryRow(ctx, `SELECT commercial_state FROM tenants WHERE id=$1 FOR UPDATE`, id).Scan(&cur); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.ENotFound("tenant")
+			}
+			return err
+		}
+		from := domain.CommercialState(cur)
+		if !domain.CanTransitionCommercial(profile, from, domain.CommercialTrial) {
+			return domain.EConflict("invalid commercial state transition " + cur + " -> trial")
+		}
+		ct, err := tx.Exec(ctx, `
+			UPDATE tenants SET commercial_state=$2, trial_started_at=$3, trial_ends_at=$4, updated_at=now()
+			WHERE id=$1`,
+			id, string(domain.CommercialTrial), startedAt, endsAt)
+		if err != nil {
+			return err
+		}
+		if ct.RowsAffected() == 0 {
+			return domain.ENotFound("tenant")
+		}
+		if err := insertTrialEventTx(ctx, tx, tev); err != nil {
+			return err
+		}
+		if err := insertOutbox(ctx, tx, evs); err != nil {
+			return err
+		}
+		return markCommercialDirtyTx(ctx, tx, id)
+	})
+}
+
+func (s *Store) ExtendTrial(ctx context.Context, id uuid.UUID, newEndsAt time.Time, tev domain.TrialEvent, evs ...domain.OutboxEvent) error {
+	return s.tenantTx(ctx, id, func(tx pgx.Tx) error {
+		ct, err := tx.Exec(ctx, `
+			UPDATE tenants SET trial_ends_at=$2, updated_at=now()
+			WHERE id=$1 AND commercial_state=$3`,
+			id, newEndsAt, string(domain.CommercialTrial))
+		if err != nil {
+			return err
+		}
+		if ct.RowsAffected() == 0 {
+			var cur string
+			if err := tx.QueryRow(ctx, `SELECT commercial_state FROM tenants WHERE id=$1`, id).Scan(&cur); err != nil {
+				return domain.ENotFound("tenant")
+			}
+			return domain.EConflict("tenant is not on an active trial (commercial_state=" + cur + ")")
+		}
+		if err := insertTrialEventTx(ctx, tx, tev); err != nil {
+			return err
+		}
+		return insertOutbox(ctx, tx, evs)
+	})
+}
+
+func (s *Store) ConvertTrial(ctx context.Context, id uuid.UUID, profile domain.TenantProfile, from domain.CommercialState, tp domain.TenantPlan, tev domain.TrialEvent, evs ...domain.OutboxEvent) error {
+	if !domain.CanTransitionCommercial(profile, from, domain.CommercialActive) {
+		return domain.EConflict("invalid commercial state transition " + string(from) + " -> active")
+	}
+	return s.tenantTx(ctx, id, func(tx pgx.Tx) error {
+		ct, err := tx.Exec(ctx, `
+			UPDATE tenants SET commercial_state=$2, trial_ends_at=NULL, updated_at=now()
+			WHERE id=$1 AND commercial_state=$3`,
+			id, string(domain.CommercialActive), string(from))
+		if err != nil {
+			return err
+		}
+		if ct.RowsAffected() == 0 {
+			var cur string
+			if err := tx.QueryRow(ctx, `SELECT commercial_state FROM tenants WHERE id=$1`, id).Scan(&cur); err != nil {
+				return domain.ENotFound("tenant")
+			}
+			return domain.EConflict("tenant commercial_state is " + cur + ", expected " + string(from))
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO tenant_plan (tenant_id, plan_key, plan_version_snapshot, assigned_at, assigned_by)
+			VALUES ($1,$2,$3,$4,$5)
+			ON CONFLICT (tenant_id) DO UPDATE SET
+				plan_key=EXCLUDED.plan_key, plan_version_snapshot=EXCLUDED.plan_version_snapshot,
+				assigned_at=EXCLUDED.assigned_at, assigned_by=EXCLUDED.assigned_by`,
+			tp.TenantID, tp.PlanKey, tp.PlanVersionSnapshot, tp.AssignedAt, tp.AssignedBy); err != nil {
+			return err
+		}
+		if err := insertTrialEventTx(ctx, tx, tev); err != nil {
+			return err
+		}
+		if err := insertOutbox(ctx, tx, evs); err != nil {
+			return err
+		}
+		return markCommercialDirtyTx(ctx, tx, id)
+	})
+}
+
+func (s *Store) SweepExpireTrial(ctx context.Context, id uuid.UUID, profile domain.TenantProfile, now time.Time, tev domain.TrialEvent, evs ...domain.OutboxEvent) (bool, error) {
+	transitioned := false
+	err := s.tenantTx(ctx, id, func(tx pgx.Tx) error {
+		var cur string
+		if err := tx.QueryRow(ctx, `SELECT commercial_state FROM tenants WHERE id=$1 FOR UPDATE`, id).Scan(&cur); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.ENotFound("tenant")
+			}
+			return err
+		}
+		if cur != string(domain.CommercialTrial) {
+			// CPL-NFR-003: already transitioned by a prior pass -- silent
+			// no-op, not CONFLICT (see Store interface doc).
+			return nil
+		}
+		if !domain.CanTransitionCommercial(profile, domain.CommercialTrial, domain.CommercialSuspendedCommercial) {
+			return domain.EConflict("invalid commercial state transition trial -> suspended_commercial")
+		}
+		ct, err := tx.Exec(ctx, `
+			UPDATE tenants SET commercial_state=$2, updated_at=$3 WHERE id=$1 AND commercial_state=$4`,
+			id, string(domain.CommercialSuspendedCommercial), now, string(domain.CommercialTrial))
+		if err != nil {
+			return err
+		}
+		if ct.RowsAffected() == 0 {
+			return nil // raced with another writer between the SELECT and UPDATE; next tick retries
+		}
+		if err := insertTrialEventTx(ctx, tx, tev); err != nil {
+			return err
+		}
+		if err := insertOutbox(ctx, tx, evs); err != nil {
+			return err
+		}
+		if err := markCommercialDirtyTx(ctx, tx, id); err != nil {
+			return err
+		}
+		transitioned = true
+		return nil
+	})
+	return transitioned, err
+}
+
+func (s *Store) InsertTrialEvent(ctx context.Context, tev domain.TrialEvent, evs ...domain.OutboxEvent) error {
+	return s.tenantTx(ctx, tev.TenantID, func(tx pgx.Tx) error {
+		if err := insertTrialEventTx(ctx, tx, tev); err != nil {
+			return err
+		}
+		return insertOutbox(ctx, tx, evs)
+	})
+}
+
+// ListExpiredTrials reads only the RLS-exempt tenants table (design doc
+// "Trial sweep job" step 1) -- no tx/session-var scoping needed, mirroring
+// ListTenants' plain pool query.
+func (s *Store) ListExpiredTrials(ctx context.Context, asOf time.Time, limit int) ([]*domain.Tenant, error) {
+	q := `SELECT ` + tenantCols + ` FROM tenants WHERE commercial_state='trial' AND trial_ends_at <= $1 ORDER BY id LIMIT $2`
+	rows, err := s.pool.Query(ctx, q, asOf, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*domain.Tenant
+	for rows.Next() {
+		t, err := scanTenant(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// ListTrialsForThreshold reads tenants (RLS-exempt) joined against a
+// cross-tenant NOT EXISTS on trial_events -- run under platformTx so the
+// trial_events_platform RLS policy grants the dedup subquery visibility
+// across every tenant's rows in one query (design doc "no trial_events row
+// of type ending_T14/etc already exists for this tenant").
+func (s *Store) ListTrialsForThreshold(ctx context.Context, eventType string, asOf, windowEnd time.Time, limit int) ([]*domain.Tenant, error) {
+	var out []*domain.Tenant
+	err := s.platformTx(ctx, func(tx pgx.Tx) error {
+		q := `
+			SELECT ` + tenantCols + ` FROM tenants t
+			WHERE t.commercial_state='trial' AND t.trial_ends_at > $1 AND t.trial_ends_at <= $2
+			  AND NOT EXISTS (SELECT 1 FROM trial_events e WHERE e.tenant_id = t.id AND e.event_type = $3)
+			ORDER BY t.id LIMIT $4`
+		rows, err := tx.Query(ctx, q, asOf, windowEnd, eventType, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			t, err := scanTenant(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, t)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+func (s *Store) ListTrialEvents(ctx context.Context, tenantID uuid.UUID) ([]domain.TrialEvent, error) {
+	var out []domain.TrialEvent
+	err := s.tenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT id, tenant_id, event_type, trial_days, reason, actor, occurred_at
+			FROM trial_events WHERE tenant_id=$1 ORDER BY occurred_at DESC`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var e domain.TrialEvent
+			if err := rows.Scan(&e.ID, &e.TenantID, &e.EventType, &e.TrialDays, &e.Reason, &e.Actor, &e.OccurredAt); err != nil {
+				return err
+			}
+			out = append(out, e)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // --- cells ---
 
 func (s *Store) CreateCell(ctx context.Context, c *domain.Cell) error {
