@@ -10,9 +10,9 @@ import WelcomeContent from "./welcome-content";
  * statement about what the product does; mock UI is clearly illustrative.
  */
 export const metadata = {
-  title: "Datacern AI — AI agents that decide, with your experts in command",
+  title: "Datacern AI — AI does the work, a named human signs it",
   description:
-    "Datacern AI puts a team of specialist AI agents to work on your highest-stakes decisions — claims, authorizations, alerts, investigations. Agents draft, a copilot assists, your experts decide, and every correction trains the next model. Governed end to end.",
+    "Datacern works your regulated back-office queues — card disputes, health claims, financial-crime alerts, insurance losses, supplier invoices. Agents read the file, apply your rules and draft the recommendation. Nothing takes effect until a named person approves it, no one can approve their own work, and every action leaves a receipt an examiner can follow.",
 };
 
 export default function WelcomePage() {

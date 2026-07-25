@@ -5,7 +5,13 @@
  */
 export const en = {
   "app.name": "Datacern AI",
-  "app.tagline": "Decision Intelligence for regulated operations",
+  // Positioning note: deliberately avoids "decision intelligence", "insights"
+  // and "AI-powered". Competitive research (2026-07) found every BI vendor and
+  // the nearest incumbent already claim to improve "decision making" in those
+  // exact words, so the category language is unownable. What no competitor
+  // documents is the accountability primitive — a NAMED approver, distinct from
+  // the requester. Lead with that noun.
+  "app.tagline": "Every AI action has a named approver",
   "nav.home": "Home",
   "nav.data": "Data",
   "nav.datasets": "Datasets",

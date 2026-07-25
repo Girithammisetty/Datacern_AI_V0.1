@@ -458,9 +458,12 @@ const TRUST = [
   ["A tamper-evident trail", "Who decided what, when, and on what evidence — captured for every action, ready for any review."],
 ] as const;
 
-/* Category comparison — how decision intelligence differs from BI and raw AI.
- * cols map to [dimension, traditional BI, AI/ML models, Datacern DI]. */
-const COMPARE_COLS = ["Traditional BI", "AI / ML models", "Decision Intelligence"] as const;
+/* Category comparison — the boundary a BI vendor cannot cross. The separating
+ * question is deliberately concrete: "show me the record of ONE decision — who
+ * proposed it, who approved it, what evidence they saw, what changed in the
+ * source system." A dashboard tool holds data ABOUT the business; this holds
+ * the action and its approver. cols map to [dimension, BI, models, Datacern]. */
+const COMPARE_COLS = ["Traditional BI", "AI / ML models", "Approved actions"] as const;
 const COMPARE: [string, string, string, string][] = [
   ["What it delivers", "Dashboards & reports", "Predictions & scores", "A governed decision + its reasoning"],
   ["Unit of work", "A metric or a chart", "A model output", "A case, handled end to end"],
@@ -473,8 +476,8 @@ const COMPARE: [string, string, string, string][] = [
 ];
 
 const FAQ = [
-  ["What is decision intelligence?",
-    "It's the discipline — and this platform — of turning your data, your policy and AI into governed, auditable decisions at scale. Not a dashboard that reports the past or a model that predicts it: a system that makes the call, attaches the evidence, and keeps a person accountable for every one."],
+  ["What does Datacern actually do?",
+    "It works your regulated back-office queues — disputes, claims, alerts, invoices — and keeps a named person accountable for every outcome. Agents read the case, apply your rules and draft the recommendation with its evidence. A person approves it, someone other than the requester signs anything sensitive, and the whole chain is recorded. Ask any vendor for the complete record of one decision — who proposed it, who approved it, what evidence they saw, what changed in the source system. That record is what this platform is built to produce."],
   ["What exactly is “agentic AI”?",
     "A chatbot answers a question; a model returns a score. An agentic AI takes on multi-step work: it reads the evidence, checks it against your rules, uses tools to gather what it needs, and drafts a decision or action — then hands it to a person to approve. Datacern runs a team of these specialist agents (triage, analytics, governance and more), each scoped to what it's allowed to see and do. They propose; they never act on their own."],
   ["How is this different from BI or analytics?",
@@ -851,7 +854,7 @@ export default function WelcomeContent() {
           <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
             <a href="#industries" className="transition-colors hover:text-foreground">Industries</a>
             <a href="#capabilities" className="transition-colors hover:text-foreground">Platform</a>
-            <a href="#difference" className="transition-colors hover:text-foreground">Why DI</a>
+            <a href="#difference" className="transition-colors hover:text-foreground">Why not BI</a>
             <a href="#how" className="transition-colors hover:text-foreground">How it works</a>
             <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
           </nav>
@@ -866,19 +869,20 @@ export default function WelcomeContent() {
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
               <Sparkles className="size-3.5" />
-              AI decision intelligence
+              Governed AI for regulated operations
             </span>
             <h1 className="wr-glowtext mt-6 text-balance text-4xl font-bold leading-[1.03] tracking-tight md:text-6xl">
-              AI agents that decide,
+              AI does the work.
               <br />
-              with your experts{" "}
-              <span className="wr-grad bg-clip-text text-transparent">in command.</span>
+              A named human{" "}
+              <span className="wr-grad bg-clip-text text-transparent">signs it.</span>
             </h1>
             <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
-              Datacern AI puts a team of specialist agents to work on your industry&apos;s
-              highest-stakes decisions — health claims, financial-crime alerts, insurance losses,
-              back-office adjudication. Agents draft, a copilot assists, your people decide, and
-              every correction trains the next model.
+              Datacern works your regulated back-office queues — card disputes, health claims,
+              financial-crime alerts, insurance losses, supplier invoices. Agents read the file,
+              apply your rules and draft the recommendation. Nothing takes effect until a named
+              person approves it, no one can approve their own work, and every action leaves a
+              receipt an examiner can follow.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Button size="lg" onClick={() => setDemoOpen(true)}>
@@ -1098,13 +1102,13 @@ export default function WelcomeContent() {
         </div>
       </section>
 
-      {/* how decision intelligence is different — BI vs AI vs DI */}
+      {/* the category boundary — BI reports, models predict, this one acts + is answerable */}
       <section id="difference" className="scroll-mt-16 border-t border-border/60">
         <div className="mx-auto max-w-6xl px-6 py-20">
           <Reveal>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
               <Sparkles className="size-3.5" />
-              Why decision intelligence
+              Where the work actually lands
             </span>
             <h2 className="mt-5 text-balance text-3xl font-bold tracking-tight md:text-4xl">
               A different category from BI and AI
@@ -1138,7 +1142,7 @@ export default function WelcomeContent() {
                           </span>
                           {di && (
                             <span className="mt-0.5 block text-xs font-medium normal-case tracking-normal text-primary/80">
-                              Decision Intelligence
+                              Approved actions
                             </span>
                           )}
                         </th>
@@ -1345,8 +1349,8 @@ export default function WelcomeContent() {
 
       <footer className="border-t border-border/60">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-6 py-6 text-xs text-muted-foreground sm:flex-row">
-          <span>Datacern AI — Decision Intelligence platform</span>
-          <span>AI proposes. People decide. The platform remembers.</span>
+          <span>Datacern AI — governed AI for regulated operations</span>
+          <span>AI proposes. A named person approves. The platform remembers.</span>
         </div>
       </footer>
 
