@@ -37,6 +37,7 @@ import {
   mapSemanticModel,
   mapDatasetSchema, mapSemanticModelSummary, mapSemanticModelVersion, mapSemanticCompileResult,
   mapWorkspace, mapGroup, mapGroupMember, mapRole, mapAuthzExplanation, mapServiceAccount, mapTenant, mapAuditEvent,
+  mapTenantCommercial, EMPTY_TENANT_COMMERCIAL,
   // Tier 4b: identity/rbac admin (lifecycle, roles, grants, bulk membership).
   mapCreatedServiceAccount, mapEffectiveAccessEntry, mapContentGrant, mapBulkGroupMembershipResult,
   mapBudget, mapRateCard, mapAnomaly, mapReportSubscription,
@@ -692,6 +693,48 @@ export const resolvers = {
 
     tenant: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.identity.tenant(a.id).then((d) => mapTenant(ctx, d))),
+
+    // BRD 66 slice 3 (CPL-FR-033): the commercial plane. Reachable by any
+    // authenticated caller in the tenant -- unlike `tenant` above, this does
+    // NOT simply forward-and-404: identity-service's GET
+    // /tenants/{id}/entitlements (built in slice 1) is gated to
+    // identity.user.admin (tenant admin) or platform super-admin, so a
+    // non-admin caller's own JWT would 403 there. The BFF checks the
+    // caller's OWN capabilities first (rbac /me/capabilities, which any
+    // authenticated principal may read for itself) and only forwards the
+    // downstream call when they qualify; otherwise it degrades to the
+    // minimal {commercialState: null, lockedFeatureKeys: []} shape rather
+    // than surfacing a 403 to every non-admin viewer -- ui-web's
+    // entitlement Gate (registry.ts) needs a stable, never-erroring shape
+    // to render locked-feature previews for ANY caller.
+    //
+    // KNOWN LIMITATION (see docs/initiatives/commercial-plane.md §3): this
+    // means a non-admin caller's lockedFeatureKeys is always [] today --
+    // full CPL-FR-013 "gating for every role" needs either a lower-
+    // privilege identity-service read path or BFF service-credential
+    // support, both out of this slice's file-ownership scope
+    // (identity-service is owned by a different slice/agent).
+    tenantCommercial: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      let isTenantAdmin = ctx.identity.claims.platform_admin === true;
+      if (!isTenantAdmin) {
+        try {
+          const caps = await ctx.clients.rbac.meCapabilities();
+          isTenantAdmin = caps.admin || caps.capabilities.includes("identity.user.admin");
+        } catch (e) {
+          console.error("tenantCommercial: rbac meCapabilities failed", e);
+          // Fail-safe: capability unconfirmed -> minimal shape, never blocks the query.
+        }
+      }
+      if (!isTenantAdmin) return EMPTY_TENANT_COMMERCIAL;
+      try {
+        const d = await ctx.clients.identity.tenantCommercial(a.id);
+        return mapTenantCommercial(d);
+      } catch (e) {
+        if (e instanceof DownstreamError && e.httpStatus === 404) return null; // cross-tenant (MASTER-FR-002/003)
+        if (e instanceof DownstreamError && e.httpStatus === 403) return EMPTY_TENANT_COMMERCIAL;
+        throw e;
+      }
+    },
 
     // Cross-tenant list for the platform-admin all-tenants view. identity's
     // requireSuperAdmin gate enforces (a tenant admin's JWT is rejected there).

@@ -472,7 +472,7 @@ export const typeDefs = gql`
     caller lacks visibility (see the type doc above) — this is a BFF-side
     capability gate, not a real "unknown" state."""
     commercialState: String
-    """`feature`-kind entitlement keys NOT present in the tenant's effective
+    """\`feature\`-kind entitlement keys NOT present in the tenant's effective
     set — i.e. platform features the tenant's plan doesn't include.
     ui-web's Gate({kind:"entitlement"}) consumes this directly to decide
     locked-preview vs normal rendering (never hidden, CPL-FR-013)."""
