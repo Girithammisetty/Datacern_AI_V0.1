@@ -470,12 +470,23 @@ start_chart() {
 
 start_usage() {
   build_go usage-service usage-e2e cmd/server
+  # Value-report export object store (BRD 69 design §2.8, handlers_value_export.go):
+  # unset VALUE_EXPORT_ROOT falls back to the hardcoded default
+  # /var/lib/usage-service/value-exports, a root-owned system path the e2e
+  # harness's unprivileged runner user cannot mkdir -- every export POST
+  # 500s with "mkdir ...: permission denied". Same fix chart-service already
+  # applies to its own EXPORT_ROOT below: point it at a writable path under
+  # the harness's own run dir. PUBLIC_URL must also be set -- unset it
+  # defaults to http://localhost:8080 (not this service's own port), so
+  # every export's presigned download link would point at the wrong service.
+  mkdir -p "$E2E_DIR/run/usage-value-exports"
   local reg_key; reg_key="$(cat "$E2E_DIR/keys/idp_private.pem")"
   say "boot usage-service"
   boot usage env \
     MIGRATE_DATABASE_URL="${PG_BASE}/usage?sslmode=disable" \
     DATABASE_URL="postgres://usage_app:usage_app@localhost:5432/usage?sslmode=disable" \
-    LISTEN_ADDR=":${PORT_USAGE}" \
+    LISTEN_ADDR=":${PORT_USAGE}" PUBLIC_URL="$USAGE_URL" \
+    VALUE_EXPORT_ROOT="$E2E_DIR/run/usage-value-exports" \
     REDIS_ADDR="$REDIS_ADDR" OPA_URL="$OPA_URL" \
     KAFKA_BROKERS="$KAFKA_BROKERS" SCHEMA_REGISTRY_URL="$SCHEMA_REGISTRY_URL" \
     RBAC_URL="$RBAC_URL" SERVICE_SIGNING_KEY_PEM="$reg_key" SERVICE_SIGNING_KID="e2e-harness-key-1" \
