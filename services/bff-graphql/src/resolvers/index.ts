@@ -475,7 +475,7 @@ interface FleetRow {
   guardrails: { dataScope: unknown; tokenBudget: number | null; piiEgress: string | null; ruleOfTwo: boolean };
   toolset: string[];
   evalGate: { status: "PASS" | "FAIL" | "STALE" | "NONE"; lastRunAt: string | null; suiteKey: string | null; unavailable: boolean };
-  killSwitch: { state: string; updatedAt: string | null; actor: string | null };
+  killSwitch: { id: string | null; state: string; updatedAt: string | null; actor: string | null };
   spend: { periodUsd: number | null; trend7dPct: number | null; unavailable: boolean } | null;
   decisions: { proposed: null; approved: null; edited: null; rejected: null; period: string; unavailable: true };
   lastIncidentAt: null;
@@ -617,6 +617,7 @@ async function buildAgentFleetRows(
           unavailable: evalUnavailable,
         },
         killSwitch: {
+          id: activeKill?.kill_id ?? null,
           state: activeKill ? "killed" : "active",
           updatedAt: activeKill?.created_at ?? null,
           actor: activeKill?.set_by ?? null,

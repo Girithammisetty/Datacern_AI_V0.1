@@ -3155,6 +3155,7 @@ export interface AgentFleetEvalGate {
 }
 
 export interface AgentFleetKillSwitchState {
+  id?: ID | null;
   state: string;
   updatedAt?: string | null;
   actor?: string | null;

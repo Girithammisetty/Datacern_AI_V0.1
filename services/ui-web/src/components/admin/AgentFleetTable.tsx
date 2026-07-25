@@ -112,8 +112,7 @@ export function AgentFleetTable() {
   const [sortKey, setSortKey] = useState<SortKey>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const rows = query.data ?? [];
-  const sorted = useMemo(() => sortFleetRows(rows, sortKey, sortDir), [rows, sortKey, sortDir]);
+  const sorted = useMemo(() => sortFleetRows(query.data ?? [], sortKey, sortDir), [query.data, sortKey, sortDir]);
   const selected = sorted.find((r) => r.key === selectedKey) ?? null;
 
   const toggleSort = (key: Exclude<SortKey, null>) => {
@@ -348,16 +347,10 @@ function AgentFleetDetail({ row, onClose }: { row: AgentFleetRow | null; onClose
         destructive
         onConfirm={() => {
           setConfirmingKill(false);
-          if (killed) {
-            // Fleet rows don't carry the underlying kill_id; re-derive it via
-            // the standard kill-switches list mutation flow is out of scope
-            // here — lifting from the fleet row targets the SAME mutation the
-            // existing kill-switches card uses, keyed by agent, not kill id,
-            // is not offered by the API. This path is reachable only when the
-            // drill-in was opened from a row already known to be killed; the
-            // existing AgentKillSwitchesCard remains the canonical lift UI.
-          } else {
-            create.mutate({ agentKey: row.key, reason: `Killed from Control Tower fleet table` });
+          if (killed && row.killSwitch.id) {
+            del.mutate(row.killSwitch.id);
+          } else if (!killed) {
+            create.mutate({ agentKey: row.key, reason: "Killed from Control Tower fleet table" });
           }
         }}
       />

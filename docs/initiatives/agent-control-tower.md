@@ -685,7 +685,214 @@ specific to this design:
 
 ## 3. Implementation & Test
 
-**pending — implementation next.**
+**Slice 1 shipped** (bff-graphql `agentFleet`/`agentFleetSummary` + ui-web
+Control Tower fleet table/tiles). Scope note: this pass was explicitly
+restricted to `services/bff-graphql` + `services/ui-web` only — two other
+concurrent agents owned `services/agent-runtime` + `services/usage-service`
+(BRD 67) and `services/identity-service` (BRD 66) in the same window, so
+**no agent-runtime route was added**, unlike §2.6/the slice plan below
+originally assumed. Every backend gap that would otherwise have needed a new
+agent-runtime route is instead degraded honestly (§3d) rather than faked.
+
+### Slice 1 — what was actually built
+
+**bff-graphql**
+- `src/schema/typeDefs.ts` — `AgentFleetRow`/`AgentFleetVersion`/
+  `AgentFleetGuardrails`/`AgentFleetEvalGate`/`AgentFleetKillSwitch`/
+  `AgentFleetSpend`/`AgentFleetDecisions`/`AgentFleetExternalInfo`/
+  `AgentFleetSummary` types + `Query.agentFleet`/`Query.agentFleetSummary`.
+  Two deliberate deviations from the literal §2.2 SDL, both documented inline
+  in the SDL doc-comments:
+  - `AgentFleetRollout` gained a 5th value `UNKNOWN` (design had only
+    STABLE/CANARY/SHADOW/PINNED) — with no rollout-read route, CANARY/SHADOW
+    can't be told apart from STABLE, so guessing STABLE would be a
+    fabrication; PINNED is still derived correctly (from
+    `TenantAgentConfig.pinned_version`, which was already exposed).
+  - `AgentFleetKillSwitch` gained an `id: ID` field (design had none) so the
+    fleet drill-in's lift action can call the existing
+    `deleteAgentKillSwitch(killId:)` mutation directly.
+- `src/clients/agent.ts` — `TenantAgentConfigDTO.guardrail_policy` (the
+  downstream `_tenant_config_view` already returns this field; no BFF field
+  read it before this slice).
+- `src/loaders/index.ts` — three new per-request dataloaders:
+  `agentVersionsByAgentKey`, `tenantAgentConfigByAgentKey`,
+  `evalGateByAgentKey` (the last collapses the eval-service 2-hop
+  latest-run→gate-by-digest chain into one per-agent lookup, reusing the
+  existing `gatesByDigest` client method). Fleet-wide spend is NOT a
+  dataloader — it's one direct `usageReport(group_by=agent)` call per period
+  (current + prior-7d for `trend7dPct`), bucketed client-side; this achieves
+  the same "fetched once, not per agent" requirement without loader
+  machinery, since the full agent-key set is already known upfront.
+- `src/resolvers/index.ts` — `buildAgentFleetRows()` (shared by both root
+  fields) + `Query.agentFleet`/`Query.agentFleetSummary`. Notable resolver
+  decisions, each documented inline at its exact spot in the code:
+  - `kind` (PLATFORM/CUSTOM/EXTERNAL) is derived with zero new backend
+    surface, from signals confirmed by reading agent-runtime source (read
+    -only — no agent-runtime file was edited): `owner_team === "tenant:<id>"`
+    (set literally by `create_custom_agent`, `registry.py:324`) → CUSTOM;
+    active version's `graph_ref === "external"` → EXTERNAL; else PLATFORM
+    (catalog seed's `owner_team="platform-ai"`, `catalog.py:122`).
+  - `evalGate.status` STALE is derived (eval-service has no such stored
+    status) as: a gate result exists but its `content_digest` no longer
+    matches the agent's *currently active* version's digest.
+  - The kill-switches list fetch and the base agent-definitions fetch are
+    both required to build ANY row — a 5xx/403 on either fails the whole
+    `agentFleet`/`agentFleetSummary` query rather than fabricating a
+    lifecycle, because `AgentFleetRow.lifecycle`/`activeVersion` have no
+    `unavailable` sibling in the SDL to degrade into (see the AgentFleetRow
+    doc-comment). This is a real, load-bearing schema gap worth revisiting in
+    a future revision (adding `unavailable` to `AgentFleetVersion` at least).
+  - Spend's error handling degrades to `unavailable:true` for **any**
+    `DownstreamError` on the usage-report call, not just 5xx (i.e. a 403 also
+    degrades rather than erroring the whole query). This is a deliberate
+    departure from §2.4 mechanism 2's "real PERMISSION_DENIED field error"
+    ideal, forced by this resolver building each row as one plain object
+    (matching the file's pre-existing monolithic-resolver style, e.g.
+    `workspaceCostPanel`) rather than a lazy per-field resolver — any
+    uncaught error inside `buildAgentFleetRows` would fail the whole
+    non-null `[AgentFleetRow!]!` list, not just the one nullable `spend`
+    field. AC-5's primary mechanism (ui-web omitting `spend` from the query
+    selection set for a capability-less caller) is unaffected and is what
+    actually satisfies AC-5 in practice; the secondary hand-built-query
+    defense is weaker than designed. Documented in both the SDL doc-comment
+    and the resolver code.
+  - `lastIncidentAt` is always `null` in slice 1 (no audit-service search
+    wiring — out of scope per the task brief's slice boundary; not
+    explicitly assigned to slice 2 or 3 either, so flagged here as an open
+    gap for whichever slice picks it up).
+  - `AgentFleetLifecycle.QUARANTINED`/`DEPRECATED` are never emitted — 
+    agent-runtime's `AgentDefinition.status` is only ever `"draft"`/
+    `"published"` (confirmed by reading `registry.py`), and there is no
+    quarantine concept in its domain model at all. Only ACTIVE/KILLED are
+    real in slice 1; an unpublished ("draft") agent reports ACTIVE (the
+    closest of the four values, though imprecise).
+- Tests: `tests/unit/agent-fleet.test.ts` (new, 7 tests) — happy path (AC-1,
+  mixed kind derivation, dataloader/single-call batching assertion), eval-gate
+  outage degrades only `evalGate` (siblings intact), usage outage degrades
+  only `spend` (never a fabricated zero), decisions' permanent
+  `unavailable:true`, a 403 on the base registry call failing the whole query
+  (ACT-FR-002/AC-5), and `agentFleetSummary` aggregation (including nulling
+  `periodSpendUsd` under a usage outage rather than a partial-sum fabrication).
+
+**ui-web**
+- `src/components/admin/AgentFleetTable.tsx` (new) — `AgentFleetTiles`
+  (ACT-FR-011 header tiles: total/active/killed counts always real; period
+  spend hidden entirely without `usage.report.read`, otherwise real-or-
+  "unavailable"; period decisions always "unavailable", per the permanent
+  slice-1 gap) and `AgentFleetTable` (ACT-FR-010: sortable `DataTable` by
+  state/spend/decisions via local client-side sort state — no shared
+  sortable-header primitive existed to reuse, so this adds a small ad hoc
+  one, matching the "no `StatCard` extraction yet" convention the design
+  itself calls out for tiles; kind/lifecycle/eval-gate chips; a guardrail
+  summary popover reusing the `ProvenanceBadge.tsx` Radix `Popover`
+  composition — the only existing precedent; a master-detail drill-in side
+  panel reusing the `KillSwitchDetail`/`AgentCatalogCard` convention instead
+  of a new route; kill/lift wired to the existing
+  `useCreateAgentKillSwitch`/`useDeleteAgentKillSwitch` mutations +
+  `ConfirmDialog`, no new write path).
+- `src/app/(app)/admin/agents/page.tsx` — the Control Tower surface mounted
+  additively above the pre-existing kill-switch/catalog/ceilings cards,
+  gated on `FEATURE_GATES.viewAgentFleet`.
+- `src/lib/authz/registry.ts` — `FEATURE_GATES.viewAgentFleet` (`cap("ai.
+  agent.read")`, reconciling ACT-FR-002's BRD-text capability name the same
+  way `viewAgentCatalog` already does) and `.viewAgentFleetSpend`
+  (`cap("usage.report.read")`).
+- `src/lib/graphql/{operations,hooks,keys,types}.ts` — `AGENT_FLEET` /
+  `AGENT_FLEET_WITH_SPEND` (two documents, not one: `useAgentFleet`'s
+  `includeSpend` flag picks between them so a capability-less caller's query
+  never even mentions `spend` — the load-bearing AC-5 mechanism, since
+  `graphqlRequest` throws on ANY GraphQL error in the response, which would
+  fail the whole table if `spend` 403'd inside a single always-requested
+  document) + `AGENT_FLEET_SUMMARY`.
+- `src/lib/i18n/messages.ts` — `fleet.*` message keys.
+- Tests: `src/components/admin/AgentFleetTable.test.tsx` (new, 4 tests) —
+  row count reflected in `aria-rowcount` + the WITH_SPEND document requested
+  for an admin viewer; the spend column header (and the `spend` field in the
+  query) fully absent for a viewer holding `ai.agent.read` but not
+  `usage.report.read` (decisions column, ungated, stays visible); tiles show
+  "unavailable" for the permanent decisions gap and for a degraded spend
+  aggregate, real numbers otherwise. `src/app/(app)/admin/agents/
+  agents.test.tsx`'s shared mock handler was extended to answer
+  `AgentFleet`/`AgentFleetSummary` (the new surface now mounts inside that
+  existing page test) so it doesn't emit "Query data cannot be undefined"
+  noise.
+  - **Not covered by a component test** (documented gap, not silently
+    dropped): the kill-from-fleet-row interaction (row click → drill-in →
+    confirm → mutation fires). `DataTable` virtualizes body rows against the
+    real scroll-container height, which jsdom always reports as `0`, so rows
+    never materialize in the DOM for `onRowActivate` to be clickable — the
+    exact same repo-wide constraint `AgentCatalogCard.test.tsx` and
+    `admin/usage/usage.test.tsx` already document and work around by not
+    testing row-click flows. The underlying `useCreateAgentKillSwitch`/
+    `useDeleteAgentKillSwitch` mutations themselves are already covered by
+    the pre-existing `agents.test.tsx` kill-switch-card tests, unchanged.
+- **Live Playwright**: `tests-live/smoke.spec.ts` — added `/admin/agents` to
+  `MODULE_ROUTES`. `tests-live/agent-fleet-journeys.spec.ts` (new) — written
+  in full to the design's slice-1 live-test plan (AC-1 mixed-kind rendering
+  cross-checked against a live `agentFleet` GraphQL call; AC-2 kill-from-row;
+  AC-3 usage-service-down degradation), but every test is `test.fixme`
+  -marked unconditionally with a stated reason — **not executed**, per this
+  task's explicit instruction not to boot/run the live stack. AC-2's test
+  additionally notes that full AC-2 (SSE flip ≤5s, no refetch) cannot pass
+  even once run until slice 2 builds the `list:agent` patcher (§2.5); this
+  version only exercises the mutation + an implicit manual refetch.
+
+### 3a. Commands run + results (verified, this pass)
+
+| Command | Where | Result |
+|---|---|---|
+| `pnpm typecheck` | bff-graphql | clean |
+| `pnpm lint` | bff-graphql | clean |
+| `pnpm test` (`vitest run`) | bff-graphql | **40/40 files, 322/322 tests pass** (315 pre-existing + 7 new in `agent-fleet.test.ts`; baseline re-confirmed green before starting) |
+| `pnpm schema:snapshot` | bff-graphql | `schema.graphql` regenerated and checked in (the snapshot test enforces this stays in sync) |
+| `pnpm typecheck` | ui-web | clean |
+| `pnpm lint` (`next lint`) | ui-web | clean (2 pre-existing `react-hooks/exhaustive-deps` warnings in unrelated files, unchanged by this work) |
+| `pnpm test` (`vitest run`) | ui-web | **79/79 files, 486/486 tests pass** (482 pre-existing baseline + 4 new in `AgentFleetTable.test.tsx`) |
+
+### 3b. Written but NOT run (verified vs. written-but-not-run)
+
+- `tests-live/agent-fleet-journeys.spec.ts` — written, `test.fixme`-marked,
+  not executed (no live compose stack booted this pass).
+- `tests-live/smoke.spec.ts`'s new `/admin/agents` row — not executed either
+  (the whole live suite was not run).
+- No agent-runtime/eval-service/usage-service integration tests were added
+  or run — none were needed since no backend route was added (scope
+  boundary, §3 intro).
+
+### 3c. Slices 2-3 — remaining (unchanged from the original plan below,
+confirmed still accurate after slice 1)
+
+- **Slice 2 — tiles + realtime.** Header tiles were actually pulled forward
+  into slice 1 (`AgentFleetTiles`, per this task's explicit brief) rather
+  than deferred as originally planned — `agentFleetSummary` ships now, not
+  in slice 2. What's genuinely still slice 2: confirm (or build) the
+  realtime-hub bridge for `agent.events.v1`/`eval.events.v1` (§2.5 open
+  item, still unconfirmed — out of scope for bff-graphql/ui-web to verify
+  alone); `list:agent` hub topic + a new `agentPatcher` entry in
+  `src/lib/realtime/patchers.ts`; wiring `useHubTopics(["list:agent"])` on
+  the Control Tower page; AC-2's SSE row flip ≤5s without refetch.
+- **Slice 3 — inventory export.** Entirely unstarted, as planned: new
+  agent-runtime export-coordination route + usage-service dependency (§2.8);
+  new audit-service `POST /compliance/artifacts` + `kind` column +
+  `GET /exports?kind=` extension + audit-event emission; BFF
+  `generateAgentInventoryExport` mutation + `auditExports` listing query;
+  `AuditComplianceCard.tsx` "past exports" section + a "Generate inventory
+  export" action on the Control Tower page.
+
+### 3d. Backend gaps deliberately left degraded (no agent-runtime edits made)
+
+Per this task's explicit scope boundary (bff-graphql + ui-web only — two
+other agents owned agent-runtime/usage-service and identity-service
+concurrently), every gap §1b/§2.6 originally assigned a new agent-runtime
+route was instead resolved honestly within the existing contract:
+
+| Field | What §2.6 originally wanted | What slice 1 actually does |
+|---|---|---|
+| `activeVersion.rollout` (CANARY/SHADOW) | `GET /registry/rollouts?agent_key=&cell=` | Resolves to `UNKNOWN` (new enum value) — no fabricated STABLE guess. PINNED still derived correctly from the already-exposed `pinned_version`. |
+| `decisions.{proposed,approved,edited,rejected}` | `GET /registry/agents/{key}/decisions?period_from=&period_to=` | Always `unavailable:true`, all counts `null`. Permanent until a future slice adds the route or wires BRD 67's `governed_decision` meter (the field shape already accepts either without a schema change, per the original design intent). |
+| `lastIncidentAt` | (not explicitly assigned a source in §2.2/§2.6) | Always `null` — no audit-service search wiring in slice 1. |
+| `kind` discriminator | "Formalize as a derivable/stored discriminator" | Derived losslessly with zero new backend surface from `owner_team` prefix + `graph_ref` — see §3 "what was actually built" above. Not a gap in practice; the design's own summary table overstated this one. |
+| `AgentFleetLifecycle.QUARANTINED`/`DEPRECATED` | (implied by the enum) | Never emitted — no backing signal in agent-runtime's domain model (`AgentDefinition.status` is only draft\|published; no quarantine concept exists anywhere in the service). |
 
 ### Slice plan
 

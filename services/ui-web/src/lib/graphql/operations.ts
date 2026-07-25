@@ -3549,7 +3549,7 @@ const AGENT_FLEET_ROW_FIELDS = /* GraphQL */ `
   guardrails { dataScope tokenBudget piiEgress ruleOfTwo }
   toolset
   evalGate { status lastRunAt suiteKey unavailable }
-  killSwitch { state updatedAt actor }
+  killSwitch { id state updatedAt actor }
   decisions { proposed approved edited rejected period unavailable }
   lastIncidentAt
   external { allowListScope sdkPrincipal autoExecute }

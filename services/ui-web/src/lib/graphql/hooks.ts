@@ -4863,7 +4863,7 @@ export function useAgentFleet(filters: AgentFleetFilters = {}, includeSpend = fa
   return useQuery({
     queryKey: qk.agentFleet({ ...filters, includeSpend }),
     queryFn: () =>
-      graphqlRequest<ops.AgentFleetResult>(includeSpend ? ops.AGENT_FLEET_WITH_SPEND : ops.AGENT_FLEET, filters).then(
+      graphqlRequest<ops.AgentFleetResult>(includeSpend ? ops.AGENT_FLEET_WITH_SPEND : ops.AGENT_FLEET, { ...filters }).then(
         (r) => r.agentFleet,
       ),
   });
@@ -4873,7 +4873,7 @@ export function useAgentFleetSummary(filters: AgentFleetFilters = {}) {
   return useQuery({
     queryKey: qk.agentFleetSummary(filters),
     queryFn: () =>
-      graphqlRequest<ops.AgentFleetSummaryResult>(ops.AGENT_FLEET_SUMMARY, filters).then(
+      graphqlRequest<ops.AgentFleetSummaryResult>(ops.AGENT_FLEET_SUMMARY, { ...filters }).then(
         (r) => r.agentFleetSummary,
       ),
   });

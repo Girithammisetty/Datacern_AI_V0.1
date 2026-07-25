@@ -7,6 +7,7 @@ import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
 import { Can } from "@/components/authz/Can";
 import { AgentCatalogCard } from "@/components/admin/AgentCatalogCard";
+import { AgentFleetTiles, AgentFleetTable } from "@/components/admin/AgentFleetTable";
 import { OperatorCeilingsCard } from "@/components/admin/OperatorCeilingsCard";
 import { Badge, Card, CardHeader, CardTitle, CardContent, Input } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,18 @@ const TOOL_SCOPES = ["tool_tenant", "tool_version", "tool"];
 export default function AdminAgentsPage() {
   return (
     <div>
+      <PageHeader title={t("fleet.title")} description={t("fleet.subtitle")} />
+      {/* BRD 68 slice 1: the Control Tower fleet view — additive above the
+          existing kill-switch/catalog/ceilings cards (the BRD frames
+          /admin/agents as evolving, not replacing). No realtime patching or
+          inventory export yet (slices 2/3). */}
+      <Can gate={FEATURE_GATES.viewAgentFleet}>
+        <div className="mb-4 space-y-4">
+          <AgentFleetTiles />
+          <AgentFleetTable />
+        </div>
+      </Can>
+
       <PageHeader title={t("killSwitch.title")} description={t("killSwitch.subtitle")} />
       <div className="grid gap-4 lg:grid-cols-2">
         <AgentKillSwitchesCard />

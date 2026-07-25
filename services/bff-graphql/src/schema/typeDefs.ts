@@ -3715,7 +3715,11 @@ export const typeDefs = gql`
     unavailable: Boolean!
   }
 
-  type AgentFleetKillSwitch { state: String! updatedAt: String actor: String }
+  """id is the underlying agent-runtime kill_id (null when there is no active
+  kill) — exposed so the fleet table's drill-in can lift a kill via the SAME
+  existing deleteAgentKillSwitch mutation the kill-switches card uses,
+  without a second lookup (ACT-NFR-003: no new write path)."""
+  type AgentFleetKillSwitch { id: ID state: String! updatedAt: String actor: String }
 
   """Null when the caller's query omitted the field (ui-web's FEATURE_GATES
   hides the column without usage.report.read — the primary AC-5 mechanism);
