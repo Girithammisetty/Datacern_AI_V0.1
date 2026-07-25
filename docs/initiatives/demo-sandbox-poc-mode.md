@@ -617,60 +617,345 @@ BRD 67's close job together.
 
 ## 3. Implementation & Test
 
-**Status: pending — implementation next.** Nothing in this initiative has
-been built yet; this document is the design gate before slice 1 starts.
+**Status: Slices 1 and 2 built and unit/API-tested; Go integration tier
+written but not executed (no Docker in this environment); ui-web watermark
+banner built and unit-tested; `packctl demo-lint` built and unit-tested
+against both synthetic fixtures and the real shipped bundle; one live-stack
+Playwright spec written and explicitly gated off (`test.skip`) pending a
+credential prerequisite `tests-live/fixtures.ts` doesn't yet provide. Slice 3
+(POC mode) is NOT started — confirmed still hard-blocked, see below.**
 
-### Slice plan
+### Slice plan (unchanged from the design; slices 1-2 are this build)
 
-- **Slice 1 — profile field + demo create/seed + watermark.**
+- **Slice 1 — profile field + demo create/seed + watermark.** ✅ **Built.**
   `Tenant.Profile` (§2.1) + immutability; `POST /demo-tenants` (DSP-FR-010)
-  wired to the existing provisioning saga with the new `SeedDemoContent`
-  step (§2.3) calling a generalized seeding runner extracted from
-  `seed_claims_demo.py`'s patterns; `deploy/demo/<pack>/` bundle format +
-  loader (§2.2) for at least one pack (claims, reusing the richest existing
-  precedent); watermark claim end-to-end (§2.6); `packctl demo-lint` (§2.8).
-  Ships without any BRD 66 dependency.
-- **Slice 2 — reset/clone/TTL.** `POST .../reset` (idempotent re-seed, §2.4),
-  `POST .../clone` (fresh sibling, §2.4), TTL reaper (§2.5) including
-  resolving the leader-election prerequisite. Still no BRD 66 dependency.
-- **Slice 3 — POC mode.** `POST /poc-tenants` + `success_criteria[]` (§2.9),
-  dashboard scoping against BRD 69, `poc-report.v1` export, billing
-  exclusion landed jointly with BRD 67 (§2.9). Hard-blocked on BRD 66's
-  `plan_key`/`commercial_state`/`trial_ends_at`/trial-sweep machinery
-  existing first (§2.1 sequencing note) — this slice cannot start before
-  that dependency is real, not merely designed.
+  wired into the existing provisioning saga via a new `SeedDemoContent` step
+  (§2.3); `deploy/demo/<pack>/` bundle format + loader (§2.2) for one pack
+  (`insurance-claims-payer`, chosen over the wellstar-rcm precedent — see
+  "Bundle choice" below); watermark claim end-to-end (§2.6); `packctl
+  demo-lint` (§2.8, AC-6).
+- **Slice 2 — reset/clone/TTL.** ✅ **Built.** `POST .../reset` (idempotent
+  re-seed, §2.4), `POST .../clone` (fresh sibling, §2.4), TTL reaper (§2.5)
+  including a real leader-election adapter resolving the prerequisite the
+  design flagged as missing.
+- **Slice 3 — POC mode.** ❌ **Not started — confirmed still hard-blocked.**
+  Re-verified against the current repo state before writing any code: BRD 66
+  slice 1 (plan catalog, `commercial_state` guard table, `internal-demo` plan
+  seed — `services/identity-service/README.md`'s "BRD 66 — Commercial plane"
+  table) is shipped, but BRD 66 slice 2 (trial start/extend/convert, the
+  T-14/T-7/T-1 threshold events, the leader-elected trial sweep) is **still
+  not built** — `docs/initiatives/commercial-plane.md` §3 confirms "Slice
+  2 — trials + sweep. ❌ Not started." DSP-FR-020's `POST /poc-tenants`
+  needs exactly that machinery (`commercial_state=trial` + `trial_ends_at`
+  reusing CPL-FR-020..023) to exist first, per §2.1's sequencing note. This
+  slice is untouched: no `poc-tenants` route, no `success_criteria` schema,
+  no `poc-report.v1` export, no BRD 67 billing-exclusion coordination.
 
-### Test plan
+### Files touched
 
-- **Go unit** (identity-service): `Tenant.Profile` immutability (no code
-  path can set it post-create); the commercial non-convertibility guard's
-  transition table (mirroring the existing `TestCanTransition`-style matrix
-  test the repo already has for `tenantTransitions`,
-  `services/identity-service/internal/domain/tenant_test.go`, extended for
-  the new axis); `SeedDemoContent` step idempotency (re-run after partial
-  failure does not duplicate); TTL reaper sweep logic (idempotent re-run is
-  a no-op, per AC-4).
-- **Py unit** (packctl): `demo-lint` contract-validation and PII-deny-list
-  checks, mirroring the existing `packs/packctl/tests/test_lint.py` pattern
-  (clean-fixture / violating-fixture pairs per finding code, as
-  `SEED_DATA_SHIPPED`/`NO_BINDING_CONTRACT` already do).
-- **Integration, real Postgres** (Testcontainers, per MASTER-FR-070):
-  full provisioning saga run with `profile=demo` against a real Postgres +
-  the existing fake Keycloak/Terraform/DB adapters the provisioning tests
-  already use (`services/identity-service/internal/domain/provisioning_test.go`),
-  extended to assert `SeedDemoContent` runs and is skipped for
-  `profile=standard`; RLS isolation test for demo tenants (MASTER-FR-004 —
-  demo/poc tenants get the identical isolation test suite as production,
-  per DSP-NFR-002, no shortcuts).
-- **One E2E**: create demo tenant (`POST /demo-tenants {pack:
-  insurance-claims-payer}`) against a real running local stack → poll to
-  `active` within the ≤10 min p95 budget → log in as each seeded persona
-  and walk the seeded journey (worklist → copilot triage → approval →
-  audit trail), matching BRD 70's AC-1 literally → assert the watermark
-  banner renders for every persona → reset → mutate a case → reset again →
-  assert state reconverges to the seeded baseline (AC-2). This mirrors the
-  existing `deploy/e2e/driver.py`-based e2e pattern
-  `seed_claims_demo.py`/`wellstar_rcm_demo.py` already prove is viable
-  end-to-end against the real stack, extended to assert the new
-  demo-specific surfaces (watermark, reset, TTL) rather than inventing a
-  new harness.
+**identity-service — domain** (new): `internal/domain/demo.go`
+(`DemoBundle`/`DemoPersona`/`DemoCase`/`DemoDataset`, `DemoBundleLoader`/
+`DemoSeedRunner` ports), `internal/domain/demo_service.go` (`DemoService`:
+`Create`/`Reset`/`Clone`), `internal/domain/demo_reaper.go` (`DemoReaper`,
+`LeaseChecker` port). **Edited**: `internal/domain/tenant.go` (`TenantProfile`
+enum + `ValidTenantProfiles`; `Tenant.Profile`/`DemoPack`/`TTLDays` fields;
+`commercialTransitionsStandard` vs `commercialTransitionsNonConvertible` —
+`CanTransitionCommercial` now takes a `TenantProfile` param, DSP-FR-003),
+`internal/domain/tenant_service.go` (`CreateTenantRequest` gains Go-only
+`Profile`/`DemoPack`/`TTLDays` fields, `json:"-"` so the public `POST
+/tenants` wire body can never set them — only `DemoService.Create` does),
+`internal/domain/commercial_service.go` (`AssignPlan` skips the
+none→active edge for non-convertible profiles instead of erroring — a demo
+tenant's forced plan assignment is a silent no-op on `commercial_state`),
+`internal/domain/store.go` (`TenantFilter.Profile`,
+`TransitionTenantCommercial` gains a `profile` param), `internal/domain/
+engine_steps.go` (new `SeedDemoContent` step — 8th step, inserted before
+`Verify`; `StepDeps` gains `DemoBundles`/`DemoSeed`), `internal/domain/
+events.go` (`demo.tenant_reaped.v1`/`demo.tenant_reset`/`demo.tenant_cloned`),
+`internal/domain/token.go` (`Claims.Profile` + `profileClaim` helper, §2.6),
+`internal/domain/token_oidc.go` (mints the `profile` claim from
+`Tenant.Profile` at real-OIDC login).
+
+**identity-service — store**: `internal/store/memory/memory.go` and
+`internal/store/postgres/postgres.go` both updated for the new `Tenant`
+columns/filter and the `TransitionTenantCommercial` signature change.
+`migrations/0012_tenant_profile.{up,down}.sql` (new: `tenants.profile`
+CHECK'd enum, `demo_pack`, `ttl_days`, a partial index for the reaper's
+sweep query).
+
+**identity-service — adapters** (new): `internal/adapters/demobundle/
+loader.go` (`FSLoader`: real filesystem/YAML bundle parser),
+`internal/adapters/demoseed/runner.go` (`SubprocessRunner`: shells out to
+`packs/demo_seed_runner.py`, minting a real short-lived service token
+in-process for it — §2.3's "operational cost flagged explicitly"),
+`internal/adapters/leaderlease/lease.go` (`Lease`: Redis `SET NX PX` +
+Lua-CAS leader election, mirroring `services/realtime-hub/internal/fanout/
+lease.go` — confirmed real, as the task briefing stated, and reused as the
+precedent §2.5 calls for).
+
+**identity-service — API**: `internal/api/handlers_demo.go` (new:
+`handleCreateDemoTenant`/`handleResetDemoTenant`/`handleCloneDemoTenant`),
+`internal/api/server.go` (`Server.Demo` field; `POST /demo-tenants[/{id}/
+reset|clone]` routes inside the existing `requireSuperAdmin` group — no new
+action label, same gate as `POST /tenants`).
+
+**identity-service — wiring**: `cmd/server/main.go` (`demobundle.FSLoader`/
+`demoseed.SubprocessRunner`/`domain.DemoService`/`domain.DemoReaper`
+construction; a 5-minute TTL-sweep ticker; `leaderlease.Lease` wired when
+`REDIS_ADDR` is set, loud-warned single-replica otherwise — same
+`REQUIRE_REAL_ADAPTERS` gate pattern as the denylist/projection adapters).
+
+**identity-service — tests** (new): `internal/domain/demo_test.go` (9 unit
+tests), `internal/domain/token_oidc_pertenant_test.go` (+1: profile-claim
+propagation), `internal/adapters/demobundle/loader_test.go` (4 unit tests,
+incl. one that validates the actual shipped bundle), `internal/api/
+handlers_demo_test.go` (2 acceptance tests), `test/integration/demo_test.go`
+(2 Testcontainers-Postgres tests, written/not run). **Edited** (mechanical,
+8-step count): `internal/domain/commercial_test.go` (fixed the 2-arg→3-arg
+`CanTransitionCommercial` call sites; added
+`TestCommercialTransitionMatrix_NonConvertible`), `internal/domain/
+provisioning_test.go`, `internal/api/acceptance_test.go`, `internal/api/
+handlers_commercial_test.go` (plan-count assertion: the fixture now seeds
+`internal-demo`, matching production), `internal/api/fixture_test.go` (wired
+fake `DemoBundleLoader`/`DemoSeedRunner` + `Server.Demo` + the seeded
+`internal-demo` plan into the shared acceptance-test fixture),
+`test/integration/pg_test.go`.
+
+**packs** (new): `packs/demo_seed_runner.py` (§2.3's generalized seeding
+runner: real dataset ingestion, persona invitation, case-queue seeding —
+see "Honest gaps" below for what it does NOT generalize),
+`packs/packctl/demo_manifest.py` (bundle loader, Python side — deliberately
+NOT `manifest.py` reused, per §2.2's "must never be mistaken for pack
+content"), `packs/packctl/demo_lint.py` (the two blocking check families),
+`packs/packctl/tests/test_demo_lint.py` (13 unit tests). **Edited**:
+`packs/packctl/cli.py` (`demo-lint` subcommand, `--packs-root` override).
+
+**deploy/demo/** (new): `insurance-claims-payer/{demo.yaml,personas.yaml,
+cases.yaml,walkthrough.yaml,data/{payer_claims,payer_denials,payer_appeals,
+prior_auth_requests}.csv}` — the one bundle DSP-FR-011 requires for slice 1.
+
+**ui-web**: `src/lib/auth/session.ts` (`SessionClaims.profile` +
+`parseClaims` decode), `src/lib/auth/personas.ts` (`Persona.profile`),
+`src/lib/auth/keys.ts` (`DevClaims.profile`, threaded into the minted dev
+JWT so the banner also renders under `AUTH_MODE=dev` without a real
+identity-service login), `src/lib/auth/personas.test.ts` (+1 test),
+`src/components/demo/DemoWatermarkBanner.{tsx,test.tsx}` (new: renders
+purely from `session.profile === "demo"`, no GraphQL round-trip, no new
+FEATURE_GATES entry or i18n key — self-contained per the task's stated
+preference), `tests-live/demo-journeys.spec.ts` (new, written/skipped —
+see "E2E" below).
+
+**Outside this task's primary ownership list, touched anyway (flagged per
+the task's instructions) — small, additive, necessary to complete the
+watermark-claim plumbing end to end**: `src/lib/session/SessionContext.tsx`
+(`SessionInfo.profile` field), `src/app/(app)/layout.tsx` (passes
+`claims.profile` into `AppShell`'s session prop), `src/components/shell/
+AppShell.tsx` (mounts `<DemoWatermarkBanner/>` between `TopBar` and
+`<main>`, the exact insertion point §2.6 names), `src/app/api/auth/login/
+route.ts` (passes a persona's optional `profile` through to
+`mintUserToken`). None of these touch GraphQL schema, `FEATURE_GATES`, or
+`src/lib/i18n/messages.ts` — the orchestrator should check them for
+conflicts with the parallel BRD 69 session's admin/value + graphql-operations
+work, but the diffs are each 1-4 lines and structurally unlikely to collide
+(BRD 69 doesn't touch session claims or the app shell).
+`packs/demo_seed_runner.py` is also technically outside the literal
+`packs/packctl/**` grant (it lives directly under `packs/`) but is the exact
+artifact §2.3 names by path.
+
+**Bundle choice.** The design's slice-1 text says "reusing the richest
+existing precedent" without naming one pack. Two candidates existed:
+`wellstar_rcm_demo.py` (bespoke, single-prospect, hand-written driver script)
+and the "deep pack v2.0.0" no-dummy-data packs (`insurance-claims-payer`,
+`banking-aml`, `card-disputes`, `healthcare-provider-rcm`,
+`chargeback-representment`). `insurance-claims-payer` was chosen: it already
+declares dataset **binding contracts** (`packs/insurance-claims-payer/data/
+datasets.yaml`) that a demo bundle's CSVs can be validated against
+mechanically (exactly what `demo-lint`'s contract check needs), and its
+`prior_auth_requests` dataset has a literal `pending` status value that maps
+directly onto "OPEN case queue row" — a cleaner fit for §2.2's `cases.yaml`
+than `payer_claims`' `denied`/`paid` binary. wellstar-rcm's bespoke script
+has no dataset contract to lint against at all.
+
+### Test commands + results
+
+```
+cd services/identity-service
+go build ./...                                          → PASS
+go vet ./... && go vet -tags integration ./...           → PASS (no findings)
+make lint   # golangci-lint run --build-tags integration → environment error, NOT a code
+            #   issue: the installed golangci-lint binary (go1.25) is older than the
+            #   module's go1.26.5 toolchain and refuses to load config. Pre-existing,
+            #   confirmed unrelated to this change (same failure on an untouched checkout).
+go test ./internal/... ./migrations/... -count=1          → PASS, all packages ok
+go test ./internal/... ./migrations/... -count=1 -v | grep -c '^--- PASS'
+                                                            → 135 passing test functions
+                                                              (0 failing, 0 broken by this change)
+go test -tags integration -timeout 600s ./test/integration/...
+                                                            → the `integration` package
+            itself: ok, every test (incl. the 2 new demo ones) SKIPs cleanly with "Docker
+            unavailable — skipping integration tier" (this sandbox has no Docker daemon:
+            `docker info` → "dial unix /var/run/docker.sock: ... no such file or directory").
+            The Makefile TARGET as a whole still exits non-zero because a SEPARATE,
+            PRE-EXISTING subpackage (test/integration/secretsigner) panics instead of
+            skipping when Docker is entirely absent (calls testcontainers'
+            MustExtractDockerSocket directly, which panics rather than returning an error
+            the way tcpg.Run does) — confirmed pre-existing and untouched by this change
+            (same panic reproduces before any BRD 70 edit); not fixed here, out of scope.
+            This is the SAME environment gap commercial-plane.md §3 already documented for
+            BRD 66's own integration tier.
+
+cd packs
+python3 -m pytest packctl/tests/ -q                        → 36 passed (23 pre-existing +
+                                                               13 new demo-lint tests, 0
+                                                               failures, 0 broken)
+python3 -m packctl.cli demo-lint ../deploy/demo/insurance-claims-payer
+                                                            → "demo-lint insurance-claims-
+                                                               payer@1.0.0: 0 error(s),
+                                                               0 warning(s)" — AC-6's
+                                                               positive case, run against
+                                                               the ACTUAL shipped bundle.
+
+cd services/ui-web
+npx tsc --noEmit                                           → PASS, 0 errors
+npx next lint                                               → PASS (2 pre-existing warnings
+                                                               in files this change never
+                                                               touched: decisions/page.tsx,
+                                                               DatasetRowsGrid.tsx)
+npx vitest run                                              → 81 test files, 501 tests
+                                                               passed (5 new: 4 in
+                                                               DemoWatermarkBanner.test.tsx,
+                                                               1 added to personas.test.ts;
+                                                               0 failures, 0 broken)
+npx playwright test -c playwright.live.config.ts \
+  tests-live/demo-journeys.spec.ts --list                   → parses cleanly, lists 2 tests
+                                                               (both test.skip — see E2E below)
+```
+
+### Verified vs written-but-not-run vs deferred
+
+- **Verified (executed, green):** `Tenant.Profile` immutability at the
+  service layer (`TestTenantProfileImmutability` — Patch's full field
+  surface cannot touch `Profile`; a plain `POST /tenants` defaults to
+  `standard`); the non-convertibility guard exhaustively over every
+  `(from,to)` pair for BOTH `demo` and `poc` profiles, plus the literal
+  AC-3 assertions (`TestCommercialTransitionMatrix_NonConvertible`,
+  `TestDemoTenantNonConvertible` — a demo tenant's forced plan assignment
+  never moves `commercial_state` past `none`); `SeedDemoContent`'s profile
+  gate (no-op for standard/poc, exactly-once `Seed` call for demo,
+  `TestSeedDemoContent_GatedByProfile`); idempotent recovery from a
+  transient seeding failure via the engine's own attempt/backoff loop
+  (`TestSeedDemoContent_RetryAfterPartialFailureDoesNotDuplicate`) and a
+  fail-loud unconfigured-adapter path
+  (`TestSeedDemoContent_MissingAdapterFailsLoud`, CONVENTIONS.md's
+  "no stub reachable from runtime"); the TTL reaper's sweep + AC-4 idempotent
+  re-run + leader-election gate + "a standard tenant with no TTL is never
+  swept" (`TestDemoReaper_*`, 2 tests); `Reset`/`Clone` at the domain layer
+  (`TestDemoService_*`, 2 tests); the watermark claim minted at real-OIDC
+  login for a demo tenant and OMITTED for a standard tenant
+  (`TestOIDCLogin_CarriesDemoProfileClaim`); the full HTTP surface —
+  `POST /demo-tenants` → 202 active with `plan.key=internal-demo` +
+  `commercial_state=none`, `POST .../reset` (200, rejected on a standard
+  tenant), `POST .../clone` (202, independent sibling id), and the
+  `requireSuperAdmin` gate (`internal/api/handlers_demo_test.go`, 2 tests);
+  the `FSLoader` against BOTH a synthetic fixture and the actual shipped
+  `deploy/demo/insurance-claims-payer/` bundle (`TestFSLoader_
+  LoadsTheShippedInsuranceClaimsPayerBundle` — if this bundle is ever
+  broken, this test catches it, not just a lint pass); `packctl demo-lint`'s
+  13 unit tests (contract violation, unresolved dataset ref, unresolved
+  `row_pk`, missing provenance, SSN-shaped/credit-card-shaped/non-fictional-
+  email PII, and the clean-bundle positive case) PLUS a direct CLI run
+  against the real bundle (0 errors); the `DemoWatermarkBanner` renders
+  only for `profile==="demo"` (not `undefined`, not `"standard"`, not
+  `"poc"`) purely from the session claim, no network call
+  (`DemoWatermarkBanner.test.tsx`, 4 tests); the dev-login persona
+  `profile` field threads through `resolveLogin` (`personas.test.ts`).
+- **Written but not executed (no Docker in this environment):**
+  `TestDemoTenantSagaOnPostgres` (full provisioning saga incl.
+  `SeedDemoContent` against real Postgres, profile round-trips through the
+  new `tenants.profile`/`demo_pack`/`ttl_days` columns, a `profile=standard`
+  sibling proves the no-op, and `UpdateTenant` never mutates `profile`) and
+  `TestDemoTenantRLSIsolation` (DSP-NFR-002 literally — a demo tenant's own
+  `users` rows get the identical RLS cross-tenant-404 + raw-SQL-invisibility
+  treatment `TestRLSIsolation` already proves for standard tenants; the RLS
+  policies themselves never branch on profile, so this demonstrates rather
+  than merely asserts "no shortcut"). Both compile clean under
+  `go vet -tags integration ./...` and auto-skip via the existing
+  `requirePG` convention.
+- **Deferred / explicitly out of slice 1-2 scope (per the task's scope, not
+  a silent gap):** the demo-persona switcher (§2.7 — DSP-FR-014 bundles it
+  with the watermark banner as one Must FR, but the task's slice-1
+  description explicitly asked only for the watermark; the switcher needs
+  real per-persona scoped-token minting on top of the real invited users
+  `demo_seed_runner.py` already creates, which is real infrastructure this
+  slice lays the groundwork for but does not finish); the guided-walkthrough
+  overlay (DSP-FR-015, Should — `walkthrough.yaml` is authored and ships in
+  the bundle per §2.2's format, but nothing in ui-web or the Go loader
+  consumes it); semantic-model authoring, dashboard/chart creation,
+  triage-copilot-driven PENDING proposals, and the best-effort retrain in
+  `demo_seed_runner.py` — `seed_claims_demo.py`'s hardcoded claims-specific
+  versions of these were NOT generalized into the bundle-driven contract
+  (explicitly flagged in `demo_seed_runner.py`'s module docstring, not
+  silently dropped); Slice 3 (POC mode) in full, confirmed still blocked
+  above.
+
+### Honest gaps (beyond the deferrals above)
+
+- **The seeding runner's bearer-token scope is broad, not least-privilege,
+  and UNVERIFIED against a live stack.** `demoseed.SubprocessRunner` mints
+  a real, short-lived (5 min, `MASTER-FR-010`) service-typed token with a
+  wildcard `["*"]` scope for `packs/demo_seed_runner.py` to drive
+  ingestion-service/case-service/identity-service with — the SAME pattern
+  `deploy/e2e`'s own harness already uses for its seed/admin operations
+  (`c.user_token(MANAGER, TENANT, ["*"], ...)`), not an invented shortcut,
+  but genuinely broader than the tightest per-call scope each downstream
+  service would ideally check. Flagged in the adapter's own doc comment.
+  Because no Docker/live stack is available in this build environment, this
+  has never actually been exercised against real ingestion-service/
+  case-service authz — it is a real, code-complete implementation, not a
+  verified one.
+- **Workspace resolution for the seeding runner is poll-based over rbac-
+  service's public API, not proven live.** `demo_seed_runner.py`'s
+  `resolve_default_workspace` mirrors identity-service's own
+  `rbacclient.WorkspaceResolver.DefaultWorkspaceID` (same real HTTP call,
+  same "best-effort, never block" contract) rather than the local e2e
+  harness's direct-Postgres shortcut (which wouldn't work across service
+  boundaries in a real deployment anyway) — but, again, unverified live.
+- **`RunScheduledDeletions` (the pre-existing grace-period deletion sweep,
+  `tenant_service.go`) remains a plain, non-leader-elected ticker.** This
+  initiative's own new reaper (`DemoReaper`) IS real leader-elected; the
+  design's §2.5 gap callout about the pre-existing sweep was about a
+  DIFFERENT sweep this BRD does not own and does not fix here — noted so
+  it isn't mistaken for having been addressed.
+- **`poc-report.v1`'s "stored/checksummed like other audited exports"
+  integration point** (§2.9) remains unconfirmed, as the design itself
+  already flagged — moot for this build since slice 3 wasn't started, but
+  restated here so it isn't lost before slice 3 begins.
+
+### E2E
+
+`services/ui-web/tests-live/demo-journeys.spec.ts` is written per this
+document's test-plan description (create → poll to active → walk the
+journey as all 4 seeded personas → assert the watermark → reset → mutate →
+reset → reconverge) and parses/lists cleanly under Playwright, but both
+tests are `test.skip`'d with an explicit reason: `tests-live/fixtures.ts`
+has no super-admin/`platform.admin` credential helper today (every existing
+live spec authenticates as a pre-seeded, non-admin `PERSONAS()` persona), and
+`POST /demo-tenants` is `requireSuperAdmin`-gated by design (§In-scope,
+"operator/partner-created in v1"). The spec documents exactly what that
+helper needs to do (mirroring `hero-learning-loop.spec.ts`'s precedent of
+calling a non-BFF service directly via an `E2E_LIVE_*_URL` env var) so it is
+ready to enable once that prerequisite lands — not a placeholder. Per the
+task's explicit instruction, the live stack was not booted or run.
+
+### A note on git state
+
+While this work was in progress, the environment auto-created intermediate
+"wip" commits (`f8d15ae`, `b523ba1`) capturing snapshots of the in-flight
+implementation shared with the concurrent BRD 69 session — these were not
+`git commit` calls made by this agent (no commit was issued at any point in
+this session; the task explicitly says not to commit). The same phenomenon
+is independently documented in `docs/initiatives/commercial-plane.md` §3.
+Flagging this again for the orchestrator's awareness since it affects what
+"the diff" means when reviewing this change — the full BRD 70 slice 1-2 diff
+is the union of those snapshot commits' BRD-70-scoped hunks plus the working
+tree at hand-off.
