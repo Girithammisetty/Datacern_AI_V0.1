@@ -230,3 +230,70 @@ func (s *Server) handleGetTenantEntitlements(w http.ResponseWriter, r *http.Requ
 		"trial_ends_at":    eff.TrialEndsAt,
 	})
 }
+
+// Trial lifecycle endpoints (BRD 66 slice 2, CPL-FR-021, US-3): start/extend/
+// convert. requireSuperAdmin, mounted in server.go alongside the slice-1
+// commercial routes (same middleware group, so Idempotency-Key handling per
+// MASTER-FR-025 applies automatically via the existing idempotencyMiddleware).
+
+// POST /tenants/{id}/trial (CPL-FR-021)
+func (s *Server) handleStartTrial(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	var req domain.StartTrialRequest
+	if r.ContentLength > 0 {
+		if err := decodeBody(r, &req); err != nil {
+			writeErr(w, r, err)
+			return
+		}
+	}
+	t, err := s.Trials.Start(r.Context(), id, req, actorFrom(ClaimsFrom(r.Context())))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
+// POST /tenants/{id}/trial/extend (CPL-FR-021: reason required + audited)
+func (s *Server) handleExtendTrial(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	var req domain.ExtendTrialRequest
+	if err := decodeBody(r, &req); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	t, err := s.Trials.Extend(r.Context(), id, req, actorFrom(ClaimsFrom(r.Context())))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
+// POST /tenants/{id}/convert (CPL-FR-021: trial->active with target plan)
+func (s *Server) handleConvertTrial(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(r)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	var req domain.ConvertTrialRequest
+	if err := decodeBody(r, &req); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	t, err := s.Trials.Convert(r.Context(), id, req, actorFrom(ClaimsFrom(r.Context())))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}

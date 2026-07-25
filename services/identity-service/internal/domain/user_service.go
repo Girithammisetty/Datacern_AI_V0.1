@@ -258,3 +258,56 @@ func (s *UserService) Patch(ctx context.Context, tenantID, userID uuid.UUID, ful
 	}
 	return u, nil
 }
+
+// checkSeatCap enforces CPL-FR-031's invite-path seat_cap gate against
+// entitlements_flat, per CPL-NFR-004's fail-open(reads)/fail-closed(writes)
+// split: this IS an entitlement-gated write, so a projection read failure
+// (Redis unreachable) fails closed with 503 ENTITLEMENT_UNAVAILABLE. A clean
+// "no projection row for this tenant" (never assigned a plan, or overrides
+// only with no seat_cap) is NOT unavailability -- it resolves to "no cap
+// configured", i.e. unlimited, matching how the platform behaved before this
+// gate existed (slice 1 shipped the projection dark, nothing enforced it).
+func (s *UserService) checkSeatCap(ctx context.Context, tenantID uuid.UUID) error {
+	if s.Entitlements == nil {
+		return nil // feature not wired (dev/single-replica without Redis) -- unenforced, not blocked
+	}
+	set, ok, err := s.Entitlements.ReadEntitlements(ctx, tenantID)
+	if err != nil {
+		return EEntitlementUnavailable()
+	}
+	if !ok {
+		return nil
+	}
+	limit, hasCap := seatCapLimit(set.Entitlements)
+	if !hasCap {
+		return nil
+	}
+	current, err := s.Store.CountUsers(ctx, tenantID, []UserStatus{UserInvited, UserActive})
+	if err != nil {
+		return err
+	}
+	if current >= limit {
+		return ECapExceeded(current, limit)
+	}
+	return nil
+}
+
+// seatCapLimit extracts the first kind=seat_cap entitlement's numeric limit
+// (value_json {"n": N} per the seeded plan data, migrations/0010_commercial_
+// plans.up.sql). JSON numbers decode as float64 through map[string]any.
+func seatCapLimit(ents []EffectiveEntitlement) (int, bool) {
+	for _, e := range ents {
+		if e.Kind != KindSeatCap {
+			continue
+		}
+		if n, ok := e.Value["n"]; ok {
+			switch v := n.(type) {
+			case float64:
+				return int(v), true
+			case int:
+				return v, true
+			}
+		}
+	}
+	return 0, false
+}

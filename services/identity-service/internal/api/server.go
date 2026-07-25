@@ -50,6 +50,9 @@ type Server struct {
 	// resolution.
 	Plans      *domain.PlanService
 	Commercial *domain.CommercialService
+	// Trials: commercial plane slice 2 (BRD 66 slice 2, CPL-FR-021) trial
+	// lifecycle: start/extend/convert.
+	Trials *domain.TrialService
 	// Demo: demo-sandbox lifecycle (BRD 70 slice 1/2) -- create/reset/clone.
 	// Nil is a valid, honest "not configured" state on a deployment that
 	// never exposes /demo-tenants (the routes below still register; Demo's

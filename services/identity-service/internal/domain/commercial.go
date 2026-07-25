@@ -5,6 +5,7 @@
 package domain
 
 import (
+	"context"
 	"regexp"
 	"strings"
 	"time"
@@ -124,6 +125,34 @@ type EffectiveSet struct {
 	CommercialState CommercialState         `json:"commercial_state"`
 	TrialEndsAt     *time.Time              `json:"trial_ends_at,omitempty"`
 	Entitlements    []EffectiveEntitlement  `json:"entitlements"`
+}
+
+// EntitlementReader abstracts a read of the tenant's entitlements_flat
+// projection (CPL-NFR-001: no synchronous identity-service call in the
+// request path) so entitlement-gated write paths (CPL-FR-031's seat_cap
+// invite gate) are testable without a live Redis, and so this package
+// doesn't need to import internal/projection (which itself imports domain --
+// an EntitlementReader implementation is instead adapted from
+// projection.ReadSet in main.go via EntitlementReaderFunc below).
+//
+// Contract (CPL-NFR-004's fail-open/fail-closed split): ok=false, err=nil
+// means "no projection row for this tenant" (never assigned a plan, or
+// overrides only with no matching kind) -- NOT unavailability; it resolves
+// to "no cap configured". err!=nil means the projection could not be read AT
+// ALL (e.g. Redis unreachable) -- entitlement-gated writes MUST fail closed
+// (503 ENTITLEMENT_UNAVAILABLE, EEntitlementUnavailable()) on this case.
+type EntitlementReader interface {
+	ReadEntitlements(ctx context.Context, tenantID uuid.UUID) (set EffectiveSet, ok bool, err error)
+}
+
+// EntitlementReaderFunc adapts a plain func to EntitlementReader (mirrors
+// http.HandlerFunc), so main.go can wire projection.ReadSet directly without
+// a named adapter type living in internal/projection (which already imports
+// domain, so domain importing it back would cycle).
+type EntitlementReaderFunc func(ctx context.Context, tenantID uuid.UUID) (EffectiveSet, bool, error)
+
+func (f EntitlementReaderFunc) ReadEntitlements(ctx context.Context, tenantID uuid.UUID) (EffectiveSet, bool, error) {
+	return f(ctx, tenantID)
 }
 
 type entKey struct {
