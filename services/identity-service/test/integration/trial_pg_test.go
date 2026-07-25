@@ -85,7 +85,7 @@ func TestTrialSweep_ExpiresEndToEnd(t *testing.T) {
 		t.Fatalf("no trial_events(expired) row: %+v", rows)
 	}
 	var outboxN int
-	if err := appPool.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE tenant_id=$1 AND event_type=$2`,
+	if err := adminPool.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE tenant_id=$1 AND event_type=$2`,
 		tn.ID, domain.EvCommercialTrialExpired).Scan(&outboxN); err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestTrialSweep_ExpiresEndToEnd(t *testing.T) {
 	if expired2 != 0 {
 		t.Fatalf("second sweep expired %d, want 0 (idempotent no-op)", expired2)
 	}
-	if err := appPool.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE tenant_id=$1 AND event_type=$2`,
+	if err := adminPool.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE tenant_id=$1 AND event_type=$2`,
 		tn.ID, domain.EvCommercialTrialExpired).Scan(&outboxN); err != nil {
 		t.Fatal(err)
 	}
@@ -183,6 +183,12 @@ func TestInviteOverCap_ReturnsCorrectCurrentLimit(t *testing.T) {
 
 	store := pgstore.New(appPool)
 	tn := newTenantRow(t, store, domain.TenantActive)
+	// newTenantRow calls store.CreateTenant directly -- it does NOT run the
+	// real provisioning saga (engine_steps.go), which is what actually
+	// creates a tenant's first "Owner" user. This test's own comment below
+	// assumes that owner already occupies the seat, so make that true
+	// explicitly rather than relying on a saga path this helper never runs.
+	_ = newUserRow(t, store, tn.ID, "owner@"+tn.Name+".example")
 	commercial := &domain.CommercialService{Store: store, Clock: time.Now}
 	plans := &domain.PlanService{Store: store, Clock: time.Now}
 

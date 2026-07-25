@@ -298,8 +298,15 @@ func TestCommercialProjection_RedisRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Fatalf("processed = %d, want 1 (the AssignTenantPlan dirty row)", n)
+	// >= 1, not == 1: commercial_dirty is shared across every test in this
+	// package (one Postgres container for the whole package via TestMain),
+	// and ProcessOnce correctly drains ALL pending rows, not just this
+	// test's own -- other tests' AssignTenantPlan calls legitimately leave
+	// their own dirty rows behind since they don't run a worker. The real
+	// assertion for this test is the Redis payload check below, which is
+	// scoped to this tenant specifically.
+	if n < 1 {
+		t.Fatalf("processed = %d, want >= 1 (the AssignTenantPlan dirty row)", n)
 	}
 
 	raw, err := rdb.Get(ctx, projection.Key(tn.ID.String())).Result()
