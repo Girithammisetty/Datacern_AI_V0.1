@@ -130,13 +130,14 @@ func (s *TokenService) OIDCLogin(ctx context.Context, req OIDCLoginRequest, trac
 	}
 
 	tok, expiresIn, err := s.Issuer.Issue(Claims{
-		Subject:       user.ID.String(),
-		TenantID:      tenant.ID,
-		Typ:           TypUser,
-		Scopes:        scopes,
-		PlatformAdmin: platformAdmin,
-		WorkspaceID:   workspaceID,
-		Profile:       profileClaim(tenant.Profile), // BRD 70 §2.6
+		Subject:         user.ID.String(),
+		TenantID:        tenant.ID,
+		Typ:             TypUser,
+		Scopes:          scopes,
+		PlatformAdmin:   platformAdmin,
+		WorkspaceID:     workspaceID,
+		Profile:         profileClaim(tenant.Profile),   // BRD 70 §2.6
+		CommercialState: string(tenant.CommercialState), // BRD 66 slice 2, CPL-FR-022
 	})
 	if err != nil {
 		return nil, err

@@ -104,14 +104,15 @@ func (s *TokenService) OBOExchange(ctx context.Context, req OBORequest, traceID 
 		return nil, ERateLimited(retry) // AC-14
 	}
 	tok, expiresIn, err := s.Issuer.Issue(Claims{
-		Subject:      "agent:" + req.AgentID + "@" + req.AgentVersion,
-		TenantID:     tenant.ID,
-		Typ:          TypAgentOBO,
-		AgentID:      req.AgentID,
-		AgentVersion: req.AgentVersion,
-		OBOSub:       user.ID.String(),
-		Scopes:       agent.Scopes, // OPA intersects with user grants at call time (MASTER-FR-015)
-		SessionID:    req.SessionID,
+		Subject:         "agent:" + req.AgentID + "@" + req.AgentVersion,
+		TenantID:        tenant.ID,
+		Typ:             TypAgentOBO,
+		AgentID:         req.AgentID,
+		AgentVersion:    req.AgentVersion,
+		OBOSub:          user.ID.String(),
+		Scopes:          agent.Scopes, // OPA intersects with user grants at call time (MASTER-FR-015)
+		SessionID:       req.SessionID,
+		CommercialState: string(tenant.CommercialState), // BRD 66 slice 2, CPL-FR-022
 	})
 	if err != nil {
 		return nil, err
@@ -155,12 +156,13 @@ func (s *TokenService) AutonomousToken(ctx context.Context, req AutonomousTokenR
 		return nil, EAgentDisabled("agent version is not allowed to run autonomously for this tenant")
 	}
 	tok, expiresIn, err := s.Issuer.Issue(Claims{
-		Subject:      "agent:" + req.AgentID + "@" + req.AgentVersion,
-		TenantID:     tenant.ID,
-		Typ:          TypAgentAutonomous,
-		AgentID:      req.AgentID,
-		AgentVersion: req.AgentVersion,
-		Scopes:       agent.Scopes,
+		Subject:         "agent:" + req.AgentID + "@" + req.AgentVersion,
+		TenantID:        tenant.ID,
+		Typ:             TypAgentAutonomous,
+		AgentID:         req.AgentID,
+		AgentVersion:    req.AgentVersion,
+		Scopes:          agent.Scopes,
+		CommercialState: string(tenant.CommercialState), // BRD 66 slice 2, CPL-FR-022
 	})
 	if err != nil {
 		return nil, err
@@ -281,10 +283,11 @@ func (s *TokenService) ExchangeAPIKey(ctx context.Context, apiKey, traceID strin
 		return nil, err
 	}
 	tok, expiresIn, err := s.Issuer.Issue(Claims{
-		Subject:  "sa:" + sa.ID.String(),
-		TenantID: tenant.ID,
-		Typ:      TypService,
-		Scopes:   sa.Scopes,
+		Subject:         "sa:" + sa.ID.String(),
+		TenantID:        tenant.ID,
+		Typ:             TypService,
+		Scopes:          sa.Scopes,
+		CommercialState: string(tenant.CommercialState), // BRD 66 slice 2, CPL-FR-022
 	})
 	if err != nil {
 		return nil, err

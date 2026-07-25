@@ -28,6 +28,7 @@ import (
 	"github.com/datacern-ai/rbac-service/internal/api"
 	"github.com/datacern-ai/rbac-service/internal/authz"
 	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/entitlements"
 	"github.com/datacern-ai/rbac-service/internal/events"
 	"github.com/datacern-ai/rbac-service/internal/projection"
 	"github.com/datacern-ai/rbac-service/internal/store"
@@ -212,7 +213,12 @@ func run() error {
 		return err
 	}
 
-	srv := &api.Server{Store: st, Checker: checker, Writer: writer, Reader: reader, Verifier: verifier, Redis: rdb}
+	// entitlements_flat reader (BRD 66 slice 3, CPL-FR-031): the same shared
+	// projection Redis rbac already uses for permissions_flat, direct-read, no
+	// synchronous identity-service call (CPL-NFR-001).
+	entReader := entitlements.NewReader(rdb)
+
+	srv := &api.Server{Store: st, Checker: checker, Writer: writer, Reader: reader, Verifier: verifier, Redis: rdb, Entitlements: entReader}
 	httpSrv := &http.Server{
 		Addr:              env("LISTEN_ADDR", ":8080"),
 		Handler:           otelx.WrapHandler(srv.Router(), "rbac-service"),

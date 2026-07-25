@@ -51,6 +51,18 @@ type Claims struct {
 	// is left unset on the wire to keep the common token small, matching
 	// Embed/Surface's own omitempty convention).
 	Profile string `json:"profile,omitempty"`
+	// CommercialState (BRD 66 slice 2, CPL-FR-022/design doc "Commercial-state
+	// claim + fail-open/fail-closed"): mirrors Tenant.CommercialState at mint
+	// time, read from the tenant row directly (mint already loads the tenant
+	// -- no extra lookup, same "from session claim" shape as Profile above).
+	// Lets a downstream service do the fast, request-local "is this tenant on
+	// an expired trial" check (writes -> 403 TRIAL_EXPIRED) with no round
+	// trip. Unlike Profile, this is never omitted: CommercialNone ("none") is
+	// itself a meaningful, non-empty value, so the claim is always present
+	// once minted (design doc's fail-open/fail-closed table: "claim is always
+	// present once minted... no fail-open/closed ambiguity here since it's
+	// not projection-dependent").
+	CommercialState string `json:"commercial_state,omitempty"`
 	// Standard claims (filled by the issuer).
 	Issuer    string    `json:"iss,omitempty"`
 	Audience  string    `json:"aud,omitempty"`

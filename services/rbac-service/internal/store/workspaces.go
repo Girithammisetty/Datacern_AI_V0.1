@@ -324,6 +324,17 @@ func (s *Store) UnlinkContentGroup(ctx context.Context, op Op, workspaceID, grou
 	})
 }
 
+// CountActiveWorkspaces counts non-archived workspaces in a tenant (CPL-FR-031:
+// the workspace_cap entitlement check compares this against the cap before
+// CreateWorkspace runs).
+func (s *Store) CountActiveWorkspaces(ctx context.Context, tenant uuid.UUID) (int, error) {
+	var n int
+	err := s.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM workspaces WHERE archived_at IS NULL`).Scan(&n)
+	})
+	return n, err
+}
+
 // ArchivedWorkspaceIDs lists all archived workspaces in a tenant.
 func (s *Store) ArchivedWorkspaceIDs(ctx context.Context, tenant uuid.UUID) ([]uuid.UUID, error) {
 	var ids []uuid.UUID

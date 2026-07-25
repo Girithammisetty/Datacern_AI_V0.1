@@ -47,6 +47,9 @@ type Store struct {
 	overrides        map[uuid.UUID]map[string]*domain.TenantEntitlementOverride // tenantID -> "kind/key" -> row
 	commercialDirty  []*commercialDirtyRow
 	dirtySeq         int64
+	// trialEvents holds the trial_events audit trail (BRD 66 slice 2), newest
+	// append last per tenant; ListTrialEvents reverses to newest-first.
+	trialEvents map[uuid.UUID][]*domain.TrialEvent
 }
 
 // commercialDirtyRow mirrors the postgres commercial_dirty table for the
@@ -84,6 +87,7 @@ func New() *Store {
 		planEntitlements: map[string][]*domain.PlanEntitlement{},
 		tenantPlans:      map[uuid.UUID]*domain.TenantPlan{},
 		overrides:        map[uuid.UUID]map[string]*domain.TenantEntitlementOverride{},
+		trialEvents:      map[uuid.UUID][]*domain.TrialEvent{},
 	}
 }
 
@@ -469,6 +473,178 @@ func (s *Store) DeleteCommercialDirty(_ context.Context, ids []int64) error {
 	return nil
 }
 
+// --- commercial: trial lifecycle (BRD 66 slice 2, CPL-FR-020..023) ---
+
+func (s *Store) recordTrialEventLocked(tev domain.TrialEvent) {
+	cp := tev
+	s.trialEvents[tev.TenantID] = append(s.trialEvents[tev.TenantID], &cp)
+}
+
+func (s *Store) StartTrial(_ context.Context, id uuid.UUID, profile domain.TenantProfile, startedAt, endsAt time.Time, tev domain.TrialEvent, evs ...domain.OutboxEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tenants[id]
+	if !ok {
+		return domain.ENotFound("tenant")
+	}
+	if !domain.CanTransitionCommercial(profile, t.CommercialState, domain.CommercialTrial) {
+		return domain.EConflict("invalid commercial state transition " + string(t.CommercialState) + " -> trial")
+	}
+	t.CommercialState = domain.CommercialTrial
+	st, en := startedAt, endsAt
+	t.TrialStartedAt = &st
+	t.TrialEndsAt = &en
+	t.UpdatedAt = time.Now().UTC()
+	s.recordTrialEventLocked(tev)
+	s.appendOutboxLocked(evs)
+	s.markCommercialDirtyLocked(id)
+	return nil
+}
+
+func (s *Store) ExtendTrial(_ context.Context, id uuid.UUID, newEndsAt time.Time, tev domain.TrialEvent, evs ...domain.OutboxEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tenants[id]
+	if !ok {
+		return domain.ENotFound("tenant")
+	}
+	if t.CommercialState != domain.CommercialTrial {
+		return domain.EConflict("tenant is not on an active trial (commercial_state=" + string(t.CommercialState) + ")")
+	}
+	en := newEndsAt
+	t.TrialEndsAt = &en
+	t.UpdatedAt = time.Now().UTC()
+	s.recordTrialEventLocked(tev)
+	s.appendOutboxLocked(evs)
+	return nil
+}
+
+func (s *Store) ConvertTrial(_ context.Context, id uuid.UUID, profile domain.TenantProfile, from domain.CommercialState, tp domain.TenantPlan, tev domain.TrialEvent, evs ...domain.OutboxEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tenants[id]
+	if !ok {
+		return domain.ENotFound("tenant")
+	}
+	if t.CommercialState != from {
+		return domain.EConflict("tenant commercial_state is " + string(t.CommercialState) + ", expected " + string(from))
+	}
+	if !domain.CanTransitionCommercial(profile, from, domain.CommercialActive) {
+		return domain.EConflict("invalid commercial state transition " + string(from) + " -> active")
+	}
+	t.CommercialState = domain.CommercialActive
+	t.TrialEndsAt = nil
+	t.UpdatedAt = time.Now().UTC()
+	cp := tp
+	s.tenantPlans[tp.TenantID] = &cp
+	s.recordTrialEventLocked(tev)
+	s.appendOutboxLocked(evs)
+	s.markCommercialDirtyLocked(id)
+	return nil
+}
+
+func (s *Store) SweepExpireTrial(_ context.Context, id uuid.UUID, profile domain.TenantProfile, now time.Time, tev domain.TrialEvent, evs ...domain.OutboxEvent) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tenants[id]
+	if !ok {
+		return false, domain.ENotFound("tenant")
+	}
+	if t.CommercialState != domain.CommercialTrial {
+		// CPL-NFR-003: already transitioned by a prior pass -- silent no-op,
+		// not an error (a re-run after a leader handoff must not surface a
+		// spurious CONFLICT to the sweep loop).
+		return false, nil
+	}
+	if !domain.CanTransitionCommercial(profile, domain.CommercialTrial, domain.CommercialSuspendedCommercial) {
+		return false, domain.EConflict("invalid commercial state transition trial -> suspended_commercial")
+	}
+	t.CommercialState = domain.CommercialSuspendedCommercial
+	t.UpdatedAt = now.UTC()
+	s.recordTrialEventLocked(tev)
+	s.appendOutboxLocked(evs)
+	s.markCommercialDirtyLocked(id)
+	return true, nil
+}
+
+func (s *Store) InsertTrialEvent(_ context.Context, tev domain.TrialEvent, evs ...domain.OutboxEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.tenants[tev.TenantID]; !ok {
+		return domain.ENotFound("tenant")
+	}
+	s.recordTrialEventLocked(tev)
+	s.appendOutboxLocked(evs)
+	return nil
+}
+
+func (s *Store) ListExpiredTrials(_ context.Context, asOf time.Time, limit int) ([]*domain.Tenant, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []*domain.Tenant{}
+	for _, t := range s.tenants {
+		if t.CommercialState != domain.CommercialTrial || t.TrialEndsAt == nil {
+			continue
+		}
+		if t.TrialEndsAt.After(asOf) {
+			continue
+		}
+		cp := *t
+		out = append(out, &cp)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (s *Store) ListTrialsForThreshold(_ context.Context, eventType string, asOf, windowEnd time.Time, limit int) ([]*domain.Tenant, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []*domain.Tenant{}
+	for _, t := range s.tenants {
+		if t.CommercialState != domain.CommercialTrial || t.TrialEndsAt == nil {
+			continue
+		}
+		if t.TrialEndsAt.Before(asOf) || t.TrialEndsAt.After(windowEnd) {
+			continue
+		}
+		if s.hasTrialEventLocked(t.ID, eventType) {
+			continue // CPL-FR-023 dedup
+		}
+		cp := *t
+		out = append(out, &cp)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// hasTrialEventLocked reports whether tenantID already has a trial_events row
+// of eventType; caller holds s.mu (read or write lock).
+func (s *Store) hasTrialEventLocked(tenantID uuid.UUID, eventType string) bool {
+	for _, ev := range s.trialEvents[tenantID] {
+		if ev.EventType == eventType {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) ListTrialEvents(_ context.Context, tenantID uuid.UUID) ([]domain.TrialEvent, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows := s.trialEvents[tenantID]
+	out := make([]domain.TrialEvent, 0, len(rows))
+	for i := len(rows) - 1; i >= 0; i-- { // newest first
+		out = append(out, *rows[i])
+	}
+	return out, nil
+}
+
 // --- cells ---
 
 func (s *Store) CreateCell(_ context.Context, c *domain.Cell) error {
@@ -814,6 +990,27 @@ func (s *Store) ListUsers(_ context.Context, tenantID uuid.UUID, f domain.UserFi
 	all = capLen(all, page.Limit+1)
 	items, info := domain.BuildPage(all, page.Limit, func(u *domain.User) uuid.UUID { return u.ID })
 	return items, info, nil
+}
+
+// CountUsers counts non-deleted users in the given statuses (BRD 66 slice 2,
+// CPL-FR-031's seat_cap invite gate).
+func (s *Store) CountUsers(_ context.Context, tenantID uuid.UUID, statuses []domain.UserStatus) (int, error) {
+	want := map[domain.UserStatus]bool{}
+	for _, st := range statuses {
+		want[st] = true
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	n := 0
+	for _, u := range s.users {
+		if u.TenantID != tenantID || u.DeletedAt != nil {
+			continue
+		}
+		if len(want) == 0 || want[u.Status] {
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (s *Store) UpdateUser(_ context.Context, u *domain.User, evs ...domain.OutboxEvent) error {

@@ -86,3 +86,21 @@ CREATE POLICY tenant_isolation ON commercial_dirty
 CREATE POLICY commercial_dirty_platform ON commercial_dirty
     USING (current_setting('app.role', true) = 'platform')
     WITH CHECK (current_setting('app.role', true) = 'platform');
+
+-- Explicit grant, not left to ALTER DEFAULT PRIVILEGES (0003_app_role.up.sql):
+-- these are the first new tables created after 0003 ran, and default
+-- privileges only apply to objects subsequently created *by the same role*
+-- that executed the ALTER DEFAULT PRIVILEGES statement -- a property this
+-- migration file cannot itself guarantee holds for every migration runner
+-- (e.g. a CI harness that reconnects as a different role between files).
+-- rbac-service's equivalent dirty-queue table (projection_dirty) never hit
+-- this gap because it was created in that service's very first migration,
+-- before its app-role grant ever ran, so the bulk "ALL SEQUENCES" grant in
+-- that later migration already covered it. commercial_dirty is the first
+-- BIGSERIAL table in this service created *after* 0003, which is exactly the
+-- case ALTER DEFAULT PRIVILEGES's role-scoping can silently miss -- confirmed
+-- live: CI failed with "permission denied for sequence
+-- commercial_dirty_id_seq" (nextval() requires USAGE) on the bulk grant path
+-- alone. Sequences need USAGE explicitly; GRANT on a table never implies it.
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_plan, tenant_entitlement_overrides, commercial_dirty TO identity_app;
+GRANT USAGE, SELECT ON SEQUENCE commercial_dirty_id_seq TO identity_app;

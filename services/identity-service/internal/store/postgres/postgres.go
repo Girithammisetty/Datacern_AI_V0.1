@@ -1040,6 +1040,23 @@ func (s *Store) ListUsers(ctx context.Context, tenantID uuid.UUID, f domain.User
 	return items, info, nil
 }
 
+// CountUsers counts non-deleted users in the given statuses (BRD 66 slice 2,
+// CPL-FR-031's seat_cap invite gate).
+func (s *Store) CountUsers(ctx context.Context, tenantID uuid.UUID, statuses []domain.UserStatus) (int, error) {
+	strs := make([]string, len(statuses))
+	for i, st := range statuses {
+		strs[i] = string(st)
+	}
+	var n int
+	err := s.tenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT count(*) FROM users
+			WHERE tenant_id=$1 AND deleted_at IS NULL AND (cardinality($2::text[]) = 0 OR status = ANY($2))`,
+			tenantID, strs).Scan(&n)
+	})
+	return n, err
+}
+
 func (s *Store) UpdateUser(ctx context.Context, u *domain.User, evs ...domain.OutboxEvent) error {
 	return s.tenantTx(ctx, u.TenantID, func(tx pgx.Tx) error {
 		ct, err := tx.Exec(ctx, `
