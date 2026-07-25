@@ -97,7 +97,7 @@ const (
 // endpoints.
 var commercialTransitionsStandard = map[CommercialState][]CommercialState{
 	CommercialNone:                {CommercialTrial, CommercialActive},
-	CommercialTrial:                {CommercialActive, CommercialSuspendedCommercial},
+	CommercialTrial:               {CommercialActive, CommercialSuspendedCommercial},
 	CommercialActive:              {CommercialChurned},
 	CommercialSuspendedCommercial: {CommercialActive, CommercialChurned},
 }
@@ -117,7 +117,7 @@ var commercialTransitionsStandard = map[CommercialState][]CommercialState{
 // without ever passing through Active.
 var commercialTransitionsNonConvertible = map[CommercialState][]CommercialState{
 	CommercialNone:                {},
-	CommercialTrial:                {CommercialSuspendedCommercial},
+	CommercialTrial:               {CommercialSuspendedCommercial},
 	CommercialActive:              {CommercialChurned},
 	CommercialSuspendedCommercial: {CommercialChurned},
 }

@@ -24,21 +24,21 @@ type Store struct {
 	tenants        map[uuid.UUID]*domain.Tenant
 	platformAdmins map[uuid.UUID]*domain.PlatformAdmin
 	cells          map[uuid.UUID]*domain.Cell
-	modules      map[uuid.UUID][]string // tenantID -> modules
-	steps        map[string]*domain.ProvisioningStep
-	users        map[uuid.UUID]*domain.User
-	invitations  map[uuid.UUID]*domain.Invitation
-	serviceAccts map[uuid.UUID]*domain.ServiceAccount
-	apiKeyIndex  map[uuid.UUID]uuid.UUID // saID -> tenantID
-	agents       map[string]*domain.AgentPrincipal
-	signingKeys  map[string]*domain.SigningKey
-	embedConfigs map[uuid.UUID]*domain.TenantEmbedConfig
-	branding     map[uuid.UUID]*domain.TenantBranding
-	extAgentKeys map[uuid.UUID]*domain.ExternalAgentKey
-	idpConfigs   map[uuid.UUID]*domain.TenantIdpConfig
-	labels       map[uuid.UUID]map[string]*domain.DisplayLabel
-	idempotency  map[string]*domain.IdempotencyRecord
-	outbox       []*domain.OutboxEvent
+	modules        map[uuid.UUID][]string // tenantID -> modules
+	steps          map[string]*domain.ProvisioningStep
+	users          map[uuid.UUID]*domain.User
+	invitations    map[uuid.UUID]*domain.Invitation
+	serviceAccts   map[uuid.UUID]*domain.ServiceAccount
+	apiKeyIndex    map[uuid.UUID]uuid.UUID // saID -> tenantID
+	agents         map[string]*domain.AgentPrincipal
+	signingKeys    map[string]*domain.SigningKey
+	embedConfigs   map[uuid.UUID]*domain.TenantEmbedConfig
+	branding       map[uuid.UUID]*domain.TenantBranding
+	extAgentKeys   map[uuid.UUID]*domain.ExternalAgentKey
+	idpConfigs     map[uuid.UUID]*domain.TenantIdpConfig
+	labels         map[uuid.UUID]map[string]*domain.DisplayLabel
+	idempotency    map[string]*domain.IdempotencyRecord
+	outbox         []*domain.OutboxEvent
 
 	// --- commercial plane (BRD 66 slice 1) ---
 	plans            map[string]*domain.Plan
@@ -65,20 +65,20 @@ func New() *Store {
 		tenants:        map[uuid.UUID]*domain.Tenant{},
 		platformAdmins: map[uuid.UUID]*domain.PlatformAdmin{},
 		cells:          map[uuid.UUID]*domain.Cell{},
-		modules:      map[uuid.UUID][]string{},
-		steps:        map[string]*domain.ProvisioningStep{},
-		users:        map[uuid.UUID]*domain.User{},
-		invitations:  map[uuid.UUID]*domain.Invitation{},
-		serviceAccts: map[uuid.UUID]*domain.ServiceAccount{},
-		apiKeyIndex:  map[uuid.UUID]uuid.UUID{},
-		agents:       map[string]*domain.AgentPrincipal{},
-		signingKeys:  map[string]*domain.SigningKey{},
-		embedConfigs: map[uuid.UUID]*domain.TenantEmbedConfig{},
-		branding:     map[uuid.UUID]*domain.TenantBranding{},
-		extAgentKeys: map[uuid.UUID]*domain.ExternalAgentKey{},
-		idpConfigs:   map[uuid.UUID]*domain.TenantIdpConfig{},
-		labels:       map[uuid.UUID]map[string]*domain.DisplayLabel{},
-		idempotency:  map[string]*domain.IdempotencyRecord{},
+		modules:        map[uuid.UUID][]string{},
+		steps:          map[string]*domain.ProvisioningStep{},
+		users:          map[uuid.UUID]*domain.User{},
+		invitations:    map[uuid.UUID]*domain.Invitation{},
+		serviceAccts:   map[uuid.UUID]*domain.ServiceAccount{},
+		apiKeyIndex:    map[uuid.UUID]uuid.UUID{},
+		agents:         map[string]*domain.AgentPrincipal{},
+		signingKeys:    map[string]*domain.SigningKey{},
+		embedConfigs:   map[uuid.UUID]*domain.TenantEmbedConfig{},
+		branding:       map[uuid.UUID]*domain.TenantBranding{},
+		extAgentKeys:   map[uuid.UUID]*domain.ExternalAgentKey{},
+		idpConfigs:     map[uuid.UUID]*domain.TenantIdpConfig{},
+		labels:         map[uuid.UUID]map[string]*domain.DisplayLabel{},
+		idempotency:    map[string]*domain.IdempotencyRecord{},
 
 		plans:            map[string]*domain.Plan{},
 		planEntitlements: map[string][]*domain.PlanEntitlement{},

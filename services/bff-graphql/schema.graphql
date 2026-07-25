@@ -3161,11 +3161,6 @@ input CreateRateCardInput {
   items: JSON!
 }
 
-# ---- Value & ROI reporting (BRD 69, design §2.6) ---------------------------
-# docs/initiatives/value-roi-reporting.md. Consumed by /admin/value and, per
-# the design's §1a, the API contract here is also what BRD 70 (POC success
-# dashboards) and CPL-FR-024 (trial-conversion snapshots) are meant to reuse.
-
 type ValueDecisions {
   total: Int!
   byDecision: JSON!
@@ -3185,9 +3180,11 @@ type EstimatedValue {
   assumptionVersion: Int!
 }
 
-"""cost_per_decision paired with how it was computed (BRD 69 design §2.0
+"""
+cost_per_decision paired with how it was computed (BRD 69 design §2.0
 tiers): "blended" (tenant/period average) | "attributed" (true per-decision
-grain — Tier 2, not built: BRD 67 usage_decisions/VMB-FR-010)."""
+grain — Tier 2, not built: BRD 67 usage_decisions/VMB-FR-010).
+"""
 type CostPerDecision {
   value: Float!
   basis: String!
@@ -3198,8 +3195,10 @@ type ValueAdoption {
   byWorkspace: JSON!
 }
 
-"""Reproducibility metadata (ROI-NFR-002): meterGap is present ("here's
-what's missing and why") or null (fully available) — design §2.0."""
+"""
+Reproducibility metadata (ROI-NFR-002): meterGap is present ("here's
+what's missing and why") or null (fully available) — design §2.0.
+"""
 type ValueProvenance {
   rollupVersion: String!
   assumptionVersion: Int
@@ -3210,8 +3209,8 @@ type ValueProvenance {
 Per-tenant value/ROI summary for a period (usage-service GET
 /api/v1/value/summary, BRD 69 ROI-FR-010). decisions is null when the
 governed_decision meter is unavailable (Tier 0); the *Est fields are null
-when assumptions are unset OR when a genuine data gap prevents computing them
-(see provenance.meterGap) — never a fabricated number (ROI-NFR-004).
+when assumptions are unset OR when a genuine data gap prevents computing
+them (see provenance.meterGap) — never a fabricated number (ROI-NFR-004).
 """
 type ValueSummary {
   period: String!
@@ -3236,8 +3235,10 @@ type ValueTrendPoint {
   distilledRungShare: Float
 }
 
-"""Tenure trend of a value metric (usage-service GET /api/v1/value/trend,
-ROI-FR-011). Currently only metric="cost_per_decision" is meaningful."""
+"""
+Tenure trend of a value metric (usage-service GET /api/v1/value/trend,
+ROI-FR-011). Currently only metric="cost_per_decision" is meaningful.
+"""
 type ValueTrend {
   metric: String!
   granularity: String!
@@ -3245,9 +3246,10 @@ type ValueTrend {
 }
 
 """
-Tenant-scoped, versioned value-reporting assumptions (usage-service, ROI-FR-001).
-Ships absent — null means "not set", not zero (the honesty invariant: a
-present-but-zero row would be indistinguishable from a deliberate zero).
+Tenant-scoped, versioned value-reporting assumptions (usage-service,
+ROI-FR-001). Ships absent — null means "not set", not zero (the honesty
+invariant: a present-but-zero row would be indistinguishable from a
+deliberate zero).
 """
 type ValueAssumptions implements Node {
   id: ID!
@@ -3273,8 +3275,8 @@ input UpdateValueAssumptionsInput {
 
 """
 A generated value-report export (usage-service, ROI-FR-021, design §2.8):
-value-report.v1 JSON + CSV, checksummed, stored under a versioned key that is
-never overwritten (re-exporting a period inserts a new version).
+value-report.v1 JSON + CSV, checksummed, stored under a versioned key that
+is never overwritten (re-exporting a period inserts a new version).
 """
 type ValueExport implements Node {
   id: ID!
@@ -6236,13 +6238,13 @@ type Mutation {
   Edit value-reporting assumptions (usage-service PUT /value/assumptions,
   BRD 69 ROI-FR-002). Needs usage.assumptions.update — a stronger grant than
   the read gate that lets a caller view the dashboard; edits apply
-  forward-only (already-served periods keep the assumption version active at
-  their close, AC-3).
+  forward-only (already-served periods keep the assumption version active
+  at their close, AC-3).
   """
   updateValueAssumptions(input: UpdateValueAssumptionsInput!): ValueAssumptions!
   """
-  Generate a value-report export (usage-service POST /value-reports, BRD 69
-  ROI-FR-021, design §2.8) — value-report.v1 JSON + CSV, checksummed,
+  Generate a value-report export (usage-service POST /value-reports, BRD
+  69 ROI-FR-021, design §2.8) — value-report.v1 JSON + CSV, checksummed,
   recomputed server-side (never trusts client-supplied figures). Needs
   usage.report.read (generation discloses current figures; it does not
   change future ones).

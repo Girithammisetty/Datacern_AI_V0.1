@@ -136,6 +136,7 @@ func (s *TokenService) OIDCLogin(ctx context.Context, req OIDCLoginRequest, trac
 		Scopes:        scopes,
 		PlatformAdmin: platformAdmin,
 		WorkspaceID:   workspaceID,
+		Profile:       profileClaim(tenant.Profile), // BRD 70 §2.6
 	})
 	if err != nil {
 		return nil, err

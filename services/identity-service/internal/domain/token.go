@@ -45,12 +45,28 @@ type Claims struct {
 	Embed          bool     `json:"embed,omitempty"`
 	Surface        []string `json:"surface,omitempty"`
 	FrameAncestors []string `json:"frame_ancestors,omitempty"`
+	// Profile (BRD 70 §2.6, DSP-FR-014) mirrors Tenant.Profile at mint time
+	// -- "from session claim, not tenant lookup" for the ui-web demo
+	// watermark banner. Empty is equivalent to "standard" (the common case
+	// is left unset on the wire to keep the common token small, matching
+	// Embed/Surface's own omitempty convention).
+	Profile string `json:"profile,omitempty"`
 	// Standard claims (filled by the issuer).
 	Issuer    string    `json:"iss,omitempty"`
 	Audience  string    `json:"aud,omitempty"`
 	ExpiresAt time.Time `json:"-"`
 	IssuedAt  time.Time `json:"-"`
 	JTI       string    `json:"jti,omitempty"`
+}
+
+// profileClaim renders a Tenant.Profile onto the wire claim (BRD 70 §2.6):
+// ProfileStandard (the overwhelming common case) is left empty to keep the
+// token small, matching every other omitempty claim's convention.
+func profileClaim(p TenantProfile) string {
+	if p == "" || p == ProfileStandard {
+		return ""
+	}
+	return string(p)
 }
 
 // HasScope reports whether the claim set carries the given action scope

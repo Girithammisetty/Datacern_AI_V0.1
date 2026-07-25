@@ -93,7 +93,7 @@ const (
 	// internal/events/kafka.go). Slice 1 emits plan_assigned and
 	// entitlement_changed; trial_started/trial_ending/trial_expired/converted
 	// are slice 2.
-	EvCommercialPlanAssigned      = "commercial.plan_assigned"
+	EvCommercialPlanAssigned       = "commercial.plan_assigned"
 	EvCommercialEntitlementChanged = "commercial.entitlement_changed"
 
 	// EvDemoTenantReaped (BRD 70 §2.5, DSP-FR-013): emitted when the

@@ -50,6 +50,12 @@ type Server struct {
 	// resolution.
 	Plans      *domain.PlanService
 	Commercial *domain.CommercialService
+	// Demo: demo-sandbox lifecycle (BRD 70 slice 1/2) -- create/reset/clone.
+	// Nil is a valid, honest "not configured" state on a deployment that
+	// never exposes /demo-tenants (the routes below still register; Demo's
+	// own methods are the ones that would nil-panic, so operators must wire
+	// it whenever POST /demo-tenants is reachable -- same contract as Logo).
+	Demo *domain.DemoService
 	// TrustedSpiffeIDs may call POST /token/agent (IDN-FR-042: agent-runtime).
 	TrustedSpiffeIDs map[string]bool
 	// TrustSpiffeHeader (F-2) must be explicitly true for the X-Spiffe-Id
@@ -177,6 +183,12 @@ func (s *Server) Router() http.Handler {
 				r.Post("/tenants/{id}/reactivate", s.handleReactivateTenant)
 				r.Post("/tenants/{id}/provisioning/retry", s.handleRetryProvisioning)
 				r.Get("/tenants/{id}/provisioning", s.handleProvisioningStatus)
+				// BRD 70 slice 1/2: demo-sandbox lifecycle (DSP-FR-010/012).
+				// Operator/partner-scoped in v1 (BRD 70 §In-scope) -- same
+				// requireSuperAdmin gate as /tenants above, not a new action.
+				r.Post("/demo-tenants", s.handleCreateDemoTenant)
+				r.Post("/demo-tenants/{id}/reset", s.handleResetDemoTenant)
+				r.Post("/demo-tenants/{id}/clone", s.handleCloneDemoTenant)
 				r.Post("/keys/rotate", s.handleRotateKeys)
 				// First-class platform-admin registry (cross-tenant operators).
 				r.Get("/platform/admins", s.handleListPlatformAdmins)

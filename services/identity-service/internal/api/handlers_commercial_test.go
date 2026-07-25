@@ -71,8 +71,11 @@ func TestPlanCRUD_CreateListGetPatch(t *testing.T) {
 		t.Fatalf("list plans: %d", list.status)
 	}
 	data := list.body["data"].([]any)
-	if len(data) != 1 {
-		t.Fatalf("expected 1 plan in catalog, got %d", len(data))
+	// 2, not 1: the fixture now also seeds the internal-demo plan (BRD 70
+	// DSP-FR-001's forced demo-tenant plan), mirroring production where
+	// migrations/0010_commercial_plans always seeds it -- see fixture_test.go.
+	if len(data) != 2 {
+		t.Fatalf("expected 2 plans in catalog (pilot + internal-demo), got %d", len(data))
 	}
 
 	get := f.do(http.MethodGet, "/api/v1/platform/plans/pilot", f.superToken(), nil)

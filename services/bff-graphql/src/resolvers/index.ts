@@ -1676,6 +1676,39 @@ export const resolvers = {
       return (page.data ?? []).map((d) => mapAnomaly(ctx, d));
     },
 
+    // ---- value & ROI reporting (BRD 69) ----------------------------------
+    valueSummary: async (
+      _p: unknown,
+      a: { period: string; workspaceId?: string },
+      ctx: GraphQLContext,
+    ) => mapValueSummary(await ctx.clients.value.summary(a.period, a.workspaceId)),
+
+    valueTrend: async (
+      _p: unknown,
+      a: { metric: string; granularity?: string; from?: string; to?: string; workspaceId?: string },
+      ctx: GraphQLContext,
+    ) =>
+      mapValueTrend(
+        await ctx.clients.value.trend({
+          metric: a.metric, granularity: a.granularity, from: a.from, to: a.to, workspaceId: a.workspaceId,
+        }),
+      ),
+
+    valueAssumptions: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const d = await ctx.clients.value.assumptions();
+      return d == null ? null : mapValueAssumptions(ctx, d);
+    },
+
+    valueAssumptionHistory: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const rows = await ctx.clients.value.assumptionHistory();
+      return rows.map((d) => mapValueAssumptions(ctx, d));
+    },
+
+    valueExports: async (_p: unknown, a: { period?: string }, ctx: GraphQLContext) => {
+      const rows = await ctx.clients.value.exports(a.period);
+      return rows.map((d) => mapValueExport(ctx, d));
+    },
+
     // ---- pipelines: no-code builder catalog + templates + runs (JWT passthrough)
     pipelineStepTypes: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
       ctx.clients.pipelines.components().then((cs) => cs.map(mapPipelineStepType)),
@@ -2513,6 +2546,28 @@ export const resolvers = {
         throw new Error(`anomaly ${dismissed.id} was dismissed but no longer appears in the list`);
       }
       return mapAnomaly(ctx, found);
+    },
+
+    // ---- value & ROI reporting (BRD 69) --------------------------------------
+    updateValueAssumptions: async (
+      _p: unknown,
+      a: { input: { minutesPerDecision: Record<string, number>; loadedHourlyRateUsd: number } },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.value.updateAssumptions({
+        minutes_per_decision: a.input.minutesPerDecision,
+        loaded_hourly_rate_usd: a.input.loadedHourlyRateUsd,
+      });
+      return mapValueAssumptions(ctx, d);
+    },
+
+    exportValueReport: async (
+      _p: unknown,
+      a: { period: string; workspaceId?: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.value.exportReport(a.period, a.workspaceId, a.idempotencyKey);
+      return mapValueExport(ctx, d);
     },
 
     // ---- audit: chain-integrity verify + compliance packs -------------------

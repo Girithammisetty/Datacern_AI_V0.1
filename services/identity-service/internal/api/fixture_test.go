@@ -42,6 +42,24 @@ func (c *fakeClock) Advance(d time.Duration) {
 
 const testSpiffeAgentRuntime = "spiffe://datacern.ai/ns/platform/sa/agent-runtime"
 
+// fakeDemoBundleLoader/fakeDemoSeedRunner back BRD 70's SeedDemoContent step
+// + DemoService in acceptance tests, mirroring internal/domain's own unit
+// fakes (demo_test.go) but local to this package (api_test can't import an
+// internal test file from another package).
+type fakeDemoBundleLoader struct{ calls int }
+
+func (f *fakeDemoBundleLoader) Load(pack string) (*domain.DemoBundle, error) {
+	f.calls++
+	return &domain.DemoBundle{Pack: pack, Version: "1.0.0", Provenance: "synthetic"}, nil
+}
+
+type fakeDemoSeedRunner struct{ calls int }
+
+func (f *fakeDemoSeedRunner) Seed(_ context.Context, _ *domain.Tenant, _ *domain.DemoBundle) error {
+	f.calls++
+	return nil
+}
+
 type fixture struct {
 	t      *testing.T
 	store  *memory.Store
@@ -81,7 +99,12 @@ func newFixtureOpt(t *testing.T, trustSpiffe bool) *fixture {
 	}
 	f.issuer = keys.NewIssuer(f.km, f.clock.Now)
 
-	deps := domain.StepDeps{Store: f.store, Keycloak: f.kc, Terraform: f.tf, DB: f.db, Prober: f.prober, Clock: f.clock.Now}
+	demoLoader := &fakeDemoBundleLoader{}
+	demoSeed := &fakeDemoSeedRunner{}
+	deps := domain.StepDeps{
+		Store: f.store, Keycloak: f.kc, Terraform: f.tf, DB: f.db, Prober: f.prober, Clock: f.clock.Now,
+		DemoBundles: demoLoader, DemoSeed: demoSeed,
+	}
 	cfg := domain.DefaultEngineConfig()
 	cfg.Backoff = func(int) time.Duration { return 0 }
 	cfg.Clock = f.clock.Now
@@ -99,11 +122,19 @@ func newFixtureOpt(t *testing.T, trustSpiffe bool) *fixture {
 		Limiter: domain.NewSlidingWindowLimiter(domain.OBORateLimit, domain.OBORateWindow),
 		Clock:   f.clock.Now,
 	}
+	commercial := &domain.CommercialService{Store: f.store, Clock: f.clock.Now}
 	f.srv = &api.Server{
 		Store: f.store, Tenants: tenants, Users: users, SAs: sas, Tokens: f.tokens,
 		KM: f.km, Verifier: f.issuer, Authz: authz.ScopeAuthorizer{},
 		Plans:      &domain.PlanService{Store: f.store, Clock: f.clock.Now},
-		Commercial: &domain.CommercialService{Store: f.store, Clock: f.clock.Now},
+		Commercial: commercial,
+		// BRD 70 slice 1/2: demo-sandbox lifecycle over the same fake
+		// bundle-loader/seed-runner the provisioning saga's SeedDemoContent
+		// step uses above.
+		Demo: &domain.DemoService{
+			Store: f.store, Tenants: tenants, Commercial: commercial,
+			Bundles: demoLoader, Seed: demoSeed, Clock: f.clock.Now,
+		},
 		TrustedSpiffeIDs:  map[string]bool{testSpiffeAgentRuntime: true},
 		TrustSpiffeHeader: trustSpiffe, // F-2
 		Clock:             f.clock.Now,
@@ -115,6 +146,15 @@ func newFixtureOpt(t *testing.T, trustSpiffe bool) *fixture {
 	if err := f.store.CreateCell(context.Background(), &domain.Cell{
 		ID: f.cellID, Name: "cell-aws-1", Cloud: "aws", Region: "us-east-1", Capacity: 100,
 	}); err != nil {
+		t.Fatal(err)
+	}
+	// BRD 66 migrations/0010 seeds the internal-demo plan in postgres;
+	// the memory store used by tests needs it created explicitly so
+	// DemoService.Create's forced-plan assignment (DSP-FR-001) resolves.
+	if err := f.store.CreatePlan(context.Background(), &domain.Plan{
+		Key: domain.DemoTenantPlanKey, Name: "Internal Demo", Status: "active", Version: 1,
+		CreatedAt: f.clock.Now(), UpdatedAt: f.clock.Now(),
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	return f

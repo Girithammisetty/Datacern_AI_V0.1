@@ -10,12 +10,12 @@ import (
 // TestTenantTransitionMatrix: allowed pairs succeed, everything else is a 409.
 func TestCommercialTransitionMatrix(t *testing.T) {
 	allowed := map[[2]CommercialState]bool{
-		{CommercialNone, CommercialTrial}:                true,
-		{CommercialNone, CommercialActive}:                true,
-		{CommercialTrial, CommercialActive}:               true,
-		{CommercialTrial, CommercialSuspendedCommercial}:  true,
-		{CommercialActive, CommercialChurned}:             true,
-		{CommercialSuspendedCommercial, CommercialActive}: true,
+		{CommercialNone, CommercialTrial}:                  true,
+		{CommercialNone, CommercialActive}:                 true,
+		{CommercialTrial, CommercialActive}:                true,
+		{CommercialTrial, CommercialSuspendedCommercial}:   true,
+		{CommercialActive, CommercialChurned}:              true,
+		{CommercialSuspendedCommercial, CommercialActive}:  true,
 		{CommercialSuspendedCommercial, CommercialChurned}: true,
 	}
 	now := time.Now()
@@ -59,7 +59,7 @@ func TestCommercialTransitionMatrix(t *testing.T) {
 func TestCommercialTransitionMatrix_NonConvertible(t *testing.T) {
 	allowed := map[[2]CommercialState]bool{
 		{CommercialTrial, CommercialSuspendedCommercial}:   true,
-		{CommercialActive, CommercialChurned}:               true,
+		{CommercialActive, CommercialChurned}:              true,
 		{CommercialSuspendedCommercial, CommercialChurned}: true,
 	}
 	now := time.Now()

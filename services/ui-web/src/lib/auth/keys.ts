@@ -59,6 +59,12 @@ export interface DevClaims {
   platformAdmin?: boolean;
   /** Override the default 8h lifetime (seconds). Embed tokens are short. */
   ttlSeconds?: number;
+  /** BRD 70 DSP-FR-014: the tenant's profile (standard|demo|poc), mirroring
+   * identity-service's real token-mint-time claim (§2.6) so the demo
+   * watermark banner renders identically whether the session came from a
+   * real OIDC login or this dev-login path. Omitted -> no `profile` claim,
+   * same as a standard-profile tenant's real token. */
+  profile?: string;
 }
 
 export async function mintUserToken(claims: DevClaims): Promise<string> {
@@ -75,6 +81,9 @@ export async function mintUserToken(claims: DevClaims): Promise<string> {
   }
   if (claims.platformAdmin) {
     payload.platform_admin = true;
+  }
+  if (claims.profile) {
+    payload.profile = claims.profile;
   }
   const jwt = new SignJWT(payload)
     .setProtectedHeader({ alg: "RS256", kid })

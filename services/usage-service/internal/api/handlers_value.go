@@ -1,9 +1,12 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/datacern-ai/usage-service/internal/domain"
 	"github.com/datacern-ai/usage-service/internal/valuecalc"
@@ -111,21 +114,33 @@ func (s *Server) handleValueSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	wsID := q.Get("workspace_id")
+
+	summary, _, err := s.buildValueSummary(r.Context(), op.Tenant, period, monthStart, wsID)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, summary)
+}
+
+// buildValueSummary is the shared implementation behind GET /value/summary
+// and the export flow (design §2.8 step 2: the export handler recomputes the
+// summary server-side rather than trusting client-supplied figures). Returns
+// the resolved assumptions too so the export can disclose them.
+func (s *Server) buildValueSummary(ctx context.Context, tenant uuid.UUID, period string, monthStart time.Time, wsID string) (domain.ValueSummary, *domain.ValueAssumptions, error) {
 	var wsPtr *string
 	if wsID != "" {
 		wsPtr = &wsID
 	}
 	periodEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
 
-	decisions, aiCost, adoption, finalized, err := s.Store.ValueSummaryInputs(r.Context(), op.Tenant, monthStart, wsID)
+	decisions, aiCost, adoption, finalized, err := s.Store.ValueSummaryInputs(ctx, tenant, monthStart, wsID)
 	if err != nil {
-		writeErr(w, r, err)
-		return
+		return domain.ValueSummary{}, nil, err
 	}
-	assumptions, ok, err := s.Store.ResolveAssumptions(r.Context(), op.Tenant, periodEnd)
+	assumptions, ok, err := s.Store.ResolveAssumptions(ctx, tenant, periodEnd)
 	if err != nil {
-		writeErr(w, r, err)
-		return
+		return domain.ValueSummary{}, nil, err
 	}
 	var assumptionsPtr *domain.ValueAssumptions
 	if ok {
@@ -146,5 +161,60 @@ func (s *Server) handleValueSummary(w http.ResponseWriter, r *http.Request) {
 		Adoption:      adoption,
 		RollupVersion: rollupVersion,
 	})
-	writeData(w, http.StatusOK, summary)
+	return summary, assumptionsPtr, nil
+}
+
+// handleValueTrend serves GET /api/v1/value/trend (ROI-FR-011). Only
+// metric=cost_per_decision is meaningful today; granularity=month is the
+// only supported granularity.
+func (s *Server) handleValueTrend(w http.ResponseWriter, r *http.Request) {
+	op, _ := opFrom(r)
+	q := r.URL.Query()
+	metric := q.Get("metric")
+	if metric == "" {
+		metric = "cost_per_decision"
+	}
+	granularity := q.Get("granularity")
+	if granularity == "" {
+		granularity = "month"
+	}
+	if granularity != "month" {
+		writeErrCode(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "granularity must be month", nil)
+		return
+	}
+	wsID := q.Get("workspace_id")
+
+	to := time.Now().UTC()
+	from := to.AddDate(0, -5, 0) // default: trailing 6 months
+	if v := q.Get("from"); v != "" {
+		t, err := time.Parse("2006-01", v)
+		if err != nil {
+			writeErrCode(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "from must be YYYY-MM", nil)
+			return
+		}
+		from = t
+	}
+	if v := q.Get("to"); v != "" {
+		t, err := time.Parse("2006-01", v)
+		if err != nil {
+			writeErrCode(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "to must be YYYY-MM", nil)
+			return
+		}
+		to = t
+	}
+	from = time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, time.UTC)
+	to = time.Date(to.Year(), to.Month(), 1, 0, 0, 0, 0, time.UTC)
+	if to.Before(from) {
+		writeErrCode(w, r, http.StatusBadRequest, "VALIDATION_FAILED", "to must be >= from", nil)
+		return
+	}
+
+	points, err := s.Store.ValueTrendPoints(r.Context(), op.Tenant, from, to, wsID)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, map[string]any{
+		"metric": metric, "granularity": granularity, "points": points,
+	})
 }

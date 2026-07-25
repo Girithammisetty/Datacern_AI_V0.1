@@ -2617,6 +2617,136 @@ export const typeDefs = gql`
     items: JSON!
   }
 
+  # ============================ value & ROI reporting (BRD 69) ================
+  # docs/initiatives/value-roi-reporting.md design §2.6. Consumed by
+  # /admin/value and, per the design's §1a, this API contract is also what BRD
+  # 70 (POC success dashboards) and CPL-FR-024 (trial-conversion snapshots)
+  # are meant to reuse.
+  type ValueDecisions {
+    total: Int!
+    byDecision: JSON!
+    byKind: JSON!
+    byAgent: JSON!
+    byPack: JSON!
+  }
+
+  """
+  A derived figure that only exists paired with its assumption version
+  (ROI-NFR-004) — mirrors usage-service's EstimatedValue at the wire level.
+  Null means "not computable" (assumptions unset, or a genuine data gap — see
+  ValueSummary.provenance.meterGap), never a fabricated zero.
+  """
+  type EstimatedValue {
+    value: Float!
+    assumptionVersion: Int!
+  }
+
+  """cost_per_decision paired with how it was computed (BRD 69 design §2.0
+  tiers): "blended" (tenant/period average) | "attributed" (true per-decision
+  grain — Tier 2, not built: BRD 67 usage_decisions/VMB-FR-010)."""
+  type CostPerDecision {
+    value: Float!
+    basis: String!
+  }
+
+  type ValueAdoption {
+    activeUsers: Int!
+    byWorkspace: JSON!
+  }
+
+  """Reproducibility metadata (ROI-NFR-002): meterGap is present ("here's
+  what's missing and why") or null (fully available) — design §2.0."""
+  type ValueProvenance {
+    rollupVersion: String!
+    assumptionVersion: Int
+    meterGap: String
+  }
+
+  """
+  Per-tenant value/ROI summary for a period (usage-service GET
+  /api/v1/value/summary, BRD 69 ROI-FR-010). decisions is null when the
+  governed_decision meter is unavailable (Tier 0); the *Est fields are null
+  when assumptions are unset OR when a genuine data gap prevents computing
+  them (see provenance.meterGap) — never a fabricated number (ROI-NFR-004).
+  """
+  type ValueSummary {
+    period: String!
+    workspaceId: String
+    decisions: ValueDecisions
+    hoursSavedEst: EstimatedValue
+    laborValueEstUsd: EstimatedValue
+    aiCostUsd: Float!
+    costPerDecision: CostPerDecision
+    humanBaselineCostUsd: EstimatedValue
+    netValueEstUsd: EstimatedValue
+    ladderSavingsUsd: Float
+    adoption: ValueAdoption!
+    provenance: ValueProvenance!
+  }
+
+  type ValueTrendPoint {
+    period: String!
+    value: Float
+    basis: String
+    rollupVersion: String!
+    distilledRungShare: Float
+  }
+
+  """Tenure trend of a value metric (usage-service GET /api/v1/value/trend,
+  ROI-FR-011). Currently only metric="cost_per_decision" is meaningful."""
+  type ValueTrend {
+    metric: String!
+    granularity: String!
+    points: [ValueTrendPoint!]!
+  }
+
+  """
+  Tenant-scoped, versioned value-reporting assumptions (usage-service,
+  ROI-FR-001). Ships absent — null means "not set", not zero (the honesty
+  invariant: a present-but-zero row would be indistinguishable from a
+  deliberate zero).
+  """
+  type ValueAssumptions implements Node {
+    id: ID!
+    urn: String!
+    version: Int!
+    minutesPerDecision: JSON!
+    loadedHourlyRateUsd: Float!
+    effectiveFrom: Date!
+    status: String!
+    createdBy: String!
+    createdAt: DateTime!
+  }
+
+  """
+  Edit value-reporting assumptions (usage-service PUT /value/assumptions).
+  Needs usage.assumptions.update (ROI-FR-002) — a stronger grant than
+  usage.report.read, which only lets a caller view the dashboard.
+  """
+  input UpdateValueAssumptionsInput {
+    minutesPerDecision: JSON!
+    loadedHourlyRateUsd: Float!
+  }
+
+  """
+  A generated value-report export (usage-service, ROI-FR-021, design §2.8):
+  value-report.v1 JSON + CSV, checksummed, stored under a versioned key that
+  is never overwritten (re-exporting a period inserts a new version).
+  """
+  type ValueExport implements Node {
+    id: ID!
+    urn: String!
+    period: String!
+    workspaceId: String
+    version: Int!
+    jsonUrl: String
+    jsonSha256: String!
+    csvUrl: String
+    csvSha256: String!
+    assumptionVersion: Int
+    createdAt: DateTime!
+  }
+
   # ============================ pipelines (pipeline-orchestrator) =============
   """An output port of a pipeline step (component.definition.outputs)."""
   type PipelineStepPort {
@@ -4167,6 +4297,22 @@ export const typeDefs = gql`
     dismissed; omitted returns all. Needs usage.anomaly.read."""
     anomalies(status: String): [Anomaly!]!
 
+    """Value/ROI summary for a period (usage-service GET /api/v1/value/summary,
+    BRD 69 ROI-FR-010). \`period\` is YYYY-MM. Needs usage.report.read."""
+    valueSummary(period: String!, workspaceId: String): ValueSummary!
+    """Tenure trend of a value metric (usage-service GET /api/v1/value/trend,
+    ROI-FR-011). Needs usage.report.read."""
+    valueTrend(metric: String!, granularity: String = "month", from: String, to: String, workspaceId: String): ValueTrend!
+    """The tenant's active value-reporting assumptions, or null if never set
+    (usage-service GET /value/assumptions, ROI-FR-001). Needs usage.report.read."""
+    valueAssumptions: ValueAssumptions
+    """Full assumption edit history, oldest first (usage-service GET
+    /value/assumptions/history, ROI-FR-002). Needs usage.report.read."""
+    valueAssumptionHistory: [ValueAssumptions!]!
+    """Generated value-report exports (usage-service GET /value-reports,
+    ROI-FR-021). Needs usage.report.read."""
+    valueExports(period: String): [ValueExport!]!
+
     """The step-type catalog (pipeline-orchestrator). Powers the builder's node palette."""
     pipelineStepTypes: [PipelineStepType!]!
     """The algorithm-step catalog (pipeline-orchestrator GET /algorithm-templates)."""
@@ -4917,6 +5063,19 @@ export const typeDefs = gql`
     """Dismiss a detected spend anomaly (usage-service POST
     /anomalies/{id}/dismiss). Needs usage.anomaly.update."""
     dismissAnomaly(id: ID!): Anomaly!
+
+    """Edit value-reporting assumptions (usage-service PUT /value/assumptions,
+    BRD 69 ROI-FR-002). Needs usage.assumptions.update — a stronger grant than
+    the read gate that lets a caller view the dashboard; edits apply
+    forward-only (already-served periods keep the assumption version active
+    at their close, AC-3)."""
+    updateValueAssumptions(input: UpdateValueAssumptionsInput!): ValueAssumptions!
+    """Generate a value-report export (usage-service POST /value-reports, BRD
+    69 ROI-FR-021, design §2.8) — value-report.v1 JSON + CSV, checksummed,
+    recomputed server-side (never trusts client-supplied figures). Needs
+    usage.report.read (generation discloses current figures; it does not
+    change future ones)."""
+    exportValueReport(period: String!, workspaceId: String, idempotencyKey: String): ValueExport!
 
     """
     Verify chain integrity for one tenant-day (audit-service POST

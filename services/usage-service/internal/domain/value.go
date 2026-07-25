@@ -158,10 +158,10 @@ type ValueSummary struct {
 
 // ValueTrendPoint is one point of GET /api/v1/value/trend (ROI-FR-011).
 type ValueTrendPoint struct {
-	Period            string   `json:"period"`
-	Value             *float64 `json:"value"`
-	Basis             *string  `json:"basis"`
-	RollupVersion     string   `json:"rollup_version"`
+	Period             string   `json:"period"`
+	Value              *float64 `json:"value"`
+	Basis              *string  `json:"basis"`
+	RollupVersion      string   `json:"rollup_version"`
 	DistilledRungShare *float64 `json:"distilled_rung_share"`
 }
 
