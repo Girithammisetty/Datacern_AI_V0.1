@@ -80,10 +80,17 @@ test.describe("Value & ROI reporting (BRD 69)", () => {
     // state for hours-saved if no governed_decision data with a matching
     // proposal_kind exists yet this period — asserted structurally, not by a
     // hardcoded number, since real tenant data varies run to run).
-    await expect(page.getByText("Governed decisions")).toBeVisible();
-    await expect(page.getByText("Cost / decision")).toBeVisible();
-    await expect(page.getByText("Hours saved (est.)")).toBeVisible();
-    await expect(page.getByText("Net value (est.)")).toBeVisible();
+    //
+    // getByRole("heading", ...), not getByText: the page's own description
+    // paragraph ("Governed decisions, hours saved and cost-per-decision for
+    // this tenant...") contains "Governed decisions" as a substring, so
+    // getByText resolved to both it and the tile's <h3> -- a Playwright
+    // strict-mode violation. Tiles render as headings (page.tsx), so scope
+    // to that role for all four, not just the one that happened to collide.
+    await expect(page.getByRole("heading", { name: "Governed decisions" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Cost / decision" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Hours saved (est.)" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Net value (est.)" })).toBeVisible();
 
     // 4. Export a report for the current period through the real UI control.
     await page.getByRole("button", { name: "Export this period" }).click();
