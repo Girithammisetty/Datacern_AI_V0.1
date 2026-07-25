@@ -56,6 +56,11 @@ export const en = {
   "state.notFound": "Not found",
   "state.livePaused": "Live updates paused",
 
+  // BRD 66 slice 3 (CPL-FR-013): locked commercial feature preview + upsell.
+  "state.featureLocked": "Not included in your plan",
+  "state.featureLockedHint": "This feature isn't part of your current plan. Contact your Datacern account team to add it.",
+  "action.upgradePlan": "Contact us to upgrade",
+
   "ai.label": "AI",
   "ai.disclosure": "You are interacting with an AI system. Responses may be inaccurate — verify before acting.",
   "ai.generated": "AI-generated",
