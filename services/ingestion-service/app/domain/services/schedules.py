@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -20,6 +21,8 @@ from app.domain.watermark import WatermarkSpec, validate_spec
 from app.events.outbox import emit_event
 from app.ids import uuid7
 from app.store.models import Connection, Ingestion, Schedule
+
+logger = logging.getLogger(__name__)
 
 
 def serialize_schedule(sched: Schedule, next_fire_at: datetime | None = None) -> dict[str, Any]:
@@ -48,6 +51,58 @@ def serialize_schedule(sched: Schedule, next_fire_at: datetime | None = None) ->
         "created_at": iso(sched.created_at),
         "updated_at": iso(sched.updated_at),
     }
+
+
+async def rehydrate(container: Container) -> int:
+    """Re-register every enabled schedule with the in-process scheduler at boot.
+
+    ING-FR-060/062 are persisted in `schedules`, but the scheduler that fires
+    them keeps its registry in memory. Without this, a restart silently drops
+    every schedule ever created: the rows stay, `next_fire_at` reads null, and
+    nothing ever runs again until someone edits the schedule. Nothing surfaces
+    the loss — which is the worst shape for a data pipeline to fail in.
+
+    Constructing the service binds the fire callback (its __init__ does, and
+    guards on `scheduler_bound`), so this also fixes the second half: a tick
+    loop started before any request built a ScheduleService would fire into an
+    unbound callback and drop the run on the floor.
+
+    Cross-tenant by nature — the relay-worker problem again — so on Postgres
+    this reads through the narrow SECURITY DEFINER `ing_schedules_for_rehydrate`
+    (migration 0010) rather than a broad RLS bypass. On SQLite (unit tier) RLS
+    does not exist and a plain select is the equivalent read.
+    """
+    ScheduleService(container)  # binds container.scheduler's fire callback
+
+    if container.db.is_postgres:
+        stmt = sa.text(
+            "SELECT id::text, tenant_id::text, cron, interval_seconds, timezone "
+            "FROM ing_schedules_for_rehydrate()"
+        )
+    else:
+        stmt = sa.select(
+            Schedule.id, Schedule.tenant_id, Schedule.cron,
+            Schedule.interval_seconds, Schedule.timezone,
+        ).where(Schedule.deleted_at.is_(None), Schedule.enabled.is_(True))
+
+    async with container.db.session_factory() as session:
+        rows = (await session.execute(stmt)).all()
+
+    restored = 0
+    for schedule_id, tenant_id, cron, interval_seconds, timezone in rows:
+        try:
+            await container.scheduler.register(
+                schedule_id, cron=cron, interval_seconds=interval_seconds, timezone=timezone
+            )
+        except Exception:  # noqa: BLE001
+            # A single unparseable cron or unknown timezone must not cost every
+            # other tenant their schedules. Timing is validated on write, so
+            # this only trips on data that predates a validation change.
+            logger.exception("schedule rehydrate failed", extra={"schedule_id": schedule_id})
+            continue
+        container.schedule_tenants[schedule_id] = tenant_id
+        restored += 1
+    return restored
 
 
 class ScheduleService:

@@ -503,6 +503,12 @@ services:
     # service's outbox dispatcher. 2 replicas would both claim the same batch
     # and double-publish e.g. ingestion.completed before either marks it
     # published. Fix that function first, then this can go to 2.
+    # Second, independent reason: app/main.py's _start_scheduler runs the
+    # in-process schedule ticker (app/domain/scheduler.py), whose registry lives
+    # in memory with no cross-replica lease. Two replicas would each rehydrate
+    # every enabled schedule and fire it, producing duplicate ingestions;
+    # overlap_policy narrows the window but does not close it. Both problems
+    # must be solved before this goes to 2.
     replicas: 1
     resources: *res-large
     # UNPREFIXED Python service. Reads: DATABASE_URL, INGESTION_MIGRATE_URL,
