@@ -134,11 +134,34 @@ temporal_backed)`. For a Temporal-backed run, approval does not execute inline �
 it signals the workflow. That run's status was already `completed`, so the
 signal went nowhere and the approval became a no-op.
 
-Not yet established whether this is a standing defect or an artifact of
-restarting agent-runtime (which hosts the Temporal worker in-process) while a
-workflow awaited approval. **Worth resolving before any demo**: a
-worker restart that silently converts future approvals into no-ops would be
-severe, and the failure is invisible — the proposal still reads `approved`.
+**Resolved: it is a standing defect, not my restart.** Re-tested cleanly —
+manager approved a proposal raised by admin, workflow alive (`awaiting_
+approval`), no restart in between. Case still unchanged. Two stacked causes,
+both found in tool-plane's `invocation_log`:
+
+**Cause 1 (FIXED).** `deny_reason: "tool not found"`. `up.sh` seeded four write
+tools and the registry held exactly those four; `case.apply_disposition` — the
+one the flagship loop runs on — was never among them. Its recipe lived only in
+`deploy/e2e/driver.py:register_apply_tool()`, which boot does not call, so it
+worked under the e2e driver and the wellstar demo builder and was broken on
+every ordinary bring-up. Fixed by adding `register_case_apply_tool()` to
+`seed.py` and calling it from `up.sh`; the tool now registers, publishes, and
+resolves at version 1.2.0.
+
+**Cause 2 (OPEN).** With the tool registered, the same approval is denied one
+layer deeper: `deny_reason: "permission denied: obo_grant"`. The signed
+on-behalf-of grant that binds (tenant, tool, args, decider) is not satisfying
+OPA. **The loop still does not close.** This is the same bug family as the
+earlier ml-engineer promote fix (obo-grant URN shape), so start there.
+
+### The shape of this failure is the real lesson
+
+At no point did any surface say anything was wrong. The agent proposed, the
+inbox rendered a clean diff, four-eyes recorded a named approver, the workflow
+completed, the proposal read `approved` — and nothing happened. The only
+evidence was a `deny_reason` in a table nobody looks at. **An approved-but-not-
+executed proposal should be a loud, visible state**, not a silent one; today
+the audit trail says a decision was applied when it was not.
 
 ## Not yet tested
 
