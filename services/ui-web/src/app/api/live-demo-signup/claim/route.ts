@@ -13,6 +13,9 @@
  *  - 401 {ok:false, error} — the claim_token is missing/expired (e.g. the
  *    visitor left the tab open past claim_expires_in); the page should tell
  *    them to sign up again rather than poll forever.
+ *  - 500 {ok:false, error} — PROVISIONING_FAILED: the tenant's provisioning
+ *    saga hit a terminal failure. Distinct from 202 -- the page must stop
+ *    polling on this, not treat it as "not ready yet".
  */
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";

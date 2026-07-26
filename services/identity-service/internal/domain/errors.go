@@ -35,6 +35,12 @@ const (
 	CodeTrialExpired           = "TRIAL_EXPIRED"
 	CodeCapExceeded            = "CAP_EXCEEDED"
 	CodeEntitlementUnavailable = "ENTITLEMENT_UNAVAILABLE"
+
+	// CodeProvisioningFailed (BRD 70 v1.1, self-serve demo signup): the
+	// tenant's provisioning saga hit a terminal, non-retryable-by-the-visitor
+	// failure (TenantProvisionFailed). Distinct from a plain 202 "still
+	// provisioning" response -- see ClaimSelfServeLogin.
+	CodeProvisioningFailed = "PROVISIONING_FAILED"
 )
 
 // Error is the domain error type. The API layer maps it onto the master BRD
@@ -155,6 +161,19 @@ func EDemoSignupAtCapacity(current, limit int) *Error {
 		Code: CodeCapExceeded, HTTP: 503,
 		Message: "self-serve demo capacity reached, please try again later",
 		Details: map[string]int{"current": current, "limit": limit},
+	}
+}
+
+// EDemoProvisioningFailed: a self-serve demo tenant's provisioning saga
+// reached TenantProvisionFailed (a terminal state -- ProvisioningEngine
+// already exhausted its own retries per step before landing here). 500, not
+// 202: this used to be indistinguishable from "still provisioning" in
+// ClaimSelfServeLogin, which left the /live-demo poller spinning for up to
+// SelfServeClaimTTL (30 min) before a misleading "link expired" message.
+func EDemoProvisioningFailed() *Error {
+	return &Error{
+		Code: CodeProvisioningFailed, HTTP: 500,
+		Message: "demo tenant provisioning failed; please try again",
 	}
 }
 

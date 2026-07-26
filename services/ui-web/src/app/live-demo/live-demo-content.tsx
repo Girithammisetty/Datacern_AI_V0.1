@@ -65,6 +65,16 @@ export default function LiveDemoContent() {
           setPhase("error");
           return;
         }
+        if (!res.ok) {
+          // A real, terminal failure (e.g. PROVISIONING_FAILED) — stop
+          // polling. Previously any non-401 error status fell through to
+          // "schedule the next check", so a permanently-failed tenant spun
+          // the UI for the full 30-minute claim-token TTL before showing a
+          // misleading "link expired" message instead of the real error.
+          setError(json.error || "Something went wrong while setting up your demo. Please try again.");
+          setPhase("error");
+          return;
+        }
         // ready:false / 202 — schedule the next check.
       } catch {
         // Transient network hiccup — schedule the next check, don't
