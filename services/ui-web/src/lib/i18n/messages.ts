@@ -554,6 +554,7 @@ export const en = {
   "fleet.guardrails.ruleOfTwo": "Rule of two",
   "fleet.external.badge": "auto-execute: denied",
   "fleet.kill": "Kill",
+  "fleet.export.button": "Export inventory (CSV)",
 
   "memory.title": "Agent memory",
   "memory.subtitle": "What the agent knows — browse stored memory records and process right-to-be-forgotten requests.",

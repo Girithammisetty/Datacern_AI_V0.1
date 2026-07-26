@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/utils";
+
+// The export button's download side effect (Blob/URL/anchor-click) is
+// exercised directly in lib/export/csv.test.ts; here we only need to see
+// what AgentFleetTable hands to it, so downloadCsv is mocked rather than
+// dealing with jsdom's incomplete Blob API.
+const { downloadCsvMock } = vi.hoisted(() => ({ downloadCsvMock: vi.fn() }));
+vi.mock("@/lib/export/csv", async (importActual) => {
+  const actual = await importActual<typeof import("@/lib/export/csv")>();
+  return { ...actual, downloadCsv: downloadCsvMock };
+});
 
 /**
  * BRD 68 slice 1 (docs/initiatives/agent-control-tower.md). Same conventions
@@ -107,6 +118,42 @@ describe("AgentFleetTable: gated column hidden without capability (AC-5)", () =>
     // Decisions is always unavailable in slice 1 regardless of capability —
     // that column stays visible (no capability gate on it).
     expect(screen.getByText("Decisions")).toBeInTheDocument();
+  });
+});
+
+describe("AgentFleetTable: inventory export (BRD 68 slice 3)", () => {
+  beforeEach(() => {
+    downloadCsvMock.mockClear();
+  });
+
+  it("builds and downloads a CSV containing every fetched row, with unavailable fields marked (not blank/zero)", async () => {
+    renderWithProviders(<AgentFleetTable />);
+    await waitFor(() => {
+      expect(screen.getByRole("grid", { name: "Fleet" })).toHaveAttribute("aria-rowcount", "2");
+    });
+
+    const button = screen.getByRole("button", { name: "Export inventory (CSV)" });
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+
+    expect(downloadCsvMock).toHaveBeenCalledTimes(1);
+    const [filename, content] = downloadCsvMock.mock.calls[0] as [string, string];
+    expect(filename).toBe("datacern-agent-inventory_2026-06-25_2026-07-25.csv");
+    expect(content).toContain("case-triage");
+    expect(content).toContain("acme-custom-1");
+    // DEGRADED_ROW's evalGate/spend are unavailable -> the export must say so
+    // explicitly, never leave the cell blank or emit a fabricated 0/empty.
+    expect(content).toContain("UNAVAILABLE");
+    expect(content).toContain("Datacern AI system inventory export");
+  });
+
+  it("disables the export button (nothing fetched yet to export) while the fleet query hasn't resolved", async () => {
+    handler = (doc: string) => {
+      if (doc.includes("query Me")) return ADMIN_VIEWER; // capabilities resolve so the button renders
+      return new Promise(() => {}); // fleet/summary queries hang forever
+    };
+    renderWithProviders(<AgentFleetTable />);
+    expect(await screen.findByRole("button", { name: "Export inventory (CSV)" })).toBeDisabled();
   });
 });
 
