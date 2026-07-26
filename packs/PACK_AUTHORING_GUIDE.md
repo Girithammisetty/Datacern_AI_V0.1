@@ -148,6 +148,94 @@ specific numbers/citations you are certain of; otherwise qualitative.
 Two: `{identity, name, algorithm: isolation_forest, mode: train, dataset: <detail>}`
 and `{identity, name, algorithm: xgboost, mode: train, dataset: <main>}`.
 
+## Control mappings (regulatory/framework mapping aids)
+
+**A6 (compliance artifacts as product output).** A pack MAY carry an optional
+top-level `control_mappings:` block in `pack.yaml`, alongside `regulatory:`.
+Where `regulatory:` is a flat list of descriptive tags (`hipaa`, `naic_ai_bulletin`,
+...), `control_mappings:` points named framework articles/clauses at the
+*specific platform control* that supports them, with evidence.
+
+**Honesty contract — read this before adding one.** A control mapping is a
+MAPPING AID for the tenant's own compliance program. It is **never** a
+certification, an attestation, or a claim that the pack or platform "is
+compliant" with anything — do not write the word "compliant" in one of these
+entries. Every entry with `status: implemented` or `status: partial` MUST cite
+evidence you have personally verified in the code — open the file, confirm it
+does what you're about to claim, then cite it. If an article has no
+corresponding implemented control, either omit the entry entirely or add it
+with `status: not_covered` and empty `evidence` — a documented gap is honest;
+a fabricated mapping is the single worst violation of this repo's
+no-hallucination rule (see "Non-negotiable engineering rules" above). Fixture
+worth reading before you write one: `packs/insurance-claims-payer/pack.yaml`
+and `packs/card-disputes/pack.yaml` both carry a populated block.
+
+```yaml
+control_mappings:
+  disclaimer: >-
+    These control mappings identify specific Datacern platform controls that
+    support obligations named in EU AI Act, NIST AI RMF, and ISO/IEC 42001
+    provisions. They are a MAPPING AID for the tenant's own compliance
+    program — NOT a certification, attestation, audit finding, or legal
+    determination that this pack or the platform is compliant with any
+    regulation or standard. Whether a given framework applies to a specific
+    tenant/deployment is the tenant's own determination; consult qualified
+    counsel. Entries with status "not_covered" document a known gap, not an
+    implemented control.
+  mappings:
+    - framework: eu_ai_act              # eu_ai_act | nist_ai_rmf | iso_42001
+      control_id: art_14                # framework-specific article/clause/function id
+      control_title: "Article 14 — Human oversight"
+      platform_control: >-
+        One sentence, in your own words, describing the ACTUAL platform
+        control — not a restatement of the regulation.
+      evidence:                         # required unless status: not_covered
+        - "services/agent-runtime/app/proposals/service.py:_check_eligibility"
+      status: implemented               # implemented | partial | not_covered (default implemented)
+```
+
+- `disclaimer` (required, non-empty, once per pack): states plainly that the
+  block is a mapping aid, not an attestation. Copy the wording above verbatim
+  unless you have a specific reason to change it.
+- `framework` (required): one of the keys `packctl/lint.py`
+  `KNOWN_CONTROL_FRAMEWORKS` recognizes today — `eu_ai_act`, `nist_ai_rmf`,
+  `iso_42001`. Add a new framework key to that set (and this table) only after
+  you've confirmed a real, mappable platform control exists for it — the
+  linter treats an unrecognized key as an error precisely so a typo or an
+  invented framework can't slip through.
+- `control_id`: the framework's own identifier for the provision — an EU AI
+  Act article/annex (`art_12`, `art_14`, `annex_iv`), a NIST AI RMF function
+  or category (`govern`, `measure`, `manage` — prefer the function level over
+  a memorized subcategory decimal unless you're certain of it), or an ISO
+  42001 clause (`clause_9_1`). If you're not fully certain of the precise
+  numbering, use the level you ARE certain of and say so in `control_title` —
+  see PACK_AUTHORING_GUIDE.md rule 1 ("if unsure of a number/date/citation,
+  state it qualitatively").
+- `control_title`: a short human-readable name for what the framework
+  provision covers (not a compliance claim — just orientation for the reader).
+- `platform_control` (required): 1-3 sentences on what the Datacern platform
+  control actually does. Plain description, not marketing language.
+- `evidence` (required list, non-empty, unless `status: not_covered`): each
+  entry is a repo path (optionally `path:symbol`, e.g.
+  `services/agent-runtime/app/proposals/service.py:_check_eligibility`) or a
+  documented feature name pointing at the control's real implementation.
+  `packctl lint` fails a mapping that cites nothing (`EMPTY_EVIDENCE`) — this
+  is the load-bearing check that keeps this feature honest.
+- `status`: `implemented` (default) for a control you verified is live today;
+  `partial` for a control that covers part of the provision but not all of
+  it (say what's missing in `platform_control`); `not_covered` to record a
+  known gap explicitly — for `not_covered`, leave `evidence: []` (citing
+  evidence for a gap you're calling uncovered is itself dishonest, and the
+  linter rejects it with `NOT_COVERED_HAS_EVIDENCE`).
+- `(framework, control_id)` pairs must be unique within a pack
+  (`DUPLICATE_CONTROL_MAPPING`).
+
+`packctl lint <pack-name>` validates all of the above offline (see
+`packctl/lint.py::_lint_control_mappings` and
+`packctl/tests/test_lint.py`'s `control_mappings` test group). A pack with no
+`control_mappings:` block at all is perfectly legal — most packs don't have
+one yet; this is an opt-in, evidence-gated addition, not a required field.
+
 ## BRD (docs/brd/NN_<slug>_pack_BRD.md)
 
 Match BRD 32's structure/length (~150 lines): header (Deliverable type/Publisher/

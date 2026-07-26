@@ -161,7 +161,34 @@ func (s *Server) buildValueSummary(ctx context.Context, tenant uuid.UUID, period
 		Adoption:      adoption,
 		RollupVersion: rollupVersion,
 	})
+	summary.Allowances = s.allowanceViews(ctx, tenant, monthStart, periodEnd)
 	return summary, assumptionsPtr, nil
+}
+
+// allowanceViews reports how much of each contracted meter allowance is left
+// (CPL-FR-032). Returns nil -- rendered as JSON null, distinct from an empty
+// array -- when the entitlements projection cannot be consulted, so the cost
+// panel can say "unknown" instead of "none". A read proceeds when the
+// projection is down (CPL-NFR-004); this surfaces figures and gates nothing,
+// so a failure here must never fail the summary.
+func (s *Server) allowanceViews(ctx context.Context, tenant uuid.UUID, from, to time.Time) []domain.MeterAllowanceView {
+	allowances, ok := s.Entitlements.Allowances(ctx, tenant.String())
+	if !ok {
+		return nil
+	}
+	out := make([]domain.MeterAllowanceView, 0, len(allowances))
+	for _, a := range allowances {
+		var used *float64
+		if totals, err := s.Store.DailyTotals(ctx, tenant, a.MeterKey, from, to); err == nil {
+			var sum float64
+			for _, q := range totals {
+				sum += q
+			}
+			used = &sum
+		}
+		out = append(out, valuecalc.BuildAllowanceView(a.MeterKey, a.IncludedQty, a.Period, used))
+	}
+	return out
 }
 
 // handleValueTrend serves GET /api/v1/value/trend (ROI-FR-011). Only

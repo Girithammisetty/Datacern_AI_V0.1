@@ -21,6 +21,12 @@ import jwt as pyjwt
 ALLOWED_ALGS = ["RS256"]
 PRINCIPAL_TYPES = {"user", "service", "agent_obo", "agent_autonomous"}
 
+#: Commercial lifecycle state (BRD 66) in which a tenant is READ-ONLY: the
+#: trial lapsed and the leader-elected sweep moved it here. Per CPL-FR-022 the
+#: tenant keeps minting tokens and keeps read access -- only value-delivering
+#: writes are refused, so conversion after expiry stays one API call away.
+SUSPENDED_COMMERCIAL = "suspended_commercial"
+
 
 class InvalidTokenError(Exception):
     """Raised for any authentication failure (maps to HTTP 401)."""
@@ -36,6 +42,26 @@ class Principal:
     agent_version: str | None = None
     obo_sub: str | None = None
     workspace_id: str | None = None
+    #: Tenant commercial state (CPL-FR-022): none|trial|active|
+    #: suspended_commercial|churned. identity-service mints it on every token
+    #: (internal/domain/token.go:72, `omitempty`). It is absent on tokens
+    #: issued before the commercial plane shipped; a missing value therefore
+    #: means "unknown", which must never be treated as suspended -- failing
+    #: open here is deliberate, since the alternative locks tenants out on a
+    #: claim that may simply not be present yet.
+    commercial_state: str | None = None
+
+    @property
+    def writes_suspended(self) -> bool:
+        """CPL-FR-022: is this tenant read-only because its trial expired?
+
+        Freshness is bounded by the access-token TTL, not by Redis: the sweep
+        flips `commercial_state` in the database and the next token minted for
+        this tenant carries the new value. That bound is the reason this is a
+        claim check and not a projection read -- it keeps the governed-write
+        path free of a synchronous dependency (CPL-NFR-001).
+        """
+        return self.commercial_state == SUSPENDED_COMMERCIAL
 
     @property
     def actor(self) -> dict[str, str]:
@@ -134,4 +160,5 @@ class JwtVerifier:
             agent_version=claims.get("agent_version"),
             obo_sub=claims.get("obo_sub"),
             workspace_id=claims.get("workspace_id"),
+            commercial_state=claims.get("commercial_state"),
         )

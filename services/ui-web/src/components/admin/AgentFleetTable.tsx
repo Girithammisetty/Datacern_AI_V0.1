@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { ArrowUpDown, ShieldCheck, X } from "lucide-react";
+import { ArrowUpDown, Download, ShieldCheck, X } from "lucide-react";
 import { DataTable, type Column } from "@/components/primitives/DataTable";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
@@ -14,6 +14,8 @@ import {
   useAgentFleet, useAgentFleetSummary, useCreateAgentKillSwitch, useDeleteAgentKillSwitch,
 } from "@/lib/graphql/hooks";
 import type { AgentFleetRow, AgentFleetLifecycle, EvalGateStatusValue } from "@/lib/graphql/types";
+import { agentInventoryFilename, buildAgentInventoryCsv } from "@/lib/export/agentInventory";
+import { downloadCsv } from "@/lib/export/csv";
 import { t } from "@/lib/i18n/messages";
 import { formatLocal, cn } from "@/lib/utils";
 
@@ -103,6 +105,12 @@ type SortKey = "state" | "spend" | "decisions" | null;
  * gate, spend, in one sortable table. Degraded field groups (evalGate.
  * unavailable, spend.unavailable, decisions.unavailable) render an honest
  * "unavailable" marker, never a fabricated zero.
+ *
+ * BRD 68 slice 3: the "Export inventory (CSV)" control builds the AI-system
+ * inventory export (EU AI Act Art. 11/Annex IV use case) straight from the
+ * rows already fetched here — no second network round-trip — via
+ * lib/export/agentInventory.ts. Same unavailable-marker honesty rule applies
+ * to the export as to this table.
  */
 export function AgentFleetTable() {
   const { can } = useCapabilities();
@@ -114,6 +122,13 @@ export function AgentFleetTable() {
 
   const sorted = useMemo(() => sortFleetRows(query.data ?? [], sortKey, sortDir), [query.data, sortKey, sortDir]);
   const selected = sorted.find((r) => r.key === selectedKey) ?? null;
+
+  const exportInventory = () => {
+    const rows = query.data ?? [];
+    if (rows.length === 0) return;
+    const csv = buildAgentInventoryCsv(rows, { includeSpend: canSpend });
+    downloadCsv(agentInventoryFilename(rows), csv);
+  };
 
   const toggleSort = (key: Exclude<SortKey, null>) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -196,9 +211,20 @@ export function AgentFleetTable() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-sm">{t("fleet.title")}</CardTitle>
-        <CardDescription>{t("fleet.subtitle")}</CardDescription>
+      <CardHeader className="flex-row items-start justify-between space-y-0">
+        <div>
+          <CardTitle className="text-sm">{t("fleet.title")}</CardTitle>
+          <CardDescription>{t("fleet.subtitle")}</CardDescription>
+        </div>
+        <Can gate={FEATURE_GATES.viewAgentFleet}>
+          <Button
+            size="sm" variant="outline" disabled={sorted.length === 0}
+            onClick={exportInventory} aria-label={t("fleet.export.button")}
+          >
+            <Download className="mr-1.5 size-3.5" aria-hidden />
+            {t("fleet.export.button")}
+          </Button>
+        </Can>
       </CardHeader>
       <CardContent>
         <div className="grid gap-3 xl:grid-cols-[1fr_360px]">

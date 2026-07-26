@@ -1,0 +1,49 @@
+# Guided-walkthrough content for the 5-minute demo script (§2.2,
+# DSP-FR-015), same status as insurance-claims-payer's, card-disputes', and
+# banking-aml's walkthroughs: served to demo-profile tenants by
+# identity-service (GET /api/v1/tenants/self/walkthrough) and rendered
+# in-product by ui-web's WalkthroughOverlay
+# (src/components/demo/WalkthroughOverlay.tsx). Also readable as a
+# stand-alone script by an SE running the bundle by hand.
+- title: "Worklist"
+  target_route: /cases
+  narration: >
+    Every SIU lead — nightly detector scans, member complaints, hotline
+    tips, and OIG exclusion-list refreshes — lands here the moment it's
+    generated. Five NEW leads are already queued, from an impossible-day
+    billing pattern to a thin data-mining signal, sorted by priority.
+- title: "Copilot triage"
+  target_route: /cases/LED-8001
+  narration: >
+    Open the impossible-day lead. A behavioral-health provider billed 27
+    hours of 60-minute therapy sessions on one calendar date — physically
+    impossible. The copilot has read the claim-line detail and provider
+    profile and proposed routing to an investigator at high confidence, but
+    it stops at routing: it never asserts fraud, waste, or abuse itself —
+    intent is for investigators and counsel to determine.
+- title: "Approval (four-eyes)"
+  target_route: /inbox
+  narration: >
+    An SIU Investigator proposes a disposition; the SIU Supervisor reviews
+    it here and either approves or overrides. Per BR-3, a referral to DOJ,
+    OIG, or a state DOI additionally requires a second signature from the
+    SIU Director plus legal — no single role can send a case out the door.
+- title: "Refusing to guess on a thin signal"
+  target_route: /cases/LED-8005
+  narration: >
+    LED-8005 is a data-mining hit on a referral-heavy pain-management
+    provider — but the score (0.42) and exposure ($2,100) both sit below the
+    plan-configured floor for opening an investigation. A naive system might
+    still flag it as fraud. This one doesn't: siu_lead_triage proposes
+    pend_evidence — hold for corroboration — never a finding, a referral, or
+    a recovery action on a signal this thin. Governance guardrail (BR-5): FWA
+    scores support human review only, and never auto-deny or auto-recoup.
+- title: "Audit trail"
+  target_route: /audit
+  narration: >
+    Every disposition, override, and copilot proposal is logged here with
+    the acting persona, timestamp, and cited evidence — including closed
+    history like LED-7895's two-signature referral on an excluded DME
+    supplier and LED-7925's honest false-positive close on a clean baseline
+    provider. Investigator identity stays pseudonymized beyond the SIU per
+    BR-7 whistleblower protection; nothing here is silent.

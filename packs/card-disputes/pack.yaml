@@ -23,6 +23,138 @@ description: >-
   transaction-anomaly + dispute-outcome training pipelines.
 categories: [banking, cards, disputes, chargebacks, fraud]
 regulatory: [reg_e, reg_z, cfpb, visa_rules, mastercard_rules]
+# Regulatory/framework CONTROL MAPPINGS (A6). MAPPING AID ONLY — see the
+# disclaimer below and PACK_AUTHORING_GUIDE.md "Control mappings". Every
+# `implemented` entry was verified against the cited code before being
+# written; `not_covered` entries record an honest gap instead of a claim.
+control_mappings:
+  disclaimer: >-
+    These control mappings identify specific Datacern platform controls that
+    support obligations named in EU AI Act, NIST AI RMF, and ISO/IEC 42001
+    provisions. They are a MAPPING AID for the tenant's own compliance
+    program — NOT a certification, attestation, audit finding, or legal
+    determination that this pack or the platform is compliant with any
+    regulation or standard. Whether a given framework applies to a specific
+    tenant/deployment is the tenant's own determination; consult qualified
+    counsel. Entries with status "not_covered" document a known gap, not an
+    implemented control.
+  mappings:
+    - framework: eu_ai_act
+      control_id: art_12
+      control_title: "Article 12 — Record-keeping (automatic logging)"
+      platform_control: >-
+        Every agent proposal, dispute-triage decision, and approval/rejection
+        is written to an append-only, tamper-evident audit trail: events are
+        chained per tenant-day (chain_hash = SHA-256(prev || event_id ||
+        payload_digest || occurred_at)) and sealed batches are exported to
+        Object-Lock (WORM) storage under a compliance retention window, so the
+        automatic logs this article expects cannot be silently altered or
+        deleted.
+      evidence:
+        - "services/audit-service/internal/chain/chain.go — per-tenant-per-day tamper-evidence hash chain"
+        - "services/audit-service/internal/chstore/chstore.go — append-only ClickHouse audit_events store"
+        - "services/audit-service/internal/worm/worm.go — Object-Lock WORM export with compliance retention"
+      status: implemented
+    - framework: eu_ai_act
+      control_id: art_14
+      control_title: "Article 14 — Human oversight"
+      platform_control: >-
+        Agent-proposed dispute dispositions (Reg E/Z determinations, chargeback
+        recommendations) cannot take effect without a distinct human approver:
+        self-approval by the proposing agent, or by the on-behalf-of trigger
+        user, is rejected outright for high-risk proposals, and every fully
+        autonomous proposal requires an explicit human principal distinct from
+        the proposing agent's own identity. In this pack, only the Dispute
+        Operations Manager role approves dispositions.
+      evidence:
+        - "services/agent-runtime/app/proposals/service.py:_check_eligibility — four-eyes / distinct-approver invariant (ART-FR-044)"
+        - "packs/card-disputes/rbac/roles.yaml — Dispute Operations Manager is the only role granted case.disposition.approve"
+      status: implemented
+    - framework: eu_ai_act
+      control_id: art_11_annex_iv
+      control_title: "Article 11 / Annex IV — Technical documentation"
+      platform_control: >-
+        No generated EU AI Act Annex IV technical-documentation kit ships with
+        this pack today (the same gap noted in the insurance-claims-payer
+        pack's mapping and docs/brd/24, INS-FR-083, which specifies but never
+        builds a docs/eu_ai_act/{art11,art13,art14}.md kit). This is a
+        documented gap, not an implemented control.
+      evidence: []
+      status: not_covered
+    - framework: nist_ai_rmf
+      control_id: govern
+      control_title: >-
+        GOVERN function — accountability structures & human-oversight roles
+        (function-level; exact NIST subcategory numbering not asserted)
+      platform_control: >-
+        Distinct, named roles (Dispute Operations Manager alone approves
+        dispositions; Dispute Compliance Auditor has read-only exam access
+        with no case-write power) hold the only approval permissions in the
+        tenant's RBAC catalog; the proposing agent never holds
+        ai.proposal.approve, and per-agent guardrail envelopes bound what an
+        agent may attempt before a human ever sees the proposal.
+      evidence:
+        - "packs/card-disputes/rbac/roles.yaml — role catalog separating proposer from approver"
+        - "services/agent-runtime/app/proposals/service.py:_check_eligibility"
+        - "services/agent-runtime/app/domain/guardrail.py — per-agent security envelope"
+      status: implemented
+    - framework: nist_ai_rmf
+      control_id: measure
+      control_title: >-
+        MEASURE function — AI system testing & evaluation (function-level;
+        exact NIST subcategory numbering not asserted)
+      platform_control: >-
+        Model/agent changes pass through eval-service gates and canary
+        rollouts before promotion, and inbound dispute evidence (chat logs,
+        merchant correspondence) is screened for prompt-injection signatures
+        before being used as agent evidence, with detected signatures
+        surfaced to the human approver rather than silently swallowed.
+      evidence:
+        - "services/eval-service/app/api/routes/gates.py"
+        - "services/eval-service/app/api/routes/canaries.py"
+        - "services/agent-runtime/app/graphs/evidence_guard.py — cross-domain prompt-injection (XPIA) detection"
+      status: implemented
+    - framework: nist_ai_rmf
+      control_id: manage
+      control_title: >-
+        MANAGE function — post-deployment monitoring & incident traceability
+        (function-level; exact NIST subcategory numbering not asserted)
+      platform_control: >-
+        The tamper-evident audit hash chain gives every proposal, decision,
+        and override a durable, queryable record that supports incident
+        investigation and post-deployment risk monitoring — including
+        regulatory-clock-sensitive Reg E/Z determinations.
+      evidence:
+        - "services/audit-service/internal/chain/chain.go"
+        - "services/audit-service/internal/chstore/chstore.go"
+      status: implemented
+    - framework: iso_42001
+      control_id: clause_9_1
+      control_title: "Clause 9.1 — Monitoring, measurement, analysis and evaluation"
+      platform_control: >-
+        eval-service gates and canaries continuously evaluate agent/model
+        behavior against golden sets, and the audit hash chain provides the
+        queryable record this clause's monitoring/measurement expectation
+        needs.
+      evidence:
+        - "services/eval-service/app/api/routes/gates.py"
+        - "services/eval-service/app/api/routes/canaries.py"
+        - "services/audit-service/internal/chstore/chstore.go"
+      status: implemented
+    - framework: iso_42001
+      control_id: clause_8_1
+      control_title: "Clause 8.1 — Operational planning and control"
+      platform_control: >-
+        Deterministic decision tables (Reg E triage / merchant-error recovery)
+        plus per-agent guardrail envelopes and the four-eyes approval gate are
+        the operational controls that keep agent behavior within planned
+        bounds before any governed action executes.
+      evidence:
+        - "packs/card-disputes/decisions/reg_e_triage.yaml"
+        - "packs/card-disputes/decisions/merchant_error_recovery.yaml"
+        - "services/agent-runtime/app/domain/guardrail.py"
+        - "services/agent-runtime/app/proposals/service.py:_check_eligibility"
+      status: implemented
 components:
   datasets:
     - { file: "data/datasets.yaml", identity: "datasets" }

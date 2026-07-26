@@ -169,5 +169,20 @@ func orEmptyI64(m map[string]int64) map[string]int64 {
 
 func strPtr(s string) *string { return &s }
 
+// BuildAllowanceView assembles one CPL-FR-032 allowance row. A nil `used`
+// means the consumption rollup for that meter could not be read, and both
+// used and remaining stay nil -- "included 100, used unknown" is truthful
+// where used=0 would assert the tenant consumed nothing. Remaining is NOT
+// clamped: an overage is a real fact the cost panel should show.
+func BuildAllowanceView(meterKey string, included float64, period string, used *float64) domain.MeterAllowanceView {
+	v := domain.MeterAllowanceView{MeterKey: meterKey, IncludedQty: included, Period: period}
+	if used != nil {
+		u := round2(*used)
+		rem := round2(included - *used)
+		v.UsedQty, v.RemainingQty = &u, &rem
+	}
+	return v
+}
+
 func round1(v float64) float64 { return math.Round(v*10) / 10 }
 func round2(v float64) float64 { return math.Round(v*100) / 100 }

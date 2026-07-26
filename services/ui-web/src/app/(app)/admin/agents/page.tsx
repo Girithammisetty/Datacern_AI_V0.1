@@ -29,8 +29,9 @@ export default function AdminAgentsPage() {
       <PageHeader title={t("fleet.title")} description={t("fleet.subtitle")} />
       {/* BRD 68 slice 1: the Control Tower fleet view — additive above the
           existing kill-switch/catalog/ceilings cards (the BRD frames
-          /admin/agents as evolving, not replacing). No realtime patching or
-          inventory export yet (slices 2/3). */}
+          /admin/agents as evolving, not replacing). Slice 3's inventory
+          export ("Export inventory (CSV)" in AgentFleetTable's header) is
+          done; realtime patching (slice 2) is still not built. */}
       <Can gate={FEATURE_GATES.viewAgentFleet}>
         <div className="mb-4 space-y-4">
           <AgentFleetTiles />

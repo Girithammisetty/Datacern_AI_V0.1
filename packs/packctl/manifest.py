@@ -92,6 +92,14 @@ class Manifest:
     regulatory: list[str]
     components: list[Component]
     deferred: list[dict] = field(default_factory=list)
+    # Regulatory/framework CONTROL MAPPINGS (A6): `{disclaimer, mappings}`. This
+    # is a mapping AID, never a compliance attestation — see
+    # PACK_AUTHORING_GUIDE.md "Control mappings". Structural shape (dict? list?
+    # required keys present?) is NOT validated here — like `regulatory`, this
+    # field is optional and content/shape is a lint concern (packctl.lint), so
+    # authoring a pack.yaml with a malformed control_mappings block never blocks
+    # `load_manifest` (used by the installer); it only fails `lint_pack`.
+    control_mappings: dict = field(default_factory=dict)
     pack_dir: Path | None = None
 
     def components_of(self, kind: str) -> list[Component]:
@@ -183,7 +191,9 @@ def load_manifest(pack_dir: str | Path) -> Manifest:
         name=name, version=version, description=description, publisher=publisher,
         categories=list(doc.get("categories") or []),
         regulatory=list(doc.get("regulatory") or []),
-        components=components, deferred=list(deferred), pack_dir=pack_dir,
+        components=components, deferred=list(deferred),
+        control_mappings=doc.get("control_mappings") or {},
+        pack_dir=pack_dir,
     )
 
 

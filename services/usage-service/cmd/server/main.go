@@ -23,12 +23,13 @@ import (
 
 	gckafka "github.com/datacern-ai/go-common/kafka"
 	"github.com/datacern-ai/go-common/objectstore"
-	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/otelx"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/redisx"
 
 	"github.com/datacern-ai/usage-service/internal/api"
 	"github.com/datacern-ai/usage-service/internal/authz"
+	"github.com/datacern-ai/usage-service/internal/entitlements"
 	"github.com/datacern-ai/usage-service/internal/events"
 	"github.com/datacern-ai/usage-service/internal/ingest"
 	"github.com/datacern-ai/usage-service/internal/jobs"
@@ -248,6 +249,9 @@ func main() {
 		Authz:    az,
 		Verifier: verifier,
 		Exports:  exports,
+		// Contracted meter allowances for the value summary (CPL-FR-032),
+		// read from the same projection Redis identity-service writes.
+		Entitlements: entitlements.NewReader(redis.R),
 		Ready: func(ctx context.Context) error {
 			if err := st.Ping(ctx); err != nil {
 				return err

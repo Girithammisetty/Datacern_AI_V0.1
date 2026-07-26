@@ -81,6 +81,30 @@ async def test_pem_verifier_accepts_valid_and_maps_claims():
     assert principal.actor == {"type": "user", "id": "user-1"}
 
 
+async def test_commercial_state_claim_drives_writes_suspended():
+    """CPL-FR-022: the commercial_state claim is what lets a service degrade a
+    suspended tenant to read-only. A token WITHOUT the claim must never read as
+    suspended -- tokens minted before the commercial plane shipped omit it, and
+    failing closed there would lock those tenants out of writes entirely."""
+    key = _make_key()
+    verifier = JwtVerifier(issuer=ISSUER, audience=AUDIENCE, public_key_pem=_pub_pem(key))
+
+    suspended = _valid_claims() | {"commercial_state": "suspended_commercial"}
+    principal = await verifier.verify(_token(key, suspended))
+    assert principal.commercial_state == "suspended_commercial"
+    assert principal.writes_suspended is True
+
+    for state in ("active", "trial", "none", "churned"):
+        claims = _valid_claims() | {"commercial_state": state}
+        principal = await verifier.verify(_token(key, claims))
+        assert principal.writes_suspended is False, state
+
+    # claim absent entirely (pre-commercial-plane token)
+    principal = await verifier.verify(_token(key, _valid_claims()))
+    assert principal.commercial_state is None
+    assert principal.writes_suspended is False
+
+
 async def test_rejects_alg_none_and_expired():
     key = _make_key()
     verifier = JwtVerifier(issuer=ISSUER, audience=AUDIENCE, public_key_pem=_pub_pem(key))

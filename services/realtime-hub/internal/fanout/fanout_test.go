@@ -153,6 +153,24 @@ func TestAC07_BackpressureGapAndIsolation(t *testing.T) {
 	for i := 0; i < total; i++ {
 		id := fmt.Sprintf("evt-%05d", i)
 		_ = hub.IngestInternal(ctx, "t1", topic, Event{ID: id, Topic: topic, Data: []byte(`{"n":1}`)}, 0)
+		// Let the FAST connection's writer goroutine drain as we go. Its send
+		// queue is the same bounded MaxQueueLen as the slow one's, so a tight
+		// flood of MaxQueueLen+50 events can outrun the writer on a loaded
+		// runner and overflow the *fast* conn too -- it then drops events and
+		// gaps, which is precisely what this test asserts must NOT happen
+		// (observed flake: "fast conn only got 258/306"). That is a race in
+		// the test's premise, not a product defect: drop-oldest-plus-gap on
+		// overflow is the designed behavior, and a real client that keeps up
+		// never hits it.
+		//
+		// Pacing does not weaken what the test actually proves. The slow conn
+		// is parked on its first write and cannot consume ANY event until its
+		// gate opens, so its queue still overflows exactly as the gap
+		// assertion below requires.
+		if i%32 == 31 && !waitFor(func() bool { return fast.count() >= i-31 }, 2*time.Second) {
+			t.Fatalf("fast conn fell behind at event %d (got %d) — writer goroutine starved",
+				i, fast.count())
+		}
 	}
 
 	// Fast connection receives (nearly) everything with no gap.
