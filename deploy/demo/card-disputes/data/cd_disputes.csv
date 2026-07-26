@@ -1,0 +1,11 @@
+dispute_id,cardholder_id,account_id,txn_id,network,card_product,dispute_type,reason_code,reg_flag,severity,status,disposition,provisional_credit,chargeback_filed,deadline_bucket,assigned_tier,filed_month,age_days,deadline_days_left,amount,recovery_amount
+DP-4101,CH-3001,AC-3001,TX-9101,visa,classic_debit,fraud_unauthorized,10.4,reg_e,medium,open,,due,no,overdue,tier3,2026-06,58,-3,340.00,0.00
+DP-4102,CH-3002,AC-3002,TX-9102,mastercard,platinum_credit,not_received,13.1,reg_z,medium,open,,not_required,no,0_7_days,tier3,2026-07,44,1,89.00,0.00
+DP-4103,CH-3003,AC-3003,TX-9103,visa,classic_debit,fraud_unauthorized,10.4,reg_e,medium,open,,due,no,0_7_days,tier2,2026-07,8,2,610.00,0.00
+DP-4104,CH-3004,AC-3004,TX-9104,visa,business_debit,fraud_unauthorized,10.4,reg_e,medium,open,,issued,no,8_30_days,tier2,2026-07,15,25,1850.00,0.00
+DP-4105,CH-3005,AC-3005,TX-9105,visa,classic_debit,fraud_unauthorized,10.4,reg_e,medium,open,,issued,no,8_30_days,tier1,2026-06,10,30,18.00,0.00
+DP-4106,CH-3006,AC-3006,TX-9106,mastercard,rewards_credit,cancelled_recurring,13.2,reg_z,medium,open,,not_required,no,8_30_days,tier1,2026-06,22,18,14.99,0.00
+DP-4107,CH-3007,AC-3007,TX-9107,visa,rewards_credit,not_received,13.1,reg_z,medium,open,,not_required,no,8_30_days,tier2,2026-07,6,9,245.00,0.00
+DP-4108,CH-3008,AC-3008,TX-9108,visa,rewards_credit,quality_defective,13.5,reg_z,medium,open,,not_required,no,gt_30_days,tier1,2026-06,25,40,42.00,0.00
+DP-4109,CH-3009,AC-3009,TX-9109,mastercard,business_debit,duplicate_charge,12.6.1,reg_e,medium,closed,chargeback_won,not_required,yes,8_30_days,tier2,2026-06,55,5,220.00,220.00
+DP-4110,CH-3010,AC-3010,TX-9110,visa,platinum_credit,not_received,13.1,reg_z,medium,closed,deny_no_error_found,not_required,no,8_30_days,tier3,2026-06,48,12,310.00,0.00

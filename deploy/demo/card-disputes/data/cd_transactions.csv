@@ -1,0 +1,11 @@
+txn_id,cardholder_id,account_id,txn_date,txn_month,mcc,merchant_name,merchant_country,channel,entry_mode,amount
+TX-9101,CH-3001,AC-3001,2026-05-29,2026-05,5814,Cobblestone Coffee,US,card_not_present,ecommerce,340.00
+TX-9102,CH-3002,AC-3002,2026-06-12,2026-06,4511,Harbour Airlines,US,card_not_present,ecommerce,89.00
+TX-9103,CH-3003,AC-3003,2026-07-18,2026-07,5732,Vellum Electronics,US,card_not_present,ecommerce,610.00
+TX-9104,CH-3004,AC-3004,2026-07-01,2026-07,5732,Vellum Electronics,US,card_not_present,ecommerce,1850.00
+TX-9105,CH-3005,AC-3005,2026-06-26,2026-06,5814,Cobblestone Coffee,US,card_present,contactless,18.00
+TX-9106,CH-3006,AC-3006,2026-06-08,2026-06,5968,Lumen Streaming,US,card_not_present,recurring,14.99
+TX-9107,CH-3007,AC-3007,2026-07-15,2026-07,5941,Ridgeline Outfitters,US,card_not_present,ecommerce,245.00
+TX-9108,CH-3008,AC-3008,2026-06-01,2026-06,5719,Orchid Home Goods,CA,card_not_present,ecommerce,42.00
+TX-9109,CH-3009,AC-3009,2026-06-15,2026-06,5541,Copperfield Fuel,US,card_present,chip,220.00
+TX-9110,CH-3010,AC-3010,2026-06-02,2026-06,4214,Pelagic Freight,NL,card_not_present,ecommerce,310.00

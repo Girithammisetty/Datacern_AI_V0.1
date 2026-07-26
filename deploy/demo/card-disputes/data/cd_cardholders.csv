@@ -1,0 +1,11 @@
+cardholder_id,cardholder_name,segment,card_product,home_state,tenure_months,risk_tier,prior_dispute_count,account_age_bucket
+CH-3001,Alina Marchetti,retail,classic_debit,TX,14,medium,1,1_3y
+CH-3002,Marcus Okonjo,premium,platinum_credit,NY,52,low,0,3_5y
+CH-3003,Priya Ramachandran,retail,classic_debit,CA,8,medium,2,lt_1y
+CH-3004,Devon Ferrante,small_business,business_debit,FL,67,high,3,gt_5y
+CH-3005,Rosa Santoro,student,classic_debit,IL,5,low,0,lt_1y
+CH-3006,Tomas Lindqvist,premium,rewards_credit,WA,40,low,1,3_5y
+CH-3007,Nadia Achebe,retail,rewards_credit,MA,22,medium,2,1_3y
+CH-3008,Elliot Moreau,retail,rewards_credit,CO,15,low,0,1_3y
+CH-3009,Cora Nakamura,small_business,business_debit,NC,73,low,1,gt_5y
+CH-3010,Idris Delacroix,premium,platinum_credit,OH,90,medium,4,gt_5y
