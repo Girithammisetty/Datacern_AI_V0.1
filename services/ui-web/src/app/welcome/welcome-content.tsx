@@ -38,6 +38,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import Link from "next/link";
 import { DatacernLogo } from "@/components/brand/DatacernLogo";
 import { Button } from "@/components/ui/button";
 
@@ -894,6 +895,15 @@ export default function WelcomeContent() {
             </div>
             <p className="mt-6 text-sm text-muted-foreground">
               Governed end to end — every determination has evidence, an owner, and a trail.
+            </p>
+            <p className="mt-3 text-sm">
+              <Link
+                href="/live-demo"
+                className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Or start a live demo yourself right now <ArrowRight className="size-3.5" />
+              </Link>
+              <span className="ml-1.5 text-muted-foreground">— no sales call, no operator.</span>
             </p>
           </div>
           <div className="flex justify-center md:justify-end">

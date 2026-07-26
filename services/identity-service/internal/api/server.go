@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -59,6 +60,27 @@ type Server struct {
 	// own methods are the ones that would nil-panic, so operators must wire
 	// it whenever POST /demo-tenants is reachable -- same contract as Logo).
 	Demo *domain.DemoService
+	// PublicDemo* config the unauthenticated self-serve demo signup surface
+	// (BRD 70 v1.1, POST /public/demo-signup + /public/demo-signup/claim,
+	// handlers_public_demo.go). All nil-safe: an unset limiter/cap simply
+	// falls back to domain's own conservative defaults inside the handler
+	// (see publicDemoIPLimiter/publicDemoDomainLimiter/publicDemoCap below)
+	// -- this endpoint provisions real infrastructure for an unauthenticated
+	// caller, so unlike Demo/Logo ("nil = don't expose this route"), it must
+	// never come up UNrate-limited just because an operator forgot a knob.
+	PublicDemoIPLimiter     domain.RateLimiter
+	PublicDemoDomainLimiter domain.RateLimiter
+	// PublicDemoSelfServeCap: 0 defers to domain.DefaultSelfServeDemoCap.
+	PublicDemoSelfServeCap int
+	// PublicDemoPack: "" defers to domain.DefaultSelfServeDemoPack.
+	PublicDemoPack string
+	// publicDemo*Once/*Fallback back publicDemoIPLimiter/publicDemoDomainLimiter
+	// (handlers_public_demo.go): lazily-built conservative limiters used only
+	// when the corresponding PublicDemo*Limiter field above is left nil.
+	publicDemoIPOnce         sync.Once
+	publicDemoIPFallback     domain.RateLimiter
+	publicDemoDomainOnce     sync.Once
+	publicDemoDomainFallback domain.RateLimiter
 	// TrustedSpiffeIDs may call POST /token/agent (IDN-FR-042: agent-runtime).
 	TrustedSpiffeIDs map[string]bool
 	// TrustSpiffeHeader (F-2) must be explicitly true for the X-Spiffe-Id
@@ -112,6 +134,13 @@ func (s *Server) Router() http.Handler {
 		// external-agent key (wr_xa_...) for a short-lived agent_autonomous
 		// token. The key IS the credential (like /token/embed); no bearer.
 		r.Post("/token/agent/external", s.handleExternalAgentTokenExchange)
+		// BRD 70 v1.1: public, unauthenticated self-serve demo signup --
+		// deliberately NOT under /demo-tenants (requireSuperAdmin below).
+		// See handlers_public_demo.go for the abuse-prevention layering
+		// (rate limits, concurrency cap, disposable-email denylist,
+		// forced profile=demo, mandatory audit log).
+		r.Post("/public/demo-signup", s.handlePublicDemoSignup)
+		r.Post("/public/demo-signup/claim", s.handlePublicDemoSignupClaim)
 
 		// Authenticated API.
 		r.Group(func(r chi.Router) {

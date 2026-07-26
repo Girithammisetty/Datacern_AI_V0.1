@@ -48,6 +48,28 @@ import (
 	"github.com/datacern-ai/identity-service/internal/store/postgres"
 )
 
+// envInt reads a positive integer from env, falling back to def when unset
+// or unparseable/non-positive (BRD 70 v1.1 self-serve demo signup config).
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return def
+}
+
+// envMinutes reads a positive integer count of minutes from env and
+// returns it as a time.Duration, falling back to def when unset/invalid.
+func envMinutes(key string, def time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Minute
+		}
+	}
+	return def
+}
+
 func main() {
 	log := slog.New(otelx.WrapLogHandler(slog.NewJSONHandler(os.Stdout, nil)))
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -318,6 +340,10 @@ func main() {
 	if rbacURL != "" {
 		tokens.Workspaces = &rbacclient.WorkspaceResolver{BaseURL: rbacURL, Issuer: issuer, Log: log}
 	}
+	// BRD 70 v1.1: self-serve demo signup's claim-login flow (PublicSignup /
+	// ClaimSelfServeLogin, demo_public_signup.go) mints real session tokens
+	// through the same Issuer/Workspaces every other login path uses.
+	demo.Tokens = tokens
 
 	// BYO-P4 per-tenant IdP: build an OIDC provider from a tenant's stored config
 	// (tenant_idp_configs). Injected so the domain layer stays free of the OIDC
@@ -384,6 +410,22 @@ func main() {
 		log.Warn("authorizer: token-scope fallback (set OPA_URL for the real rbac-projection path; scope-based authz does NOT honor a tenant Admin's projection grant)")
 	}
 
+	// BRD 70 v1.1: self-serve demo signup abuse-prevention knobs (task
+	// requirement #1/#2 -- rate limits + concurrency cap, both env-
+	// overridable, both defaulting to domain's own conservative constants
+	// so a deployment that never sets these env vars is still protected).
+	publicDemoIPLimiter := domain.NewSlidingWindowLimiter(
+		envInt("PUBLIC_DEMO_SIGNUP_IP_LIMIT", domain.DefaultSelfServeIPLimit),
+		envMinutes("PUBLIC_DEMO_SIGNUP_IP_WINDOW_MINUTES", domain.DefaultSelfServeIPWindow))
+	publicDemoDomainLimiter := domain.NewSlidingWindowLimiter(
+		envInt("PUBLIC_DEMO_SIGNUP_DOMAIN_LIMIT", domain.DefaultSelfServeDomainLimit),
+		envMinutes("PUBLIC_DEMO_SIGNUP_DOMAIN_WINDOW_MINUTES", domain.DefaultSelfServeDomainWindow))
+	publicDemoCap := envInt("PUBLIC_DEMO_SIGNUP_CAP", domain.DefaultSelfServeDemoCap)
+	publicDemoPack := os.Getenv("PUBLIC_DEMO_SIGNUP_PACK")
+	if publicDemoPack == "" {
+		publicDemoPack = domain.DefaultSelfServeDemoPack
+	}
+
 	srv := &api.Server{
 		Store: store, Tenants: tenants, Users: users, SAs: sas, Tokens: tokens,
 		KM: km, Verifier: issuer, Authz: authorizer,
@@ -393,6 +435,8 @@ func main() {
 		// re-injects it). TRUST_SPIFFE_HEADER=true to enable.
 		TrustSpiffeHeader: os.Getenv("TRUST_SPIFFE_HEADER") == "true",
 		Clock:             clock, Log: log, Ready: ready,
+		PublicDemoIPLimiter: publicDemoIPLimiter, PublicDemoDomainLimiter: publicDemoDomainLimiter,
+		PublicDemoSelfServeCap: publicDemoCap, PublicDemoPack: publicDemoPack,
 		Logo: logoStore,
 	}
 

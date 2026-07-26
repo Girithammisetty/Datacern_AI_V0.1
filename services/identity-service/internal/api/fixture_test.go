@@ -136,10 +136,21 @@ func newFixtureOpt(t *testing.T, trustSpiffe bool) *fixture {
 		Demo: &domain.DemoService{
 			Store: f.store, Tenants: tenants, Commercial: commercial,
 			Bundles: demoLoader, Seed: demoSeed, Clock: f.clock.Now,
+			// BRD 70 v1.1: self-serve claim-login mints through the SAME
+			// fixture Issuer every other token in this test suite uses.
+			Tokens: f.tokens,
 		},
-		TrustedSpiffeIDs:  map[string]bool{testSpiffeAgentRuntime: true},
-		TrustSpiffeHeader: trustSpiffe, // F-2
-		Clock:             f.clock.Now,
+		// BRD 70 v1.1: generous defaults so ordinary acceptance tests never
+		// trip the abuse-prevention limits by accident -- tests that
+		// specifically exercise rate limiting / the concurrency cap
+		// (handlers_public_demo_test.go) override these fields directly on
+		// f.srv before making requests.
+		PublicDemoIPLimiter:     domain.NewSlidingWindowLimiter(1000, time.Hour),
+		PublicDemoDomainLimiter: domain.NewSlidingWindowLimiter(1000, 24*time.Hour),
+		PublicDemoSelfServeCap:  domain.DefaultSelfServeDemoCap,
+		TrustedSpiffeIDs:        map[string]bool{testSpiffeAgentRuntime: true},
+		TrustSpiffeHeader:       trustSpiffe, // F-2
+		Clock:                   f.clock.Now,
 	}
 	f.ts = httptest.NewServer(f.srv.Router())
 	t.Cleanup(f.ts.Close)
