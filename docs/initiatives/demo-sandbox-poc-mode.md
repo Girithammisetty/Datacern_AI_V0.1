@@ -921,11 +921,51 @@ npx playwright test -c playwright.live.config.ts \
   harness's direct-Postgres shortcut (which wouldn't work across service
   boundaries in a real deployment anyway) — but, again, unverified live.
 - **`RunScheduledDeletions` (the pre-existing grace-period deletion sweep,
-  `tenant_service.go`) remains a plain, non-leader-elected ticker.** This
-  initiative's own new reaper (`DemoReaper`) IS real leader-elected; the
-  design's §2.5 gap callout about the pre-existing sweep was about a
-  DIFFERENT sweep this BRD does not own and does not fix here — noted so
-  it isn't mistaken for having been addressed.
+  `tenant_service.go`) is now leader-elected — fixed in a follow-up pass
+  after this section was first written.** Re-investigated before writing any
+  code: contrary to how this gap was originally framed (as "two divergent
+  Go teardown paths"), the actual code already had exactly ONE deprovision
+  implementation — `RunScheduledDeletions` (`tenant_service.go:259-275` as of
+  this fix) calls `s.Engine.Deprovision`, the identical call
+  `TenantService.Delete`'s force-destroy branch and `DemoReaper.reapOne`
+  (`demo_reaper.go:85-91`, the `TenantDeleting` retry branch) both make.
+  There was never a raw-SQL or partial-cleanup divergence inside
+  identity-service's Go code; the only real ad hoc teardown mechanism is
+  `packs/cleanup_pack_tenants.py` (§1b), a local-dev/CI Python harness this
+  BRD explicitly does not generalize (§2.5) and which this fix leaves alone.
+  What WAS genuinely missing — the only real gap — was the leader-election
+  guard: `RunScheduledDeletions` was the one sweep in the codebase still a
+  plain `time.NewTicker`, unlike `DemoReaper.Sweep` and `TrialSweep.SweepOnce`
+  which already had a `LeaseChecker`. Fixed by adding
+  `TenantService.Lease LeaseChecker` (nil = "always leader", the same default
+  every other sweep in this service uses) and gating
+  `RunScheduledDeletions` on it exactly like `DemoReaper.Sweep` does
+  (`if s.Lease != nil && !s.Lease.IsLeader() { return nil }`).
+  `cmd/server/main.go` wires a `leaderlease.Lease` for it under its own
+  Redis key (`"tenant-scheduled-deletions"`, 15s TTL) when `REDIS_ADDR` is
+  set, loud-warned single-replica otherwise — the identical
+  `REQUIRE_REAL_ADAPTERS` gate pattern the demo reaper and trial sweep
+  already use, so all three scheduled sweeps now hold independent leases
+  rather than one of the three racing across replicas. Two new unit tests
+  (`internal/domain/demo_test.go`,
+  `TestRunScheduledDeletions_NotLeaderSkipsSweep` /
+  `TestRunScheduledDeletions_NilLeaseAlwaysLeads`) mirror
+  `TestDemoReaper_NotLeaderSkipsSweep`'s pattern exactly: a non-leader
+  replica must never deprovision even past grace period, and a nil Lease
+  (single-replica dev/tests) still sweeps as before. `go build ./...`,
+  `go vet ./...`, and `go test ./... -short` all pass with this change
+  (135+4 = 139 domain/api-adjacent test functions now green, 0 regressions).
+  The two pre-written `test/integration/demo_test.go` Testcontainers-Postgres
+  tests were re-run in this environment and still SKIP cleanly ("Docker
+  unavailable") — this environment has a local Postgres 16 available
+  directly, but `test/integration/setup_test.go` is hardcoded to
+  `testcontainers-go` (no `DATABASE_URL` escape hatch), and there is still no
+  Docker daemon here (`docker info` succeeds for the client but the server
+  call fails: "dial unix /var/run/docker.sock ... no such file or
+  directory"), so this was not fought, per the same tier-2 constraint already
+  documented above. The separate, pre-existing `test/integration/secretsigner`
+  panic (Docker fully absent, not merely container-less) reproduces exactly
+  as already documented and is untouched by this fix.
 - **`poc-report.v1`'s "stored/checksummed like other audited exports"
   integration point** (§2.9) remains unconfirmed, as the design itself
   already flagged — moot for this build since slice 3 wasn't started, but

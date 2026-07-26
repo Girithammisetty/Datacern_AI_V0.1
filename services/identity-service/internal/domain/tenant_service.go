@@ -22,6 +22,18 @@ type TenantService struct {
 	Async bool
 	// ReservedNames extends the reserved list with cell names (IDN-FR-002).
 	ReservedNames []string
+	// Lease gates RunScheduledDeletions the same way DemoReaper.Sweep and
+	// TrialSweep.SweepOnce are gated (LeaseChecker, internal/domain/
+	// demo_reaper.go): nil means "always leader", correct for single-replica
+	// dev/tests, but NOT leader-elected for real multi-replica safety. Before
+	// this field existed, this was the one scheduled sweep in the codebase
+	// still a plain, non-leader-elected ticker (docs/initiatives/
+	// demo-sandbox-poc-mode.md §3 "Honest gaps") -- every other reaper
+	// already had a real Redis SET-NX-PX lease. Production wiring
+	// (cmd/server/main.go) sets this to a leaderlease.Lease exactly like the
+	// demo reaper and trial sweep do, using its own resource key so the three
+	// sweeps campaign for independent leases.
+	Lease LeaseChecker
 }
 
 func (s *TenantService) now() time.Time { return s.Clock().UTC() }
@@ -243,8 +255,22 @@ func (s *TenantService) Delete(ctx context.Context, id uuid.UUID, mode string, f
 }
 
 // RunScheduledDeletions processes tenants whose grace period elapsed
-// (invoked by the scheduler loop in main; directly in tests).
+// (invoked by the scheduler loop in main; directly in tests). Leader-gated
+// (s.Lease, same LeaseChecker seam DemoReaper.Sweep and TrialSweep.SweepOnce
+// use) so a non-leader replica never races another replica to deprovision
+// the same tenant -- a plain single-process ticker was safe with one
+// identity-service replica but not once there is more than one (docs/
+// initiatives/demo-sandbox-poc-mode.md §3 "Honest gaps"). It already drives
+// tenants through the SAME saga every other teardown path uses --
+// s.Engine.Deprovision, the identical call DemoReaper.reapOne makes for a
+// tenant already `deleting` and TenantService.Delete's force-destroy branch
+// kicks off -- so there is exactly one deprovision implementation in this
+// service; this sweep was only ever missing the leader-election guard, not
+// a divergent teardown mechanism.
 func (s *TenantService) RunScheduledDeletions(ctx context.Context) error {
+	if s.Lease != nil && !s.Lease.IsLeader() {
+		return nil
+	}
 	tenants, _, err := s.Store.ListTenants(ctx, TenantFilter{Status: string(TenantDeleting)}, PageRequest{Limit: MaxPageLimit})
 	if err != nil {
 		return err

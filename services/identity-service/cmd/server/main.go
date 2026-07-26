@@ -531,6 +531,28 @@ func main() {
 		}
 	}()
 
+	// IDN-FR-008b's grace-period deletion sweep (RunScheduledDeletions).
+	// Already drives every tenant through the same real deprovision saga
+	// (Engine.Deprovision) DemoReaper and TenantService.Delete's force path
+	// use -- there is one teardown implementation, not a divergent one. Until
+	// now this was the one sweep in the service still a plain, non-leader-
+	// elected ticker (docs/initiatives/demo-sandbox-poc-mode.md §3 "Honest
+	// gaps"); wire the same leaderlease.Lease pattern as the demo reaper and
+	// trial sweep above, under its own resource key so the three sweeps hold
+	// independent leases (any one of them may be led by a different replica).
+	if redisAddr := os.Getenv("REDIS_ADDR"); redisAddr != "" {
+		delLease := leaderlease.NewLease(redisx.NewFromEnv(redisAddr, os.Getenv).R,
+			"tenant-scheduled-deletions", "identity-"+uuid.NewString(), 15*time.Second)
+		go delLease.Run(ctx)
+		tenants.Lease = delLease
+		log.Info("scheduled-deletion sweep: leader-elected (redis)", "addr", redisAddr)
+	} else {
+		if requireReal {
+			mustReal("REDIS_ADDR", "single-replica scheduled-deletion sweep (not leader-elected; a second replica could double-deprovision)")
+		}
+		log.Warn("scheduled-deletion sweep: single-replica (set REDIS_ADDR for real leader election across replicas)")
+	}
+
 	go func() { // key-cache refresh so retirements take effect (AC-8)
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()
