@@ -355,7 +355,7 @@ func main() {
 	// fallback at all -- Progress/ExportReport simply fail loud (EInternal)
 	// rather than fabricate figures when unset, matching Bundles/Seed's own
 	// "fail loud on nil adapter" rule.
-	poc := &domain.PocService{Store: store, Tenants: tenants, Clock: clock}
+	poc := &domain.PocService{Store: store, Tenants: tenants, Commercial: commercial, Clock: clock}
 	if usageURL := os.Getenv("USAGE_SERVICE_URL"); usageURL != "" {
 		poc.Value = &valueclient.Client{BaseURL: usageURL, Issuer: issuer}
 		log.Info("poc value reader: usage-service", "url", usageURL)

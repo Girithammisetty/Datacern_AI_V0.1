@@ -79,13 +79,22 @@ func newPocFixture(t *testing.T) *pocFixture {
 	}
 	f.value = &fakeValueReader{Views: map[string]*domain.ValueSummaryView{}, AllowMiss: true}
 	f.exports = newFakeExportStore()
-	f.poc = &domain.PocService{Store: f.store, Tenants: f.tenants, Value: f.value, Exports: f.exports, Clock: f.clock.now}
+	commercial := &domain.CommercialService{Store: f.store, Clock: f.clock.now}
+	f.poc = &domain.PocService{Store: f.store, Tenants: f.tenants, Commercial: commercial, Value: f.value, Exports: f.exports, Clock: f.clock.now}
 
 	cellID, _ := uuid.NewV7()
 	if err := f.store.CreateCell(context.Background(), &domain.Cell{
 		ID: cellID, Name: "cell-aws-1", Cloud: "aws", Region: "us-east-1", Capacity: 10,
 	}); err != nil {
 		t.Fatalf("seed cell: %v", err)
+	}
+	// PocService.Create assigns PocTenantPlanKey (=internal-demo) for
+	// entitlement defaults, mirroring demoFixture's own plan seed.
+	if err := f.store.CreatePlan(context.Background(), &domain.Plan{
+		Key: domain.PocTenantPlanKey, Name: "Internal Demo", Status: "active", Version: 1,
+		CreatedAt: f.clock.now(), UpdatedAt: f.clock.now(),
+	}, nil); err != nil {
+		t.Fatalf("seed poc plan: %v", err)
 	}
 	return f
 }

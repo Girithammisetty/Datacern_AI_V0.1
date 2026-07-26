@@ -26,6 +26,13 @@ const DefaultPocWindowDays = 90
 type PocService struct {
 	Store   Store
 	Tenants *TenantService
+	// Commercial assigns PocTenantPlanKey at creation, purely for
+	// entitlement defaults (seat_cap/workspace_cap) so a POC tenant can
+	// actually invite its sponsor as a real user -- mirrors DemoService's
+	// forced-plan assignment. Nil is a valid, honest "no plan assignment"
+	// state (Create simply skips it) -- entitlements then resolve empty,
+	// same as any tenant with no plan assigned.
+	Commercial *CommercialService
 	// Value reads usage-service's real value/summary data (BRD 69) to
 	// compute progress. Nil is an honest "not configured" state: Progress
 	// and ExportReport fail loud (EInternal) rather than fabricating
@@ -104,6 +111,11 @@ func (s *PocService) Create(ctx context.Context, req CreatePocTenantRequest, act
 	})
 	if err := s.Store.SetPocSuccessCriteria(ctx, t.ID, req.SuccessCriteria, criteriaEv); err != nil {
 		return nil, "", err
+	}
+	if s.Commercial != nil {
+		if _, err := s.Commercial.AssignPlan(ctx, t.ID, PocTenantPlanKey, actor); err != nil {
+			return nil, "", err
+		}
 	}
 	opID, err := s.Tenants.Publish(ctx, t.ID, actor)
 	if err != nil {

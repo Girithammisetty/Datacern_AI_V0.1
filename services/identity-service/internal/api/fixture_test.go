@@ -173,7 +173,7 @@ func newFixtureOpt(t *testing.T, trustSpiffe bool) *fixture {
 		// is a real FSStore rooted at a t.TempDir() so download-artifact
 		// acceptance tests exercise the real checksum/signature path.
 		Poc: &domain.PocService{
-			Store: f.store, Tenants: tenants, Value: valueReader, Exports: pocExports, Clock: f.clock.Now,
+			Store: f.store, Tenants: tenants, Commercial: commercial, Value: valueReader, Exports: pocExports, Clock: f.clock.Now,
 		},
 		PocExports: pocExports,
 		// BRD 70 v1.1: generous defaults so ordinary acceptance tests never
