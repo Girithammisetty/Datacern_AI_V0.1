@@ -60,6 +60,7 @@ from app.domain.drivers.bigquery import (
 from app.domain.drivers.databricks import databricks_dialect
 from app.domain.drivers.dbapi import DbapiPreviewer, DbapiProber, DbapiQuerySource
 from app.domain.drivers.fetch import FetcherRegistry, SourceFetcher
+from app.domain.drivers.filesource import FtpFileIngestor, SftpFileIngestor
 from app.domain.drivers.ftp import FtpProber, FtpSourceFetcher, FtpSourcePreviewer
 from app.domain.drivers.gcs import gcs_client_factory
 from app.domain.drivers.http import HttpProber, HttpSourceFetcher, HttpSourcePreviewer
@@ -249,6 +250,15 @@ def wire_local_drivers(
             previewer.set(
                 ctype, ObjectStoreSourcePreviewer(factory, connect_timeout_s=preview_timeout)
             )
+
+    # --- SFTP/FTP as an ingestion SOURCE (ING-FR-064) ------------------------
+    # A remote directory is a listing of files with names and mtimes -- the same
+    # shape a bucket has -- so these reuse the object engine's pipeline via
+    # run_file_ingest. Without this a file-drop connection tests green and then
+    # cannot ingest: `file_poll` fell through to UnsupportedObjectIngestor and
+    # the registered fetchers had no caller.
+    object_ingestors.set("sftp", SftpFileIngestor(connect_timeout_s=connect_timeout))
+    object_ingestors.set("ftp", FtpFileIngestor(connect_timeout_s=connect_timeout))
 
     # --- remaining local-protocol probers/previewers -------------------------
     probers.set("sftp", SftpProber(connect_timeout_s=connect_timeout))
