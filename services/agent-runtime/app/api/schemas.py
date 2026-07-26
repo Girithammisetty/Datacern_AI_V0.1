@@ -10,7 +10,11 @@ def proposal_view(p: Proposal) -> dict:
         "id": p.proposal_id, "run_id": p.run_id, "agent_key": p.agent_key,
         "agent_version": p.agent_version, "tool_id": p.tool_id,
         "tool_version": p.tool_version, "tier": p.tier, "side_effects": p.side_effects,
-        "args": p.args, "rationale": p.rationale, "affected_urns": p.affected_urns,
+        "args": p.args, "rationale": p.rationale,
+        # "llm" (real model call) or "fallback_template" (canned sentence
+        # substituted when the LLM call failed/was empty) — lets the approval
+        # surface distinguish a genuine LLM-reasoned proposal from a fallback.
+        "rationale_source": p.rationale_source, "affected_urns": p.affected_urns,
         # The primary resource this proposal targets (the bff's case-detail
         # Proposals tab groups by it). Proposals record the authoritative
         # resource reference as affected_urns (e.g. the triage graph puts the

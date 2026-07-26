@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+from app.domain.drivers.objectsource import ObjectSourceIngestor
 from app.domain.querysource import FakeQuerySource
 from app.ids import uuid7
 from app.store.models import Ingestion
+from tests.unit.test_object_source import FakeObjectStoreClient, _factory_for
 from tests.util import TENANT_A, create_connection, outbox_events
 
 ROWS = [
@@ -61,13 +65,64 @@ async def test_invalid_cron_timezone_and_timing_rejected(client, auth_a, contain
         assert resp.status_code == 422, bad
 
 
-async def test_file_poll_template_is_todo(client, auth_a, container) -> None:
-    conn = await create_connection(client, auth_a)
+async def test_file_poll_schedule_runs_object_source_ingestion(client, auth_a, container) -> None:
+    """BUG-A regression: file_poll is a real, driven `ingestion_mode` — a fired
+    schedule actually lists+decodes+commits via ObjectSourceIngestor end to end,
+    not just a proven-at-driver-level dead subsystem."""
+    fake_client = FakeObjectStoreClient(
+        {
+            "lake/skip.txt": (b"ignore me", datetime(2026, 7, 1, tzinfo=UTC)),
+            "lake/a.csv": (b"id,name\n1,alpha\n2,beta\n", datetime(2026, 7, 2, tzinfo=UTC)),
+        }
+    )
+    container.object_ingestors.set("s3", ObjectSourceIngestor(_factory_for(fake_client)))
+
+    conn = await create_connection(
+        client,
+        auth_a,
+        connector_type="s3",
+        config={"bucket": "b", "root_prefix": "lake/", "glob": "*.csv", "file_format": "csv"},
+        secrets={},
+    )
+    resp = await client.post(
+        "/api/v1/schedules",
+        json=schedule_payload(
+            conn["id"],
+            ingestion_template={
+                "ingestion_mode": "file_poll",
+                "new_dataset": {"name": "lake-poll"},
+            },
+        ),
+        headers=auth_a,
+    )
+    assert resp.status_code == 201, resp.text
+    sched = resp.json()["data"]
+
+    fired = await client.post(f"/api/v1/schedules/{sched['id']}/run_now", headers=auth_a)
+    assert fired.status_code == 200, fired.text
+    fired_body = fired.json()["data"]
+    assert fired_body["skipped"] is False
+    assert fired_body["status"] == "completed"
+
+    job = await client.get(f"/api/v1/ingestions/{fired_body['ingestion_id']}", headers=auth_a)
+    job_body = job.json()["data"]
+    assert job_body["ingestion_mode"] == "file_poll"
+    assert job_body["status"] == "completed"
+    assert job_body["rows_appended"] == 2  # only lake/a.csv matches the glob
+    assert job_body["iceberg_snapshot_id"] is not None
+
+    sched_after = await client.get(f"/api/v1/schedules/{sched['id']}", headers=auth_a)
+    assert sched_after.json()["data"]["watermark"]["current_value"] is not None
+
+
+async def test_file_poll_template_requires_dataset_target(client, auth_a, container) -> None:
+    conn = await create_connection(
+        client, auth_a, connector_type="s3", config={"bucket": "b"}, secrets={}
+    )
     payload = schedule_payload(conn["id"])
-    payload["ingestion_template"]["ingestion_mode"] = "file_poll"
+    payload["ingestion_template"] = {"ingestion_mode": "file_poll"}
     resp = await client.post("/api/v1/schedules", json=payload, headers=auth_a)
     assert resp.status_code == 422
-    assert "TODO" in resp.json()["error"]["message"]
 
 
 async def test_run_now_creates_and_completes_job(client, auth_a, container) -> None:

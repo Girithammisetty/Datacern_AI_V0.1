@@ -358,6 +358,21 @@ Honest list. Each was observed, not assumed.
    no RBAC grants — every grounding read 403s ("grounding degraded"). The
    user-driven copilot path is unaffected because it runs on-behalf-of the user.
    Do not demo autonomous triggers.
+
+4a. **Know exactly what is automatic before you claim it** (researched
+   2026-07-24 — the marketing copy previously overclaimed here):
+
+   | Step | Automatic? |
+   |---|---|
+   | Data arriving | **No.** Nothing polls, listens or wakes up. Every load is human-initiated: upload, query-pull, `run_now`, or an approved agent proposal. The recurring scheduler exists but `start()`/`tick()` are never called and **no env flag enables it**; Temporal schedules are a `NotImplementedFeatureError` stub; webhook-batch creation 501s; SFTP/object-store fetchers are never invoked. |
+   | Rows becoming cases | **Yes — once a human authors an intake rule.** `ingestion.completed` → case-trigger evaluation → cases materialized, dedup-keyed on `(dataset_urn, row_pk)`. Fully wired, no feature flag, real Postgres integration test. Without a trigger, an operator must tick rows in the dataset/dashboard grid and click "Create cases" every time. |
+   | Agent triaging a new case | **No.** `AR_EVENT_TRIGGERS_ENABLED` defaults `false` and is set nowhere in `deploy/`. Worse, if enabled it would fail: the dispatcher passes the event payload straight through as graph inputs, but case-service's real `case.created` payload has no `case_id`/`tenant_id`, which the triage graph requires — a `KeyError`. The unit test that appears to prove it hand-writes a payload shape case-service never emits. There is also **no UI control to run triage**; the only working entry is `POST /api/v1/agents/case-triage/chat/completions` with `metadata.case_id`. |
+   | Decision table across a worklist | **No.** `POST /decision-models/{id}/batch-evaluate` is real and defaults to dry-run, but **no UI component calls it** — the React hook exists with zero callers. Operator must hit the API. |
+   | Inference → auto-create case | **Dead path.** The consumer is wired, but no service emits `inference.completed` and nothing anywhere sets `auto_case`. |
+
+   Honest one-liner for a buyer: *the intake queue fills itself accurately once
+   someone writes a trigger rule; the "agent reads it and drafts" half is not
+   running in any shipped configuration.*
 5. **`data-pipeline-builder` is a dead agent key** — present in `RUNNERS` but
    missing from `CATALOG`, so invoking it 404s.
 6. **Dev login is local-mode.** Real OIDC/SSO is built and verified against

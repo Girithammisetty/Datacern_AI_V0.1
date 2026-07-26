@@ -146,14 +146,17 @@ class OpenAICompatibleProvider:
         choice = (data.get("choices") or [{}])[0]
         content = (choice.get("message") or {}).get("content") or ""
         usage = data.get("usage") or {}
-        input_tokens = int(usage.get("prompt_tokens")
+        input_measured = usage.get("prompt_tokens")
+        output_measured = usage.get("completion_tokens")
+        input_tokens = int(input_measured
                            or sum(estimate_tokens(m["content"]) for m in request.messages
                                   if isinstance(m.get("content"), str)))
-        output_tokens = int(usage.get("completion_tokens") or estimate_tokens(content))
+        output_tokens = int(output_measured or estimate_tokens(content))
         return ProviderResult(
             content=content, input_tokens=input_tokens, output_tokens=output_tokens,
             model=data.get("model", deployment.deployment_name),
             finish_reason=choice.get("finish_reason") or "stop",
+            is_estimated=not input_measured or not output_measured,
         )
 
     async def stream(self, deployment: ProviderDeployment,
@@ -191,16 +194,18 @@ class OpenAICompatibleProvider:
             raise ProviderError(503, f"{self._label} stream unreachable: {exc}") from exc
 
         content = "".join(content_parts)
-        input_tokens = int((usage or {}).get("prompt_tokens")
+        input_measured = (usage or {}).get("prompt_tokens")
+        output_measured = (usage or {}).get("completion_tokens")
+        input_tokens = int(input_measured
                            or sum(estimate_tokens(m["content"]) for m in request.messages
                                   if isinstance(m.get("content"), str)))
-        output_tokens = int((usage or {}).get("completion_tokens")
-                            or estimate_tokens(content))
+        output_tokens = int(output_measured or estimate_tokens(content))
         # usage chunk always emitted (stream_options.include_usage, AIG-FR-010)
-        yield {"usage": {"input_tokens": input_tokens, "output_tokens": output_tokens}}
+        yield {"usage": {"input_tokens": input_tokens, "output_tokens": output_tokens,
+                         "is_estimated": not input_measured or not output_measured}}
 
     async def embed(self, deployment: ProviderDeployment, model: str,
-                    inputs: list[str]) -> tuple[list[list[float]], int]:
+                    inputs: list[str]) -> tuple[list[list[float]], int, bool]:
         try:
             resp = await self._http().post(
                 "/embeddings", params=self._params,
@@ -218,9 +223,9 @@ class OpenAICompatibleProvider:
         rows = sorted(data.get("data") or [], key=lambda r: r.get("index", 0))
         vectors = [list(r.get("embedding") or []) for r in rows]
         usage = data.get("usage") or {}
-        tokens = int(usage.get("prompt_tokens")
-                     or sum(estimate_tokens(t) for t in inputs))
-        return vectors, tokens
+        input_measured = usage.get("prompt_tokens")
+        tokens = int(input_measured or sum(estimate_tokens(t) for t in inputs))
+        return vectors, tokens, not input_measured
 
 
 class OllamaProvider(OpenAICompatibleProvider):
@@ -279,9 +284,12 @@ class InProcessProvider:
                 )
                 output_tokens = outcome.get("output_tokens", estimate_tokens(content))
                 self._bill(deployment.deployment_name, input_tokens + output_tokens)
+                # The double has no real provider `usage` block to measure from —
+                # its token counts are always synthesized, never provider-reported.
                 return ProviderResult(content=content, input_tokens=input_tokens,
                                       output_tokens=output_tokens,
-                                      model=deployment.deployment_name)
+                                      model=deployment.deployment_name,
+                                      is_estimated=True)
         # default: deterministic echo
         last_user = next(
             (m["content"] for m in reversed(request.messages)
@@ -297,7 +305,7 @@ class InProcessProvider:
         self._bill(deployment.deployment_name, input_tokens + output_tokens)
         return ProviderResult(content=content, input_tokens=input_tokens,
                               output_tokens=output_tokens,
-                              model=deployment.deployment_name)
+                              model=deployment.deployment_name, is_estimated=True)
 
     async def stream(self, deployment: ProviderDeployment,
                      request: ProviderRequest) -> AsyncIterator[dict]:
@@ -328,11 +336,13 @@ class InProcessProvider:
         for c in chunks:
             yield {"delta": c}
         self._bill(deployment.deployment_name, input_tokens + output_tokens)
-        # usage chunk always emitted (stream_options.include_usage, AIG-FR-010)
-        yield {"usage": {"input_tokens": input_tokens, "output_tokens": output_tokens}}
+        # usage chunk always emitted (stream_options.include_usage, AIG-FR-010);
+        # synthesized, never provider-reported (see complete()).
+        yield {"usage": {"input_tokens": input_tokens, "output_tokens": output_tokens,
+                         "is_estimated": True}}
 
     async def embed(self, deployment: ProviderDeployment, model: str,
-                    inputs: list[str]) -> tuple[list[list[float]], int]:
+                    inputs: list[str]) -> tuple[list[list[float]], int, bool]:
         outcome = self._next(deployment.deployment_name)
         if outcome:
             if outcome.get("timeout"):
@@ -344,4 +354,4 @@ class InProcessProvider:
         vectors = [hash_embedding(t, dim=16) for t in inputs]
         tokens = sum(estimate_tokens(t) for t in inputs)
         self._bill(deployment.deployment_name, tokens)
-        return vectors, tokens
+        return vectors, tokens, True

@@ -28,6 +28,21 @@ class FakeLlm:
                          model="fake-fast-small", deployment="fake")
 
 
+class FakeFailingLlm:
+    """LLM double that always raises, simulating an ai-gateway/model outage so
+    tests can exercise a graph's canned-rationale fallback path."""
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self._error = error or RuntimeError("llm unavailable")
+        self.calls: list[dict] = []
+
+    async def chat(self, *, messages, tenant_id, response_format=None, temperature=None,
+                   max_tokens=None) -> LlmResult:
+        self.calls.append({"messages": messages, "tenant_id": tenant_id,
+                           "max_tokens": max_tokens, "temperature": temperature})
+        raise self._error
+
+
 class FakeToolClient:
     def __init__(self) -> None:
         self.calls: list[dict] = []

@@ -30,6 +30,8 @@ start_identity() {
     KEYCLOAK_URL="http://localhost:8180"
     KEYCLOAK_ADMIN_USER="admin" KEYCLOAK_ADMIN_PASSWORD="admin"
     OPA_URL="$OPA_URL" RBAC_URL="$RBAC_URL"
+    MINIO_ENDPOINT="${S3_ENDPOINT#http://}" MINIO_ACCESS_KEY=datacern MINIO_SECRET_KEY=datacern_dev
+    MINIO_USE_SSL=false TENANT_BRANDING_BUCKET=datacern-tenant-branding POC_EXPORT_BUCKET=datacern-poc-reports
     # BRD 70 slice 3 (POC mode): PocService.Value reads real BRD 69 data from
     # usage-service over HTTP -- REQUIRE_REAL_ADAPTERS=true above means
     # identity-service now refuses to boot at all without this set (no
@@ -94,7 +96,7 @@ start_case() {
     QUERY_SERVICE_URL="$QUERY_URL" \
     DATASET_URL="$DATASET_URL" \
     MINIO_ENDPOINT="${S3_ENDPOINT#http://}" MINIO_ACCESS_KEY=datacern MINIO_SECRET_KEY=datacern_dev \
-    MINIO_USE_SSL=false CASE_EVIDENCE_BUCKET=datacern-case-evidence \
+    MINIO_USE_SSL=false CASE_EVIDENCE_BUCKET=datacern-case-evidence CASE_SNAPSHOT_BUCKET=datacern-case-snapshots \
     RBAC_URL="$RBAC_URL" REGISTER_SIGNING_KEY_PEM="$reg_key" \
     REGISTER_SIGNING_KID="e2e-harness-key-1" REGISTER_TENANT_ID="$TENANT_ID" \
     CASE_FACADE_ALLOWED_SPIFFE="spiffe://datacern/ns/tools/sa/mcp-gateway" \
@@ -384,6 +386,8 @@ start_query() {
     AWS_ACCESS_KEY_ID="datacern" AWS_SECRET_ACCESS_KEY="datacern_dev" \
     DUCKDB_AUTOMATERIALIZE_SCHEMAS="main" \
     TRINO_ENDPOINT="http://localhost:8080" TRINO_USER="datacern" TRINO_CATALOG="iceberg" \
+    MINIO_ENDPOINT="localhost:9000" MINIO_ACCESS_KEY="datacern" MINIO_SECRET_KEY="datacern_dev" \
+    MINIO_USE_SSL=false QUERY_RESULTS_BUCKET=datacern-query-results \
     "$BIN_DIR/query-e2e"
   wait_ready query "$QUERY_URL" || { warn "query-service not ready — SKIPPED"; SKIPPED+=("query"); return 1; }
 }
@@ -487,6 +491,8 @@ start_chart() {
     DATASET_SERVICE_URL="$DATASET_URL" EXPERIMENT_SERVICE_URL="$EXPERIMENT_URL" \
     RBAC_URL="$RBAC_URL" PLATFORM_SIGNING_KEY_PEM="$reg_key" PLATFORM_SIGNING_KID="e2e-harness-key-1" \
     JWKS_URL="$WR_JWKS_URL" JWT_ISSUER="$WR_ISS" JWT_AUDIENCE="$WR_AUD" \
+    MINIO_ENDPOINT="${S3_ENDPOINT#http://}" MINIO_ACCESS_KEY=datacern MINIO_SECRET_KEY=datacern_dev \
+    MINIO_USE_SSL=false CHART_EXPORT_BUCKET=datacern-chart-exports \
     "$BIN_DIR/chart-e2e"
   wait_ready chart "$CHART_URL" || { warn "chart-service not ready — SKIPPED"; SKIPPED+=("chart"); return 1; }
 }
@@ -515,6 +521,8 @@ start_usage() {
     RBAC_URL="$RBAC_URL" SERVICE_SIGNING_KEY_PEM="$reg_key" SERVICE_SIGNING_KID="e2e-harness-key-1" \
     PLATFORM_TENANT_ID="$TENANT_ID" \
     JWKS_URL="$WR_JWKS_URL" JWT_ISSUER="$WR_ISS" JWT_AUDIENCE="$WR_AUD" \
+    MINIO_ENDPOINT="${S3_ENDPOINT#http://}" MINIO_ACCESS_KEY=datacern MINIO_SECRET_KEY=datacern_dev \
+    MINIO_USE_SSL=false VALUE_EXPORT_BUCKET=datacern-value-exports \
     "$BIN_DIR/usage-e2e"
   wait_ready usage "$USAGE_URL" || { warn "usage-service not ready — SKIPPED"; SKIPPED+=("usage"); return 1; }
 }

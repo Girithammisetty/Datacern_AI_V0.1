@@ -108,6 +108,10 @@ func (s *Server) Router() http.Handler {
 		r.With(RequireServiceOrSuperAdmin).Post("/authz/check", s.handleAuthzCheck)
 		r.With(s.RequireAction("audit.log.read")).Post("/authz/explain", s.handleAuthzExplain)
 
+		// Audience resolution (NOTIF-FR-013): notification-service's real
+		// source of truth for role/group-addressed alerts.
+		r.With(RequireServiceOrSuperAdmin).Post("/audience/resolve", s.handleAudienceResolve)
+
 		// Admin / platform-operator.
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(RequireSuperAdmin)

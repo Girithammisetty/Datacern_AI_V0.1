@@ -6,6 +6,8 @@ import (
 
 	gcevent "github.com/datacern-ai/go-common/event"
 	gckafka "github.com/datacern-ai/go-common/kafka"
+
+	"github.com/datacern-ai/query-service/internal/domain"
 )
 
 // KafkaPublisher is the real outbound event adapter backed by the shared
@@ -68,6 +70,30 @@ func toMaster(env Envelope) gcevent.Envelope {
 	}
 	if env.ViaAgent != nil {
 		out.ViaAgent = &gcevent.ViaAgent{AgentID: env.ViaAgent.AgentID, Version: env.ViaAgent.Version}
+	}
+	if out.Payload == nil {
+		out.Payload = map[string]any{}
+	}
+	return out
+}
+
+// fromMaster maps the platform master envelope (an inbound Kafka delivery)
+// onto query-service's local Envelope type, the inverse of toMaster. Used by
+// Consumer.KafkaHandler to feed inbound identity-service events (tenant.
+// suspended/reactivated) into Handle.
+func fromMaster(env gcevent.Envelope) Envelope {
+	out := Envelope{
+		EventID:     env.EventID,
+		EventType:   env.EventType,
+		TenantID:    env.TenantID,
+		Actor:       domain.Actor{Type: env.Actor.Type, ID: env.Actor.ID},
+		ResourceURN: env.ResourceURN,
+		OccurredAt:  env.OccurredAt,
+		TraceID:     env.TraceID,
+		Payload:     env.Payload,
+	}
+	if env.ViaAgent != nil {
+		out.ViaAgent = &domain.ViaAgent{AgentID: env.ViaAgent.AgentID, Version: env.ViaAgent.Version}
 	}
 	if out.Payload == nil {
 		out.Payload = map[string]any{}

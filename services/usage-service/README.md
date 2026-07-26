@@ -46,6 +46,9 @@ Default env wires REAL adapters (no flags):
 | `REDIS_ADDR` | `localhost:6379` | Redis |
 | `OPA_URL` | `http://localhost:8281` | OPA sidecar |
 | `JWKS_URL` | identity-service JWKS | JWT verification |
+| `MINIO_ENDPOINT` | unset (dev falls back with a loud warning) | MinIO/S3, backs both value-report exports and provider-bill reconciliation drops |
+| `PROVIDER_BILL_BUCKET` | `datacern-provider-bills` | bucket the reconciliation job reads (USG-FR-070) |
+| `PROVIDER_BILL_PREFIX` | `bills/` | key prefix; objects are `<prefix><provider>/<month>.csv` |
 
 RLS is enforced under the shipped **non-owner** role with `ALTER TABLE … FORCE
 ROW LEVEL SECURITY`, so neither the app role nor a table owner can escape tenant
@@ -72,7 +75,7 @@ make test-integration  # real Postgres/Kafka/Redis/OPA; auto-skips if infra down
 | USG-FR-040/041 showback + CSV | `api/handlers_reports.go`, `store/rollups.go` | AC06 |
 | USG-FR-042/043 rate cards + chargeback | `store/ratecards.go`, `store/rollups.go` | AC09 |
 | USG-FR-050/051 anomaly z-score | `internal/anomaly`, `jobs/jobs.go` | AC08, `anomaly/detect_test.go` |
-| USG-FR-070/071/072 reconciliation + adjustments | `internal/recon`, `store/recon.go` | AC09, `recon/variance_test.go` |
+| USG-FR-070/071/072 reconciliation + adjustments, hourly job | `internal/recon`, `internal/jobs/jobs.go` (`Runner.Reconcile`), `internal/jobs/billstore.go`, `store/recon.go`, `cmd/server/main.go` (bill object store wiring + ticker) | AC09, `recon/variance_test.go`, `test/integration/reconciliation_job_test.go` (AC09 via the job itself, written/compile-checked — Docker unavailable in this environment) |
 | MASTER-FR-001/003 RLS + cross-tenant 404 | `migrations/000002_rls`, `store/*` | RLS default-role test, AC10 |
 | MASTER-FR-012 OPA authz | `internal/authz/opa_client.go` | OPA-sidecar test |
 | MASTER-FR-034 outbox → Kafka | `store/pg.go`, `events/*` | AC03 (real Kafka) |
@@ -98,3 +101,20 @@ All adapters are local-protocol real. Provider-bill reconciliation reads CSV
 line items (RFC 4180) from a configured object-storage prefix; the parser and
 variance math are real and unit-tested. Live cloud-provider billing APIs
 (AWS CUR / Azure / GCP) are the only credential-gated path, per CONVENTIONS.
+
+**What "reconciliation" actually checks today.** `Runner.Reconcile`
+(`internal/jobs/jobs.go`) runs hourly from `cmd/server` and is the thing that
+makes the USG-FR-071 block gate live: it lists `bills/<provider>/<month>.csv`
+objects under a real MinIO/S3 bucket (`PROVIDER_BILL_BUCKET`,
+`internal/jobs/billstore.go` wraps `go-common/objectstore`, same real client
+the value-report exports use, separate bucket), parses each with
+`recon.ParseBillCSV`, and diffs it against `MeteredMonthly`. This is real
+end-to-end wiring against real infra, but "provider bill" only means whatever
+CSV was dropped in that bucket -- there is no live pull from an actual
+Anthropic/OpenAI/AWS/Azure/GCP billing API anywhere in this repo, and building
+one is out of scope (credential-gated, per CONVENTIONS). Getting the real
+provider invoice into the bucket in the first place (an operator export, or an
+out-of-repo scheduled pull) is an operational step, not code in this service.
+Until a bucket has bill objects, `Reconcile` is a real, scheduled, provably-
+wired no-op (see `TestReconcile_NoBillsConfigured_NoOp`) and every month stays
+`reconciliation_status=pending` -- honestly inert, not a fake "matched".

@@ -27,8 +27,11 @@ import (
 	"github.com/datacern-ai/query-service/internal/store"
 
 	"github.com/datacern-ai/go-common/dbcheck"
-	gcoutbox "github.com/datacern-ai/go-common/outbox"
+	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/objectstore"
 	"github.com/datacern-ai/go-common/otelx"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 func env(key, def string) string {
@@ -95,8 +98,38 @@ func main() {
 	}
 	st := store.NewPG(pool)
 
-	resultsRoot := env("RESULTS_ROOT", "/var/lib/query-service")
-	resStore := results.NewStore(resultsRoot)
+	// Query-result object store (QRY-FR-060..062): real MinIO/S3 when
+	// MINIO_ENDPOINT is set (multi-replica safe, every real deploy -- a result
+	// set written by the replica that ran the query must be readable by
+	// whichever replica later serves the page/download request), the local
+	// filesystem otherwise (single-replica dev/demo only).
+	var resStore *results.Store
+	if minioEndpoint := os.Getenv("MINIO_ENDPOINT"); minioEndpoint != "" || requireReal {
+		if minioEndpoint == "" {
+			minioEndpoint = "localhost:9000"
+		}
+		osClient, err := objectstore.New(ctx, objectstore.Config{
+			Endpoint:  minioEndpoint,
+			AccessKey: env("MINIO_ACCESS_KEY", "datacern"),
+			SecretKey: env("MINIO_SECRET_KEY", "datacern_dev"),
+			UseSSL:    os.Getenv("MINIO_USE_SSL") == "true",
+			Bucket:    env("QUERY_RESULTS_BUCKET", "datacern-query-results"),
+		})
+		if err != nil {
+			if requireReal {
+				slog.Error("query result store init failed", "err", err)
+				os.Exit(1)
+			}
+			slog.Warn("query result store: minio unavailable, falling back to local filesystem (dev only)", "err", err)
+			resStore = results.NewStore(env("RESULTS_ROOT", "/var/lib/query-service"))
+		} else {
+			resStore = results.NewS3Store(osClient)
+			slog.Info("query result store: minio (real)", "endpoint", minioEndpoint)
+		}
+	} else {
+		resStore = results.NewStore(env("RESULTS_ROOT", "/var/lib/query-service"))
+		slog.Warn("query result store: local filesystem (set MINIO_ENDPOINT for multi-replica deploys)")
+	}
 
 	var resolver datasets.Resolver
 	if base := os.Getenv("DATASET_SERVICE_URL"); base != "" {
@@ -237,6 +270,34 @@ func main() {
 	// B6 (BRD 58): published outbox rows are drained but never pruned; sweep
 	// them past a retention window so the table doesn't grow unboundedly.
 	go gcoutbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
+
+	// Inbound consumer (§6): identity-service's tenant.suspended/tenant.
+	// reactivated on identity.events.v1 drive the broker's suspended-tenant
+	// set, so a suspended tenant's queries are actually blocked (ETenantSuspended)
+	// instead of only being rejected by intent in a doc comment. Same
+	// KAFKA_BROKERS=false escape hatch as the outbox publisher above; with no
+	// live consumer group, suspension is enforced only via whatever calls
+	// broker.SuspendTenant directly (tests).
+	if brokers == "false" {
+		if requireReal {
+			mustReal("KAFKA_BROKERS", "no inbound tenant-suspension consumer (suspended tenants would keep running queries)")
+		}
+		slog.Warn("KAFKA_BROKERS=false; tenant-suspension events are not consumed (local dev only)")
+	} else {
+		rc := redisx.NewFromEnv(env("REDIS_ADDR", "localhost:6379"), os.Getenv)
+		kafkaSASL, kafkaTLS := gckafka.SASLFromEnv(os.Getenv), gckafka.TLSFromEnv(os.Getenv)
+		dlq := gckafka.NewProducer(gckafka.Config{Brokers: strings.Split(brokers, ","), SASL: kafkaSASL, TLS: kafkaTLS})
+		consumer := &events.Consumer{Broker: broker}
+		inbound := gckafka.NewConsumerGroup(gckafka.ConsumerConfig{
+			Brokers: strings.Split(brokers, ","), GroupID: "query-inbound",
+			Topics:  []string{"identity.events.v1"},
+			Handler: consumer.KafkaHandler(),
+			Dedup:   rc, DLQ: dlq,
+			SASL: kafkaSASL, TLS: kafkaTLS,
+		})
+		go inbound.Run(ctx)
+		defer func() { _ = inbound.Close() }()
+	}
 
 	// Result retention GC (QRY-FR-062: 24h then GC; history row persists).
 	go func() {

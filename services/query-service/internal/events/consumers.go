@@ -5,6 +5,8 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+
+	gcevent "github.com/datacern-ai/go-common/event"
 )
 
 // BrokerReactions is the surface the consumers drive (implemented by
@@ -20,10 +22,11 @@ type ResolverInvalidation interface {
 	Delete(tenant uuid.UUID, name string)
 }
 
-// Consumer dispatches inbound envelopes. In production it sits behind a
-// Kafka consumer group with Redis event_id dedup and a DLQ
-// (MASTER-FR-032/033); tests dispatch directly (CONVENTIONS: fakes from
-// contracts, never live services).
+// Consumer dispatches inbound envelopes. In production it sits behind the
+// shared go-common Kafka consumer group (cmd/server/main.go's "query-inbound"
+// group on identity.events.v1) with Redis event_id dedup and a DLQ
+// (MASTER-FR-032/033), reached via KafkaHandler; tests dispatch directly
+// through Handle (CONVENTIONS: fakes from contracts, never live services).
 type Consumer struct {
 	Broker   BrokerReactions
 	Resolver ResolverInvalidation
@@ -57,9 +60,21 @@ func (c *Consumer) Handle(ctx context.Context, env Envelope) {
 		// on the resolver's short TTL. No action required.
 	case "tenant.suspended":
 		c.Broker.SuspendTenant(ctx, env.TenantID)
-	case "tenant.resumed":
+	case "tenant.reactivated":
 		c.Broker.ResumeTenant(env.TenantID)
 	default:
 		slog.Debug("ignoring event", "type", env.EventType)
+	}
+}
+
+// KafkaHandler adapts Handle to the shared go-common Kafka consumer's Handler
+// signature (gckafka.Handler), translating the wire envelope onto
+// query-service's local Envelope type (mirrors toMaster's inverse in
+// gocommon.go). Handle itself never errors, so retries/DLQ never trigger on
+// tenant-suspension delivery.
+func (c *Consumer) KafkaHandler() func(ctx context.Context, env gcevent.Envelope) error {
+	return func(ctx context.Context, env gcevent.Envelope) error {
+		c.Handle(ctx, fromMaster(env))
+		return nil
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/datacern-ai/chart-service/internal/authz"
 	"github.com/datacern-ai/chart-service/internal/domain"
 	"github.com/datacern-ai/chart-service/internal/events"
+	"github.com/datacern-ai/chart-service/internal/resolve"
 	"github.com/datacern-ai/go-common/event"
 )
 
@@ -117,7 +118,7 @@ func (s *Server) handleUpdateChart(w http.ResponseWriter, r *http.Request) {
 		versionBump = true
 	}
 	// Re-validate config against (possibly new) type + sources.
-	if err := s.validateChartInput(r, &chartWrite{ChartType: c.ChartType, Config: c.Config, Sources: c.Sources}); err != nil {
+	if err := s.validateChartInput(r, &chartWrite{ChartType: c.ChartType, Config: c.Config, DisplayMeta: c.DisplayMeta, Sources: c.Sources}); err != nil {
 		writeErr(w, r, err)
 		return
 	}
@@ -224,15 +225,37 @@ func (s *Server) validateChartInput(r *http.Request, in *chartWrite) error {
 			return domain.EValidation("source_urn is required", []domain.FieldDetail{{Field: "sources[" + strconv.Itoa(i) + "].source_urn", Code: "REQUIRED"}})
 		}
 	}
-	// Discover known fields from upstream metadata when a validator is wired
-	// (CHART-FR-013); nil in dev falls back to structural validation only.
-	var known map[string]bool
-	if s.Fields != nil {
-		if k, err := s.Fields.KnownFields(r.Context(), bearerToken(r), in.Sources); err == nil {
-			known = k
-		}
-	}
+	known := s.knownFieldSet(r, in.Config, in.DisplayMeta, in.Sources)
 	return domain.ValidateConfig(in.ChartType, in.Config, known)
+}
+
+// knownFieldSet resolves the real known measure/dimension names for a chart
+// spec's semantic model (CHART-FR-013), using the exact model resolution
+// resolve.Resolve uses at render time (resolve.ChartModel / DefaultModel), so
+// write-time validation and render-time compilation never disagree on which
+// model a chart targets. Returns nil (skip the unknown-field check) when no
+// validator is wired, the primary source isn't a semantic measure, the model
+// can't be resolved, or semantic-service is unreachable.
+func (s *Server) knownFieldSet(r *http.Request, config, displayMeta json.RawMessage, sources []domain.ChartSource) map[string]bool {
+	if s.Fields == nil {
+		return nil
+	}
+	tmp := &domain.Chart{Config: rawOr(config, "{}"), DisplayMeta: rawOr(displayMeta, "{}"), Sources: sources}
+	if src := resolve.PrimarySource(tmp); src.SourceType != domain.SourceSemanticMeasure && src.SourceType != "" {
+		return nil
+	}
+	model := resolve.ChartModel(tmp)
+	if model == "" {
+		model = s.DefaultModel
+	}
+	if model == "" {
+		return nil
+	}
+	known, err := s.Fields.KnownFields(r.Context(), bearerToken(r), model, resolve.ChartWorkspace(tmp))
+	if err != nil {
+		return nil
+	}
+	return known
 }
 
 func normalizeSources(in []domain.ChartSource) []domain.ChartSource {

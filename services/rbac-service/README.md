@@ -144,6 +144,7 @@ body-supplied tenant for authorization (MASTER-FR-002).
 | RBC-FR-044 OPA decision contract + policy bundle | Done | `authz/decide.go`, `policy/datacern_authz.rego` | `TestDecide_*`, `TestPolicy_*` (parity) |
 | RBC-FR-045 cold-start fallback + warm + alert metric | Done | `authz/checker.go` | `TestAC08_RedisFlushFallback` |
 | RBC-FR-046 explain chain | Done | `authz/explain.go` | `TestIntegration_ExplainFullChain`, `TestAC07` |
+| cross-service audience resolution (notification-service's NOTIF-FR-013 source of truth: tenant admins, workspace managers/subscribers, arbitrary group subjects) | Done | `POST /audience/resolve`, `Store.RoleAudience/WorkspaceSubscribers` | `TestIntegration_AudienceResolve_*` |
 | RBC-FR-047 TTL 24h + refresh-on-read | Done | `RedisWriter` TTL, `RedisReader.OnNearExpiry` | `TestIntegration_ProjectionRecomputeEndToEnd` (TTL assert) |
 | RBC-FR-048 idempotent ordered workers, per-user mutex, versioned LWW, no resurrection | Done | `ClaimDirty` (SKIP LOCKED + visibility), `projection.UserLock`, Lua CAS + version-carrying tombstones | `TestIntegration_VersionedLastWriterWins`, `TestIntegration_StaleWriterCannotResurrectRevokedGrant`, `TestIntegration_StaleWriterCannotResurrectWorkspaceAssignment`, `TestIntegration_UserLockSerializesRecompute` |
 

@@ -29,6 +29,7 @@ from app.domain.drivers import (
     FetcherRegistry,
     wire_local_drivers,
 )
+from app.domain.drivers.objectsource import ObjectIngestorRegistry, UnsupportedObjectIngestor
 from app.domain.objectstore import LocalFSObjectStore, ObjectStore, S3ObjectStore
 from app.domain.policy import OPAPolicyEngine, PolicyEngine, StaticPolicyEngine
 from app.domain.probers import (
@@ -73,6 +74,8 @@ class Container:
     publisher: EventPublisher
     # remote-file source fetchers (SFTP/HTTP → object store); empty in memory tier
     fetchers: FetcherRegistry = field(default_factory=FetcherRegistry)
+    # file_poll ingestion_mode drivers (s3/gcs/azure_blob); empty in memory tier
+    object_ingestors: ObjectIngestorRegistry = field(default_factory=ObjectIngestorRegistry)
     # cached JWKS provider (real JWKS refresh) when jwks_url is configured
     jwks: object | None = None
     # in-process scheduler bookkeeping (Temporal carries tenant context natively)
@@ -136,7 +139,8 @@ def _build_real(settings: Settings) -> Container:
     query_sources = QuerySourceRegistry(default=UnsupportedQuerySource())
     fetchers = FetcherRegistry()
     previewer = DispatchingSourcePreviewer(default=UnsupportedSourcePreviewer())
-    wire_local_drivers(settings, probers, query_sources, fetchers, previewer)
+    object_ingestors = ObjectIngestorRegistry(default=UnsupportedObjectIngestor())
+    wire_local_drivers(settings, probers, query_sources, fetchers, previewer, object_ingestors)
 
     return Container(
         settings=settings,
@@ -162,6 +166,7 @@ def _build_real(settings: Settings) -> Container:
         previewer=previewer,
         query_sources=query_sources,
         fetchers=fetchers,
+        object_ingestors=object_ingestors,
         policy=OPAPolicyEngine(settings.opa_url, redis_url=settings.redis_url),
         publisher=KafkaEventPublisher(settings.kafka_bootstrap_servers),
         jwks=(

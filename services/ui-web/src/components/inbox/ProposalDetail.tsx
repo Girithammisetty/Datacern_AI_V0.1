@@ -129,7 +129,17 @@ export function ProposalDetail({ proposal }: { proposal: Proposal }) {
       <CardContent className="space-y-4">
         {proposal.rationale && (
           <section>
-            <h3 className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Rationale</h3>
+            <div className="mb-1 flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase text-muted-foreground">Rationale</h3>
+              {proposal.rationaleSource === "fallback_template" && (
+                <span
+                  className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
+                  title="The LLM call failed or returned nothing; this is a canned sentence, not model reasoning."
+                >
+                  auto-generated fallback, not LLM-reasoned
+                </span>
+              )}
+            </div>
             <p className="text-sm">{proposal.rationale}</p>
           </section>
         )}

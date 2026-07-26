@@ -65,7 +65,7 @@ authz against the sidecar.
 | NOTIF-FR-010 subscription rules CRUD + filters | M | ✅ | `handlers_rules.go`, `store/rules.go` |
 | NOTIF-FR-011 rule evaluation (≤1 per event/channel) | M | ✅ | `subscriptions.Matches`, pipeline dedup; `TestAC11_FilterMatch` |
 | NOTIF-FR-012 preferences (mute/override/quiet-hours/digest) | M | ✅ | `internal/preferences`; `TestAC13…`, `TestBR3…` |
-| NOTIF-FR-013 group/role audience expansion (≤500) | S | ✅ | `pipeline.RedisGroupResolver`, `MaxAudience` truncation |
+| NOTIF-FR-013 group/role audience expansion (≤500) | S | ✅ | `pipeline.RBACGroupResolver` (calls rbac-service `POST /audience/resolve`, real membership data), `MaxAudience` truncation; `TestPipeline_RoleAudience_DeliversToRealRecipients` |
 | NOTIF-FR-020 in-app persist + realtime + inbox API | M | ✅ | `channels/inapp`, `handlers_inbox.go`; `TestAC01…` |
 | NOTIF-FR-021 email provider abstraction + failover + suppression | M | ✅ | `channels/email` (SMTP/SES/SendGrid/ACS); `TestBR9…`, `TestAC09…` |
 | NOTIF-FR-022 webhooks (HMAC, handshake, rotation, SSRF) | M | ✅ | `channels/webhook`; `TestAC04…`, `TestAC06…`, `TestAC12…` |

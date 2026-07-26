@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/objectstore"
 	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/otelx"
 	"github.com/datacern-ai/go-common/redisx"
@@ -49,6 +50,13 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Stabilization guard (rule: no fake/mock/stub in a runtime path). When
+	// REQUIRE_REAL_ADAPTERS=true — set in every real deploy — the service REFUSES
+	// to boot on a fallback adapter (here: the local-filesystem export store)
+	// instead of silently running multi-replica-unsafe. Absent (local unit dev),
+	// the loud-warn fallback below keeps dev self-contained.
+	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
 
 	// Distributed tracing (no-op unless datacern_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
@@ -140,7 +148,42 @@ func main() {
 	go gcoutbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
 
 	// Periodic workers.
-	runner := &jobs.Runner{Store: st}
+	runner := &jobs.Runner{Store: st, BillPrefix: env("PROVIDER_BILL_PREFIX", "bills/")}
+
+	// Provider-bill object store (USG-FR-070/071): real MinIO/S3 prefix that an
+	// operator (or an out-of-repo pull job) drops provider invoice CSV exports
+	// into; the reconciliation job below only reads them. This is genuinely
+	// real local object storage (CONVENTIONS table), not a live AWS CUR/Azure/
+	// GCP/LLM-provider billing API client -- no such adapter exists anywhere in
+	// this repo, and per README "No credential-gated exceptions" that stays out
+	// of scope. Separate bucket from the value-report exports above so the two
+	// concerns don't share a lifecycle.
+	if minioEndpoint := os.Getenv("MINIO_ENDPOINT"); minioEndpoint != "" || requireReal {
+		ep := minioEndpoint
+		if ep == "" {
+			ep = "localhost:9000"
+		}
+		billsClient, err := objectstore.New(ctx, objectstore.Config{
+			Endpoint:  ep,
+			AccessKey: env("MINIO_ACCESS_KEY", "datacern"),
+			SecretKey: env("MINIO_SECRET_KEY", "datacern_dev"),
+			UseSSL:    os.Getenv("MINIO_USE_SSL") == "true",
+			Bucket:    env("PROVIDER_BILL_BUCKET", "datacern-provider-bills"),
+		})
+		if err != nil {
+			if requireReal {
+				slog.Error("provider-bill object store init failed", "err", err)
+				os.Exit(1)
+			}
+			slog.Warn("provider-bill object store: minio unavailable, reconciliation has nothing to reconcile until fixed", "err", err)
+		} else {
+			runner.Bills = jobs.NewMinioBillStore(billsClient)
+			slog.Info("provider-bill object store: minio (real)", "endpoint", ep, "bucket", billsClient.Bucket())
+		}
+	} else {
+		slog.Warn("provider-bill object store: MINIO_ENDPOINT unset, reconciliation job has no bill source (dev-only; the variance-block gate stays inert -- always 'pending' -- until a real bucket is configured)")
+	}
+
 	startJobs(ctx, runner)
 
 	// Register the action manifest with rbac (best-effort, RBC-FR-022).
@@ -158,20 +201,47 @@ func main() {
 		}
 	}()
 
-	// Value-report export object store (BRD 69 design §2.8) — real local
-	// filesystem store today (MinIO/S3-compatible in prod), same weight class
-	// as chart-service's export mechanics, no Object-Lock/WORM (not a
+	// Value-report export object store (BRD 69 design §2.8): real MinIO/S3 when
+	// MINIO_ENDPOINT is set (multi-replica safe, every real deploy), the local
+	// filesystem FSStore otherwise (single-replica dev/demo only — its files are
+	// pinned to whichever replica wrote them, same weight class as
+	// chart-service's export mechanics, no Object-Lock/WORM since this is not a
 	// compliance record).
-	exportSecret := []byte(os.Getenv("VALUE_EXPORT_SIGNING_SECRET"))
-	if len(exportSecret) == 0 {
-		exportSecret = []byte(uuid.NewString())
-		slog.Warn("VALUE_EXPORT_SIGNING_SECRET unset; generated ephemeral secret (download links break on restart)")
+	var exports valueexport.ObjectStore
+	if minioEndpoint := os.Getenv("MINIO_ENDPOINT"); minioEndpoint != "" || requireReal {
+		if minioEndpoint == "" {
+			minioEndpoint = "localhost:9000"
+		}
+		osClient, err := objectstore.New(ctx, objectstore.Config{
+			Endpoint:  minioEndpoint,
+			AccessKey: env("MINIO_ACCESS_KEY", "datacern"),
+			SecretKey: env("MINIO_SECRET_KEY", "datacern_dev"),
+			UseSSL:    os.Getenv("MINIO_USE_SSL") == "true",
+			Bucket:    env("VALUE_EXPORT_BUCKET", "datacern-value-exports"),
+		})
+		if err != nil {
+			if requireReal {
+				slog.Error("value-report export store init failed", "err", err)
+				os.Exit(1)
+			}
+			slog.Warn("value-report export store: minio unavailable, exports will fail loud until fixed", "err", err)
+		} else {
+			exports = valueexport.NewS3Store(osClient)
+			slog.Info("value-report export store: minio (real)", "endpoint", minioEndpoint)
+		}
+	} else {
+		exportSecret := []byte(os.Getenv("VALUE_EXPORT_SIGNING_SECRET"))
+		if len(exportSecret) == 0 {
+			exportSecret = []byte(uuid.NewString())
+			slog.Warn("VALUE_EXPORT_SIGNING_SECRET unset; generated ephemeral secret (download links break on restart)")
+		}
+		exports = valueexport.NewFSStore(
+			env("VALUE_EXPORT_ROOT", "/var/lib/usage-service/value-exports"),
+			env("PUBLIC_URL", "http://localhost:8080"),
+			exportSecret,
+		)
+		slog.Warn("value-report export store: local filesystem (set MINIO_ENDPOINT for multi-replica deploys)")
 	}
-	exports := valueexport.NewFSStore(
-		env("VALUE_EXPORT_ROOT", "/var/lib/usage-service/value-exports"),
-		env("PUBLIC_URL", "http://localhost:8080"),
-		exportSecret,
-	)
 
 	srv := &api.Server{
 		Store:    st,
@@ -214,6 +284,13 @@ func startJobs(ctx context.Context, r *jobs.Runner) {
 	every(ctx, 30*time.Minute, func() {
 		if _, err := r.AnomalyScan(ctx, time.Now().AddDate(0, 0, -1)); err != nil {
 			slog.Warn("anomaly scan failed", "err", err)
+		}
+	})
+	every(ctx, time.Hour, func() {
+		if n, err := r.Reconcile(ctx); err != nil {
+			slog.Warn("reconciliation failed", "err", err)
+		} else if n > 0 {
+			slog.Info("reconciliation processed", "count", n)
 		}
 	})
 	every(ctx, 6*time.Hour, func() {

@@ -944,6 +944,13 @@ export interface Proposal {
    */
   riskTier?: string | null;
   rationale?: string | null;
+  /**
+   * Provenance of `rationale`: "llm" (a real model call produced it) or
+   * "fallback_template" (the LLM call failed/was empty and agent-runtime
+   * substituted a canned sentence in the same shape). Lets the UI warn the
+   * approver when a proposal's rationale is not actually LLM-reasoned.
+   */
+  rationaleSource?: string | null;
   affectedUrns: string[];
   /**
    * Structured predicted-effect object from the originating agent

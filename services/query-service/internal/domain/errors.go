@@ -43,6 +43,7 @@ const (
 	CodeRateLimited         = "RATE_LIMITED"
 	CodeEngineUnavailable   = "ENGINE_UNAVAILABLE"
 	CodePermissionDenied    = "PERMISSION_DENIED"
+	CodeTenantSuspended     = "TENANT_SUSPENDED"
 	CodeUnauthenticated     = "UNAUTHENTICATED"
 	CodeNotImplemented      = "NOT_IMPLEMENTED"
 	CodeInternal            = "INTERNAL"
@@ -120,6 +121,14 @@ func EEngineUnavailable(msg string) *Error {
 // EPermissionDenied is a 403 authz denial.
 func EPermissionDenied(msg string) *Error {
 	return &Error{Code: CodePermissionDenied, HTTP: http.StatusForbidden, Message: msg}
+}
+
+// ETenantSuspended is the 403 for a tenant blocked by identity-service's
+// tenant.suspended (mirrors identity-service's own error catalog: same code,
+// same HTTP status, so clients recognize it regardless of which service
+// returned it).
+func ETenantSuspended() *Error {
+	return &Error{Code: CodeTenantSuspended, HTTP: http.StatusForbidden, Message: "tenant is suspended"}
 }
 
 // EUnauthenticated is a 401.

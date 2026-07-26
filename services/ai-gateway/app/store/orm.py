@@ -181,6 +181,7 @@ class RequestLogRow(Base):
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     trace_id: Mapped[str | None] = mapped_column(Text)
     deployment_id: Mapped[str | None] = mapped_column(Text)
+    is_estimated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 

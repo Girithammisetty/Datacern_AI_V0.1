@@ -394,7 +394,7 @@ class GatewayService:
         async def sse():
             deployment: ProviderDeployment | None = None
             content_parts: list[str] = []
-            usage = {"input_tokens": 0, "output_tokens": 0}
+            usage = {"input_tokens": 0, "output_tokens": 0, "is_estimated": False}
             first_token_ms: int | None = None
             streamed_any = False
             try:
@@ -462,6 +462,7 @@ class GatewayService:
                             input_tokens=usage.get("input_tokens", 0),
                             output_tokens=usage.get("output_tokens", 0),
                             model=rung.model_alias,
+                            is_estimated=usage.get("is_estimated", False),
                         ),
                     )
                     await service.cache.store(ctx.tenant_id, messages, p_hash, c_hash,
@@ -472,6 +473,7 @@ class GatewayService:
                     input_tokens=usage.get("input_tokens", 0),
                     output_tokens=usage.get("output_tokens", 0),
                     model=rung.model_alias,
+                    is_estimated=usage.get("is_estimated", False),
                 )
                 await service._settle_and_meter(
                     ctx, span, started, preflight, quote, result, rung_idx,
@@ -545,7 +547,7 @@ class GatewayService:
             candidates, plan = self._plan(span, deployments, rung, ctx.cell_cloud,
                                           ladder, 0)
             try:
-                vectors, deployment, input_tokens = None, None, 0
+                vectors, deployment, input_tokens, is_estimated = None, None, 0, False
                 last_exc: Exception | None = None
                 prev = None
                 for dep in plan.sequence:
@@ -553,7 +555,7 @@ class GatewayService:
                         await self.sleeper(backoff_ms(self.settings))
                     prev = dep
                     try:
-                        vectors, input_tokens = await self.provider.embed(
+                        vectors, input_tokens, is_estimated = await self.provider.embed(
                             dep, dep.deployment_name, inputs
                         )
                         self.breaker.record(dep.id, True)
@@ -573,7 +575,8 @@ class GatewayService:
                 raise
 
             result = ProviderResult(content="", input_tokens=input_tokens,
-                                    output_tokens=0, model=rung.model_alias)
+                                    output_tokens=0, model=rung.model_alias,
+                                    is_estimated=is_estimated)
             await self._settle_and_meter(
                 ctx, span, started, preflight, quote, result, 0, rung.model_alias,
                 deployment, GuardrailOutcome(messages=[]), False, status="ok",
@@ -822,7 +825,7 @@ class GatewayService:
             input_tokens=result.input_tokens, output_tokens=result.output_tokens,
             cost_usd=actual_cents / 100, cached=False, guardrail_flags=guard.flags,
             degraded=degraded, status=status, first_token_ms=first_token_ms,
-            price_source=actual_quote.source,
+            price_source=actual_quote.source, is_estimated=result.is_estimated,
         )
 
     async def _record_and_meter(self, ctx, span: Span, started, rung_idx: int,
@@ -830,7 +833,8 @@ class GatewayService:
                                 output_tokens: int, cost_usd: float, cached: bool,
                                 guardrail_flags: list[str], degraded: bool,
                                 status: str, first_token_ms: int | None = None,
-                                price_source: str | None = None) -> None:
+                                price_source: str | None = None,
+                                is_estimated: bool = False) -> None:
         latency_ms = int((self.clock.now() - started).total_seconds() * 1000)
         day = self.clock.now().date().isoformat()
         if deployment is not None:
@@ -857,6 +861,7 @@ class GatewayService:
             "rung": rung_idx,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "is_estimated": is_estimated,
             "cached": cached,
             "cost_usd": cost_usd,
             "latency_ms": latency_ms,
@@ -881,7 +886,7 @@ class GatewayService:
                 guardrail_flags=list(guardrail_flags), status=status,
                 latency_ms=latency_ms, trace_id=ctx.trace_id,
                 deployment_id=deployment.id if deployment else None,
-                created_at=self.clock.now(),
+                is_estimated=is_estimated, created_at=self.clock.now(),
             ))
             await uow.outbox.add(self.settings.usage_topic, make_envelope(
                 event_type="ai.token_usage.v1", tenant_id=ctx.tenant_id,

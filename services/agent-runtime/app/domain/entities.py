@@ -181,6 +181,11 @@ class Proposal:
     # args.get("workspace_id") when this is None, for graphs whose tools do
     # accept workspace_id as a real arg.
     workspace_id: str | None = None
+    # Provenance of `rationale`: "llm" (real model call) or "fallback_template"
+    # (the LLM call failed/was empty and a canned sentence was substituted).
+    # Carried verbatim from WriteIntent.rationale_source so the human approver
+    # can tell a genuine LLM-reasoned proposal from a canned one.
+    rationale_source: str = "llm"
     created_at: datetime = field(default_factory=now)
     updated_at: datetime = field(default_factory=now)
 

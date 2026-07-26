@@ -5,7 +5,13 @@ dataset<->model feature-compatibility check (ART-FR-040)."""
 
 from __future__ import annotations
 
-from app.adapters.fakes import FakeDatasetReader, FakeExperimentReader, FakeLlm, FakeMemory
+from app.adapters.fakes import (
+    FakeDatasetReader,
+    FakeExperimentReader,
+    FakeFailingLlm,
+    FakeLlm,
+    FakeMemory,
+)
 from app.graphs.base import GraphDeps
 from app.graphs.inference_agent import run_inference
 from tests.conftest import TENANT_A
@@ -42,6 +48,8 @@ async def test_inference_produces_submit_intent_when_compatible():
     # the compatibility report rides on the predicted effect
     assert wi.predicted_effect["compatibility"]["compatible"] is True
     assert wi.rationale
+    # real LLM call produced the rationale -> honestly labelled "llm"
+    assert wi.rationale_source == "llm"
     # grounding actually happened against BOTH services
     exp_ops = [c["op"] for c in experiment.calls]
     ds_ops = [c["op"] for c in dataset.calls]
@@ -50,6 +58,27 @@ async def test_inference_produces_submit_intent_when_compatible():
     # retrieved memory surfaced as grounding evidence + a real model was invoked
     assert outcome.evidence
     assert outcome.usage["output_tokens"] > 0
+
+
+async def test_inference_marks_rationale_as_fallback_when_llm_unavailable():
+    # LLM call raises (ai-gateway outage) -> the agent substitutes a templated
+    # rationale, but MUST label it distinguishably from a real LLM rationale so
+    # the human approver isn't misled into thinking the model reasoned about it.
+    experiment = FakeExperimentReader()  # production v2 wants {amount: double}
+    dataset = FakeDatasetReader()        # schema {amount: double, non-nullable}
+    deps = GraphDeps(
+        llm=FakeFailingLlm(), memory=FakeMemory(),
+        experiment_reader=experiment, dataset_reader=dataset,
+        prompt_params={}, obo_token="tok")
+
+    outcome = await run_inference(deps, {"tenant_id": TENANT_A, "query": _QUERY})
+
+    wi = outcome.write_intent
+    assert wi is not None
+    assert wi.rationale
+    assert wi.rationale_source == "fallback_template"
+    # the fallback content itself is unchanged: still the deterministic template
+    assert "compatible with" in wi.rationale
 
 
 async def test_inference_blocks_and_explains_when_incompatible():

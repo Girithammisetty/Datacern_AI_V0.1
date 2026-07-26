@@ -250,7 +250,7 @@ func (b *Broker) DryRun(ctx context.Context, req RunRequest) (*Plan, error) {
 // and a slot is instantly free (BR-5), async otherwise (202 + status).
 func (b *Broker) Run(ctx context.Context, req RunRequest) (*domain.Execution, error) {
 	if b.IsSuspended(req.Op.Tenant) {
-		return nil, domain.EPermissionDenied("tenant is suspended; new executions are blocked")
+		return nil, domain.ETenantSuspended()
 	}
 	plan, err := b.buildPlan(ctx, req.PlanRequest)
 	if err != nil {

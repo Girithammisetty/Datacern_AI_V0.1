@@ -879,11 +879,12 @@ export default function WelcomeContent() {
               <span className="wr-grad bg-clip-text text-transparent">signs it.</span>
             </h1>
             <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
-              Datacern works your regulated back-office queues — card disputes, health claims,
-              financial-crime alerts, insurance losses, supplier invoices. Agents read the file,
-              apply your rules and draft the recommendation. Nothing takes effect until a named
-              person approves it, no one can approve their own work, and every action leaves a
-              receipt an examiner can follow.
+              Point Datacern at the data behind your regulated back-office work — card disputes,
+              health claims, financial-crime alerts, insurance losses, supplier invoices. Write one
+              intake rule and matching rows become a worklist on their own. Your team works that
+              queue with an agent drafting the recommendation and its evidence; nothing takes effect
+              until a named person approves it, no one can approve their own work, and every action
+              leaves a receipt an examiner can follow.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Button size="lg" onClick={() => setDemoOpen(true)}>

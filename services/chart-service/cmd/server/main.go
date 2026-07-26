@@ -26,6 +26,7 @@ import (
 	"github.com/datacern-ai/chart-service/internal/register"
 	"github.com/datacern-ai/chart-service/internal/store"
 	"github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/objectstore"
 	"github.com/datacern-ai/go-common/otelx"
 	"github.com/datacern-ai/go-common/outbox"
 )
@@ -74,26 +75,58 @@ func main() {
 	slog.Info("wired real adapters (no stubs)", "authz", rep.Authz, "cache", rep.Cache,
 		"semantic", rep.Semantic, "query", rep.Query, "verifier", rep.Verifier, "producer", rep.Producer)
 
-	secret := []byte(cfg.ExportSecret)
-	if len(secret) == 0 {
-		secret = make([]byte, 32)
-		if _, err := rand.Read(secret); err != nil {
-			slog.Error("secret generation failed", "err", err)
-			os.Exit(1)
+	// Chart export object store (CHART-FR-041): real MinIO/S3 when
+	// MINIO_ENDPOINT is set (multi-replica safe, every real deploy), the local
+	// filesystem FSStore otherwise (single-replica dev/demo only -- its files
+	// are pinned to whichever replica wrote them). REQUIRE_REAL_ADAPTERS=true
+	// forces the MinIO branch even without MINIO_ENDPOINT (localhost:9000
+	// default) and fails boot loudly if it can't connect.
+	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
+	var exports export.ObjectStore
+	if cfg.MinIOEndpoint != "" || requireReal {
+		endpoint := cfg.MinIOEndpoint
+		if endpoint == "" {
+			endpoint = "localhost:9000"
 		}
-		slog.Warn("EXPORT_SIGNING_SECRET unset; generated ephemeral secret (links break on restart)")
+		osClient, err := objectstore.New(ctx, objectstore.Config{
+			Endpoint: endpoint, AccessKey: cfg.MinIOAccessKey, SecretKey: cfg.MinIOSecretKey,
+			UseSSL: cfg.MinIOUseSSL, Bucket: cfg.ExportBucket,
+		})
+		if err != nil {
+			if requireReal {
+				slog.Error("chart export store init failed", "err", err)
+				os.Exit(1)
+			}
+			slog.Warn("chart export store: minio unavailable, exports will fail loud until fixed", "err", err)
+		} else {
+			exports = export.NewS3Store(osClient)
+			slog.Info("chart export store: minio (real)", "endpoint", endpoint)
+		}
+	} else {
+		secret := []byte(cfg.ExportSecret)
+		if len(secret) == 0 {
+			secret = make([]byte, 32)
+			if _, err := rand.Read(secret); err != nil {
+				slog.Error("secret generation failed", "err", err)
+				os.Exit(1)
+			}
+			slog.Warn("EXPORT_SIGNING_SECRET unset; generated ephemeral secret (links break on restart)")
+		}
+		exports = export.NewFSStore(cfg.ExportRoot, cfg.PublicURL, secret)
+		slog.Warn("chart export store: local filesystem (set MINIO_ENDPOINT for multi-replica deploys)")
 	}
-	exports := export.NewFSStore(cfg.ExportRoot, cfg.PublicURL, secret)
 
 	srv := &api.Server{
-		Store:       st,
-		Cache:       core.Cache,
-		Authz:       core.Authz,
-		Resolver:    core.Resolver,
-		Verifier:    core.Verifier,
-		Exports:     exports,
-		PreviewSem:  make(chan struct{}, 5),
-		PNGRenderer: cfg.PNGRenderer,
+		Store:        st,
+		Cache:        core.Cache,
+		Authz:        core.Authz,
+		Resolver:     core.Resolver,
+		Verifier:     core.Verifier,
+		Exports:      exports,
+		Fields:       core.Semantic, // real known-field validation (CHART-FR-013)
+		DefaultModel: cfg.DefaultModel,
+		PreviewSem:   make(chan struct{}, 5),
+		PNGRenderer:  cfg.PNGRenderer,
 	}
 
 	// Outbox relay → real Kafka (MASTER-FR-034). KAFKA_BROKERS=false disables.

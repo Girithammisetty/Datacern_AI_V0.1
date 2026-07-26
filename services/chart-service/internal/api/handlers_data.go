@@ -140,7 +140,8 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, domain.ERateLimited("preview concurrency cap reached (5/tenant)"))
 		return
 	}
-	if err := domain.ValidateConfig(in.ChartType, in.Config, nil); err != nil {
+	known := s.knownFieldSet(r, in.Config, in.Display, in.Sources)
+	if err := domain.ValidateConfig(in.ChartType, in.Config, known); err != nil {
 		writeErr(w, r, err)
 		return
 	}

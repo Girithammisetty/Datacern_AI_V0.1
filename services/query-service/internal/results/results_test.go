@@ -170,9 +170,10 @@ func TestExportCSV(t *testing.T) {
 	s := NewStore(t.TempDir())
 	tenant, exec := uuid.New(), uuid.New()
 	writeRows(t, s, tenant, exec, 5)
-	path, err := s.ExportCSV(tenant, exec)
+	data, err := s.ExportCSV(tenant, exec)
 	require.NoError(t, err)
-	assert.FileExists(t, path)
+	assert.Contains(t, string(data), "row-0")
+	assert.Contains(t, string(data), "row-4")
 }
 
 // Abort removes partials; nothing readable remains.

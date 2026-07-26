@@ -55,6 +55,27 @@ finalized) or acknowledges the variance
 (`POST /reconciliations/:id/acknowledge`). Either unblocks
 `GET /reports/chargeback?month=`.
 
+## Dropping a provider bill for reconciliation (USG-FR-070)
+
+The hourly `Runner.Reconcile` job (`internal/jobs/jobs.go`, started from
+`cmd/server`) reads provider bill CSVs from the `PROVIDER_BILL_BUCKET` MinIO/S3
+bucket. To submit a month's bill, upload (e.g. via `mc cp` or the S3 API) an
+RFC 4180 CSV with `meter_key,billed_quantity` columns to
+`<PROVIDER_BILL_PREFIX><provider>/<month>.csv`, e.g.:
+
+```
+mc cp openai-2026-06.csv local/datacern-provider-bills/bills/openai/2026-06.csv
+```
+
+The job picks it up on its next tick (≤ 1h), upserts the `reconciliations` row
+for `(month, provider)`, and — if any meter's variance exceeds threshold (5%
+LLM / 10% infra) — marks the month `variance` and emits
+`usage.reconciliation_variance`, blocking chargeback per the flow above.
+Re-dropping the same key is safe (idempotent upsert). If `MINIO_ENDPOINT` is
+unset, the job is a real no-op every tick (logged once at startup) and every
+month stays `pending` — there is nothing to reconcile against, not a silently
+faked "matched".
+
 ## Budget-event replay for gateway resync
 
 ai-gateway resyncs budget state via `GET /budget-states?scope=` and

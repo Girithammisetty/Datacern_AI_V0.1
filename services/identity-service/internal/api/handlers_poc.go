@@ -10,6 +10,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -170,7 +171,7 @@ func (s *Server) handleExportPocReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, pocExportView(s, export))
+	writeJSON(w, http.StatusCreated, pocExportView(r.Context(), s, export))
 }
 
 // GET /tenants/{id}/poc-reports — list a POC tenant's poc-report.v1 exports.
@@ -190,7 +191,7 @@ func (s *Server) handleListPocReports(w http.ResponseWriter, r *http.Request) {
 	}
 	views := make([]map[string]any, len(exports))
 	for i, e := range exports {
-		views[i] = pocExportView(s, e)
+		views[i] = pocExportView(r.Context(), s, e)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": views})
 }
@@ -221,16 +222,21 @@ func (s *Server) handleDownloadPocReport(w http.ResponseWriter, r *http.Request)
 	_, _ = w.Write(data)
 }
 
-func pocExportView(s *Server, e domain.PocExport) map[string]any {
+func pocExportView(ctx context.Context, s *Server, e domain.PocExport) map[string]any {
 	v := map[string]any{
 		"id": e.ID.String(), "version": e.Version,
 		"json_sha256": e.JSONSHA256, "generated_by": e.GeneratedBy,
 		"created_at": e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
-	if fs, ok := s.PocExports.(*pocexport.FSStore); ok {
+	switch store := s.PocExports.(type) {
+	case *pocexport.FSStore:
 		exp := s.Clock().Add(24 * time.Hour).Unix()
-		v["json_url"] = fs.PublicURL + "/api/v1/poc-report-artifacts/" + e.JSONKey +
-			"?exp=" + strconv.FormatInt(exp, 10) + "&sig=" + fs.Sign(e.JSONKey, exp)
+		v["json_url"] = store.PublicURL + "/api/v1/poc-report-artifacts/" + e.JSONKey +
+			"?exp=" + strconv.FormatInt(exp, 10) + "&sig=" + store.Sign(e.JSONKey, exp)
+	case *pocexport.S3Store:
+		if u, err := store.PresignedURL(ctx, e.JSONKey, 24*time.Hour); err == nil {
+			v["json_url"] = u
+		}
 	}
 	return v
 }

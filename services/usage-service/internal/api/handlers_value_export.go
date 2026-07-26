@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -165,7 +166,7 @@ func (s *Server) handleExportValueReport(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	view := valueExportView(s, created)
+	view := valueExportView(r.Context(), s, created)
 	if key != "" {
 		var buf strings.Builder
 		_ = json.NewEncoder(&buf).Encode(DataBody{Data: view})
@@ -186,7 +187,7 @@ func (s *Server) handleListValueReports(w http.ResponseWriter, r *http.Request) 
 	}
 	views := make([]map[string]any, len(exports))
 	for i, e := range exports {
-		views[i] = valueExportView(s, e)
+		views[i] = valueExportView(r.Context(), s, e)
 	}
 	writePage(w, views, "", false)
 }
@@ -223,7 +224,7 @@ func (s *Server) handleDownloadValueExport(w http.ResponseWriter, r *http.Reques
 	_, _ = w.Write(data)
 }
 
-func valueExportView(s *Server, e domain.ValueExport) map[string]any {
+func valueExportView(ctx context.Context, s *Server, e domain.ValueExport) map[string]any {
 	v := map[string]any{
 		"id": e.ID.String(), "period": e.Period, "version": e.Version,
 		"json_sha256": e.JSONSHA256, "csv_sha256": e.CSVSHA256, "created_at": e.CreatedAt.Format(time.RFC3339),
@@ -237,10 +238,18 @@ func valueExportView(s *Server, e domain.ValueExport) map[string]any {
 	// Presigned URLs are re-signed on every list read (not stored) — the
 	// object bytes are immutable once written (design §2.8), only the
 	// download link's signature/expiry needs to stay fresh.
-	if fs, ok := s.Exports.(*valueexport.FSStore); ok {
+	switch store := s.Exports.(type) {
+	case *valueexport.FSStore:
 		expAt := time.Now().Add(24 * time.Hour).Unix()
-		v["json_url"] = presignedURL(fs, e.JSONKey, expAt)
-		v["csv_url"] = presignedURL(fs, e.CSVKey, expAt)
+		v["json_url"] = presignedURL(store, e.JSONKey, expAt)
+		v["csv_url"] = presignedURL(store, e.CSVKey, expAt)
+	case *valueexport.S3Store:
+		if u, err := store.PresignedURL(ctx, e.JSONKey, 24*time.Hour); err == nil {
+			v["json_url"] = u
+		}
+		if u, err := store.PresignedURL(ctx, e.CSVKey, 24*time.Hour); err == nil {
+			v["csv_url"] = u
+		}
 	}
 	return v
 }

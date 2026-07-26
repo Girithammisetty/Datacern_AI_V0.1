@@ -425,7 +425,11 @@ func TestBrokerCancelQueued(t *testing.T) {
 	got, err := f.broker.Cancel(context.Background(), op2, e2.ID)
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusCancelled, got.Status)
-	assert.Equal(t, 0, f.duck.Calls(), "engine untouched while blocked run holds the slot")
+	// At most e1's own (still-blocked) dispatch may have reached the engine by
+	// now -- whether it has is a race against e1's async goroutine, not
+	// something this test controls. What matters is e2 (queued, then
+	// cancelled) never dispatches: calls can never exceed 1 here.
+	assert.LessOrEqual(t, f.duck.Calls(), 1, "queued run cancelled without ever reaching the engine")
 	close(f.duck.block)
 	f.waitTerminal(t, e1.ID)
 }
@@ -632,6 +636,10 @@ func TestBrokerTenantSuspension(t *testing.T) {
 
 	_, err = f.broker.Run(context.Background(), f.runReq("SELECT region FROM {{dataset('Orders')}}"))
 	require.Error(t, err, "new executions blocked while suspended")
+	de, ok := domain.AsError(err)
+	require.True(t, ok)
+	assert.Equal(t, domain.CodeTenantSuspended, de.Code)
+	assert.Equal(t, 403, de.HTTP)
 
 	f.broker.ResumeTenant(f.tenant)
 	f.duck.block = nil

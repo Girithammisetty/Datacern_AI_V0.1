@@ -131,11 +131,19 @@ func (s *Server) handleGetOperation(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDownloadExport serves a signed artifact (HMAC-validated, not JWT).
+// Only reachable when Exports is the local-filesystem FSStore -- an S3Store
+// export returns a presigned MinIO/S3 URL directly (set at Put time), so this
+// route is never linked to in that mode.
 func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
+	fs, ok := s.Exports.(*export.FSStore)
+	if !ok {
+		writeErr(w, r, domain.EInternal("download unsupported by this object store"))
+		return
+	}
 	key := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
 	q := r.URL.Query()
 	exp, _ := strconv.ParseInt(q.Get("exp"), 10, 64)
-	data, err := s.Exports.Read(key, exp, q.Get("sig"))
+	data, err := fs.Read(key, exp, q.Get("sig"))
 	if err != nil {
 		writeErr(w, r, domain.ENotFound("artifact not found or link expired"))
 		return

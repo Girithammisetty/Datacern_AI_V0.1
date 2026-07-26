@@ -72,6 +72,12 @@ class WriteIntent:
     # workspace_id as a real arg may keep setting args["workspace_id"] instead
     # — service.py falls back to that when this field is None.
     workspace_id: str | None = None
+    # Provenance of `rationale`: "llm" when it came from the real model call,
+    # "fallback_template" when the LLM call failed/was empty and a canned
+    # sentence was substituted (same shape, so the approver otherwise has no
+    # way to tell them apart). Default "llm" — graphs that never fall back
+    # never need to set this.
+    rationale_source: str = "llm"
 
 
 @dataclass(slots=True)

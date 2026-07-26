@@ -19,6 +19,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/datacern-ai/go-common/objectstore"
 	"github.com/datacern-ai/go-common/otelx"
 	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/redisx"
@@ -365,16 +366,49 @@ func main() {
 		}
 		log.Warn("poc value reader: not configured — POC progress/export will fail loud until USAGE_SERVICE_URL is set")
 	}
-	pocExportSecret := []byte(os.Getenv("POC_EXPORT_SIGNING_SECRET"))
-	if len(pocExportSecret) == 0 {
-		pocExportSecret = []byte(uuid.NewString())
-		log.Warn("POC_EXPORT_SIGNING_SECRET unset; generated ephemeral secret (poc report download links break on restart)")
+	// poc-report.v1 export object store: real MinIO/S3 when MINIO_ENDPOINT is
+	// set (multi-replica safe, every real deploy; the same MINIO_* env vars the
+	// tenant-branding logo store above reads), the local filesystem FSStore
+	// otherwise (single-replica dev/demo only -- its files are pinned to
+	// whichever replica wrote them).
+	if minioEndpoint := os.Getenv("MINIO_ENDPOINT"); minioEndpoint != "" || requireReal {
+		if minioEndpoint == "" {
+			minioEndpoint = "localhost:9000"
+		}
+		accessKey, secretKey := os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY")
+		if accessKey == "" {
+			accessKey = "datacern"
+		}
+		if secretKey == "" {
+			secretKey = "datacern_dev"
+		}
+		osClient, err := objectstore.New(ctx, objectstore.Config{
+			Endpoint: minioEndpoint, AccessKey: accessKey, SecretKey: secretKey,
+			UseSSL: os.Getenv("MINIO_USE_SSL") == "true", Bucket: envOr("POC_EXPORT_BUCKET", "datacern-poc-reports"),
+		})
+		if err != nil {
+			if requireReal {
+				log.Error("poc report export store init failed", "error", err)
+				os.Exit(1)
+			}
+			log.Warn("poc report export store unavailable — poc report export will fail loud", "error", err)
+		} else {
+			poc.Exports = pocexport.NewS3Store(osClient)
+			log.Info("poc report export store: minio")
+		}
+	} else {
+		pocExportSecret := []byte(os.Getenv("POC_EXPORT_SIGNING_SECRET"))
+		if len(pocExportSecret) == 0 {
+			pocExportSecret = []byte(uuid.NewString())
+			log.Warn("POC_EXPORT_SIGNING_SECRET unset; generated ephemeral secret (poc report download links break on restart)")
+		}
+		poc.Exports = pocexport.NewFSStore(
+			envOr("POC_EXPORT_ROOT", "/var/lib/identity-service/poc-reports"),
+			envOr("PUBLIC_URL", "http://localhost:8080"),
+			pocExportSecret,
+		)
+		log.Warn("poc report export store: local filesystem (set MINIO_ENDPOINT for multi-replica deploys)")
 	}
-	poc.Exports = pocexport.NewFSStore(
-		envOr("POC_EXPORT_ROOT", "/var/lib/identity-service/poc-reports"),
-		envOr("PUBLIC_URL", "http://localhost:8080"),
-		pocExportSecret,
-	)
 
 	// BYO-P4 per-tenant IdP: build an OIDC provider from a tenant's stored config
 	// (tenant_idp_configs). Injected so the domain layer stays free of the OIDC

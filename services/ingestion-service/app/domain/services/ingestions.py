@@ -157,6 +157,11 @@ class IngestionService:
                 details.append({"field": "statement", "message": "required for query mode"})
             if not body.connection_id:
                 details.append({"field": "connection_id", "message": "required for query mode"})
+        elif body.ingestion_mode == "file_poll":
+            # ING-FR-064: no statement — the connection's own root_prefix/glob/
+            # file_format drive ObjectSourceIngestor's list+decode.
+            if not body.connection_id:
+                details.append({"field": "connection_id", "message": "required for file_poll mode"})
         elif body.ingestion_mode == "scheduled_run":
             details.append(
                 {
@@ -231,7 +236,7 @@ class IngestionService:
                 webhook_info, pending_webhook_secret = self._create_webhook_endpoint(
                     session, principal, ing
                 )
-            if body.ingestion_mode in ("query", "webhook_batch"):
+            if body.ingestion_mode in ("query", "file_poll", "webhook_batch"):
                 record_transition(
                     session,
                     ing,
@@ -248,7 +253,7 @@ class IngestionService:
         if pending_webhook_secret is not None:
             await self.c.secrets.put(*pending_webhook_secret)
 
-        if body.ingestion_mode == "query" and self.c.settings.inline_execution:
+        if body.ingestion_mode in ("query", "file_poll") and self.c.settings.inline_execution:
             from app.domain.services.runner import IngestionRunner
 
             await IngestionRunner(self.c).execute(principal.tenant_id, ingestion_id)
@@ -258,7 +263,7 @@ class IngestionService:
             body_out = serialize_ingestion(ing)
             if webhook_info:
                 body_out["webhook"] = webhook_info  # signing secret shown exactly once
-            status = 202 if body.ingestion_mode == "query" else 201
+            status = 202 if body.ingestion_mode in ("query", "file_poll") else 201
             body_out["operation_id"] = ingestion_id
             return status, body_out
 
@@ -408,7 +413,7 @@ class IngestionService:
             )
             await session.commit()
             clone_id = clone.id
-        if self.c.settings.inline_execution and ing.ingestion_mode == "query":
+        if self.c.settings.inline_execution and ing.ingestion_mode in ("query", "file_poll"):
             from app.domain.services.runner import IngestionRunner
 
             await IngestionRunner(self.c).execute(principal.tenant_id, clone_id)

@@ -109,7 +109,8 @@ class ProposalService:
             rationale=intent.rationale, affected_urns=intent.affected_urns,
             predicted_effect=effect,
             expires_at=datetime.fromtimestamp(expires, tz=UTC), status="pending",
-            workspace_id=intent.workspace_id or intent.args.get("workspace_id"))
+            workspace_id=intent.workspace_id or intent.args.get("workspace_id"),
+            rationale_source=intent.rationale_source)
         await self._store.create_proposal(prop)
         await self._store.supersede_pending(
             tenant_id=run.tenant_id, run_id=run.run_id, tool_id=intent.tool_id,

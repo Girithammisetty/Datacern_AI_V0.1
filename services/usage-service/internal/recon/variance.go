@@ -1,6 +1,7 @@
 // Package recon computes provider-bill vs metered variance (USG-FR-070/071).
-// Bill line items arrive as CSV from an object-storage prefix; the mapping to
-// meters is a static table. Pure helpers here; job wiring in cmd/server.
+// Bill line items arrive as CSV from an object-storage prefix (billstore.go);
+// the mapping to meters is a static table. Pure helpers here; the periodic
+// job itself is internal/jobs.Runner.Reconcile, scheduled from cmd/server.
 package recon
 
 import (

@@ -20,6 +20,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	gcevent "github.com/datacern-ai/go-common/event"
+
 	"github.com/datacern-ai/query-service/internal/authz"
 	"github.com/datacern-ai/query-service/internal/datasets"
 	"github.com/datacern-ai/query-service/internal/domain"
@@ -785,6 +787,53 @@ func TestListExecutionsPagination(t *testing.T) {
 	// sort=-cost accepted (QRY-FR-080)
 	r = f.do(t, "GET", "/api/v1/executions?sort=-cost", tok, nil, nil)
 	assert.Equal(t, http.StatusOK, r.status)
+}
+
+// TestSuspendedTenantQueryBlocked proves the full production path (§6): an
+// identity-service tenant.suspended delivery, translated exactly as
+// cmd/server/main.go's "query-inbound" Kafka consumer group would deliver it
+// (events.Consumer.KafkaHandler over the shared master envelope), actually
+// blocks that tenant's subsequent query at the HTTP edge with a genuine 403
+// TENANT_SUSPENDED — not just an internal broker-state assertion. Tenant B is
+// untouched, and tenant.reactivated (identity-service's real event name)
+// lifts the block.
+func TestSuspendedTenantQueryBlocked(t *testing.T) {
+	f := newAPIFixture(t, nil)
+	tokA := f.token(t, f.tenantA, domain.TypUser, "alice", nil)
+	tokB := f.token(t, f.tenantB, domain.TypUser, "bob", nil)
+
+	// Sanity: both tenants can query before any suspension.
+	r := f.do(t, "POST", "/api/v1/sql/run", tokA, map[string]any{"sql": "SELECT region FROM {{dataset('Orders')}}"}, nil)
+	require.Equal(t, http.StatusAccepted, r.status, "%v", r.body)
+	f.waitStatus(t, tokA, data(r)["execution_id"].(string), domain.StatusSucceeded)
+
+	consumer := &events.Consumer{Broker: f.broker}
+	suspend := gcevent.New("tenant.suspended", f.tenantA, gcevent.Actor{Type: "service", ID: "identity-service"},
+		"wr:"+f.tenantA.String()+":identity:tenant/"+f.tenantA.String(), "trace-suspend", nil)
+	require.NoError(t, consumer.KafkaHandler()(context.Background(), suspend))
+
+	r = f.do(t, "POST", "/api/v1/sql/run", tokA, map[string]any{
+		"sql": "SELECT region FROM {{dataset('Orders')}}", "cache": false,
+	}, nil)
+	assert.Equal(t, http.StatusForbidden, r.status, "%v", r.body)
+	assert.Equal(t, domain.CodeTenantSuspended, errCode(r))
+
+	// Tenant B is a different tenant; unaffected.
+	r = f.do(t, "POST", "/api/v1/sql/run", tokB, map[string]any{
+		"sql": "SELECT region FROM {{dataset('Orders')}}", "cache": false,
+	}, nil)
+	require.Equal(t, http.StatusAccepted, r.status, "tenant B must not be blocked by tenant A's suspension")
+	f.waitStatus(t, tokB, data(r)["execution_id"].(string), domain.StatusSucceeded)
+
+	reactivate := gcevent.New("tenant.reactivated", f.tenantA, gcevent.Actor{Type: "service", ID: "identity-service"},
+		"wr:"+f.tenantA.String()+":identity:tenant/"+f.tenantA.String(), "trace-reactivate", nil)
+	require.NoError(t, consumer.KafkaHandler()(context.Background(), reactivate))
+
+	r = f.do(t, "POST", "/api/v1/sql/run", tokA, map[string]any{
+		"sql": "SELECT region FROM {{dataset('Orders')}}", "cache": false,
+	}, nil)
+	require.Equal(t, http.StatusAccepted, r.status, "reactivation lifts the block: %v", r.body)
+	f.waitStatus(t, tokA, data(r)["execution_id"].(string), domain.StatusSucceeded)
 }
 
 // Suppress unused warning for strings import used conditionally.

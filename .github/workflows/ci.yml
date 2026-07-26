@@ -305,6 +305,10 @@ jobs:
   # real, hermetic, offline unit tests (a recording fake for the install-time
   # PlatformClient — no network) but has no pyproject.toml/venv of its own and
   # isn't referenced by deploy/services.yaml, so it's never run in CI otherwise.
+  # Also runs `packctl coherence` (C1-C11, coherence.py) against the REAL
+  # packs/ + deploy/demo/ fleet, not just its own unit tests — this is the
+  # regression gate for the cross-file defect classes (plan/disposition drift,
+  # dangling refs) the 2026-07-23 pack fleet depth audit fixed by hand.
   # ---------------------------------------------------------------------------
   test-packs:
     runs-on: ubuntu-latest
@@ -319,6 +323,8 @@ jobs:
         run: pip install -q pytest pyyaml requests
       - name: Pytest (packctl)
         run: python -m pytest packs/packctl/tests -q
+      - name: Coherence check (C1-C11, real fleet)
+        run: PYTHONPATH=packs python3 -m packctl.cli coherence
 
   # ---------------------------------------------------------------------------
   # e2e-contract — ui-web's fast, hermetic Playwright suite (tests-e2e/) drives

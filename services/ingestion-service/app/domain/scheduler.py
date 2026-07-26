@@ -1,10 +1,13 @@
 """Scheduler port (ING-FR-060/062/063).
 
-InProcessScheduler is an APScheduler-style in-process implementation used in
-dev/tests: it computes next-fire times from cron/interval specs and fires a
-bound async callback (tests drive `tick`/`run_now` deterministically; a
-background loop is available via start()). TemporalScheduler is the production
-adapter stub (TODO: Temporal Schedules).
+InProcessScheduler is an APScheduler-style in-process implementation: it
+computes next-fire times from cron/interval specs and fires a bound async
+callback (tests drive `tick`/`run_now` deterministically; a background loop is
+available via `start()`). It is the ONLY scheduler this deployment runs —
+in-process cron is real logic, not a stub, in both the "memory" and "real"
+container wirings (see `app/container.py`). ingestion-service is not part of
+the Temporal-dependent service set (`deploy/services.yaml` lists Temporal only
+for `agent-runtime`); a Temporal-backed scheduler is not available here.
 """
 
 from __future__ import annotations
@@ -146,52 +149,3 @@ class InProcessScheduler:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
             self._task = None
-
-
-class TemporalScheduler:
-    """Production adapter stub — NOT wired anywhere (both container modes use
-    InProcessScheduler). Every method raises an HONEST 501 NOT_IMPLEMENTED so
-    that if it is ever wired by mistake, schedule create/update/pause/resume
-    APIs reject at request time with a clear error instead of surfacing a 500
-    or, worse, persisting schedules that silently never fire.
-
-    TODO(wave-2): temporalio ScheduleClient — one Temporal Schedule per row
-    (id `ing-sched-<schedule_id>`), overlap policy mapped to
-    ScheduleOverlapPolicy.SKIP / BUFFER_ONE (ING-FR-060, BR-10).
-    """
-
-    def __init__(self, target: str, namespace: str = "datacern") -> None:
-        self.target = target
-        self.namespace = namespace
-
-    @staticmethod
-    def _not_implemented(op: str):
-        from app.domain.errors import NotImplementedFeatureError
-
-        return NotImplementedFeatureError(
-            f"TemporalScheduler.{op} is not implemented in this deployment "
-            "(TODO wave-2 temporalio); schedules cannot be accepted against it"
-        )
-
-    def bind(self, callback: FireCallback) -> None:  # noqa: ARG002 - stub
-        raise self._not_implemented("bind")
-
-    async def register(
-        self, schedule_id: str, *, cron: str | None, interval_seconds: int | None, timezone: str
-    ) -> str:
-        raise self._not_implemented("register")
-
-    async def unregister(self, schedule_id: str) -> None:
-        raise self._not_implemented("unregister")
-
-    async def pause(self, schedule_id: str) -> None:
-        raise self._not_implemented("pause")
-
-    async def resume(self, schedule_id: str) -> None:
-        raise self._not_implemented("resume")
-
-    async def run_now(self, schedule_id: str) -> None:
-        raise self._not_implemented("run_now")
-
-    def next_fire_at(self, schedule_id: str) -> datetime | None:
-        raise self._not_implemented("next_fire_at")

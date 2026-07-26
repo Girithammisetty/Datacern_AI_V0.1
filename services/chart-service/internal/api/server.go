@@ -78,22 +78,24 @@ type Resolver interface {
 	Drilldown(ctx context.Context, token, queryURN string, dr resolve.DrilldownRequest) (resolve.ExecResult, error)
 }
 
-// FieldValidator returns the known dimension/measure field set for a chart's
-// sources (CHART-FR-013). A nil result skips unknown-field checks (dev fallback).
+// FieldValidator returns the known dimension/measure names published for a
+// semantic model, resolved the same way render time resolves it
+// (resolve.ChartModel) — CHART-FR-013. A nil result skips unknown-field checks.
 type FieldValidator interface {
-	KnownFields(ctx context.Context, token string, sources []domain.ChartSource) (map[string]bool, error)
+	KnownFields(ctx context.Context, token, model, workspaceID string) (map[string]bool, error)
 }
 
 // Server holds the HTTP dependencies.
 type Server struct {
-	Store      Store
-	Cache      Cache
-	Authz      authz.Authorizer
-	Resolver   Resolver
-	Verifier   *authjwt.Verifier
-	Exports    *export.FSStore
-	Fields     FieldValidator // optional; nil in dev
-	PreviewSem chan struct{}  // per-tenant preview concurrency cap (BR-11)
+	Store        Store
+	Cache        Cache
+	Authz        authz.Authorizer
+	Resolver     Resolver
+	Verifier     *authjwt.Verifier
+	Exports      export.ObjectStore
+	Fields       FieldValidator // optional; nil in dev
+	DefaultModel string         // fallback semantic model when a chart omits one; mirrors resolve.Resolver.DefaultModel
+	PreviewSem   chan struct{}  // per-tenant preview concurrency cap (BR-11)
 	// PNGRenderer is the headless-renderer sidecar base URL. Empty → PNG export
 	// is infra-gated and returns PNG_RENDERER_UNAVAILABLE (documented).
 	PNGRenderer string
