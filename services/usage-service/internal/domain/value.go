@@ -86,17 +86,27 @@ type CostPerDecision struct {
 }
 
 // DecisionsBreakdown is the governed_decision rollup shape consumed by
-// valuecalc.BuildSummary (ROI-FR-010). ByKind is populated only when
-// proposal_kind is available at rollup grain — in the CURRENT schema it never
-// is: BRD 67 slice 1 as actually shipped widened the generic usage_hourly/
-// daily/monthly tuple with pack_name/decision only (migrations/
+// valuecalc.BuildSummary (ROI-FR-010). ByKind is populated from
+// usage_monthly's proposal_kind column, a rollup-worthy dimension added by
+// BRD 69's migration 000007_governed_decision_kind (docs/initiatives/
+// value-roi-reporting.md §3 "Repo-state finding" / "Known limits").
+//
+// History: BRD 67 slice 1 as originally shipped widened the generic
+// usage_hourly/daily/monthly tuple with pack_name/decision only (migrations/
 // 000004_value_meters.up.sql), keeping proposal_kind raw-detail-only in
-// usage_raw.meta (never rolled up, per that migration's own doc comment).
-// This is a real, currently-open gap beyond what design §2.0/§2.5 anticipated
-// (§2.5 chose a dedicated governed_decision rollup keyed by proposal_kind
-// among other dims; the as-built rollup does not carry it). A nil
-// DecisionsBreakdown pointer at the valuecalc layer models Tier 0 (meter not
-// available at all); an empty-but-non-nil ByKind models this Tier-1 gap.
+// usage_raw.meta (never rolled up). That left decisions.by_kind — and every
+// per-kind *_est figure — stuck returning null for every real tenant even
+// with value_assumptions set, a gap beyond what design §2.0/§2.5 anticipated.
+// Migration 000007 closes it by promoting proposal_kind to a physical rollup
+// column, following the same pattern 000004 used for pack_name/decision.
+//
+// ByKind can still be empty-but-non-nil for real reasons: a tenant with zero
+// decisions this period, or decisions whose events genuinely carried no
+// proposal_kind (e.g. rows ingested before this migration). That is the
+// honest "data genuinely absent" case ROI-NFR-004 requires — valuecalc still
+// renders null for the *_est fields rather than fabricating a number. A nil
+// DecisionsBreakdown pointer at the valuecalc layer models Tier 0 (the
+// governed_decision meter itself unavailable) — a different, coarser gap.
 type DecisionsBreakdown struct {
 	Total      int64
 	ByDecision map[string]int64

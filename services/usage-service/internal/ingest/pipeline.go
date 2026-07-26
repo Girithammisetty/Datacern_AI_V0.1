@@ -96,9 +96,13 @@ func (p *Pipeline) Handle(ctx context.Context, env gcevent.Envelope) error {
 		rec.AgentID = dimPtr(env.Payload, m.DimPaths["agent_id"])
 		rec.Model = dimPtr(env.Payload, m.DimPaths["model"])
 		rec.ResourceURN = dimPtr(env.Payload, m.DimPaths["resource_urn"])
-		// Value-meter dimensions (BRD 67 slice 1, design §2.2).
+		// Value-meter dimensions (BRD 67 slice 1, design §2.2; ProposalKind
+		// promoted to a physical dim by BRD 69's migration
+		// 000007_governed_decision_kind — see docs/initiatives/
+		// value-roi-reporting.md §3).
 		rec.PackName = dimPtr(env.Payload, m.DimPaths["pack_name"])
 		rec.Decision = dimPtr(env.Payload, m.DimPaths["decision"])
+		rec.ProposalKind = dimPtr(env.Payload, m.DimPaths["proposal_kind"])
 		if len(m.MetaPaths) > 0 {
 			meta := map[string]any{}
 			for key, path := range m.MetaPaths {

@@ -35,11 +35,15 @@ func TestBuildSummary_Tier0(t *testing.T) {
 	require.Nil(t, out.Provenance.AssumptionVersion)
 }
 
-// TestBuildSummary_Tier1_NoByKind is the CURRENT repo state (see
+// TestBuildSummary_Tier1_NoByKind covers a still-legitimate real case (see
 // domain.DecisionsBreakdown doc comment): governed_decision is available and
-// decisions.total/by_decision/by_agent/by_pack populate, but by_kind is
-// empty (proposal_kind not at rollup grain) — so even with assumptions set,
-// the *_est fields stay nil (never fabricated) and the gap is disclosed.
+// decisions.total/by_decision/by_agent/by_pack populate, but by_kind is empty
+// — e.g. zero decisions this period, or rows ingested before BRD 69's
+// migration 000007_governed_decision_kind promoted proposal_kind to a rollup
+// column — so even with assumptions set, the *_est fields stay nil (never
+// fabricated) and the gap is disclosed. Contrast with
+// TestBuildSummary_ByKind_NoMatchingAssumption below, where by_kind IS
+// populated but none of it matches the tenant's assumptions.
 func TestBuildSummary_Tier1_NoByKind(t *testing.T) {
 	assumptions := &domain.ValueAssumptions{
 		Version:             1,
@@ -119,6 +123,74 @@ func TestBuildSummary_Tier1_WithByKind_AC1(t *testing.T) {
 	require.NotNil(t, out.NetValueEstUSD)
 	require.InDelta(t, 740400.0-812.44, out.NetValueEstUSD.Value(), 0.5)
 
+	require.NotNil(t, out.Provenance.AssumptionVersion)
+	require.Equal(t, 1, *out.Provenance.AssumptionVersion)
+}
+
+// TestBuildSummary_ByKind_NoMatchingAssumption is the ROI-NFR-004 case this
+// pass's fix closes: decisions.by_kind IS populated (real proposal_kind data,
+// e.g. from usage_monthly post-migration-000007) but every kind present this
+// period is one the tenant never set minutes for. Before this fix, the loop
+// that sums matched minutes would silently compute 0 and BuildSummary would
+// emit hours_saved_est={"value":0,...} — a fabricated number indistinguishable
+// from "we computed zero hours saved". The fix requires at least one kind to
+// actually match before emitting any *_est field.
+func TestBuildSummary_ByKind_NoMatchingAssumption(t *testing.T) {
+	assumptions := &domain.ValueAssumptions{
+		Version:             3,
+		MinutesPerDecision:  map[string]float64{"claims_disposition": 20},
+		LoadedHourlyRateUSD: 180,
+	}
+	out := BuildSummary(Input{
+		Period:    "2026-07",
+		AICostUSD: 100,
+		Decisions: &domain.DecisionsBreakdown{
+			Total:  500,
+			ByKind: map[string]int64{"underwriting_review": 500}, // no assumption entry for this kind
+		},
+		Assumptions:   assumptions,
+		RollupVersion: "usage_monthly@2026-07-finalized",
+	})
+
+	require.Nil(t, out.HoursSavedEst, "no decision kind this period has a minutes_per_decision entry -> null, never a fabricated 0")
+	require.Nil(t, out.LaborValueEstUSD)
+	require.Nil(t, out.HumanBaselineCostUSD)
+	require.Nil(t, out.NetValueEstUSD)
+	require.Nil(t, out.Provenance.AssumptionVersion, "no assumption was actually applied to any figure")
+	require.NotNil(t, out.Provenance.MeterGap)
+	require.Contains(t, *out.Provenance.MeterGap, "none of this period's decision kinds")
+	// cost_per_decision does not depend on assumptions and must still populate.
+	require.NotNil(t, out.CostPerDecision)
+}
+
+// TestBuildSummary_ByKind_PartialMatch: decisions span two kinds, the tenant
+// has set minutes for only one — the estimate is computed from ONLY the
+// matched kind's decisions (ROI-FR-010's own "using ONLY kinds the tenant has
+// set minutes for" rule), never inflated or zeroed by the unmatched kind.
+func TestBuildSummary_ByKind_PartialMatch(t *testing.T) {
+	assumptions := &domain.ValueAssumptions{
+		Version:             1,
+		MinutesPerDecision:  map[string]float64{"claims_disposition": 30}, // 30 min/decision
+		LoadedHourlyRateUSD: 100,
+	}
+	out := BuildSummary(Input{
+		Period:    "2026-07",
+		AICostUSD: 0,
+		Decisions: &domain.DecisionsBreakdown{
+			Total: 300,
+			ByKind: map[string]int64{
+				"claims_disposition":  200, // matched: 200*30/60 = 100 hours
+				"underwriting_review": 100, // unmatched: contributes nothing
+			},
+		},
+		Assumptions:   assumptions,
+		RollupVersion: "usage_monthly@2026-07-finalized",
+	})
+
+	require.NotNil(t, out.HoursSavedEst)
+	require.InDelta(t, 100.0, out.HoursSavedEst.Value(), 1e-9)
+	require.NotNil(t, out.LaborValueEstUSD)
+	require.InDelta(t, 10000.0, out.LaborValueEstUSD.Value(), 1e-9) // 100h * $100/hr
 	require.NotNil(t, out.Provenance.AssumptionVersion)
 	require.Equal(t, 1, *out.Provenance.AssumptionVersion)
 }

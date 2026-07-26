@@ -171,22 +171,28 @@ func Catalog() []Mapping {
 // affected resources are a list, "affected_urns", not a single resource_urn) —
 // those std dims resolve to NULL for this meter, same as any other meter
 // missing a dim (USG-FR-002: unknown dims stored as nil, never dropped).
-// pack_name/decision are the physical rollup columns (design §2.2).
+// pack_name/decision/proposal_kind are the physical rollup columns (design
+// §2.2; proposal_kind promoted from meta to a physical dim by BRD 69's
+// migration 000007_governed_decision_kind, docs/initiatives/
+// value-roi-reporting.md §3 — it feeds decisions.by_kind and every per-kind
+// *_est figure in internal/valuecalc, which was previously stuck at null for
+// every real tenant because proposal_kind never reached rollup grain).
 func governedDecisionDims() map[string]string {
 	return stdDims(map[string]string{
-		"agent_id":  "agent_key",
-		"pack_name": "pack_name",
-		"decision":  "decision_label",
+		"agent_id":      "agent_key",
+		"pack_name":     "pack_name",
+		"decision":      "decision_label",
+		"proposal_kind": "proposal_kind",
 	})
 }
 
 // governedDecisionMeta: raw-detail-only fields (design §2.2), carried in
-// usage_raw.meta and never rolled up. edit_distance_bucket is absent from the
-// payload for approve/reject (only edited_approved carries it) — getPath
-// simply omits the key from meta when the path is missing.
+// usage_raw.meta and never rolled up — no showback/ROI query groups by
+// either. edit_distance_bucket is absent from the payload for approve/reject
+// (only edited_approved carries it) — getPath simply omits the key from meta
+// when the path is missing.
 func governedDecisionMeta() map[string]string {
 	return map[string]string{
-		"proposal_kind":        "proposal_kind",
 		"decision_latency_ms":  "decision_latency_ms",
 		"edit_distance_bucket": "edit_distance_bucket",
 	}
