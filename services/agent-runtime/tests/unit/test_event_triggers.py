@@ -18,12 +18,23 @@ async def _container():
 
 def _event(**kw):
     """The REAL master envelope (MASTER-FR-031): body under `payload`, subject
-    under top-level `resource_urn` — not a hand-rolled shape."""
+    under top-level `resource_urn` — not a hand-rolled shape.
+
+    The payload below is byte-for-byte the field set case-service actually emits
+    on case.created (services/case-service/internal/store/pg_cases.go). It has
+    NO `case_id` and NO `tenant_id` — those live in `resource_urn` and at the
+    envelope top level. This fixture previously carried `{"case_id": "c-91"}`,
+    a shape no producer ever sends, which made the dispatcher look correct while
+    every real event would have KeyError'd inside the triage graph. Keep this
+    honest: if you change it, change it to match the producer.
+    """
     base = {"event_id": "evt-1", "event_type": "case.created", "tenant_id": TENANT_A,
             "actor": {"type": "user", "id": "u-1"}, "via_agent": None,
             "resource_urn": f"wr:{TENANT_A}:case:case/c-91",
             "occurred_at": "2026-07-19T00:00:00Z", "trace_id": "t-1",
-            "payload": {"case_id": "c-91"}}
+            "payload": {"case_number": "CASE-1", "status": "unassigned", "severity": "high",
+                        "dataset_urn": f"wr:{TENANT_A}:dataset:dataset/d-1", "row_pk": "r-1",
+                        "dedup_key": "d-1|r-1", "workspace_id": "ws-1"}}
     base.update(kw)
     return base
 
@@ -50,10 +61,57 @@ async def test_trigger_provenance_is_recorded_on_the_run_inputs():
     await EventTriggerDispatcher(c).handle(_event())
     assert fired, "run engine was never invoked"
     inputs = fired[0]
-    assert inputs["case_id"] == "c-91"                       # envelope `payload` carried
+    assert inputs["case_id"] == "c-91"                       # DERIVED from resource_urn
     assert inputs["trigger"]["event_type"] == "case.created"  # why it ran (auditable)
     assert inputs["trigger"]["event_id"] == "evt-1"
     assert inputs["trigger"]["resource_urn"].endswith("case/c-91")
+
+
+async def test_graph_addressing_keys_are_derived_from_the_envelope():
+    """The regression guard for the autonomous path.
+
+    A real `case.created` body has neither `case_id` nor `tenant_id`, but the
+    triage graph indexes state["case_id"] and state["tenant_id"] directly — so
+    before this was fixed, the first genuine event raised KeyError inside the
+    graph while every unit test passed against a hand-written payload. Assert
+    the dispatcher supplies both from the envelope, and that the real payload
+    fields still ride along untouched.
+    """
+    c = await _container()
+    fired = []
+    orig = c.run_engine.execute
+
+    async def spy(run, inputs, **kw):
+        fired.append(inputs)
+        return await orig(run, inputs, **kw)
+
+    c.run_engine.execute = spy
+    ev = _event()
+    assert "case_id" not in ev["payload"], "fixture must mirror the real producer"
+    assert "tenant_id" not in ev["payload"]
+
+    await EventTriggerDispatcher(c).handle(ev)
+    inputs = fired[0]
+    assert inputs["case_id"] == "c-91"        # from resource_urn
+    assert inputs["tenant_id"] == TENANT_A    # from the envelope top level
+    assert inputs["row_pk"] == "r-1"          # payload still passed through
+
+
+async def test_payload_values_win_over_derived_ones():
+    """A producer that DOES send a typed id must not be overridden by parsing."""
+    c = await _container()
+    fired = []
+    orig = c.run_engine.execute
+
+    async def spy(run, inputs, **kw):
+        fired.append(inputs)
+        return await orig(run, inputs, **kw)
+
+    c.run_engine.execute = spy
+    ev = _event()
+    ev["payload"] = {**ev["payload"], "case_id": "explicit-99"}
+    await EventTriggerDispatcher(c).handle(ev)
+    assert fired[0]["case_id"] == "explicit-99"
 
 
 async def test_accepts_the_data_alias_for_simplified_events():

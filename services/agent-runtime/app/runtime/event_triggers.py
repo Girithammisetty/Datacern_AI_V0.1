@@ -94,11 +94,33 @@ class EventTriggerDispatcher:
 
         # Carry the event payload as inputs + explicit trigger provenance so the
         # run/proposal records WHY it ran (auditable evidence→action linkage).
+        #
+        # The payload alone is NOT sufficient. Graphs address their subject by
+        # `tenant_id` + a typed id (triage.py reads state["tenant_id"] and
+        # state["case_id"]), but a master envelope keeps the tenant at the top
+        # level and the subject in `resource_urn` — case-service's real
+        # `case.created` body carries case_number/status/severity/dataset_urn/
+        # row_pk/dedup_key/workspace_id and NO case_id (pg_cases.go, CaseURN =
+        # "wr:<tenant>:case:case/<id>"). Passing the payload straight through
+        # therefore KeyError'd on the first real event; only the hand-written
+        # unit fixture ever had a `case_id`, so the bug was invisible in tests.
+        # Derive both from the envelope, exactly as the human chat path already
+        # does (api/routes/chat.py `_inputs_from_body`), and let an explicit
+        # payload value win so a richer producer can still override.
+        resource_urn = envelope.get("resource_urn") or payload.get("urn") or ""
+        derived: dict = {"tenant_id": tenant_id}
+        if ":case/" in resource_urn:
+            derived["case_id"] = resource_urn.split(":case/")[-1]
         inputs = {
+            **derived,
             **payload,
             "trigger": {"event_type": event_type, "event_id": envelope.get("event_id"),
                         "resource_urn": envelope.get("resource_urn")},
         }
+        # A payload that explicitly nulls a derived key must not blank it out.
+        for k, v in derived.items():
+            if not inputs.get(k):
+                inputs[k] = v
         run, _ = await orch.start_run(
             principal=None, agent_key=agent_key, inputs=inputs, session=session,
             principal_type="agent_autonomous")
