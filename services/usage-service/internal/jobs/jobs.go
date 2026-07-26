@@ -1,10 +1,12 @@
 // Package jobs holds usage-service's periodic workers: rollup refresh, budget
-// sweep, daily anomaly scan and retention enforcement (USG-FR-020/021/022/050).
-// They are real background loops driven from cmd/server; the scan logic here is
-// unit-testable against the store.
+// sweep, daily anomaly scan, provider-bill reconciliation and retention
+// enforcement (USG-FR-020/021/022/050/070). They are real background loops
+// driven from cmd/server; the scan logic here is unit-testable against the
+// store.
 package jobs
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"math"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/datacern-ai/usage-service/internal/anomaly"
 	"github.com/datacern-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/recon"
 	"github.com/datacern-ai/usage-service/internal/store"
 )
 
@@ -21,6 +24,16 @@ import (
 type Runner struct {
 	Store *store.PG
 	Log   *slog.Logger
+
+	// Bills is the provider-bill CSV drop store (USG-FR-070). Nil is a valid,
+	// intentional state (no MINIO_ENDPOINT configured, dev/demo only):
+	// Reconcile then no-ops rather than erroring, matching cmd/server's loud
+	// startup warning that the variance-block gate stays inert until a real
+	// bucket is wired.
+	Bills recon.BillStore
+	// BillPrefix is the object-storage prefix bills are listed under. Empty
+	// defaults to "bills/".
+	BillPrefix string
 }
 
 func (r *Runner) log() *slog.Logger {
@@ -118,4 +131,72 @@ func (r *Runner) scanOne(ctx context.Context, tenant uuid.UUID, meter string, da
 		return 1, nil
 	}
 	return 0, nil
+}
+
+// Reconcile scans the provider-bill-drop prefix for CSV exports and, for
+// every (provider, month) bill object found, compares metered totals against
+// the billed quantities and upserts the reconciliation result (USG-FR-070).
+// A variance beyond threshold marks the month blocking (USG-FR-071) — this is
+// the job that makes that gate live; before this was wired nothing ever
+// called it and the gate's underlying status stayed at its pending zero-value
+// forever. Idempotent: re-scanning the same object re-upserts the same
+// (month, provider) row (store.UpsertReconciliation's ON CONFLICT), so a slow
+// or repeated tick is harmless. Returns the number of bill objects processed.
+func (r *Runner) Reconcile(ctx context.Context) (int, error) {
+	if r.Bills == nil {
+		return 0, nil
+	}
+	prefix := r.BillPrefix
+	if prefix == "" {
+		prefix = "bills/"
+	}
+	objs, err := r.Bills.List(ctx, prefix)
+	if err != nil {
+		return 0, err
+	}
+	processed := 0
+	for _, o := range objs {
+		provider, month, ok := recon.ParseBillKey(prefix, o.Key)
+		if !ok {
+			r.log().Warn("reconciliation: skipping unrecognized bill key", "key", o.Key)
+			continue
+		}
+		if err := r.reconcileOne(ctx, provider, month, o.Key); err != nil {
+			r.log().Warn("reconciliation failed", "provider", provider, "month", month, "key", o.Key, "err", err)
+			continue
+		}
+		processed++
+	}
+	return processed, nil
+}
+
+func (r *Runner) reconcileOne(ctx context.Context, provider, month, key string) error {
+	data, err := r.Bills.Get(ctx, key)
+	if err != nil {
+		return err
+	}
+	billed, err := recon.ParseBillCSV(bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	metered, err := r.Store.MeteredMonthly(ctx, month)
+	if err != nil {
+		return err
+	}
+	lines, blocking := recon.Compute(metered, billed)
+	status := domain.ReconMatched
+	var varianceMeters []map[string]any
+	if blocking {
+		status = domain.ReconVariance
+		for _, l := range lines {
+			if l.Blocking {
+				varianceMeters = append(varianceMeters, map[string]any{
+					"meter_key": l.MeterKey, "metered": l.Metered, "billed": l.Billed, "variance_pct": l.VariancePct,
+				})
+			}
+		}
+	}
+	rec := domain.Reconciliation{Month: month, Provider: provider, Status: status, ReportURI: key}
+	_, err = r.Store.UpsertReconciliation(ctx, rec, map[string]any{"lines": lines, "source_key": key}, varianceMeters)
+	return err
 }

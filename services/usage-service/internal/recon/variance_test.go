@@ -44,3 +44,24 @@ func TestParseBillCSV(t *testing.T) {
 		t.Fatalf("api=%v", m[domain.MeterAPICalls])
 	}
 }
+
+func TestParseBillKey(t *testing.T) {
+	cases := []struct {
+		prefix, key, wantProvider, wantMonth string
+		wantOK                               bool
+	}{
+		{"bills/", "bills/openai/2026-05.csv", "openai", "2026-05", true},
+		{"bills", "bills/anthropic/2026-06.csv", "anthropic", "2026-06", true},
+		{"bills/", "bills/openai/not-a-month.csv", "", "", false},
+		{"bills/", "bills/openai/2026-05.txt", "", "", false},
+		{"bills/", "bills/2026-05.csv", "", "", false},
+		{"bills/", "bills/openai/sub/2026-05.csv", "", "", false},
+	}
+	for _, c := range cases {
+		p, m, ok := ParseBillKey(c.prefix, c.key)
+		if ok != c.wantOK || p != c.wantProvider || m != c.wantMonth {
+			t.Fatalf("ParseBillKey(%q,%q) = (%q,%q,%v), want (%q,%q,%v)",
+				c.prefix, c.key, p, m, ok, c.wantProvider, c.wantMonth, c.wantOK)
+		}
+	}
+}

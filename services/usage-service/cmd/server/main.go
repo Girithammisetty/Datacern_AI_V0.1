@@ -148,7 +148,42 @@ func main() {
 	go gcoutbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
 
 	// Periodic workers.
-	runner := &jobs.Runner{Store: st}
+	runner := &jobs.Runner{Store: st, BillPrefix: env("PROVIDER_BILL_PREFIX", "bills/")}
+
+	// Provider-bill object store (USG-FR-070/071): real MinIO/S3 prefix that an
+	// operator (or an out-of-repo pull job) drops provider invoice CSV exports
+	// into; the reconciliation job below only reads them. This is genuinely
+	// real local object storage (CONVENTIONS table), not a live AWS CUR/Azure/
+	// GCP/LLM-provider billing API client -- no such adapter exists anywhere in
+	// this repo, and per README "No credential-gated exceptions" that stays out
+	// of scope. Separate bucket from the value-report exports above so the two
+	// concerns don't share a lifecycle.
+	if minioEndpoint := os.Getenv("MINIO_ENDPOINT"); minioEndpoint != "" || requireReal {
+		ep := minioEndpoint
+		if ep == "" {
+			ep = "localhost:9000"
+		}
+		billsClient, err := objectstore.New(ctx, objectstore.Config{
+			Endpoint:  ep,
+			AccessKey: env("MINIO_ACCESS_KEY", "datacern"),
+			SecretKey: env("MINIO_SECRET_KEY", "datacern_dev"),
+			UseSSL:    os.Getenv("MINIO_USE_SSL") == "true",
+			Bucket:    env("PROVIDER_BILL_BUCKET", "datacern-provider-bills"),
+		})
+		if err != nil {
+			if requireReal {
+				slog.Error("provider-bill object store init failed", "err", err)
+				os.Exit(1)
+			}
+			slog.Warn("provider-bill object store: minio unavailable, reconciliation has nothing to reconcile until fixed", "err", err)
+		} else {
+			runner.Bills = jobs.NewMinioBillStore(billsClient)
+			slog.Info("provider-bill object store: minio (real)", "endpoint", ep, "bucket", billsClient.Bucket())
+		}
+	} else {
+		slog.Warn("provider-bill object store: MINIO_ENDPOINT unset, reconciliation job has no bill source (dev-only; the variance-block gate stays inert -- always 'pending' -- until a real bucket is configured)")
+	}
+
 	startJobs(ctx, runner)
 
 	// Register the action manifest with rbac (best-effort, RBC-FR-022).
@@ -249,6 +284,13 @@ func startJobs(ctx context.Context, r *jobs.Runner) {
 	every(ctx, 30*time.Minute, func() {
 		if _, err := r.AnomalyScan(ctx, time.Now().AddDate(0, 0, -1)); err != nil {
 			slog.Warn("anomaly scan failed", "err", err)
+		}
+	})
+	every(ctx, time.Hour, func() {
+		if n, err := r.Reconcile(ctx); err != nil {
+			slog.Warn("reconciliation failed", "err", err)
+		} else if n > 0 {
+			slog.Info("reconciliation processed", "count", n)
 		}
 	})
 	every(ctx, 6*time.Hour, func() {
