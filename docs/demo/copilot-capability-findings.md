@@ -90,7 +90,57 @@ output 300→42.)
   these.
 - The analytics agent runs on model `fast-small`.
 
+## The approval loop — the strongest surface in the product
+
+The approval inbox is the best-built screen tested. It shows a real diff of the
+proposed args, the tool + tier + reversibility, blast radius, an auditor
+evidence pack, and — notably — labels the agent's own summary
+**"Agent's description (unverified)"**. That is exactly the honest-provenance
+discipline the analytics agent was missing, done right.
+
+The stored proposal is equally good: `decision.actor` bound to the approver,
+an `args_digest` (sha256) so an approval is tied to the exact arguments it was
+granted for, and `rationale_source: "llm"` labelled honestly.
+
+### Four-eyes works — verified live, by accident
+
+Two proposals, approved by the same person (admin), opposite outcomes:
+
+| proposal | proposed by | result |
+|---|---|---|
+| `ef946523` | a different principal | **approved** — `decision.actor` recorded as the admin |
+| `721549bd` | **the admin themselves** (via the case's own Draft recommendation button) | **refused** — stays `pending` |
+
+`tenant_agent_configs` is empty, so `self_approval` is false and the gate
+refuses. You cannot approve your own proposal. This is the platform's central
+claim and it holds under a real UI test.
+
+### But the refusal is SILENT — fix this
+
+Clicking Approve on your own proposal does nothing observable: no toast, no
+error, no console message, no state change. The user's only signal is that the
+row stubbornly stays pending. Everyone who hits this will conclude the button
+is broken rather than that they were correctly refused — and the control that
+most deserves to be *seen* working is the one that says nothing. The gate needs
+to surface "You proposed this — a different person must approve it."
+
+### Approved does not always mean executed
+
+Approving `ef946523` flipped it to `approved` and recorded the approver, but the
+case was never updated (`disposition_id` empty, `updated_at` unchanged).
+
+Mechanism: `app/api/routes/proposals.py` calls `decide(..., execute=not
+temporal_backed)`. For a Temporal-backed run, approval does not execute inline —
+it signals the workflow. That run's status was already `completed`, so the
+signal went nowhere and the approval became a no-op.
+
+Not yet established whether this is a standing defect or an artifact of
+restarting agent-runtime (which hosts the Temporal worker in-process) while a
+workflow awaited approval. **Worth resolving before any demo**: a
+worker restart that silently converts future approvals into no-ops would be
+severe, and the failure is invisible — the proposal still reads `approved`.
+
 ## Not yet tested
 
-Dashboards, ML, decision tables, data onboarding, and the four-eyes approval
-inbox were not driven end to end in this pass.
+Dashboards, ML, decision tables, and data onboarding were not driven end to end
+in this pass.
