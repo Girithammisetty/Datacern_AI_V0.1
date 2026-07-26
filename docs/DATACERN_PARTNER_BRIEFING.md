@@ -2,7 +2,7 @@
 
 **Prepared:** 2026-07-26 · **Audience:** investor conversations and IT-consulting / SI partner meetings.
 
-**Rule #1 of this document: every factual claim was verified against the codebase, CI, or a recorded live run on 2026-07-26.** Where a capability has a limit, the limit is stated next to the claim — not hidden in an appendix. Anything aspirational is labeled **ROADMAP**. Companion documents: [`docs/security/SECURITY_POSTURE.md`](security/SECURITY_POSTURE.md) (code-cited security controls and non-claims) and [`docs/demo/RUNBOOK.md`](demo/RUNBOOK.md) (the live-verified demo, including its own "known limits" section).
+**Rule #1 of this document: every factual claim was verified against the codebase, CI, or a recorded live run on 2026-07-26.** Where a capability has a limit, the limit is stated next to the claim — not hidden in an appendix. Anything aspirational is labeled **ROADMAP**. Companion documents: [`docs/security/SECURITY_POSTURE.md`](security/SECURITY_POSTURE.md) (code-cited security controls and non-claims), [`docs/demo/RUNBOOK.md`](demo/RUNBOOK.md) (the live-verified demo, including its own "known limits" section), and [`DATACERN_2035_VISION.md`](DATACERN_2035_VISION.md) (the researched 5–10 year direction — clearly separated bets, not claims).
 
 Sections are marked **[SHARE]** (safe to present or hand over) or **[INTERNAL]** (your prep only).
 

@@ -3,7 +3,7 @@
 **Prepared:** 2026-07-25 · **Audience:** founder / strategy · **Status:** analysis + prioritized roadmap
 **Inputs:** full codebase audit (23 services, 30 packs, 66 BRDs), mid-2026 competitive research (web-sourced, cited), GTM feature-pattern research across enterprise AI/data platforms.
 
-Companion docs: [`DATACERN_PARTNER_BRIEFING.md`](DATACERN_PARTNER_BRIEFING.md) (partner motion), [`DATACERN_REALTIME_HEALTHCARE_POSITION.md`](DATACERN_REALTIME_HEALTHCARE_POSITION.md) (healthcare objection handling).
+Companion docs: [`DATACERN_PARTNER_BRIEFING.md`](DATACERN_PARTNER_BRIEFING.md) (partner motion), [`DATACERN_REALTIME_HEALTHCARE_POSITION.md`](DATACERN_REALTIME_HEALTHCARE_POSITION.md) (healthcare objection handling), [`DATACERN_2035_VISION.md`](DATACERN_2035_VISION.md) (5–10 year direction; this doc governs the 0–24 month window).
 
 ---
 
