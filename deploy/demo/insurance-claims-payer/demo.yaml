@@ -7,7 +7,7 @@
 # offline by `packctl demo-lint`.
 demo_manifest: 1
 pack: insurance-claims-payer
-pack_version: 1.0.0
+pack_version: 2.1.0
 version: 1.0.0
 provenance: >
   All rows are synthetic, hand-authored for this demo bundle. Member names,
