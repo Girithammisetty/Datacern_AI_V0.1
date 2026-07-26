@@ -19,6 +19,7 @@
     {"name": "rung", "type": "int"},
     {"name": "input_tokens", "type": "long"},
     {"name": "output_tokens", "type": "long"},
+    {"name": "is_estimated", "type": "boolean", "default": false, "doc": "true when input_tokens/output_tokens were derived from the estimate_tokens fallback (the provider did not return a usable usage block) rather than measured from the provider's own response — billing/reconciliation consumers must not treat these as exact."},
     {"name": "cached", "type": "boolean", "default": false},
     {"name": "cost_usd", "type": "double"},
     {"name": "latency_ms", "type": "long"},

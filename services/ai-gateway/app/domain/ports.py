@@ -192,6 +192,11 @@ class ProviderResult:
     output_tokens: int
     model: str
     finish_reason: str = "stop"
+    # True when EITHER token count was not returned by the provider and was
+    # instead derived from `estimate_tokens` (the char-count heuristic) rather
+    # than the provider's own `usage` block — the honesty marker downstream
+    # billing/reconciliation needs to tell a measurement from a guess.
+    is_estimated: bool = False
 
 
 class ProviderError(Exception):
@@ -242,8 +247,8 @@ class ProviderClient(Protocol):
     def stream(self, deployment: ProviderDeployment,
                request: ProviderRequest) -> AsyncIterator[dict]: ...
     async def embed(self, deployment: ProviderDeployment, model: str,
-                    inputs: list[str]) -> tuple[list[list[float]], int]:
-        """Returns (vectors, input_tokens)."""
+                    inputs: list[str]) -> tuple[list[list[float]], int, bool]:
+        """Returns (vectors, input_tokens, is_estimated)."""
         ...
 
 

@@ -109,9 +109,51 @@ async def test_openai_compatible_complete_parses_recorded_shape(monkeypatch):
     assert result.content == "Hello from OpenAI."
     assert result.input_tokens == 11 and result.output_tokens == 4
     assert result.finish_reason == "stop"
+    assert result.is_estimated is False  # a full provider `usage` block was returned
     assert seen["url"].endswith("/v1/chat/completions")
     assert seen["auth"] == "Bearer sk-test"
     assert seen["body"]["model"] == "gpt-4o-mini"
+
+
+@pytest.mark.asyncio
+async def test_openai_compatible_complete_marks_estimated_when_usage_missing(monkeypatch):
+    """Some OpenAI-compatible deployments omit `usage` entirely; the gateway
+    falls back to the estimate_tokens heuristic (AIG-FR-060 honesty marker) —
+    the fallback figures must be flagged, not indistinguishable from measured."""
+    response_no_usage = {**OPENAI_CHAT_RESPONSE, "usage": {}}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=response_no_usage)
+
+    _patch_httpx(monkeypatch, handler, [])
+    adapter = OpenAICompatibleProvider("http://host/v1", api_key="sk-test", label="openai")
+    dep = _deployment("openai", name="gpt-4o-mini")
+    result = await adapter.complete(dep, ProviderRequest(
+        model="gpt-4o-mini", messages=[{"role": "user", "content": "hi"}],
+        max_tokens=64, temperature=0.5))
+
+    assert result.is_estimated is True
+    assert result.input_tokens > 0 and result.output_tokens > 0  # estimate_tokens, not 0
+
+
+@pytest.mark.asyncio
+async def test_openai_compatible_complete_marks_estimated_when_usage_partial(monkeypatch):
+    """Only completion_tokens missing must still flag the whole record estimated
+    — a record is either fully measured or it isn't (no silent partial-honesty)."""
+    response_partial = {**OPENAI_CHAT_RESPONSE, "usage": {"prompt_tokens": 11}}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=response_partial)
+
+    _patch_httpx(monkeypatch, handler, [])
+    adapter = OpenAICompatibleProvider("http://host/v1", api_key="sk-test", label="openai")
+    dep = _deployment("openai", name="gpt-4o-mini")
+    result = await adapter.complete(dep, ProviderRequest(
+        model="gpt-4o-mini", messages=[{"role": "user", "content": "hi"}],
+        max_tokens=64, temperature=0.5))
+
+    assert result.input_tokens == 11  # the measured half is still used as-is
+    assert result.is_estimated is True
 
 
 @pytest.mark.asyncio
@@ -189,6 +231,28 @@ async def test_anthropic_builds_correct_request_and_parses_response(monkeypatch)
     assert result.content == "Hi there, from Claude."
     assert result.input_tokens == 23 and result.output_tokens == 7
     assert result.finish_reason == "end_turn"
+    assert result.is_estimated is False  # a full provider `usage` block was returned
+
+
+@pytest.mark.asyncio
+async def test_anthropic_complete_marks_estimated_when_usage_missing(monkeypatch):
+    """Same AIG-FR-060 honesty marker as the OpenAI-compatible adapter: a
+    response with no usable `usage` block falls back to estimate_tokens and
+    must be flagged, not silently indistinguishable from a measured record."""
+    response_no_usage = {**ANTHROPIC_MESSAGES_RESPONSE, "usage": {}}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=response_no_usage)
+
+    _patch_httpx(monkeypatch, handler, [])
+    adapter = AnthropicProvider("sk-ant-123")
+    dep = _deployment("anthropic", name="claude-opus-4-8")
+    result = await adapter.complete(dep, ProviderRequest(
+        model="claude-opus-4-8", messages=[{"role": "user", "content": "hi"}],
+        max_tokens=100, temperature=0.7))
+
+    assert result.is_estimated is True
+    assert result.input_tokens > 0 and result.output_tokens > 0  # estimate_tokens, not 0
 
 
 @pytest.mark.asyncio

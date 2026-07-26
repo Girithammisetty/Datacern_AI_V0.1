@@ -37,6 +37,15 @@ async def test_ac1_chat_success_headers_and_metering(client, container):
     assert payload["output_tokens"] == body["usage"]["completion_tokens"]
     assert payload["cost_usd"] > 0
     assert payload["price_version"] == container.settings.price_version
+    # AIG-FR-060 honesty marker: the in-process test double never has a real
+    # provider `usage` block to measure from, so it is always estimated — and
+    # that must reach both the emitted event and the persisted request_log row,
+    # not just live as an internal variable dropped before the record leaves
+    # ai-gateway.
+    assert payload["is_estimated"] is True
+    async with container.uow_factory(TENANT_A) as uow:
+        logged = await uow.request_log.get(request_id)
+    assert logged.is_estimated is True
 
 
 async def test_span_attribute_contract(client, container):

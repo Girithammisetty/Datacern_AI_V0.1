@@ -183,7 +183,7 @@ class ProviderRegistry:
         return self._adapter_for(deployment).stream(deployment, request)
 
     async def embed(self, deployment: ProviderDeployment, model: str,
-                    inputs: list[str]) -> tuple[list[list[float]], int]:
+                    inputs: list[str]) -> tuple[list[list[float]], int, bool]:
         return await self._adapter_for(deployment).embed(deployment, model, inputs)
 
     async def aclose(self) -> None:

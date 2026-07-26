@@ -157,6 +157,7 @@ class RequestLog:
     latency_ms: int
     trace_id: str | None
     deployment_id: str | None = None
+    is_estimated: bool = False  # token counts came from estimate_tokens, not the provider
     created_at: datetime | None = None
 
 

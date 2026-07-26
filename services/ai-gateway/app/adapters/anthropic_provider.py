@@ -151,14 +151,17 @@ class AnthropicProvider:
         data = resp.json()
         content = self._text_from_blocks(data.get("content") or [])
         usage = data.get("usage") or {}
-        input_tokens = int(usage.get("input_tokens")
+        input_measured = usage.get("input_tokens")
+        output_measured = usage.get("output_tokens")
+        input_tokens = int(input_measured
                            or sum(estimate_tokens(m["content"]) for m in request.messages
                                   if isinstance(m.get("content"), str)))
-        output_tokens = int(usage.get("output_tokens") or estimate_tokens(content))
+        output_tokens = int(output_measured or estimate_tokens(content))
         return ProviderResult(
             content=content, input_tokens=input_tokens, output_tokens=output_tokens,
             model=data.get("model", deployment.deployment_name),
             finish_reason=data.get("stop_reason") or "stop",
+            is_estimated=not input_measured or not output_measured,
         )
 
     async def stream(self, deployment: ProviderDeployment,
@@ -202,15 +205,18 @@ class AnthropicProvider:
             raise ProviderError(503, f"anthropic stream unreachable: {exc}") from exc
 
         content = "".join(content_parts)
+        input_measured = bool(input_tokens)
+        output_measured = bool(output_tokens)
         if not input_tokens:
             input_tokens = sum(estimate_tokens(m["content"]) for m in request.messages
                                if isinstance(m.get("content"), str))
         if not output_tokens:
             output_tokens = estimate_tokens(content)
-        yield {"usage": {"input_tokens": input_tokens, "output_tokens": output_tokens}}
+        yield {"usage": {"input_tokens": input_tokens, "output_tokens": output_tokens,
+                         "is_estimated": not input_measured or not output_measured}}
 
     async def embed(self, deployment: ProviderDeployment, model: str,
-                    inputs: list[str]) -> tuple[list[list[float]], int]:
+                    inputs: list[str]) -> tuple[list[list[float]], int, bool]:
         # The Anthropic Messages API has no embeddings endpoint — surface an
         # honest, non-retryable error rather than fabricating vectors (Rule 2).
         raise ProviderNotConfigured(
