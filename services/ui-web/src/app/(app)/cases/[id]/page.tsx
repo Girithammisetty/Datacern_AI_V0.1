@@ -20,6 +20,8 @@ import {
   useCloseCase, useEscalateCase, useAddCaseComment, useUpdateCaseComment, useDeleteCaseComment,
   useConnections, useCreateWriteback,
 } from "@/lib/graphql/hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { qk } from "@/lib/graphql/keys";
 import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import { useSession } from "@/lib/session/SessionContext";
 import { useToasts } from "@/stores/ui";
@@ -225,9 +227,48 @@ const REOPEN_WINDOW_MS = 30 * 86_400_000;
  * no status guard but is hidden on the terminal closed state. An illegal
  * transition still 409s server-side — these buttons just never offer one.
  */
-function CaseActionsBar({ c }: { c: Case }) {
+export function CaseActionsBar({ c }: { c: Case }) {
   const push = useToasts((s) => s.push);
   const [dialog, setDialog] = useState<null | "assign" | "resolve" | "close" | "escalate" | "sync">(null);
+  const queryClient = useQueryClient();
+  const [triaging, setTriaging] = useState(false);
+
+  /**
+   * Ask the case-triage agent to read this case and draft a disposition.
+   * The agent cannot apply it: the run produces a PENDING proposal that a
+   * second person decides in the approvals inbox, and agent-runtime re-checks
+   * `case.case.update` for this user on this case before the proposal is even
+   * created. Refetching the case is all that is needed to surface the result —
+   * Case.proposals is resolved from agent-runtime by resource URN.
+   */
+  const runTriage = async () => {
+    setTriaging(true);
+    try {
+      const res = await fetch(`/api/cases/${c.id}/triage`, { method: "POST" });
+      const json = (await res.json().catch(() => ({}))) as { error?: string; mode?: string };
+      if (!res.ok) {
+        push({ title: "Could not draft a recommendation", description: json.error, variant: "error" });
+        return;
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: qk.case(c.id) }),
+        queryClient.invalidateQueries({ queryKey: qk.caseTimeline(c.id) }),
+      ]);
+      push({
+        title: "Recommendation drafted",
+        // Honest about what just happened: a proposal exists, nothing was applied.
+        description:
+          json.mode === "temporal"
+            ? "The agent is working; the proposal will appear on this case shortly."
+            : "Review it in the approvals inbox — a second person must approve.",
+        variant: "success",
+      });
+    } catch {
+      push({ title: "Could not draft a recommendation", variant: "error" });
+    } finally {
+      setTriaging(false);
+    }
+  };
 
   const toastError = (title: string) => (err: unknown) => {
     const g = err instanceof GraphQLRequestError ? err : null;
@@ -399,6 +440,14 @@ function CaseActionsBar({ c }: { c: Case }) {
           </Button>
         </Can>
       )}
+      {/* Gated on manageCase (case.case.update) — the same capability
+          agent-runtime re-checks before minting the proposal, so the button is
+          hidden from exactly the users whose run would be refused. */}
+      <Can gate={FEATURE_GATES.manageCase}>
+        <Button size="sm" variant="ai" onClick={runTriage} disabled={triaging}>
+          {triaging ? "Drafting…" : "Draft recommendation"}
+        </Button>
+      </Can>
       {canSync && (
         <Can gate={FEATURE_GATES.createWriteback}>
           <Button size="sm" variant="outline" onClick={() => setDialog("sync")}>
