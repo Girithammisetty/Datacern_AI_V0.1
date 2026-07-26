@@ -312,6 +312,17 @@ func (s *DemoService) ClaimSelfServeLogin(ctx context.Context, tenantID uuid.UUI
 		// against a future caller that resolves tenantID some other way.
 		return nil, nil, ENotFound("demo signup")
 	}
+	if t.Status == TenantProvisionFailed {
+		// A terminal failure, not a transient "not ready yet" -- the
+		// ProvisioningEngine already exhausted its own per-step retries
+		// before landing the tenant here (see provisioning.go). Returning
+		// (t, nil, nil) here (as if still provisioning) was the bug: the
+		// HTTP handler turns that into 202 "poll again", so the /live-demo
+		// page's poller would spin until the claim token's own 30-minute
+		// SelfServeClaimTTL expired, then show a misleading "this demo link
+		// expired" message instead of the real failure.
+		return t, nil, EDemoProvisioningFailed()
+	}
 	if t.Status != TenantActive {
 		return t, nil, nil // still provisioning
 	}

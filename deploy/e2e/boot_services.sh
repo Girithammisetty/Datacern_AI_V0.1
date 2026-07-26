@@ -40,6 +40,19 @@ start_identity() {
     # on demand), so this is safe regardless of exactly when start_usage
     # itself runs relative to start_identity.
     USAGE_SERVICE_URL="$USAGE_URL"
+    # BRD 70 slices 1/2 (demo sandbox): DEMO_BUNDLES_ROOT/DEMO_SEED_SCRIPT
+    # default to RELATIVE paths ("deploy/demo", "packs/demo_seed_runner.py",
+    # main.go) meant for a container image that ships them alongside the
+    # binary at its own working directory -- but `boot`'s subshell here
+    # inherits THIS SCRIPT's cwd (deploy/e2e/ under make e2e, deploy/local/
+    # under make up via up.sh's own `cd "$(dirname "$0")"`), not the repo
+    # root. Every demo-tenant create/reset then fails SeedDemoContent with
+    # "unknown demo pack" (demobundle/loader.go: os.Stat on the resolved
+    # relative path finds nothing), regardless of which pack is requested --
+    # confirmed live locally. Set both absolute via $REPO_DIR so this is
+    # correct no matter which script/cwd boots identity-service.
+    DEMO_BUNDLES_ROOT="$REPO_DIR/deploy/demo"
+    DEMO_SEED_SCRIPT="$REPO_DIR/packs/demo_seed_runner.py"
     OIDC_ISSUER="${OIDC_ISSUER:-}" OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-}" OIDC_TENANT_ID="${OIDC_TENANT_ID:-}" )
   say "boot identity (bootstrap pass)"
   boot identity "${env[@]}" "$BIN_DIR/identity-e2e"
