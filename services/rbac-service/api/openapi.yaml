@@ -196,6 +196,10 @@ paths:
     post:
       summary: Full decision chain for "why can user X do Y" (audit.log.read; RBC-FR-046)
       responses: {'200': {description: Explanation}}
+  /audience/resolve:
+    post:
+      summary: Resolve a role/group audience to member user ids (service identity; NOTIF-FR-013)
+      responses: {'200': {description: '{user_ids: [...]}'}, '403': {description: tenant mismatch or non-service caller}}
   /admin/projection/rebuild:
     post:
       summary: Enqueue full tenant rebuild (super_admin; RBC-FR-043)

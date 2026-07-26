@@ -153,8 +153,13 @@ func TestMain(m *testing.M) {
 	webhookSender := webhook.NewSender(true) // allow http for httptest targets
 	reg := registry.Default()
 
+	// No rbac-service instance runs in this harness (out of this service's
+	// Testcontainers scope), so role/group audience refs error rather than
+	// resolve here — none of this package's tests exercise a Role/Group
+	// audience mapping. See internal/pipeline/rbac_audience_test.go for the
+	// resolver's own contract test against a fake rbac endpoint.
 	pl := &pipeline.Pipeline{
-		Store: pg, Registry: reg, Groups: pipeline.NewRedisGroupResolver(rc),
+		Store: pg, Registry: reg, Groups: pipeline.NewRBACGroupResolver(pipeline.RBACAudienceConfig{}),
 		Dir: pipeline.NewRedisUserDirectory(rc), Email: emailSender, Webhook: webhookSender,
 		Realtime: inapp.NewRedisPublisher(rc), Limiter: ratelimit.New(rc),
 		DigestWindow: 2 * time.Second, InAppDailyCap: 500,

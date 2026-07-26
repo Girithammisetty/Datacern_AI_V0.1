@@ -69,6 +69,17 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Stabilization guard (rule: no fake/mock/stub in a runtime path). When
+	// REQUIRE_REAL_ADAPTERS=true — set in every real deploy — the service
+	// REFUSES to boot on an adapter that would silently degrade instead of
+	// faking success. Absent (local unit dev), the loud-warn fallback below
+	// keeps dev self-contained.
+	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
+	mustReal := func(realEnv, adapter string) {
+		slog.Error("REQUIRE_REAL_ADAPTERS=true but " + realEnv + " is unset — refusing to boot on the " + adapter + " fallback")
+		os.Exit(1)
+	}
+
 	// Distributed tracing (no-op unless datacern_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
 	otelShutdown := otelx.InitFromEnv(ctx, "notification-service")
@@ -130,10 +141,29 @@ func main() {
 	reg := registry.Default()
 	limiter := ratelimit.New(rc)
 
+	// Role/group audience resolution (NOTIF-FR-013) against rbac-service's
+	// real membership data. RBAC_URL and REGISTER_SIGNING_KEY_PEM are the
+	// same env this service already uses to register its action manifest
+	// (internal/register); an unset value here means every role/group
+	// audience call fails loudly instead of resolving to zero recipients.
+	if os.Getenv("RBAC_URL") == "" || os.Getenv("REGISTER_SIGNING_KEY_PEM") == "" {
+		if requireReal {
+			mustReal("RBAC_URL", "unconfigured audience resolver (role/group-addressed alerts would resolve to zero recipients)")
+		}
+		slog.Warn("RBAC_URL/REGISTER_SIGNING_KEY_PEM unset; role/group-addressed alerts will fail to resolve recipients until configured")
+	}
+	groups := pipeline.NewRBACGroupResolver(pipeline.RBACAudienceConfig{
+		RBACURL:       os.Getenv("RBAC_URL"),
+		SigningKeyPEM: os.Getenv("REGISTER_SIGNING_KEY_PEM"),
+		SigningKID:    os.Getenv("REGISTER_SIGNING_KID"),
+		Issuer:        os.Getenv("JWT_ISSUER"),
+		Audience:      os.Getenv("JWT_AUDIENCE"),
+	})
+
 	pl := &pipeline.Pipeline{
 		Store:    st,
 		Registry: reg,
-		Groups:   pipeline.NewRedisGroupResolver(rc),
+		Groups:   groups,
 		Dir:      pipeline.NewRedisUserDirectory(rc),
 		Email:    emailSender,
 		Webhook:  webhookSender,
