@@ -864,7 +864,15 @@ export default function WelcomeContent() {
             <a href="#how" className="transition-colors hover:text-foreground">How it works</a>
             <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
           </nav>
-          <Button onClick={() => setDemoOpen(true)}>Request a demo</Button>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/login"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Sign in
+            </Link>
+            <Button onClick={() => setDemoOpen(true)}>Request a demo</Button>
+          </div>
         </div>
       </header>
 
