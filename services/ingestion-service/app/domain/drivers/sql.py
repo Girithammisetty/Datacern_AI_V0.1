@@ -74,6 +74,25 @@ def to_format(sql: str, params: dict[str, Any]) -> tuple[str, list[Any]]:
     return translated, values
 
 
+def to_qmark(sql: str, params: dict[str, Any]) -> tuple[str, list[Any]]:
+    """Translate `:name` placeholders to DB-API ``?`` positional args.
+
+    Used by drivers whose paramstyle is ``qmark`` (e.g. the Trino/Presto
+    client). Unlike ``to_format`` there is no interpolation step, so literal
+    ``%`` is left alone — doubling it here would corrupt a LIKE pattern.
+    Repeated names append the value again in positional order; a missing param
+    raises KeyError rather than silently falling back to text substitution.
+    """
+    values: list[Any] = []
+
+    def repl(match: re.Match[str]) -> str:
+        values.append(params[match.group(1)])
+        return "?"
+
+    translated = _PARAM_RE.sub(repl, sql)
+    return translated, values
+
+
 def to_at_named(sql: str, params: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """Translate `:name` placeholders to BigQuery/Spanner ``@name`` named params.
 

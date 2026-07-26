@@ -74,6 +74,7 @@ from app.domain.drivers.objectsource import (
 )
 from app.domain.drivers.oracle import OraclePreviewer, OracleProber, OracleQuerySource
 from app.domain.drivers.postgres import PostgresPreviewer, PostgresProber, PostgresQuerySource
+from app.domain.drivers.presto import presto_dialect
 from app.domain.drivers.preview import DispatchingSourcePreviewer
 from app.domain.drivers.redshift import redshift_dialect
 from app.domain.drivers.s3 import s3_client_factory
@@ -184,10 +185,14 @@ def wire_local_drivers(
     )
 
     # --- credential-gated warehouses (generic DB-API harness) ----------------
+    # `presto` rides the same harness: the trino client is a PEP-249 driver and,
+    # unlike the three above, it is NOT credential-gated — the local stack runs a
+    # real Trino coordinator, so this path is verified end to end.
     for ctype, dialect in (
         ("snowflake", snowflake_dialect()),
         ("redshift", redshift_dialect()),
         ("databricks", databricks_dialect()),
+        ("presto", presto_dialect()),
     ):
         wire(
             ctype,
