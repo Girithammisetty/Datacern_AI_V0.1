@@ -1,0 +1,5 @@
+recovery_id,lead_id,provider_npi,recovery_method,demanded_amount,recovered_amount,status,recovery_month,cycle_days,overpayment_identified_date
+REC-6001,LED-7940,1955010004,payback_demand,18500.00,14200.00,collected,2026-07,41,2026-06-05
+REC-6002,LED-7910,1955010006,education_letter,0.00,0.00,closed,2026-05,12,2026-04-18
+REC-6003,LED-7895,1955010003,prosecution_restitution,410000.00,0.00,pending,2026-07,150,2026-02-20
+REC-6004,LED-7880,1955010007,offset,95000.00,32000.00,in_progress,2026-07,90,2026-03-15

@@ -1,0 +1,92 @@
+# Open-row seed cases (§2.2): the 5 OPEN alerts become the demo tenant's
+# worklist (mirrors ALT-7001..7005 in data/aml_alerts.csv — alert_triage is
+# the pack's real deterministic triage decision table, so these are the same
+# rows a live AML program's L1 queue would surface, and the same dispositions
+# alert_triage.yaml's rules would propose, in rule order). Five more rows
+# (ALT-6990..6950) exist only in the CSV, already closed, to give the KPI
+# dashboards and the audit-trail step real history to show — they are
+# deliberately NOT queued here. row_pk resolves against aml_alerts' first
+# required_columns entry (alert_id) — checked by `packctl demo-lint`.
+- dataset: aml_alerts
+  row_pk: ALT-7001
+  severity: critical
+  display_projection:
+    party_id: PTY-6010
+    party_name: Northgate Trading FZE
+    typology: sanctions_near_match
+    match_score: 0.93
+    amount_involved: 92000.00
+  note: >
+    alert_triage rule 2 (typology=sanctions_near_match, match_score >= 0.85):
+    a high fuzzy name-match against the screening list — copilot escalates to
+    L2/sanctions adjudication immediately, but it never declares a true hit
+    itself. Confirming identity (DOB, address, government ID) against the
+    listed entry is a human adjudication; the table only proposes the
+    escalation, at 0.93 confidence in the match signal, not in a verdict.
+- dataset: aml_alerts
+  row_pk: ALT-7002
+  severity: high
+  display_projection:
+    party_id: PTY-6003
+    party_name: Coral Bay Nail & Spa LLC
+    typology: structuring
+    scenario_rule: just_under_ctr_threshold_paired_deposits
+    amount_involved: 58400.00
+  note: >
+    alert_triage rule 5 (typology=structuring, amount_involved >= $50,000):
+    paired same-day cash deposits just under the $10,000 CTR threshold across
+    two branches, aggregating to material institution-configured volume — a
+    classic CTR-evasion signature per the pack's BSA grounding. Escalates to
+    L2 to build the case on the full deposit pattern.
+- dataset: aml_alerts
+  row_pk: ALT-7003
+  severity: medium
+  display_projection:
+    party_id: PTY-6008
+    party_name: Union Harvest Grocers Inc
+    typology: peer_anomaly
+    scenario_rule: peer_group_deviation_sic_5411
+    amount_involved: 42000.00
+  note: >
+    Matches NO specific alert_triage rule: peer_anomaly only auto-escalates
+    at amount_involved >= $100,000 (rule 7), and this alert's $42,000 is
+    below that institution-configured floor. Rather than guess at severity
+    from an unbundled dollar figure, the table falls through to
+    default_outcome — escalate_l2 at MEDIUM, routed to a human analyst who
+    weighs the full pattern (a grocer sending international wires outside
+    its declared cash-intensive retail profile) instead of an automated
+    verdict on a partial signal.
+- dataset: aml_alerts
+  row_pk: ALT-7004
+  severity: medium
+  display_projection:
+    party_id: PTY-6011
+    party_name: Colton Ashworth
+    typology: dormant_activity
+    scenario_rule: dormant_reactivation_inbound_then_outbound
+    amount_involved: 31200.00
+  note: >
+    alert_triage rule 6 (typology=dormant_activity): an account onboarded
+    2025-11 with a $1,200 expected monthly volume suddenly received two
+    inbound wires totaling $15,800 followed within 24 hours by a $15,400
+    outbound wire to Hong Kong — the classic dormant-then-active mule
+    signature. Routes to edd_required; triage of the underlying flows
+    continues alongside the refreshed due-diligence referral.
+- dataset: aml_alerts
+  row_pk: ALT-7005
+  severity: critical
+  display_projection:
+    party_id: PTY-6006
+    party_name: Delacroix-Nkemelu Holdings Ltd
+    typology: layering
+    scenario_rule: multi_hop_wire_chain_offshore_termination
+    amount_involved: 141000.00
+  note: >
+    Rule precedence: this is a multi-hop wire chain (Meridian Star Imports ->
+    Delacroix-Nkemelu Holdings -> an offshore counterparty in Vietnam, each
+    hop passing ~95%+ of the amount within 24 hours) which typology alone
+    would route via rule 4 (escalate_l2 / high). But the alert has also aged
+    32 days past the program-configured 30-day escalation floor, so rule 1
+    fires FIRST in rule order — aging outranks typology severity here,
+    matching alert_triage.yaml's documented rule ordering, and the case
+    proposes at CRITICAL, not high.

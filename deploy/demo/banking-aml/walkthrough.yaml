@@ -1,0 +1,48 @@
+# Guided-walkthrough content for the 5-minute demo script (§2.2,
+# DSP-FR-015), same status as insurance-claims-payer's and card-disputes'
+# walkthroughs: served to demo-profile tenants by identity-service
+# (GET /api/v1/tenants/self/walkthrough) and rendered in-product by
+# ui-web's WalkthroughOverlay (src/components/demo/WalkthroughOverlay.tsx).
+# Also readable as a stand-alone script by an SE running the bundle by hand.
+- title: "Worklist"
+  target_route: /cases
+  narration: >
+    Every AML monitoring hit and sanctions-screening near-match lands here
+    the moment it fires — five OPEN alerts are already queued, from a
+    sanctions fuzzy-match to a structuring pattern to a dormant-account
+    reactivation, sorted by severity.
+- title: "Copilot triage"
+  target_route: /cases/ALT-7001
+  narration: >
+    Open the sanctions near-match on Northgate Trading FZE. The copilot has
+    read the fuzzy name-match score and the party's KYC profile and proposed
+    escalating to sanctions adjudication at 0.93 confidence in the match
+    signal — but it stops there. Confirming a true hit against the SDN entry
+    requires a human to weigh distinguishing evidence (DOB, address,
+    government ID); the copilot never declares a hit on its own.
+- title: "Approval (four-eyes)"
+  target_route: /inbox
+  narration: >
+    An AML Analyst L1 or Sanctions Analyst proposes a disposition; the MLRO
+    reviews it here and either approves or overrides. Per BRD 30, only the
+    MLRO can approve a disposition that becomes a SAR recommendation — the
+    proposer and approver are always different people.
+- title: "No guessing on a partial signal"
+  target_route: /cases/ALT-7003
+  narration: >
+    Union Harvest Grocers' international wire pattern doesn't match any
+    specific rule in the alert-triage table — its $42,000 exposure sits
+    below the institution-configured floor for an automatic peer-anomaly
+    escalation. Rather than round up to a severity it can't support, the
+    table's default_outcome routes it to a human analyst at MEDIUM. Same
+    governance discipline as a live deployment: no disposition without a
+    complete pattern to support it.
+- title: "Audit trail"
+  target_route: /audit
+  narration: >
+    Every disposition, override, and copilot proposal is logged here with
+    the acting persona, timestamp, and evidence cited — including closed
+    history like ALT-6960's confirmed sanctions true hit (blocked & reported
+    only after a human confirmed identity) and ALT-6978's routine CTR filing
+    (reportable cash activity, not an accusation — CTR is never treated as a
+    SAR). Nothing is silent.

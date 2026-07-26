@@ -1,0 +1,21 @@
+# BRD 70 demo bundle manifest (§2.2). Bound explicitly to `pack` +
+# `pack_version` (not "whatever's currently installed") so this bundle is
+# reproducible independent of what the product pack has moved on to since —
+# the same discipline packs/<pack>'s own dataset_bindings use at install
+# time. Never installed by `packctl install` — only by
+# packs/demo_seed_runner.py (BRD 70 SeedDemoContent step) and validated
+# offline by `packctl demo-lint`.
+demo_manifest: 1
+pack: banking-aml
+pack_version: 2.1.0
+version: 1.0.0
+provenance: >
+  All rows are synthetic, hand-authored for this demo bundle, in the shape
+  BRD 70 (Demo Sandbox & POC Mode) already ships for insurance-claims-payer
+  and card-disputes. Party names, account/transaction/alert identifiers,
+  counterparty ids, and dollar amounts are fictional (no real people, no
+  real banks, no real KYC/customer records). Typologies, scenario rules, and
+  dispositions are drawn from packs/banking-aml/decisions/alert_triage.yaml
+  and packs/banking-aml/cases/dispositions.yaml so the seed exercises the
+  pack's real triage logic. Generated 2026-07-26 for the banking-aml demo
+  bundle.
