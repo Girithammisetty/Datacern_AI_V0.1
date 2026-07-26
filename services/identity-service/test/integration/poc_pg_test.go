@@ -58,12 +58,14 @@ func TestPocSuccessCriteriaRoundTripOnPostgres(t *testing.T) {
 	if err := store.CreateCell(ctx, &domain.Cell{ID: cellID, Name: freshName("cell"), Cloud: "aws", Region: "us-east-1", Capacity: 100}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.CreatePlan(ctx, &domain.Plan{
-		Key: domain.PocTenantPlanKey, Name: "Internal Demo", Status: "active", Version: 1,
-		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
-	}, nil); err != nil {
-		t.Fatal(err)
-	}
+	// domain.PocTenantPlanKey ("internal-demo") is NOT seeded here -- unlike
+	// internal/domain/demo_test.go's in-memory-store unit tests (which start
+	// from a genuinely empty store and must create it), this tier runs
+	// against a REAL, already-migrated Postgres database: migration
+	// 0010_commercial_plans.up.sql seeds this exact plan row before any test
+	// runs. Creating it again collided with VALIDATION_FAILED "plan key
+	// already exists" (confirmed live in CI, since Docker/Postgres are
+	// unavailable in the dev sandbox this test was authored in).
 
 	tenants := &domain.TenantService{Store: store, Graph: domain.DefaultModuleGraph(), Clock: time.Now}
 	commercial := &domain.CommercialService{Store: store, Clock: time.Now}
