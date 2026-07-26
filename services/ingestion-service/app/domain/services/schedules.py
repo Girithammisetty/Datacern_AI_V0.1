@@ -87,20 +87,17 @@ class ScheduleService:
     def _validate_template(self, template: dict[str, Any]) -> None:
         details = []
         mode = template.get("ingestion_mode")
-        if mode == "file_poll":
-            # ING-FR-064 (Should) — stubbed per definition-of-done
-            raise ValidationFailedError(
-                "file_poll schedules are not implemented yet (TODO ING-FR-064)",
-                details=[
-                    {"field": "ingestion_template.ingestion_mode", "message": "file_poll TODO"}
-                ],
-            )
-        if mode != "query":
+        if mode not in ("query", "file_poll"):
             details.append(
-                {"field": "ingestion_template.ingestion_mode", "message": "must be 'query'"}
+                {
+                    "field": "ingestion_template.ingestion_mode",
+                    "message": "must be 'query' or 'file_poll'",
+                }
             )
-        if not template.get("statement"):
+        elif mode == "query" and not template.get("statement"):
             details.append({"field": "ingestion_template.statement", "message": "required"})
+        # file_poll (ING-FR-064) needs no statement: the connection's own
+        # root_prefix/glob/file_format drive ObjectSourceIngestor's list+decode.
         if not template.get("dataset_urn") and not template.get("new_dataset"):
             details.append(
                 {"field": "ingestion_template.dataset_urn", "message": "dataset target required"}
@@ -143,6 +140,17 @@ class ScheduleService:
                 timezone=body.timezone,
             )
             self._tenants()[schedule_id] = principal.tenant_id
+            watermark_column = body.watermark.column if body.watermark else None
+            watermark_operator = body.watermark.operator if body.watermark else ">"
+            watermark_value_type = body.watermark.value_type if body.watermark else "string"
+            template_mode = body.ingestion_template.get("ingestion_mode")
+            if watermark_column is None and template_mode == "file_poll":
+                # ObjectSourceIngestor watermarks on object mtime, not a SQL
+                # column; this sentinel is never read outside runner.
+                # _attempt_file_poll's WatermarkSpec, only persisted/reported.
+                watermark_column = "_object_mtime"
+                watermark_operator = ">"
+                watermark_value_type = "timestamp"
             sched = Schedule(
                 id=schedule_id,
                 tenant_id=principal.tenant_id,
@@ -152,9 +160,9 @@ class ScheduleService:
                 cron=body.cron,
                 interval_seconds=body.interval_seconds,
                 timezone=body.timezone,
-                watermark_column=body.watermark.column if body.watermark else None,
-                watermark_operator=body.watermark.operator if body.watermark else ">",
-                watermark_value_type=body.watermark.value_type if body.watermark else "string",
+                watermark_column=watermark_column,
+                watermark_operator=watermark_operator,
+                watermark_value_type=watermark_value_type,
                 watermark_value=body.watermark.initial_value if body.watermark else None,
                 overlap_policy=body.overlap_policy,
                 enabled=body.enabled,
@@ -334,6 +342,7 @@ class ScheduleService:
                 run_immediately = False  # buffer_one: queue at most one pending run
 
             template = dict(sched.ingestion_template)
+            ingestion_mode = template.get("ingestion_mode", "query")
             if not template.get("dataset_urn"):
                 # new_dataset target: mint the dataset URN on first fire and pin
                 # it in the template so every later run appends to the same dataset
@@ -347,9 +356,9 @@ class ScheduleService:
                 connection_id=sched.connection_id,
                 dataset_urn=template.get("dataset_urn"),
                 new_dataset=template.get("new_dataset"),
-                ingestion_mode="query",
-                file_format="parquet",  # BR-2
-                statement=template.get("statement"),
+                ingestion_mode=ingestion_mode,
+                file_format="parquet" if ingestion_mode == "query" else None,  # BR-2
+                statement=template.get("statement") if ingestion_mode == "query" else None,
                 status="created",
                 trigger="schedule",
                 schedule_id=schedule_id,

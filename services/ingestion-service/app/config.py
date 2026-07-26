@@ -8,6 +8,13 @@ from dataclasses import dataclass, field
 MIB = 1024 * 1024
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 @dataclass
 class Settings:
     database_url: str = "sqlite+aiosqlite:///./.data/dev.db"
@@ -53,8 +60,12 @@ class Settings:
     opa_url: str = "http://localhost:8281"
     redis_url: str = "redis://localhost:6379/0"
 
-    # Execution behaviour
-    inline_execution: bool = True  # run jobs inline (dev/test); prod uses Temporal (stub)
+    # Execution behaviour. Inline synchronous execution is the only supported
+    # mode today (see app/domain/scheduler.py) — override with
+    # INGESTION_INLINE_EXECUTION=false only once a real out-of-process consumer
+    # exists to run queued/buffered jobs, or fired schedules queue jobs no
+    # worker ever picks up.
+    inline_execution: bool = True
     retry_max_attempts: int = 5  # ING-FR-081
     retry_backoff_base_s: float = 10.0
     retry_backoff_cap_s: float = 600.0
@@ -137,4 +148,5 @@ class Settings:
             ),
             opa_url=os.getenv("OPA_URL", cls.opa_url),
             redis_url=os.getenv("REDIS_URL", cls.redis_url),
+            inline_execution=_env_bool("INGESTION_INLINE_EXECUTION", cls.inline_execution),
         )

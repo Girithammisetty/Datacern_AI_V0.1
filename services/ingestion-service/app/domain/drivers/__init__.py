@@ -66,6 +66,7 @@ from app.domain.drivers.http import HttpProber, HttpSourceFetcher, HttpSourcePre
 from app.domain.drivers.mssql import SqlServerPreviewer, SqlServerProber, SqlServerQuerySource
 from app.domain.drivers.mysql import MysqlPreviewer, MysqlProber, MysqlQuerySource
 from app.domain.drivers.objectsource import (
+    ObjectIngestorRegistry,
     ObjectSourceIngestor,
     ObjectStoreProber,
     ObjectStoreSourceFetcher,
@@ -90,6 +91,7 @@ from app.domain.querysource import QuerySourceRegistry
 __all__ = [
     "DispatchingSourcePreviewer",
     "FetcherRegistry",
+    "ObjectIngestorRegistry",
     "ObjectSourceIngestor",
     "SourceFetcher",
     "wire_local_drivers",
@@ -134,6 +136,7 @@ def wire_local_drivers(
     query_sources: QuerySourceRegistry,
     fetchers: FetcherRegistry,
     previewer: DispatchingSourcePreviewer | SourcePreviewer,
+    object_ingestors: ObjectIngestorRegistry,
 ) -> None:
     """Register every real driver on the runtime registries.
 
@@ -223,7 +226,9 @@ def wire_local_drivers(
     # --- object-store / data-lake SOURCE connectors (ING-FR-064) -------------
     # Each backend supplies a client factory; the shared engine does the
     # list → glob/incremental filter → stream-decode pipeline. S3 is verified
-    # live against MinIO; gcs/azure_blob are credential-gated (real SDK).
+    # live against MinIO; gcs/azure_blob are credential-gated (real SDK). The
+    # file_poll ingestion_mode (schedules.py / runner.py) dispatches through
+    # object_ingestors to run the full list→decode→commit pipeline.
     object_factories = {
         "s3": s3_client_factory,
         "gcs": gcs_client_factory,
@@ -232,6 +237,9 @@ def wire_local_drivers(
     for ctype, factory in object_factories.items():
         fetchers.set(ctype, ObjectStoreSourceFetcher(factory, connect_timeout_s=connect_timeout))
         probers.set(ctype, ObjectStoreProber(factory, connect_timeout_s=connect_timeout))
+        object_ingestors.set(
+            ctype, ObjectSourceIngestor(factory, connect_timeout_s=connect_timeout)
+        )
         if is_dispatch:
             previewer.set(
                 ctype, ObjectStoreSourcePreviewer(factory, connect_timeout_s=preview_timeout)

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from fnmatch import fnmatch
 from typing import Any, Protocol
@@ -30,7 +30,7 @@ from typing import Any, Protocol
 from pydantic import BaseModel
 
 from app.domain.decode import DecodeOptions, DecodeStats, decode_stream
-from app.domain.errors import ErrorCategory
+from app.domain.errors import ErrorCategory, PermanentJobError, TransientSourceError
 from app.domain.objectstore import ObjectStore, PutResult
 from app.domain.probers import PreviewResult, ProbeResult
 from app.domain.watermark import coerce_watermark, serialize_watermark
@@ -296,6 +296,7 @@ class IngestResult:
     bytes_written: int
     snapshot_id: int
     new_watermark: str | None  # serialized max mtime observed (next run's "since")
+    columns: list[str] = field(default_factory=list)
 
 
 class ObjectSourceIngestor:
@@ -331,9 +332,16 @@ class ObjectSourceIngestor:
         glob = getattr(config, "glob", None)
         file_format = getattr(config, "file_format", "csv")
 
-        client = await asyncio.to_thread(self._factory, config, secrets, self.connect_timeout_s)
         try:
+            client = await asyncio.to_thread(
+                self._factory, config, secrets, self.connect_timeout_s
+            )
             all_refs = await asyncio.to_thread(client.list_objects, prefix)
+        except Exception as exc:  # noqa: BLE001 — connect/list failure -> retryable (ING-FR-081)
+            category, detail = _classify(exc)
+            raise TransientSourceError(category, detail) from exc
+
+        try:
             refs = select_objects(all_refs, glob=glob, since=coerce_since(since))
             stats = DecodeStats()
             opts = DecodeOptions(
@@ -361,6 +369,7 @@ class ObjectSourceIngestor:
             objects=len(refs),
             bytes_written=result.bytes_written,
             snapshot_id=result.snapshot_id,
+            columns=staged.columns,
             new_watermark=serialize_watermark(newest_mtime(refs)) if refs else (
                 serialize_watermark(since) if since else None
             ),
@@ -374,3 +383,44 @@ def _safe_close(client: Any) -> None:
             close()
         except Exception:  # noqa: BLE001
             pass
+
+
+# --------------------------------------------------------------------------- registry
+
+
+class UnsupportedObjectIngestor:
+    """Real-runtime registry default: a file_poll job against a connector type
+    with no wired object-store ingestor fails PERMANENTLY with a categorized,
+    honest error instead of silently ingesting zero rows (mirrors
+    UnsupportedQuerySource for the query-mode path)."""
+
+    @staticmethod
+    def _raise(config: BaseModel) -> None:
+        ctype = getattr(config, "connector_type", "unknown")
+        raise PermanentJobError(
+            ErrorCategory.INTERNAL,
+            f"UNSUPPORTED_CONNECTOR: no object-store ingestor wired for connector type "
+            f"{ctype!r} in this deployment",
+            hint="use a supported object-store connector type or deploy the missing driver",
+        )
+
+    async def ingest(
+        self, config: BaseModel, secrets: dict[str, str], **kwargs: Any
+    ) -> IngestResult:
+        self._raise(config)
+        raise AssertionError("unreachable")  # pragma: no cover
+
+
+class ObjectIngestorRegistry:
+    def __init__(self, default: Any | None = None) -> None:
+        self._default = default
+        self._by_type: dict[str, Any] = {}
+
+    def set(self, connector_type: str, ingestor: Any) -> None:
+        self._by_type[connector_type] = ingestor
+
+    def get(self, connector_type: str) -> Any:
+        ingestor = self._by_type.get(connector_type, self._default)
+        if ingestor is None:
+            raise NotImplementedError(f"no object-store ingestor registered for {connector_type}")
+        return ingestor

@@ -1,8 +1,8 @@
 """Ingestion execution engine (ING-FR-023/041/043/080/081/082, BR-3/7/9).
 
-In production the finalize pipeline is a Temporal workflow with each step a
-retryable activity (stub: TemporalScheduler / worker TODO). This in-process
-runner implements the same step sequence deterministically for dev/tests:
+This in-process runner is the only execution path this deployment has (see
+`Settings.inline_execution` / `app/domain/scheduler.py` — there is no
+Temporal-backed alternative here):
 
     slot acquire -> [attempt: decode/stream -> stage] -> committing ->
     single atomic commit -> completed
@@ -27,6 +27,7 @@ import sqlalchemy as sa
 from app.container import Container
 from app.domain import connectors
 from app.domain.decode import DecodeOptions, DecodeStats, decode_stream
+from app.domain.drivers.objectsource import coerce_since
 from app.domain.errors import (
     ErrorCategory,
     PermanentJobError,
@@ -286,6 +287,8 @@ class IngestionRunner:
             return None
         if mode in ("query", "scheduled_run"):
             return await self._attempt_query(tenant_id, ingestion_id, watermark)
+        if mode == "file_poll":
+            return await self._attempt_file_poll(tenant_id, ingestion_id, watermark)
         raise PermanentJobError(ErrorCategory.INTERNAL, f"mode {mode} is not runnable")
 
     async def _concat_parts(self, part_keys: list[str]) -> AsyncIterator[bytes]:
@@ -453,6 +456,119 @@ class IngestionRunner:
             ) from exc
         await self._commit_staged(tenant_id, ingestion_id, table, staged, stats, allow_empty)
         return serialize_watermark(observed[0]) if observed else None
+
+    async def _attempt_file_poll(
+        self, tenant_id: str, ingestion_id: str, watermark: WatermarkSpec | None
+    ) -> str | None:
+        """ING-FR-064: list -> glob/incremental filter -> stream-decode every
+        matching object -> one bronze snapshot, via ObjectSourceIngestor."""
+        async with self.c.db.tenant_session(tenant_id) as session:
+            ing = (
+                await session.execute(sa.select(Ingestion).where(Ingestion.id == ingestion_id))
+            ).scalar_one()
+            conn = (
+                await session.execute(
+                    sa.select(Connection).where(
+                        Connection.id == ing.connection_id, Connection.tenant_id == tenant_id
+                    )
+                )
+            ).scalar_one_or_none()
+            if conn is None:
+                raise PermanentJobError(
+                    ErrorCategory.INTERNAL, "connection not found for file_poll job"
+                )
+            error_row_limit = ing.error_row_limit
+            table = bronze_table_ident(tenant_id, ing.dataset_urn or "")
+            connector_type = conn.connector_type
+            config_dict = conn.config
+            vault_ref = conn.vault_ref
+
+        if await self.c.table_writer.has_snapshot(table, ingestion_id):
+            raise PermanentJobError(
+                ErrorCategory.INTERNAL, "snapshot already committed for this ingestion (BR-9)"
+            )
+
+        config_model = connectors.validate_config(connector_type, config_dict)
+        secrets = (await self.c.secrets.get(vault_ref) or {}) if vault_ref else {}
+        ingestor = self.c.object_ingestors.get(connector_type)
+        since = coerce_since(watermark.value) if watermark is not None else None
+
+        try:
+            result = await asyncio.wait_for(
+                ingestor.ingest(
+                    config_model,
+                    secrets,
+                    table_writer=self.c.table_writer,
+                    table=table,
+                    ingestion_id=ingestion_id,
+                    since=since,
+                    batch_size=self.c.settings.decode_batch_size,
+                    error_row_limit=error_row_limit,
+                ),
+                timeout=self.c.settings.query_timeout_s,
+            )
+        except TimeoutError as exc:
+            raise PermanentJobError(
+                ErrorCategory.TIMEOUT,
+                f"file_poll exceeded the {self.c.settings.query_timeout_s}s job timeout",
+                hint="raise the per-job timeout or narrow the prefix/glob",
+            ) from exc
+
+        async with self.c.db.tenant_session(tenant_id) as session:
+            ing = (
+                await session.execute(sa.select(Ingestion).where(Ingestion.id == ingestion_id))
+            ).scalar_one()
+            # ObjectSourceIngestor always commits (even 0 matching objects): unlike a
+            # query/file job, an incremental poll finding nothing new since the last
+            # watermark is the normal steady state, not an empty-source failure.
+            record_transition(
+                session,
+                ing,
+                "committing",
+                TransitionContext(rows_decoded=result.rows, allow_empty=True),
+            )
+            await session.commit()
+
+        async with self.c.db.tenant_session(tenant_id) as session:
+            ing = (
+                await session.execute(sa.select(Ingestion).where(Ingestion.id == ingestion_id))
+            ).scalar_one()
+            ing.iceberg_snapshot_id = result.snapshot_id
+            ing.rows_appended = result.rows
+            ing.finished_at = datetime.now(UTC)
+            dataset_id: str | None = None
+            if ing.dataset_urn:
+                _, dataset_id = parse_dataset_urn(ing.dataset_urn)
+            schema = {
+                col: {"type": "string", "nullable": True, "tags": []} for col in result.columns
+            }
+            record_transition(
+                session,
+                ing,
+                "completed",
+                TransitionContext(commit_ok=True),
+                event_payload={
+                    "ingestion_id": ing.id,
+                    "dataset_urn": ing.dataset_urn,
+                    "dataset_id": dataset_id,
+                    "workspace_id": str(ing.workspace_id),
+                    "dataset_name": (ing.new_dataset.get("name") if ing.new_dataset else None),
+                    "iceberg_table": table,
+                    "iceberg_snapshot_id": result.snapshot_id,
+                    "rows_appended": result.rows,
+                    "row_count": result.rows,
+                    "bytes": result.bytes_written,
+                    "file_format": ing.file_format,
+                    "skip_profiling": ing.skip_profiling,
+                    "schema": schema,
+                    "pii_tags": [],
+                    "renamed_columns": False,
+                    "rows_bad": 0,
+                    "source": {"table": table, "objects": result.objects},
+                },
+            )
+            await session.commit()
+        return result.new_watermark
 
     # ----------------------------------------------------------- commit path
     async def _commit_staged(

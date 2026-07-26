@@ -1381,6 +1381,7 @@ components:
           enum:
           - file_upload
           - query
+          - file_poll
           - scheduled_run
           - webhook_batch
           title: Ingestion Mode

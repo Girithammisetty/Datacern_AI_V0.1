@@ -62,7 +62,6 @@ reaches. No `NotImplementedError` stub is reachable from the real path.
 | `ConnectionProber` / `SourcePreviewer` / `QuerySource` — cloud/SaaS types (`domain/drivers/*`) | **Real SDK adapters, credential-gated** (Snowflake, Redshift, Databricks, BigQuery, Spanner, Salesforce). Registered on the runtime registries — no fake reachable. | The adapter drives the real vendor SDK/protocol, but a live pull needs real customer credentials (see **Connector matrix** below). Offline request/response shaping is contract-tested with a mocked transport (`tests/unit/test_cloud_driver_contracts.py`). |
 | Object-store SOURCE connectors (`s3`, `gcs`, `azure_blob`) + `ftp` (`domain/drivers/objectsource.py`, `s3.py`, `gcs.py`, `azure_blob.py`, `ftp.py`) | **Real adapters, registered on the runtime registries** — no fake reachable. `s3` (boto3) + `ftp` (aioftp) are REAL-TESTED; `gcs`/`azure_blob` are credential-gated (real SDK). | `s3` is verified live against MinIO and `ftp` against a real in-process FTP server; `gcs`/`azure_blob` drive the real vendor SDK but a live pull needs customer credentials (see **Connector matrix** / **Going live**). Offline list/read shaping is contract-tested with an injected client (`tests/unit/test_object_source.py`). |
 | `QuerySource` — `presto` (Trino) | `Fake*` double (registry default) | Trino/Presto federation is a separate wave (out of scope here). |
-| `Scheduler` prod orchestrator (`TemporalScheduler`) | `NotImplementedError` | Temporal Schedules; `InProcessScheduler` carries the real cron semantics locally. Webhook buffer flush timer likewise deferred to a Temporal workflow. |
 
 ### Connector matrix (wave-2 datasource drivers)
 
@@ -133,10 +132,11 @@ store by omitting/setting `endpoint`); `gcs`/`azure_blob` are credential-gated.
 `s3` secrets: `access_key_id` / `secret_access_key` (or an ambient role via
 `role_arn` with no secret).
 
-Execution: dev/tests run jobs inline (`Settings.inline_execution`); production
-finalize is a Temporal workflow with retryable activities (ING-FR-043) — the
-in-process `IngestionRunner` implements the identical step sequence and retry
-semantics (5 attempts, exponential backoff + jitter). The real `IcebergTableWriter`,
+Execution: every environment runs jobs inline through `IngestionRunner`
+(`Settings.inline_execution`, default true; override with
+`INGESTION_INLINE_EXECUTION=false` only once a real out-of-process consumer
+exists — there is none today, see **Known deviations** below) with 5-attempt
+exponential-backoff+jitter retries (ING-FR-043/081). The real `IcebergTableWriter`,
 `S3ObjectStore`, `VaultSecretsStore`, `KafkaEventPublisher`, `OPAPolicyEngine`
 and `JWKSKeyProvider` are exercised end-to-end in
 `tests/integration/test_real_adapters.py` against the live dev infra.
@@ -165,15 +165,15 @@ and `JWKSKeyProvider` are exercised end-to-end in
 | ING-FR-040 upload init/parts/complete protocol | ✅ (presigned `direct=true` TODO with cloud stores) | `services/uploads.py` | `test_chunk_assembly.py` |
 | ING-FR-041 never buffer a file; RSS bound | ✅ | streaming iterators end-to-end | AC-4 (scaled RSS assert) |
 | ING-FR-042 resumability, state in PG | ✅ | `uploads.get` | AC-5, integration upload test |
-| ING-FR-043 complete pipeline: verify→decode→parquet→single append→notify | ✅ in-process (Temporal workflow **stub**) | `runner.py`, two-phase `TableWriter` | AC-4/12, chunk tests |
+| ING-FR-043 complete pipeline: verify→decode→parquet→single append→notify | ✅ in-process (the only execution path this deployment has) | `runner.py`, two-phase `TableWriter` | AC-4/12, chunk tests |
 | ING-FR-044 24h expiry GC | ✅ | `uploads._ensure_open`/`gc_expired` | `test_expired_upload_returns_410…` |
 | ING-FR-060 schedules cron/interval/tz/watermark/overlap | ✅ | `services/schedules.py` | `test_api_schedules.py` |
 | ING-FR-061 watermark bound as driver parameter, persisted high-water | ✅ | `domain/watermark.py` | `test_watermark.py`, AC-8 |
 | ING-FR-062 fires create normal jobs; skip events | ✅ | `schedules.fire` | AC-9 |
 | ING-FR-063 pause/resume/run_now (S) | ✅ | routes | `test_pause_resume_and_delete` |
-| ING-FR-064 file-poll schedules (S) | 🟡 **partial**: the object-store SOURCE pipeline is real — list→glob→incremental-mtime→stream-decode→one bronze snapshot (`ObjectSourceIngestor`, `s3`/`gcs`/`azure_blob`, verified live vs MinIO); wiring it into a `file_poll` schedule executor / `ingestion_mode` is still a follow-up (schedule create still rejects the template with TODO) | `domain/drivers/objectsource.py`, `schedules._validate_template` | `test_object_source.py`, `test_object_store_drivers.py`, `test_file_poll_template_is_todo` |
+| ING-FR-064 file-poll schedules (S) | ✅ `file_poll` is a real `ingestion_mode`: schedule fires (and one-off `POST /ingestions`) drive `ObjectSourceIngestor` end-to-end — list→glob→incremental-mtime→stream-decode→one bronze snapshot, watermark persisted back onto the schedule (`s3`/`gcs`/`azure_blob`, `s3` verified live vs MinIO) | `domain/drivers/objectsource.py`, `runner._attempt_file_poll`, `schedules.fire` | `test_object_source.py`, `test_object_store_drivers.py`, `test_file_poll_schedule_runs_object_source_ingestion` |
 | ING-FR-080 error categories + error_log shape | ✅ | `domain/errors.py`, `runner._fail` | AC-13, decode tests |
-| ING-FR-081 5 retries w/ backoff; POST /retry | ✅ in-process (Temporal **stub**) | `runner.execute`, `ingestions.retry` | AC-12 |
+| ING-FR-081 5 retries w/ backoff; POST /retry | ✅ in-process (the only execution path this deployment has) | `runner.execute`, `ingestions.retry` | AC-12 |
 | ING-FR-082 tenant caps (5 running / 20 uploads) | ✅ | `runner._acquire_slot`, `uploads.create` | `test_tenant_concurrency_cap…` |
 | ING-FR-083 PII scan (S) | ❌ **stub**: `pii_tags: []` emitted, Presidio TODO | `runner.py` | — |
 | MASTER-FR-001/003/004 RLS + cross-tenant 404 + audit + isolation suite | ✅ (audit fires under RLS via SECURITY DEFINER `ing_owner_tenant`, migration `0002`) | migrations `0001`/`0002`, `store/db.py`, `services/common.py` | `test_rls_isolation.py` (incl. `test_f2_cross_tenant_denied_audit_fires_under_rls`), AC-3 |
@@ -220,13 +220,19 @@ and `JWKSKeyProvider` are exercised end-to-end in
   adapters, contract-tested with mocked transports/injected clients and
   credential-gated for a live run (Spanner also runs against its emulator).
 - Still deferred: direct-to-storage presigned part URLs (`direct=true`),
-  Temporal workflows / `TemporalScheduler`, **`presto`/Trino federation** and an
-  **`iceberg` source type** (pyiceberg scan of an existing table), wiring the
-  object-store source into a runner **file-poll schedule** (ING-FR-064: the
-  `ObjectSourceIngestor` pipeline is real and reusable, but no new
-  `ingestion_mode`/schedule executor is added yet — like SFTP/HTTP, the fetchers
-  are proven at driver level), PII scan, webhook buffer flush→Iceberg, monthly
-  partition rotation (pg_partman), Helm chart / RUNBOOK.
+  **`presto`/Trino federation** and an **`iceberg` source type** (pyiceberg
+  scan of an existing table), the single-file SFTP/FTP/HTTP `SourceFetcher`
+  pull path (drivers are real and driver-level tested, `container.fetchers`,
+  but no `ingestion_mode`/route consumes them — unlike `s3`/`gcs`/`azure_blob`,
+  which now run end-to-end via `file_poll`, ING-FR-064), PII scan, webhook
+  buffer flush→Iceberg, monthly partition rotation (pg_partman), Helm chart /
+  RUNBOOK.
+- No Temporal-backed scheduler or worker: `TemporalScheduler` was removed
+  (it never did anything but raise `NotImplementedError`). ingestion-service is
+  not in the Temporal-dependent service set (`deploy/services.yaml` — only
+  `agent-runtime` declares `needs: [..., temporal]`); `InProcessScheduler` +
+  inline `IngestionRunner` execution (`Settings.inline_execution`, real env
+  override `INGESTION_INLINE_EXECUTION`) is the only execution path today.
 - Redis-based consumer dedup / webhook `event_id` dedup: the shared
   `datacern_common.redisx.RedisDedupStore` (24h TTL) is available; the DB-table
   path remains for the wave-1 webhook dedup (same 24h semantics).

@@ -69,7 +69,7 @@ class NewDataset(_Body):
 
 
 class IngestionCreate(_Body):
-    ingestion_mode: Literal["file_upload", "query", "scheduled_run", "webhook_batch"]
+    ingestion_mode: Literal["file_upload", "query", "file_poll", "scheduled_run", "webhook_batch"]
     connection_id: str | None = None
     statement: str | None = None
     file_format: str | None = None
