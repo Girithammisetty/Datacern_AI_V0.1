@@ -68,6 +68,17 @@ FREEFORM_KINDS = {"memories"}
 
 DISPOSITION_CATEGORIES = {"true_positive", "false_positive", "benign", "inconclusive", "other"}
 
+# --- control_mappings (A6: regulatory control mappings as a product output) ---
+# Honesty contract: a control mapping is a MAPPING AID pointing at a platform
+# control the pack's author has verified in code — never a certification or a
+# compliance claim (see PACK_AUTHORING_GUIDE.md "Control mappings"). The linter
+# cannot verify that cited evidence actually implements the control (that is a
+# human/reviewer judgment made at authoring time); it only enforces that the
+# structure cannot ship an unsubstantiated or malformed claim.
+KNOWN_CONTROL_FRAMEWORKS = {"eu_ai_act", "nist_ai_rmf", "iso_42001"}
+CONTROL_MAPPING_STATUSES = {"implemented", "partial", "not_covered"}
+REQUIRED_CONTROL_MAPPING_FIELDS = ["framework", "control_id", "control_title", "platform_control"]
+
 
 @dataclass(slots=True)
 class Finding:
@@ -189,7 +200,110 @@ def lint_pack(pack_dir: str | Path) -> LintReport:
                                            "pack.yaml", f"/deferred/{i}/reason",
                                            "deferred entry should explain WHY the kind is deferred"))
 
+    # ---- control_mappings (A6) --------------------------------------------------
+    _lint_control_mappings(manifest.control_mappings, report)
+
     return report
+
+
+def _lint_control_mappings(control_mappings, report: LintReport) -> None:
+    """Validate the optional `control_mappings` block: `{disclaimer, mappings}`.
+
+    Absent or empty `control_mappings` is legal (most packs have none yet) —
+    only a PRESENT block is validated. Errors here block a publish because a
+    malformed or unsubstantiated control mapping is worse than none: it would
+    ship a compliance-adjacent claim nobody can trust.
+    """
+    if not control_mappings:
+        return
+    if not isinstance(control_mappings, dict):
+        report.findings.append(Finding(
+            "CONTROL_MAPPINGS_WRONG_SHAPE", "error", "control_mappings", "pack.yaml",
+            "/control_mappings",
+            "control_mappings must be a mapping with 'disclaimer' and 'mappings' keys"))
+        return
+
+    disclaimer = control_mappings.get("disclaimer")
+    if not isinstance(disclaimer, str) or not disclaimer.strip():
+        report.findings.append(Finding(
+            "CONTROL_MAPPINGS_MISSING_DISCLAIMER", "error", "control_mappings", "pack.yaml",
+            "/control_mappings/disclaimer",
+            "control_mappings.disclaimer is required: it must state that these are "
+            "mapping aids for the tenant's own compliance program, not a "
+            "certification, attestation, or legal determination of compliance"))
+
+    mappings = control_mappings.get("mappings")
+    if mappings is None:
+        mappings = []
+    if not isinstance(mappings, list):
+        report.findings.append(Finding(
+            "CONTROL_MAPPINGS_WRONG_SHAPE", "error", "control_mappings", "pack.yaml",
+            "/control_mappings/mappings", "control_mappings.mappings must be a list"))
+        return
+
+    seen: set[tuple[str, str]] = set()
+    for i, entry in enumerate(mappings):
+        ptr = f"/control_mappings/mappings/{i}"
+        if not isinstance(entry, dict):
+            report.findings.append(Finding("ENTRY_NOT_MAPPING", "error", "control_mappings",
+                                           "pack.yaml", ptr, "entry must be a mapping"))
+            continue
+
+        for f in REQUIRED_CONTROL_MAPPING_FIELDS:
+            if not str(entry.get(f) or "").strip():
+                report.findings.append(Finding(
+                    "MISSING_FIELD", "error", "control_mappings", "pack.yaml", f"{ptr}/{f}",
+                    f"required field {f!r} is missing or empty"))
+
+        framework = entry.get("framework")
+        if framework and framework not in KNOWN_CONTROL_FRAMEWORKS:
+            report.findings.append(Finding(
+                "UNKNOWN_FRAMEWORK", "error", "control_mappings", "pack.yaml", f"{ptr}/framework",
+                f"framework {framework!r} is not a known key "
+                f"{sorted(KNOWN_CONTROL_FRAMEWORKS)} — add it to lint.py "
+                f"KNOWN_CONTROL_FRAMEWORKS only after confirming the platform "
+                f"actually implements a mappable control for it"))
+
+        status = entry.get("status") or "implemented"
+        if status not in CONTROL_MAPPING_STATUSES:
+            report.findings.append(Finding(
+                "UNKNOWN_STATUS", "error", "control_mappings", "pack.yaml", f"{ptr}/status",
+                f"status {status!r} must be one of {sorted(CONTROL_MAPPING_STATUSES)}"))
+
+        evidence = entry.get("evidence")
+        non_empty_evidence = [e for e in (evidence or []) if str(e or "").strip()] \
+            if isinstance(evidence, list) else []
+        if status == "not_covered":
+            # An honest gap: no implemented control to cite. Evidence must stay
+            # empty (a not_covered entry citing "evidence" would misrepresent
+            # the gap as covered) and platform_control must say so explicitly.
+            if non_empty_evidence:
+                report.findings.append(Finding(
+                    "NOT_COVERED_HAS_EVIDENCE", "error", "control_mappings", "pack.yaml",
+                    f"{ptr}/evidence",
+                    "status is 'not_covered' but evidence is non-empty — either "
+                    "the control IS implemented (set status accordingly) or this "
+                    "entry must not cite evidence for a gap"))
+        else:
+            if evidence is not None and not isinstance(evidence, list):
+                report.findings.append(Finding(
+                    "CONTROL_MAPPINGS_WRONG_SHAPE", "error", "control_mappings", "pack.yaml",
+                    f"{ptr}/evidence", "evidence must be a list of repo paths or feature names"))
+            elif not non_empty_evidence:
+                report.findings.append(Finding(
+                    "EMPTY_EVIDENCE", "error", "control_mappings", "pack.yaml", f"{ptr}/evidence",
+                    "mapping cites no evidence — an implemented/partial control "
+                    "mapping must point at real evidence (a repo path or a "
+                    "documented feature name), or its status must be "
+                    "'not_covered'"))
+
+        key = (str(framework), str(entry.get("control_id")))
+        if key in seen:
+            report.findings.append(Finding(
+                "DUPLICATE_CONTROL_MAPPING", "error", "control_mappings", "pack.yaml", ptr,
+                f"duplicate mapping for framework={framework!r} control_id="
+                f"{entry.get('control_id')!r}"))
+        seen.add(key)
 
 
 def _entries(kind: str, doc) -> list[tuple[str, object]] | None:
