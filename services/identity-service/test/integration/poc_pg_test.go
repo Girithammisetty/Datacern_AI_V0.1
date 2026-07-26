@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/datacern-ai/identity-service/internal/adapters/keycloak"
+	"github.com/datacern-ai/identity-service/internal/adapters/terraform"
 	"github.com/datacern-ai/identity-service/internal/domain"
 	pgstore "github.com/datacern-ai/identity-service/internal/store/postgres"
 )
@@ -67,7 +69,22 @@ func TestPocSuccessCriteriaRoundTripOnPostgres(t *testing.T) {
 	// already exists" (confirmed live in CI, since Docker/Postgres are
 	// unavailable in the dev sandbox this test was authored in).
 
-	tenants := &domain.TenantService{Store: store, Graph: domain.DefaultModuleGraph(), Clock: time.Now}
+	// PocService.Create unconditionally calls Tenants.Publish (poc_service.go:
+	// "publish explicitly below, after criteria are recorded"), which drives
+	// Engine.Provision through TenantService.runWorkflow -- a nil Engine
+	// panics (nil pointer dereference) the moment Publish runs, since Async
+	// defaults false and runWorkflow calls the workflow fn inline rather than
+	// swallowing it in a goroutine. Wire the same fake-backed Engine
+	// TestAPITenantIsolationOnPostgres (api_pg_test.go) already uses so the
+	// real saga actually runs against fake Keycloak/Terraform/DB/Prober
+	// adapters -- confirmed live in CI (Docker/Postgres are unavailable in
+	// the dev sandbox this test was authored in, so the nil Engine was never
+	// exercised until now).
+	deps := domain.StepDeps{Store: store, Keycloak: keycloak.NewFake(), Terraform: terraform.NewFake(), DB: terraform.NewFakeDB(), Prober: &terraform.FakeProber{}}
+	cfg := domain.DefaultEngineConfig()
+	cfg.Backoff = func(int) time.Duration { return 0 }
+	engine := domain.NewEngine(store, cfg, deps.ProvisionSteps, deps.DestroySteps, nil)
+	tenants := &domain.TenantService{Store: store, Engine: engine, Graph: domain.DefaultModuleGraph(), Prober: deps.Prober, Clock: time.Now}
 	commercial := &domain.CommercialService{Store: store, Clock: time.Now}
 	valueReader := &fakePocValueReader{views: map[string]*domain.ValueSummaryView{}}
 	exports := &fakePocExportStore{}
