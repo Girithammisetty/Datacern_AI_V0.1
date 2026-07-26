@@ -1,6 +1,6 @@
 # BRD 69 — Value & ROI Reporting
 
-**Status:** design — 2026-07-25
+**Status:** design — 2026-07-25 (§3 records slices 1-4, implemented through 2026-07-26)
 **Related:** [BRD 69](../brd/69_value_roi_reporting_BRD.md) (value & ROI reporting), [BRD 67](../brd/67_value_metering_billing_export_BRD.md) (value metering & billing export — dependency), [BRD 55](../brd/55_decision_outcome_monitoring_BRD.md) (decision outcome monitoring — future enrichment), [BRD 17](../brd/17_usage_service_BRD.md) (usage-service), [`00_MASTER_BRD.md`](../brd/00_MASTER_BRD.md), roadmap [`DATACERN_COMPETITIVE_LANDSCAPE_AND_GTM_ROADMAP.md`](../DATACERN_COMPETITIVE_LANDSCAPE_AND_GTM_ROADMAP.md) §6 B5
 
 ---
@@ -786,6 +786,152 @@ there before a non-platform-admin persona can exercise it in a live cell.
   `ladder_savings_usd`) remains fully unbuilt, tracked as a BRD 67 dependency
   as before.
 
+### Slice 4 — close the `decisions.by_kind` gap (2026-07-26) — DONE
+
+Slices 1-3 above (2026-07-25) shipped `hours_saved_est`/`labor_value_est_usd`/
+`human_baseline_cost_usd`/`net_value_est_usd` always `null` in real deployments
+because `decisions.by_kind` could never populate from the real store — BRD 67
+slice 1 widened `usage_hourly/daily/monthly` with `pack_name`/`decision` only
+(migrations/000004_value_meters.up.sql), keeping `proposal_kind`
+raw-detail-only in `usage_raw.meta`, never rolled up. This was flagged in
+"Known limits" below as "the single biggest gap between the pitch and the
+product" (per `value-metering-billing-export.md` §1a) still open at the
+dashboard layer. `internal/valuecalc.BuildSummary` already implemented and
+unit-tested the per-kind formula against a synthetic fixture — it was only
+ever missing real input data, exactly as this doc's own test-plan language
+anticipated. This slice supplies that data.
+
+**What was built:**
+
+- Migration `services/usage-service/migrations/000007_governed_decision_kind.{up,down}.sql`
+  — promotes `proposal_kind` from `usage_raw.meta` (raw-detail-only) to a
+  physical rollup-worthy column, following the **exact same pattern**
+  migration 000004 already established for `pack_name`/`decision`: nullable
+  on `usage_raw`, `NOT NULL DEFAULT ''` + widened `PRIMARY KEY` on
+  `usage_hourly`/`usage_daily`/`usage_monthly`. This deliberately does NOT
+  build the dedicated `governed_decision_daily`/`monthly` rollup pair §2.5
+  originally specified — that fork was already abandoned when BRD 67 slice 1
+  shipped option (a) instead (see "Repo-state finding" above); extending the
+  same generic tuple a second time is the smaller, convention-matching diff,
+  at the same "a few permanently-empty columns on every infra meter's rollup
+  rows" cost already accepted for `pack_name`/`decision`.
+- `internal/domain/types.go`: `MeterRecord.ProposalKind *string` (physical
+  dim, alongside the existing `PackName`/`Decision`).
+- `internal/ingest/mapping.go`: `governedDecisionDims()` gained
+  `"proposal_kind": "proposal_kind"`; `governedDecisionMeta()` lost it (no
+  longer duplicated into `usage_raw.meta` — `decision_latency_ms`/
+  `edit_distance_bucket` remain the only genuinely raw-detail-only fields).
+- `internal/ingest/pipeline.go`: extracts `rec.ProposalKind` the same way as
+  `PackName`/`Decision`.
+- `internal/store/raw.go` (`InsertRaw`) and `internal/store/rollups.go`
+  (`RefreshRollups`): persist/aggregate the new column through all three
+  rollup tables, `GROUP BY`/`ON CONFLICT` tuples widened to match.
+- `internal/store/value_summary.go` (`ValueSummaryInputs`): now selects
+  `proposal_kind` from `usage_monthly` and populates
+  `DecisionsBreakdown.ByKind` — this is the one query
+  `valuecalc.BuildSummary` was always waiting on. `internal/store/value_trend.go`
+  needed no change; it already reuses `ValueSummaryInputs`.
+- **A real honesty bug found and fixed while doing this:**
+  `valuecalc.BuildSummary`'s per-kind loop summed `count * minutes` only for
+  matched kinds, but set `HoursSavedEst`/etc. whenever `len(d.ByKind) > 0`
+  regardless of whether *any* kind actually matched an assumption entry. Once
+  `ByKind` started carrying real data, a tenant whose assumptions cover kind
+  A but whose decisions this period are entirely kind B would have received
+  `hours_saved_est: {"value": 0, ...}` — a fabricated "we computed zero"
+  number indistinguishable from a genuine zero, violating ROI-NFR-004. This
+  case was unreachable before this slice (`ByKind` was always empty in
+  practice) and had no test covering it. Fixed: the four `*_est` fields are
+  now only set when at least one decision kind actually matched an assumption
+  entry (`matchedAnyKind`); otherwise they stay `nil` and a new
+  `valuecalc.GapNoMatchingAssumption` message is disclosed via
+  `provenance.meter_gap`. Covered by
+  `TestBuildSummary_ByKind_NoMatchingAssumption` and
+  `TestBuildSummary_ByKind_PartialMatch` (the latter proves a *partial* match
+  — decisions span a matched and an unmatched kind — correctly computes the
+  estimate from only the matched kind's decisions, per ROI-FR-010's own "using
+  ONLY kinds the tenant has set minutes for" rule).
+- Doc comments updated to stop describing this as a permanent gap:
+  `internal/domain/value.go`'s `DecisionsBreakdown`, `internal/valuecalc/valuecalc.go`'s
+  package doc and `GapNoByKind`, `internal/domain/types.go`'s `MeterRecord`/
+  `Catalog()` comments.
+- **ui-web / bff-graphql: no changes needed**, confirmed by inspection before
+  writing any code — `services/bff-graphql/src/schema/map.ts:1801` already
+  maps `byKind: d.decisions.by_kind ?? {}` generically, and
+  `services/ui-web/src/app/(app)/admin/value/page.tsx`'s tiles already render
+  whatever `hours_saved_est`/`net_value_est_usd` the API returns (null or
+  populated) via `AsyncBoundary` — the honesty-null rendering path was already
+  correct, it simply never received a populated value to render until now.
+
+**Tests written:**
+
+- `internal/valuecalc/valuecalc_test.go`: `TestBuildSummary_ByKind_NoMatchingAssumption`,
+  `TestBuildSummary_ByKind_PartialMatch` (new, both above). The pre-existing
+  `TestBuildSummary_Tier1_WithByKind_AC1` (AC-1's exact $740,400/4,113.3
+  fixture) needed no change — it already proved the formula; this slice proves
+  the formula now receives real data.
+- `internal/ingest/governed_decision_test.go`: updated
+  `TestGovernedDecisionMapping_HumanApprove` to assert `r.ProposalKind` (not
+  `r.Meta["proposal_kind"]`) and that `proposal_kind` is no longer duplicated
+  into `meta`.
+- `test/integration/governed_decision_test.go`: `queryGovernedDecisionRow`
+  now reads the physical `proposal_kind` column instead of `meta->>'proposal_kind'`.
+- `test/integration/value_test.go`: new
+  `TestAC_HoursSavedEst_ComputesRealNumber_WhenByKindAvailable` — publishes 3
+  real `governed_decision` events (via Kafka, through the real ingest
+  pipeline) all carrying `proposal_kind="case"`, sets assumptions covering
+  `"case"`, and asserts `GET /api/v1/value/summary` returns real, non-null
+  `hours_saved_est`/`net_value_est_usd` with the exact expected values (0.75h,
+  $90) — the literal "tiles show real numbers, not null" acceptance case this
+  whole gap was about.
+
+**Verified (run in this environment):**
+
+- `cd services/usage-service && go build ./... && go vet ./... && go test -short -count=1 ./...`
+  → clean build, clean vet, **37 tests pass, 0 fail** (up from 35 before this
+  slice — the two new `valuecalc` honesty tests), no regressions across every
+  pre-existing package.
+- `go vet ./test/integration/...` → clean (the new integration test compiles
+  correctly).
+- **Real local Postgres end-to-end verification** (Docker/Kafka/Redis/OPA are
+  all unavailable in this environment — confirmed via `docker ps`,
+  `/dev/tcp/localhost/{9092,6379,8281}` all refused — but a local Postgres 16
+  was started via `service postgresql start` and a `datacern`/`datacern_dev`
+  superuser role created for this purpose). A throwaway Go program (run via
+  `go run`, deleted afterward — never committed, not part of the deliverable)
+  exercised the real store directly, bypassing Kafka by calling
+  `store.InsertRaw` the same way the ingest pipeline does:
+  1. `store.Migrate` against a fresh `usage_verify` database — confirms
+     migration 000007 applies cleanly on top of 000001-000006.
+  2. Inserted 12,340 synthetic `governed_decision` raw rows, all
+     `proposal_kind="claims_disposition"`, `decision="approved"` — AC-1's
+     exact fixture shape.
+  3. `RefreshRollups` → `ValueSummaryInputs` → confirmed
+     `decisions.by_kind == {"claims_disposition": 12340}` read back from real
+     `usage_monthly` rows.
+  4. `PutAssumptions` (20 min/decision, $180/hr) → `valuecalc.BuildSummary`
+     produced `hours_saved_est.value = 4113.3`, `net_value_est_usd.value =
+     740400` — AC-1's exact numbers, computed end-to-end from real Postgres
+     rollup data, not a synthetic `valuecalc` fixture.
+  5. A second tenant with one decision of `proposal_kind="underwriting_review"`
+     and assumptions covering only `"claims_disposition"` confirmed
+     `hours_saved_est` renders `null` with `provenance.meter_gap` explaining
+     why — the honesty-fix case above, proven against real Postgres too.
+- **Not run:** the new `test/integration/value_test.go` test
+  (`TestAC_HoursSavedEst_ComputesRealNumber_WhenByKindAvailable`) itself,
+  because the full integration harness additionally needs a `datacern`
+  database (not just role), Kafka, Redis, and OPA together in one `setup()`
+  gate — none of Kafka/Redis/OPA are available here. It auto-skips with the
+  standard "real infra unavailable" message, matching every other test in
+  this tier; confirmed via `go test ./test/integration/... -run
+  TestAC_HoursSavedEst...` printing `--- SKIP`. The manual Postgres-only
+  verification above is a substitute proof for the store/rollup logic, not a
+  substitute for this specific HTTP+Kafka test — that remains genuinely
+  unverified live in this environment, same honesty caveat as every other
+  integration test in this initiative's history.
+- **Not touched:** `golangci-lint`/full `make lint`, ui-web/bff-graphql test
+  suites (no source changes there, so not re-run this pass — see "no changes
+  needed" above), Playwright live journeys, e2e driver.
+
 ### Test plan — results
 
 All commands below were actually run in this environment; pass/fail counts
@@ -878,11 +1024,25 @@ environment cannot run.
 
 Tier 2 (`usage_decisions`, `savings_usd_est`, true `attributed` cost basis,
 `ladder_savings_usd`) remains fully unbuilt — a BRD 67 dependency, unchanged
-from the original plan. **New finding this pass:** `decisions.by_kind` and
-every assumption-derived `*_est` figure are ALSO blocked today, not by BRD 67
-being unbuilt, but by a schema choice BRD 67 slice 1 already made (generic
-rollup widening instead of this design's preferred dedicated
-`governed_decision` rollup with `proposal_kind`) — see "Repo-state finding"
-above. The math itself is implemented and proven correct against AC-1's exact
-numbers via a synthetic fixture (`internal/valuecalc`); only the real-store
-wiring for `by_kind` is pending a BRD 67 schema change.
+from the original plan.
+
+**`decisions.by_kind` / `hours_saved_est` / `net_value_est_usd` gap: CLOSED
+2026-07-26 (Slice 4 above).** Previously: not blocked by BRD 67 being
+unbuilt, but by a schema choice BRD 67 slice 1 already made (generic rollup
+widening instead of this design's preferred dedicated `governed_decision`
+rollup with `proposal_kind`) — see "Repo-state finding" above for the
+history. Migration `000007_governed_decision_kind` promotes `proposal_kind`
+to a physical rollup column on the same generic `usage_hourly/daily/monthly`
+tables (matching, not replacing, BRD 67's own convention), and
+`internal/store/value_summary.go` now reads it into `decisions.by_kind`. The
+`internal/valuecalc` math (already proven correct against AC-1's exact
+numbers via a synthetic fixture) now receives real input: verified against a
+real local Postgres instance to reproduce AC-1's exact $740,400/4,113.3
+figures end-to-end (see Slice 4's "Verified" list). **What is still not
+verified live:** the real Kafka→ingest→rollup→HTTP path (Kafka/Redis/OPA are
+unavailable in this sandbox), covered by the new but not-yet-run
+`TestAC_HoursSavedEst_ComputesRealNumber_WhenByKindAvailable` integration
+test, and the UI rendering a populated (non-null) tile in a live browser
+(covered by the existing, also not-yet-run, Playwright live journey). Both
+are written and compile-checked, not executed, per this doc's established
+honesty convention for this environment.
