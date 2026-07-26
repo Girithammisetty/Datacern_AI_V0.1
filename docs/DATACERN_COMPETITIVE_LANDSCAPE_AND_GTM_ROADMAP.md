@@ -1,7 +1,7 @@
 # Datacern AI — Competitive Landscape & Agentic-Platform + GTM Roadmap
 
-**Prepared:** 2026-07-25 · **Audience:** founder / strategy · **Status:** analysis + prioritized roadmap
-**Inputs:** full codebase audit (23 services, 30 packs, 66 BRDs), mid-2026 competitive research (web-sourced, cited), GTM feature-pattern research across enterprise AI/data platforms.
+**Prepared:** 2026-07-25 · **Updated:** 2026-07-26 (full status re-verification against code — every claim below re-checked; stale statements corrected in place and items annotated ✅ built / 🟡 partial / ❌ not started) · **Audience:** founder / strategy · **Status:** analysis + prioritized roadmap
+**Inputs:** full codebase audit (23 services, **28 packs — 27 installable verticals + 1 shared `library` pack**, **71 BRDs**), mid-2026 competitive research (web-sourced, cited), GTM feature-pattern research across enterprise AI/data platforms.
 
 Companion docs: [`DATACERN_PARTNER_BRIEFING.md`](DATACERN_PARTNER_BRIEFING.md) (partner motion), [`DATACERN_REALTIME_HEALTHCARE_POSITION.md`](DATACERN_REALTIME_HEALTHCARE_POSITION.md) (healthcare objection handling), [`DATACERN_2035_VISION.md`](DATACERN_2035_VISION.md) (5–10 year direction; this doc governs the 0–24 month window).
 
@@ -15,11 +15,11 @@ Datacern's engineering position is unusually strong for a pre-revenue platform: 
 
 Hyperscalers log after the fact; Databricks/Snowflake govern only their own perimeter; Credo/Holistic document AI but don't run it; gateways route but don't approve; Sierra/Fin are single-vertical apps. The market has also handed Datacern two live urgency levers: **EU AI Act high-risk enforcement (Aug 2026)** and the **SR 11-7 → SR 26-2 replacement (Apr 2026)**, which explicitly left GenAI/agentic AI out of scope — banks must self-govern agents under regulatory uncertainty, and they will buy defensible controls.
 
-The gap is entirely commercial. Three blunt facts from the code audit:
+The gap is entirely commercial. Three blunt facts from the 07-25 code audit — **status re-verified 07-26 after BRDs 66/67/69/70 shipped**:
 
-1. **Money cannot change hands.** Rate cards price meters, but nothing invoices, charges, or collects; there is no payment provider, no plan/entitlement/trial object anywhere in the repo — and no `governed_decision` meter despite "per-decision pricing" being the pitch.
-2. **There is no self-serve path at all.** No signup, no sandbox, no trial — the `/welcome` page doesn't even link to `/login`. Every motion is demo-request → manual tenant-provisioning script.
-3. **Zero product analytics.** OTel exists, but nothing answers "which packs get used, where do users drop off, who is about to churn or expand."
+1. **Money still cannot change hands — but the objects now exist.** 🟡 Since 07-25: a real commercial plane shipped — 4 seeded plans, 5 entitlement kinds with per-tenant overrides (`identity-service/migrations/0010-0011`), a `commercial_state` machine with trial start/extend/convert endpoints and a leader-elected expiry sweep (`trial_sweep.go`, wired in `main.go`), and the `governed_decision` + `auto_executed_action` meters emitting from real proposal decisions with value-shaped dims and rollup tests. **Still true:** no payment provider, no invoicing, nothing collects (repo-wide zero hits for any billing vendor). **New finding:** enforcement is partial — only `seat_cap` (invites) and `workspace_cap` actually block anything; `pack_sku`/`feature`/`meter_allowance` entitlements and trial expiry are recorded but unenforced (`EEntitlementRequired`/`ETrialExpired` have zero production call sites). The commercial plane can *describe* a customer relationship it cannot yet fully *enforce*.
+2. **A self-serve path now exists end-to-end.** ✅ Public demo signup (`POST /public/demo-signup`: forced default pack, per-IP/domain rate limits, disposable-email denylist) → `/live-demo` UI with 201/202+claim-poll flows → demo-profile tenant with TTL + leader-elected reaper through the real destroy saga + global "DEMO — synthetic data" watermark → in-product guided walkthrough → POC mode with success criteria evaluated against live value metrics and checksummed report exports. `/welcome` now links to Sign in, `/live-demo`, and the public walkthrough page. **Still true:** demo-request lead capture is fire-and-forget (honeypot + validation added, but no persistent store, no dedupe, no confirmation email — an unset `DEMO_WEBHOOK_URL` means leads exist only in stdout).
+3. **Zero product analytics.** ❌ Still true — no PostHog/Segment/Amplitude/anything; nothing answers "which packs get used, where do users drop off." (Not to be confused with the per-tenant ROI/value reporting, which *did* ship — see §6 B5.)
 
 This document maps the landscape (§2–3), locks the differentiation thesis (§4), then lays out two prioritized roadmaps: agentic-platform hardening against the 2026 table-stakes checklist (§5) and the GTM feature build (§6), with quick wins (§7) and a consolidated backlog (§8).
 
@@ -35,17 +35,20 @@ This document maps the landscape (§2–3), locks the differentiation thesis (§
 | Audit: per-tenant/day hash chains (ClickHouse) + 7-yr WORM Parquet under Object-Lock + SOC 2 / EU AI Act evidence-pack endpoints | "Evidence-grade audit" — directly sellable against EU AI Act Art. 12/14 and the SR 26-2 vacuum |
 | ai-gateway: normative pipeline (guardrails → cache → budget → ladder → provider failover), hierarchical hard budgets that 402 fail-closed | "Your AI bill structurally cannot run away" — a selling feature, already true in code |
 | usage-service: 7 versioned meters incl. per-agent dims, rollups, showback CSV, rate cards, budget threshold events, anomaly detection, provider-bill reconciliation | 80% of a billing system's hard half (metering/rating raw material) already exists |
-| 30 vertical packs + governed install saga (dry-run plan, origin-tagged ledger, upgrade/rollback/drift, four-eyes on data-chain) + `packctl` lint | The ecosystem/distribution thesis has a real substrate — what's missing is registry/signing/monetization, not the install machinery |
+| 28 packs (27 installable verticals + 1 shared `library` pack) + governed install saga (dry-run plan, origin-tagged ledger, upgrade/rollback/drift, four-eyes on data-chain) + `packctl` lint + fleet coherence checker | The ecosystem/distribution thesis has a real substrate — what's missing is registry/signing/monetization, not the install machinery |
 | MCP gateway (pinned spec 2025-06-18), A2A signed agent cards, external-agent SDK (`sdk/agent-python`) | Interop posture already matches where the market converged (MCP is the universal standard; AWS/Snowflake/Databricks all adopted it) |
 | Eval-service: deterministic gates + LLM-judge (never gate alone), CI gate API, canaries with bootstrap CIs, agent SLOs | Maps directly onto bank model-validation language (challenger review, ongoing monitoring) |
 | Learning loop M1–M2 live (transcripts → SFT datasets), M3 control plane built (GPU behind honest `GpuTrainer` port) | The "cost-per-decision declines with tenure" margin story — no major competitor has this narrative |
-| `/welcome` (12 segments, 4 industries, no-invented-numbers rule), persona-scoped Help Center, demo-tenant tooling (`make demo-load PACK=…`) | Raw material for the self-serve funnel — currently unconnected to any funnel |
+| `/welcome` (12 segments, 4 industries, no-invented-numbers rule) + public walkthrough page, persona-scoped Help Center, **self-serve demo funnel now live** (public signup → sandboxed demo tenant with TTL reaper + watermark → guided walkthrough → POC mode with live success metrics) | The funnel exists (07-26); what it still lacks is analytics (B8), lead persistence (B4), and trust/legal pages (B9) |
+| **Commercial plane (BRD 66, new since 07-25):** plans / 5 entitlement kinds / trials with leader-elected expiry sweep; `governed_decision` + `auto_executed_action` value meters (BRD 67); per-tenant ROI dashboard `/admin/value` with honest-null estimates (BRD 69); agent fleet Control-Tower page slice 1 (BRD 68) | The pitch-vs-code gap on "per-decision pricing" is closed at the metering layer; enforcement and billing remain (see §1 fact 1) |
 
 ### 2.2 Honest gaps (from the repo's own docs + audit)
 
-- No production cloud deployment (IaC written, never applied); no SOC 2/HITRUST (identified as the #1 revenue blocker, not started); scale proven at demo volume only; single-developer bus factor.
-- Bedrock/Vertex providers raise `ProviderNotConfigured`; gVisor sandbox off-path; Presidio/ML guardrail classifiers are documented upgrade stubs (regex/heuristic versions are real); per-decision cost attribution (USG-FR-080..086) is design-only; SCIM returns 501.
-- Several ui-web admin screens honestly render "not yet wired" panels.
+- No production cloud deployment (IaC written, never applied); no SOC 2/HITRUST (identified as the #1 revenue blocker, not started); scale proven at demo volume only; single-developer bus factor. *(All still true 07-26.)*
+- Bedrock/Vertex providers still raise `ProviderNotConfigured` (4 real adapters: ollama, openai, azure_openai, anthropic); gVisor sandbox still off-path; Presidio/ML guardrail classifiers still documented upgrade stubs — though the regex tier improved (PERSON/ADDRESS patterns now real, Luhn-checked cards); SCIM still 501 (wildcard `/scim/v2/*`).
+- Per-decision cost attribution: **partially closed** — decisions are now counted and segmented (`governed_decision` meter with pack/decision/kind dims), but `cost_per_decision` is a blended tenant/period average; the Tier-2 `usage_decisions` grain and token→proposal join are not built (the code's own `GapNoAttribution` string is the precise formulation).
+- ~~Several ui-web admin screens render "not yet wired" panels~~ **Resolved 07-26:** zero admin pages use `NotWiredPanel` anymore; remaining honest gaps are one dataset-profile panel and one inline note on `/admin/value` (distilled-rung share).
+- **New (07-26 validation):** entitlement enforcement covers 2 of 5 kinds; trial expiry transitions state but blocks nothing; `datacern-agent` SDK unpublished (README corrected to repo-path install).
 
 ---
 
@@ -75,8 +78,8 @@ This document maps the landscape (§2–3), locks the differentiation thesis (§
 | Governed memory/RAG with row-level security | ✅ Built (4 scopes, schema-per-tenant + RLS, erasure cascade) |
 | Observability + cost dashboards + audit | ✅ Built |
 | SOC 2 / HIPAA deployment, SSO/SCIM, VPC/self-host | ⚠️ Self-host + BYO-IdP real; **certifications not started; SCIM 501** |
-| Agent registry/inventory with lifecycle states ("Control Tower") | ⚠️ Exists functionally (catalog, versions, kill switches, rollouts) but not packaged/marketed as a fleet-governance surface |
-| Consumption metering with transparent unit economics | ⚠️ Metering real; **no value-shaped meter, no published pricing, no billing** |
+| Agent registry/inventory with lifecycle states ("Control Tower") | ✅ **Slice 1 shipped 07-26**: `/admin/agents` fleet tiles + table (lifecycle, rollout, guardrails, eval gate, kill switch, spend, decisions) over a real `agentFleet` GraphQL query; ⚠️ realtime patching + inventory export (slices 2/3) pending |
+| Consumption metering with transparent unit economics | 🟡 Metering real **and value-shaped meters now exist** (`governed_decision`, `auto_executed_action` with decision/kind/pack dims); **still no published pricing, no billing** |
 
 Conclusion: Datacern **meets or exceeds nearly every 2026 table-stake on the engineering axis** and fails almost every commercial-packaging one. The roadmap below is weighted accordingly.
 
@@ -98,13 +101,13 @@ Anti-goals (validated by research): don't build another agent framework; don't c
 
 Ordered by (regulated-buyer impact × effort). These close the remaining ⚠️ rows in §3.2 and sharpen the wedge.
 
-### A1. Ship the "Agent Control Tower" surface (packaging, ~90% built)
+### A1. Ship the "Agent Control Tower" surface — ✅ slice 1 DONE (07-26); export + realtime remain
 ServiceNow made fleet-level agent governance an expected surface. Datacern already has the parts: agent catalog + versions + A2A cards, kill switches, canary/shadow/pin/rollback, eval gates, per-agent cost dims, external-agent registry (BRD 60). Build **one admin page** (`/admin/agents` evolution) that presents: every agent (internal + external + tenant-custom) with lifecycle state, guardrail envelope, toolset, spend, eval status, last incident, kill switch — plus an exportable "agent inventory report" (EU AI Act system-inventory shaped). *Mostly UI + one BFF aggregation; disproportionate demo and compliance value.*
 
-### A2. Value-shaped metering: the `governed_decision` meter (critical, small)
+### A2. Value-shaped metering: the `governed_decision` meter — ✅ DONE (07-26)
 Add first-class meters for the unit of value: `governed_decision` (proposal decided), `case_resolved`, `auto_executed_action`, with dims (agent, pack, workspace, disposition, decision latency, human-edit distance). This closes the credibility gap between the pricing pitch ("per-decision usage") and the code (infra-shaped meters only), implements USG-FR-080..086, and is the substrate for billing (B1), the ROI dashboard (A3/B5), and any future outcome pricing. *Events already flow through `usage.metering.v1`; this is meter definitions + emission points in case-service/agent-runtime.*
 
-### A3. Outcome & ROI instrumentation (BRD 55 acceleration)
+### A3. Outcome & ROI instrumentation — 🟡 LARGELY DONE (07-26): `/admin/value` ships hours-saved / net-value / cost-per-decision with tenant-editable assumptions and honest-null provenance; remaining: BRD 55 outcome labels + Tier-2 per-decision cost grain
 Decision Outcome Monitoring is already designed (BRD 55) — prioritize it for *commercial* reasons, not just DI-completeness: outcome labels + per-decision cost + customer-editable time-saved assumptions = the exec value dashboard (§B5) that drives renewals (the Copilot Analytics / Glean-TEI pattern), and the measurement backbone if outcome pricing is ever offered.
 
 ### A4. Guardrail upgrades to ML-grade (named stubs → real)
@@ -133,25 +136,25 @@ Phased: **Phase 1 unblocks revenue capture → Phase 2 opens self-serve top-of-f
 
 ### Phase 1 — Monetization spine (money can change hands)
 
-**B1. Plans, entitlements & trials.** Introduce a commercial layer distinct from RBAC: `plan` (design-partner / pilot / enterprise / internal-demo), `entitlements` (pack SKUs, meter allowances, seat/workspace caps, feature gates), `trial` state with expiry on the tenant state machine. Builds on identity-service `Modules[]` (the proto-entitlement) and the provisioning saga. Every downstream GTM feature (trials, pack cross-sell, marketplace) depends on this object existing.
+**B1. Plans, entitlements & trials.** 🟡 **BUILT 07-26 with an enforcement gap.** Shipped: the 4 plans exactly as specced, 5 entitlement kinds + per-tenant overrides + Redis projection, `commercial_state` machine with trial start/extend/convert and a leader-elected expiry sweep with T-14/7/1 threshold events. **Remaining:** enforcement wires for `pack_sku` / `feature` / `meter_allowance` and for trial expiry itself (seat/workspace caps are the only kinds that block today — see §1 fact 1). Until those land, downstream features can *read* entitlements but customers can't be *held to* them.
 
 **B2. Metering → billing pipeline.** Don't build invoicing. Emit billable events from usage-service rollups + rate cards into a rating engine — **Lago** (AGPLv3, self-hostable — fits Datacern's self-host model and can ship inside customer VPCs) or **Stripe Billing/Metronome** for the hosted motion. Scope: billable-metric export, commitment/credit-wallet drawdown (the Salesforce Flex Credits / Temporal actions pattern), invoice generation, dunning. The BRD already anticipated this ("external billing system consumes chargeback exports") — now pick the system and wire it.
 
 **B3. Published pricing + cost calculator.** A public pricing page: platform floor + per-governed-decision tiers + hard budget caps ("73% of agentic-AI projects bust budget; ours structurally can't") + pack add-ons, with an interactive calculator fed by the same rate-card math. The clearest lesson from Fin-vs-Sierra research: modelable-before-sales-contact pricing wins trust; opaque pricing is the #1 buyer complaint against Sierra-class vendors.
 
-**B4. Lead capture hardening.** The demo-request webhook is fire-and-forget. Add: persistent lead store, dedupe, rate limiting, prospect confirmation email (notification-service already has real SMTP + templates), CRM forwarding. Hours of work; protects every lead the `/welcome` page ever generates.
+**B4. Lead capture hardening.** 🟡 Honeypot + field validation added; **still missing the parts that matter**: persistent lead store, dedupe, prospect confirmation email (notification-service already has real SMTP + templates), CRM forwarding. Today an unset `DEMO_WEBHOOK_URL` means a lead exists only in stdout. Hours of work; protects every lead the `/welcome` page ever generates.
 
-**B5. Exec value/ROI dashboard.** Per-tenant: governed decisions completed, approval/edit/reject mix, hours saved (customer-editable per-task-minute assumptions × decisions), cost-per-decision vs. human baseline ($180/hr clinician framing), model-ladder savings from distillation, adoption by team — exportable as a board-ready report. Builds on A2/A3 + existing CostPanel. This is the renewal weapon (Copilot Analytics / Glean 141%-ROI-TEI pattern) and it uniquely showcases the declining-cost-per-decision story.
+**B5. Exec value/ROI dashboard.** ✅ **BUILT 07-26** (`/admin/value`, BRD 69): governed decisions, approval/edit/reject mix, hours saved from customer-editable per-kind minute assumptions (never a fabricated default — honest nulls with `assumption v{n}` provenance), cost-per-decision (blended tier, disclosed), adoption, trend, and versioned checksummed value-report exports (JSON/CSV). **Remaining:** model-ladder savings line (needs ai-gateway rung dimension), true per-decision cost grain, and board-ready PDF packaging. This is the renewal weapon and it uniquely showcases the declining-cost-per-decision story.
 
 ### Phase 2 — Self-serve entry (see value before wiring data)
 
-**B6. Demo sandbox tenants (synthetic data, per vertical).** The no-dummy-data rule is right for *product* packs — keep it. Add a parallel, clearly-labeled **demo-tenant profile**: `make demo-load` already builds isolated seeded tenants per pack; productize that as (i) a hosted, resettable, cloneable-per-prospect sandbox for sales, and (ii) later, self-serve "explore a claims workspace" access from `/welcome`. Research: sandbox demos cut SE time ~30% and are the aha-moment vehicle for regulated buyers who cannot upload real data pre-contract.
+**B6. Demo sandbox tenants (synthetic data, per vertical).** ✅ **BUILT 07-26** (BRD 70): demo-tenant `profile` axis with `demo_pack` + `ttl_days`, TTL reaper through the real destroy saga (leader-elected, idempotent), global "DEMO — synthetic data" watermark, self-serve entry live from `/welcome` → `/live-demo` (rate-limited public signup, no credit card). **Remaining:** demo bundles exist for only 2 of 27 verticals (insurance-claims-payer, card-disputes) — bundle coverage is now the constraint on "explore *your* industry," and there's no per-prospect clone/reset control panel for SEs yet.
 
-**B7. POC mode + design-partner tooling.** A time-boxed POC tenant profile: pre-agreed success metrics captured at creation, a live success dashboard (from B5 metrics), expiry + conversion flow. Attacks the industry's ~5% pilot→production rate with the 90-day playbook (shadow → proposal → ROI report) already defined in the partner briefing. Design-partner variant: early-access flags + discounted entitlements (B1) + feedback instrumentation.
+**B7. POC mode + design-partner tooling.** ✅ **CORE BUILT 07-26** (BRD 70 slice 3): `poc` tenant profile, success criteria captured at creation (`{key, metric_ref, target, direction}` constrained to live value metrics: decisions, hours-saved, net-value, adoption, or manual), criteria evaluated against real usage-service rollups, trial-state coupling, checksummed `poc-report.v1` exports. **Remaining:** conversion flow UX, design-partner variant (early-access flags + discounted entitlements), feedback instrumentation.
 
 **B8. Product analytics.** Self-hostable analytics (PostHog fits the self-host posture) wired for: activation funnel (login → pack installed → first proposal → first approval), feature adoption per pack, per-persona engagement, drop-off. Without this, B6/B7 can't be tuned and expansion signals (B12) have no substrate. Respect tenancy: per-tenant opt-out, no PII in events.
 
-**B9. `/welcome` funnel completion.** Immediate fixes: sign-in link in header/footer; then add trust/security page, legal pages (privacy/terms/DPA), and — once B6 exists — a "explore the sandbox" secondary CTA beside "Request a demo". Keep the no-invented-numbers rule; replace the missing social proof with the sandbox itself.
+**B9. `/welcome` funnel completion.** 🟡 Done 07-26: sign-in link in header; "start a live demo yourself" CTA to the sandbox; public demo-walkthrough subpage; "illustrative mock" labeling on all stat tiles; `/live-demo` made actually public (middleware fix). **Remaining:** trust/security page, legal pages (privacy/terms/DPA), footer links. Keep the no-invented-numbers rule; replace the missing social proof with the sandbox itself.
 
 ### Phase 3 — Trust as GTM (win procurement)
 
@@ -171,45 +174,47 @@ Phased: **Phase 1 unblocks revenue capture → Phase 2 opens self-serve top-of-f
 
 ---
 
-## 7. Quick wins (days, not weeks)
+## 7. Quick wins (days, not weeks) — status 2026-07-26
 
-1. Sign-in link on `/welcome` header/footer (B9) — existing customers currently have no path to `/login`.
-2. `governed_decision` meter definition + emission (A2) — closes the pitch-vs-code gap.
-3. Lead-capture hardening: store + dedupe + confirmation email (B4).
-4. Prospect confirmation + welcome email templates in notification-service (supports B4/B1).
-5. "Agent inventory export" (CSV/PDF of agent catalog + versions + guardrails + eval status) as a first Control-Tower artifact (A1).
-6. BAA/DPA template docs in-repo + a first-pass security whitepaper from existing BRD/security content (B10).
-7. Trial/expiry field on the tenant state machine (first slice of B1).
-8. Publish `datacern-agent` to PyPI (B15).
+1. ✅ Sign-in link on `/welcome` header (B9) — done 07-26.
+2. ✅ `governed_decision` meter definition + emission (A2) — done, with rollup tests.
+3. ❌ Lead-capture hardening: store + dedupe + confirmation email (B4) — only honeypot/validation done; **now the top open quick win.**
+4. ❌ Prospect confirmation + welcome email templates in notification-service (supports B4/B1).
+5. ❌ "Agent inventory export" (CSV/PDF of catalog + versions + guardrails + eval status) — Control-Tower slice 3 (A1).
+6. 🟡 BAA/DPA templates ❌; security whitepaper ✅ (`docs/security/SECURITY_POSTURE.md`, code-cited, 07-26).
+7. ✅ Trial/expiry fields + sweep on the tenant state machine (B1) — done; **enforcement of expiry still open** (see B1).
+8. ❌ Publish `datacern-agent` to PyPI (B15) — unpublished; README overclaim fixed 07-26.
+
+**New quick wins surfaced by the 07-26 validation:** (9) wire `ETrialExpired`/`EEntitlementRequired` into token issuance / pack install / feature gates — the enforcement half of B1, small because the objects and projections exist; (10) demo bundles for 2–3 more flagship verticals (banking-aml, payer-fwa-siu) to widen B6's "explore your industry" coverage.
 
 ---
 
 ## 8. Consolidated priority view
 
-| # | Item | Roadmap | Effort | Unblocks |
-|---|---|---|---|---|
-| 1 | Value-shaped meters (`governed_decision`) | A2 | S | Pricing credibility, B2, B5 |
-| 2 | Plans / entitlements / trials | B1 | M | Everything commercial |
-| 3 | Billing pipeline (Lago or Stripe/Metronome) | B2 | M | Revenue capture |
-| 4 | Exec ROI/value dashboard | B5 | M | Renewals, POC conversion |
-| 5 | Agent Control Tower surface + inventory export | A1 | S–M | Demo, EU AI Act inventory |
-| 6 | Demo sandbox tenants (hosted, per vertical) | B6 | M | Top-of-funnel, sales efficiency |
-| 7 | SOC 2 start + trust center + BAA/DPA | B10 | M (long lead) | Every regulated deal |
-| 8 | Published pricing + calculator | B3 | S | Trust, inbound qualification |
-| 9 | Product analytics (self-hosted) | B8 | S–M | Funnel tuning, expansion signals |
-| 10 | POC mode + design-partner tooling | B7 | M | Pilot→production conversion |
-| 11 | Guardrails to ML-grade (Presidio/XPIA) | A4 | M | Security review survival |
-| 12 | Compliance artifacts as product output | A6 | M | Compliance-budget revenue |
-| 13 | Bedrock/Vertex adapters | A5 | S–M | Cloud-native deals, B12 |
-| 14 | Productized BYOC (zero-access split-plane) | B11 | L | Sovereignty deals |
-| 15 | Cloud marketplace listings + private offers | B12 | M | Procurement channel |
-| 16 | Pack marketplace v1 (sign → registry → SKUs) | B13 | L | Ecosystem thesis |
-| 17 | Expansion signals in-product | B14 | S | NRR |
-| 18 | Docs site + SDK expansion + Datacern MCP server | B15 | M | Developer wedge |
-| 19 | Online decision API + SLOs | A7 | M–L | Realtime verticals |
-| 20 | SCIM + tenant export | A9 | S | Procurement checklists |
+| # | Item | Roadmap | Effort | Status 07-26 | Unblocks |
+|---|---|---|---|---|---|
+| 1 | Value-shaped meters (`governed_decision`) | A2 | S | ✅ done | Pricing credibility, B2, B5 |
+| 2 | Plans / entitlements / trials | B1 | M | 🟡 built; enforcement 2/5 kinds, trial expiry unenforced | Everything commercial |
+| 3 | Billing pipeline (Lago or Stripe/Metronome) | B2 | M | ❌ | Revenue capture |
+| 4 | Exec ROI/value dashboard | B5 | M | ✅ done (ladder-savings + PDF pending) | Renewals, POC conversion |
+| 5 | Agent Control Tower surface + inventory export | A1 | S–M | 🟡 fleet page done; export + realtime pending | Demo, EU AI Act inventory |
+| 6 | Demo sandbox tenants (hosted, per vertical) | B6 | M | ✅ core done; 2/27 verticals bundled | Top-of-funnel, sales efficiency |
+| 7 | SOC 2 start + trust center + BAA/DPA | B10 | M (long lead) | ❌ (security posture doc ✅) | Every regulated deal |
+| 8 | Published pricing + calculator | B3 | S | ❌ | Trust, inbound qualification |
+| 9 | Product analytics (self-hosted) | B8 | S–M | ❌ | Funnel tuning, expansion signals |
+| 10 | POC mode + design-partner tooling | B7 | M | 🟡 POC core done; conversion/design-partner pending | Pilot→production conversion |
+| 11 | Guardrails to ML-grade (Presidio/XPIA) | A4 | M | ❌ (regex tier improved) | Security review survival |
+| 12 | Compliance artifacts as product output | A6 | M | ❌ (no control mappings in any pack manifest) | Compliance-budget revenue |
+| 13 | Bedrock/Vertex adapters | A5 | S–M | ❌ (4 providers real, 2 stubs) | Cloud-native deals, B12 |
+| 14 | Productized BYOC (zero-access split-plane) | B11 | L | ❌ | Sovereignty deals |
+| 15 | Cloud marketplace listings + private offers | B12 | M | ❌ | Procurement channel |
+| 16 | Pack marketplace v1 (sign → registry → SKUs) | B13 | L | ❌ | Ecosystem thesis |
+| 17 | Expansion signals in-product | B14 | S | ❌ (80/95/100% budget events exist to build on) | NRR |
+| 18 | Docs site + SDK expansion + Datacern MCP server | B15 | M | ❌ (SDK exists, unpublished) | Developer wedge |
+| 19 | Online decision API + SLOs | A7 | M–L | ❌ | Realtime verticals |
+| 20 | SCIM + tenant export | A9 | S | ❌ (SCIM still 501) | Procurement checklists |
 
-Sequencing logic: items 1–4 make the existing enterprise motion able to capture and defend revenue (no channel dependency); 5–10 make the platform *showable and buyable* without founder-led heroics; 11–15 win regulated procurement; 16–20 compound ecosystem and expansion. The design-partner motion (already defined in the partner briefing) should run in parallel from day one — items 6, 7, and 10 are what make it repeatable.
+Sequencing logic (unchanged, re-based on the 07-26 statuses): with items 1, 4, 6 and the cores of 2, 5, 10 now built, **the critical path narrows to: enforcement hooks (finish 2) → billing (3) → pricing page (8) → SOC 2 start (7)** — that sequence alone makes the platform able to sign, charge, and pass procurement for a first design partner. Items 11–15 win regulated procurement; 16–20 compound ecosystem and expansion. The design-partner motion should run in parallel from day one — 6, 7's trust center, and 10's conversion flow are what make it repeatable.
 
 ---
 
