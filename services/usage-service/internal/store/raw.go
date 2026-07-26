@@ -34,12 +34,12 @@ func (s *PG) InsertRaw(ctx context.Context, recs []domain.MeterRecord) (int, err
 				INSERT INTO usage_raw
 				  (time, tenant_id, meter_key, quantity, workspace_id, user_id,
 				   agent_id, model, cloud, resource_urn, event_id, late,
-				   pack_name, decision, meta)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+				   pack_name, decision, meta, proposal_kind)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 				ON CONFLICT (tenant_id, event_id, meter_key, time) DO NOTHING`,
 				r.Time, r.TenantID, r.MeterKey, r.Quantity, r.WorkspaceID, r.UserID,
 				r.AgentID, r.Model, r.Cloud, r.ResourceURN, r.EventID, r.Late,
-				r.PackName, r.Decision, metaJSON)
+				r.PackName, r.Decision, metaJSON, r.ProposalKind)
 			if err != nil {
 				return err
 			}

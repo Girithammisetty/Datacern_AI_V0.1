@@ -20,6 +20,7 @@ import (
 	"github.com/datacern-ai/identity-service/internal/authz"
 	"github.com/datacern-ai/identity-service/internal/domain"
 	"github.com/datacern-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/identity-service/internal/pocexport"
 	"github.com/datacern-ai/identity-service/internal/store/memory"
 )
 
@@ -60,6 +61,25 @@ func (f *fakeDemoSeedRunner) Seed(_ context.Context, _ *domain.Tenant, _ *domain
 	return nil
 }
 
+// fakeValueSummaryReader backs BRD 70 slice 3's PocService.Value in
+// acceptance tests -- a local stand-in for internal/adapters/valueclient's
+// real usage-service HTTP call (api_test can't reach a live usage-service).
+// Views is keyed by "tenantID|period"; a miss returns a "no data yet" view
+// (all fields nil, an explicit gap message) rather than an error, matching
+// what a real, freshly-provisioned tenant's first month would honestly look
+// like -- tests that need populated figures set Views explicitly.
+type fakeValueSummaryReader struct {
+	Views map[string]*domain.ValueSummaryView
+}
+
+func (f *fakeValueSummaryReader) Summary(_ context.Context, tenantID uuid.UUID, period string) (*domain.ValueSummaryView, error) {
+	if v, ok := f.Views[tenantID.String()+"|"+period]; ok {
+		return v, nil
+	}
+	gap := "no usage data recorded yet for this period"
+	return &domain.ValueSummaryView{Period: period, MeterGap: &gap, Raw: map[string]any{"period": period}}, nil
+}
+
 type fixture struct {
 	t      *testing.T
 	store  *memory.Store
@@ -77,6 +97,10 @@ type fixture struct {
 	srv    *api.Server
 	ts     *httptest.Server
 	cellID uuid.UUID
+	// pocValue backs f.srv.Poc.Value (BRD 70 slice 3) -- tests set
+	// pocValue.Views["<tenantID>|<YYYY-MM>"] to exercise met/missed progress
+	// against real-shaped (fake-sourced) usage-service data.
+	pocValue *fakeValueSummaryReader
 }
 
 func (f *fixture) tenants() *domain.TenantService { return f.tenSvc }
@@ -123,6 +147,9 @@ func newFixtureOpt(t *testing.T, trustSpiffe bool) *fixture {
 		Clock:   f.clock.Now,
 	}
 	commercial := &domain.CommercialService{Store: f.store, Clock: f.clock.Now}
+	valueReader := &fakeValueSummaryReader{Views: map[string]*domain.ValueSummaryView{}}
+	f.pocValue = valueReader
+	pocExports := pocexport.NewFSStore(t.TempDir(), "http://test.local", []byte("test-secret"))
 	f.srv = &api.Server{
 		Store: f.store, Tenants: tenants, Users: users, SAs: sas, Tokens: f.tokens,
 		KM: f.km, Verifier: f.issuer, Authz: authz.ScopeAuthorizer{},
@@ -136,10 +163,30 @@ func newFixtureOpt(t *testing.T, trustSpiffe bool) *fixture {
 		Demo: &domain.DemoService{
 			Store: f.store, Tenants: tenants, Commercial: commercial,
 			Bundles: demoLoader, Seed: demoSeed, Clock: f.clock.Now,
+			// BRD 70 v1.1: self-serve claim-login mints through the SAME
+			// fixture Issuer every other token in this test suite uses.
+			Tokens: f.tokens,
 		},
-		TrustedSpiffeIDs:  map[string]bool{testSpiffeAgentRuntime: true},
-		TrustSpiffeHeader: trustSpiffe, // F-2
-		Clock:             f.clock.Now,
+		// BRD 70 slice 3: POC-mode lifecycle. Value is the fake
+		// usage-service reader above (tests override valueReader.Views
+		// per-tenant/period to exercise met/missed/inconclusive); Exports
+		// is a real FSStore rooted at a t.TempDir() so download-artifact
+		// acceptance tests exercise the real checksum/signature path.
+		Poc: &domain.PocService{
+			Store: f.store, Tenants: tenants, Commercial: commercial, Value: valueReader, Exports: pocExports, Clock: f.clock.Now,
+		},
+		PocExports: pocExports,
+		// BRD 70 v1.1: generous defaults so ordinary acceptance tests never
+		// trip the abuse-prevention limits by accident -- tests that
+		// specifically exercise rate limiting / the concurrency cap
+		// (handlers_public_demo_test.go) override these fields directly on
+		// f.srv before making requests.
+		PublicDemoIPLimiter:     domain.NewSlidingWindowLimiter(1000, time.Hour),
+		PublicDemoDomainLimiter: domain.NewSlidingWindowLimiter(1000, 24*time.Hour),
+		PublicDemoSelfServeCap:  domain.DefaultSelfServeDemoCap,
+		TrustedSpiffeIDs:        map[string]bool{testSpiffeAgentRuntime: true},
+		TrustSpiffeHeader:       trustSpiffe, // F-2
+		Clock:                   f.clock.Now,
 	}
 	f.ts = httptest.NewServer(f.srv.Router())
 	t.Cleanup(f.ts.Close)

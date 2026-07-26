@@ -47,6 +47,12 @@ type demoCaseYAML struct {
 	Note              string         `yaml:"note"`
 }
 
+type demoWalkthroughStepYAML struct {
+	Title       string `yaml:"title"`
+	TargetRoute string `yaml:"target_route"`
+	Narration   string `yaml:"narration"`
+}
+
 // Load reads and parses deploy/demo/<pack>/{demo.yaml,personas.yaml,
 // cases.yaml,data/*.csv}. Every field packctl's demo-lint already validates
 // offline (packs/packctl/demo_lint.py) is re-validated here defensively
@@ -103,6 +109,21 @@ func (l *FSLoader) Load(pack string) (*domain.DemoBundle, error) {
 		})
 	}
 
+	var walkthroughYAML []demoWalkthroughStepYAML
+	// walkthrough.yaml is optional (Should, DSP-FR-015) -- same "absent file
+	// = empty slice, not an error" contract as cases.yaml above.
+	if _, err := os.Stat(filepath.Join(dir, "walkthrough.yaml")); err == nil {
+		if err := readYAML(filepath.Join(dir, "walkthrough.yaml"), &walkthroughYAML); err != nil {
+			return nil, fmt.Errorf("walkthrough.yaml: %w", err)
+		}
+	}
+	walkthrough := make([]domain.WalkthroughStep, 0, len(walkthroughYAML))
+	for _, s := range walkthroughYAML {
+		walkthrough = append(walkthrough, domain.WalkthroughStep{
+			Title: s.Title, TargetRoute: s.TargetRoute, Narration: s.Narration,
+		})
+	}
+
 	dataDir := filepath.Join(dir, "data")
 	entries, err := os.ReadDir(dataDir)
 	if err != nil {
@@ -124,6 +145,7 @@ func (l *FSLoader) Load(pack string) (*domain.DemoBundle, error) {
 	return &domain.DemoBundle{
 		Pack: manifest.Pack, PackVersion: manifest.PackVersion, Version: manifest.Version,
 		Provenance: manifest.Provenance, Datasets: datasets, Personas: personas, Cases: cases,
+		Walkthrough: walkthrough,
 	}, nil
 }
 

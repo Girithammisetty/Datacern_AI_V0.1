@@ -99,7 +99,7 @@ ok "infra reachable"
 
 # databases + pgvector
 say "ensuring per-service databases + pgvector"
-for db in identity rbac tool_plane case_svc realtimehub dataset ingestion ai_gateway agent_runtime memory pipeline experiment inference; do
+for db in identity rbac tool_plane case_svc realtimehub dataset ingestion ai_gateway agent_runtime memory pipeline experiment inference usage; do
   psql_q -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 || psql_q -d postgres -c "CREATE DATABASE $db" >/dev/null
 done
 for db in tool_plane dataset ai_gateway agent_runtime memory; do

@@ -11,10 +11,10 @@ import (
 const DefaultDemoTTLDays = 14
 
 // DemoBundle is the parsed form of a deploy/demo/<pack>/ bundle (§2.2):
-// demo.yaml + personas.yaml + cases.yaml, resolved against the target pack's
-// dataset identities. Walkthrough content (DSP-FR-015, Should) is
-// deliberately not modeled here -- it is out of scope for this slice (see
-// docs/initiatives/demo-sandbox-poc-mode.md §3 honest gaps).
+// demo.yaml + personas.yaml + cases.yaml + walkthrough.yaml, resolved
+// against the target pack's dataset identities. Walkthrough is optional
+// (Should, DSP-FR-015) -- a bundle with no walkthrough.yaml yields an empty
+// slice, not an error, mirroring cases.yaml's optionality.
 type DemoBundle struct {
 	Pack        string // target product pack name (packs/<pack>/)
 	PackVersion string // pins the installed pack version (§2.2)
@@ -22,9 +22,10 @@ type DemoBundle struct {
 	Provenance  string // no-real-PII attestation note (DSP-NFR-004)
 	// Datasets lists the identity -> CSV path the bundle ships under data/,
 	// resolved to an absolute filesystem path by the loader.
-	Datasets []DemoDataset
-	Personas []DemoPersona
-	Cases    []DemoCase
+	Datasets    []DemoDataset
+	Personas    []DemoPersona
+	Cases       []DemoCase
+	Walkthrough []WalkthroughStep
 }
 
 // DemoDataset is one data/<identity>.csv entry.
@@ -50,6 +51,19 @@ type DemoCase struct {
 	Severity          string         `json:"severity" yaml:"severity"`
 	DisplayProjection map[string]any `json:"display_projection" yaml:"display_projection"`
 	Note              string         `json:"note" yaml:"note"`
+}
+
+// WalkthroughStep is one ordered step of a bundle's walkthrough.yaml
+// (§2.2, DSP-FR-015): a guided-tour script an SE (or, once ui-web wires it
+// up, the in-product overlay) walks a demo tenant through. TargetRoute is
+// an app route (e.g. "/cases"), not a DOM selector -- the overlay
+// navigates the viewer to the route and shows Narration alongside it,
+// matching the granularity the shipped bundle actually authors at
+// (deploy/demo/insurance-claims-payer/walkthrough.yaml).
+type WalkthroughStep struct {
+	Title       string `json:"title" yaml:"title"`
+	TargetRoute string `json:"target_route" yaml:"target_route"`
+	Narration   string `json:"narration" yaml:"narration"`
 }
 
 // DemoBundleLoader resolves a pack name to its deploy/demo/<pack>/ bundle

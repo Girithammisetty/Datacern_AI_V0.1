@@ -35,6 +35,7 @@ import (
 	"github.com/datacern-ai/identity-service/internal/adapters/keycloak"
 	"github.com/datacern-ai/identity-service/internal/adapters/localinfra"
 	"github.com/datacern-ai/identity-service/internal/adapters/oidc"
+	"github.com/datacern-ai/identity-service/internal/adapters/valueclient"
 	"github.com/datacern-ai/identity-service/internal/adapters/vault"
 	"github.com/datacern-ai/identity-service/internal/api"
 	"github.com/datacern-ai/identity-service/internal/authz"
@@ -42,11 +43,34 @@ import (
 	"github.com/datacern-ai/identity-service/internal/domain"
 	"github.com/datacern-ai/identity-service/internal/events"
 	"github.com/datacern-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/identity-service/internal/pocexport"
 	"github.com/datacern-ai/identity-service/internal/projection"
 	"github.com/datacern-ai/identity-service/internal/rbacclient"
 	"github.com/datacern-ai/identity-service/internal/store/memory"
 	"github.com/datacern-ai/identity-service/internal/store/postgres"
 )
+
+// envInt reads a positive integer from env, falling back to def when unset
+// or unparseable/non-positive (BRD 70 v1.1 self-serve demo signup config).
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return def
+}
+
+// envMinutes reads a positive integer count of minutes from env and
+// returns it as a time.Duration, falling back to def when unset/invalid.
+func envMinutes(key string, def time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Minute
+		}
+	}
+	return def
+}
 
 func main() {
 	log := slog.New(otelx.WrapLogHandler(slog.NewJSONHandler(os.Stdout, nil)))
@@ -318,6 +342,39 @@ func main() {
 	if rbacURL != "" {
 		tokens.Workspaces = &rbacclient.WorkspaceResolver{BaseURL: rbacURL, Issuer: issuer, Log: log}
 	}
+	// BRD 70 v1.1: self-serve demo signup's claim-login flow (PublicSignup /
+	// ClaimSelfServeLogin, demo_public_signup.go) mints real session tokens
+	// through the same Issuer/Workspaces every other login path uses.
+	demo.Tokens = tokens
+
+	// BRD 70 slice 3: POC-mode lifecycle (create-with-criteria, progress,
+	// poc-report.v1 export). Value reads real BRD 69 data from usage-service
+	// over HTTP when USAGE_SERVICE_URL is set -- same real-adapter-vs-honest-
+	// fallback gate as the RBAC_URL-backed last-admin checker above; unlike
+	// that checker (which has an allow-all fallback), Poc.Value has no
+	// fallback at all -- Progress/ExportReport simply fail loud (EInternal)
+	// rather than fabricate figures when unset, matching Bundles/Seed's own
+	// "fail loud on nil adapter" rule.
+	poc := &domain.PocService{Store: store, Tenants: tenants, Commercial: commercial, Clock: clock}
+	if usageURL := os.Getenv("USAGE_SERVICE_URL"); usageURL != "" {
+		poc.Value = &valueclient.Client{BaseURL: usageURL, Issuer: issuer}
+		log.Info("poc value reader: usage-service", "url", usageURL)
+	} else {
+		if requireReal {
+			mustReal("USAGE_SERVICE_URL", "poc progress/export disabled (no ValueSummaryReader configured)")
+		}
+		log.Warn("poc value reader: not configured — POC progress/export will fail loud until USAGE_SERVICE_URL is set")
+	}
+	pocExportSecret := []byte(os.Getenv("POC_EXPORT_SIGNING_SECRET"))
+	if len(pocExportSecret) == 0 {
+		pocExportSecret = []byte(uuid.NewString())
+		log.Warn("POC_EXPORT_SIGNING_SECRET unset; generated ephemeral secret (poc report download links break on restart)")
+	}
+	poc.Exports = pocexport.NewFSStore(
+		envOr("POC_EXPORT_ROOT", "/var/lib/identity-service/poc-reports"),
+		envOr("PUBLIC_URL", "http://localhost:8080"),
+		pocExportSecret,
+	)
 
 	// BYO-P4 per-tenant IdP: build an OIDC provider from a tenant's stored config
 	// (tenant_idp_configs). Injected so the domain layer stays free of the OIDC
@@ -384,15 +441,34 @@ func main() {
 		log.Warn("authorizer: token-scope fallback (set OPA_URL for the real rbac-projection path; scope-based authz does NOT honor a tenant Admin's projection grant)")
 	}
 
+	// BRD 70 v1.1: self-serve demo signup abuse-prevention knobs (task
+	// requirement #1/#2 -- rate limits + concurrency cap, both env-
+	// overridable, both defaulting to domain's own conservative constants
+	// so a deployment that never sets these env vars is still protected).
+	publicDemoIPLimiter := domain.NewSlidingWindowLimiter(
+		envInt("PUBLIC_DEMO_SIGNUP_IP_LIMIT", domain.DefaultSelfServeIPLimit),
+		envMinutes("PUBLIC_DEMO_SIGNUP_IP_WINDOW_MINUTES", domain.DefaultSelfServeIPWindow))
+	publicDemoDomainLimiter := domain.NewSlidingWindowLimiter(
+		envInt("PUBLIC_DEMO_SIGNUP_DOMAIN_LIMIT", domain.DefaultSelfServeDomainLimit),
+		envMinutes("PUBLIC_DEMO_SIGNUP_DOMAIN_WINDOW_MINUTES", domain.DefaultSelfServeDomainWindow))
+	publicDemoCap := envInt("PUBLIC_DEMO_SIGNUP_CAP", domain.DefaultSelfServeDemoCap)
+	publicDemoPack := os.Getenv("PUBLIC_DEMO_SIGNUP_PACK")
+	if publicDemoPack == "" {
+		publicDemoPack = domain.DefaultSelfServeDemoPack
+	}
+
 	srv := &api.Server{
 		Store: store, Tenants: tenants, Users: users, SAs: sas, Tokens: tokens,
 		KM: km, Verifier: issuer, Authz: authorizer,
 		Plans: plans, Commercial: commercial, Demo: demo, Trials: trials,
+		Poc: poc, PocExports: poc.Exports,
 		TrustedSpiffeIDs: trusted,
 		// F-2: only honor X-Spiffe-Id when explicitly enabled (mesh strips +
 		// re-injects it). TRUST_SPIFFE_HEADER=true to enable.
 		TrustSpiffeHeader: os.Getenv("TRUST_SPIFFE_HEADER") == "true",
 		Clock:             clock, Log: log, Ready: ready,
+		PublicDemoIPLimiter: publicDemoIPLimiter, PublicDemoDomainLimiter: publicDemoDomainLimiter,
+		PublicDemoSelfServeCap: publicDemoCap, PublicDemoPack: publicDemoPack,
 		Logo: logoStore,
 	}
 
@@ -530,6 +606,28 @@ func main() {
 			}
 		}
 	}()
+
+	// IDN-FR-008b's grace-period deletion sweep (RunScheduledDeletions).
+	// Already drives every tenant through the same real deprovision saga
+	// (Engine.Deprovision) DemoReaper and TenantService.Delete's force path
+	// use -- there is one teardown implementation, not a divergent one. Until
+	// now this was the one sweep in the service still a plain, non-leader-
+	// elected ticker (docs/initiatives/demo-sandbox-poc-mode.md §3 "Honest
+	// gaps"); wire the same leaderlease.Lease pattern as the demo reaper and
+	// trial sweep above, under its own resource key so the three sweeps hold
+	// independent leases (any one of them may be led by a different replica).
+	if redisAddr := os.Getenv("REDIS_ADDR"); redisAddr != "" {
+		delLease := leaderlease.NewLease(redisx.NewFromEnv(redisAddr, os.Getenv).R,
+			"tenant-scheduled-deletions", "identity-"+uuid.NewString(), 15*time.Second)
+		go delLease.Run(ctx)
+		tenants.Lease = delLease
+		log.Info("scheduled-deletion sweep: leader-elected (redis)", "addr", redisAddr)
+	} else {
+		if requireReal {
+			mustReal("REDIS_ADDR", "single-replica scheduled-deletion sweep (not leader-elected; a second replica could double-deprovision)")
+		}
+		log.Warn("scheduled-deletion sweep: single-replica (set REDIS_ADDR for real leader election across replicas)")
+	}
 
 	go func() { // key-cache refresh so retirements take effect (AC-8)
 		t := time.NewTicker(time.Minute)

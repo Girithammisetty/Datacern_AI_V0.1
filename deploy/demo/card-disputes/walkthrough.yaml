@@ -1,0 +1,57 @@
+# Guided-walkthrough content for the 5-minute demo script (§2.2,
+# DSP-FR-015, Should), same status as insurance-claims-payer's walkthrough:
+# NOT consumed by identity-service's SeedDemoContent step or the ui-web
+# watermark banner in this slice — DSP-FR-015 (the in-product guided-overlay
+# UI) is explicitly deferred, see docs/initiatives/demo-sandbox-poc-mode.md
+# §3 honest gaps. Kept here because §2.2 names walkthrough.yaml as part of
+# the bundle format and an SE running the bundle by hand can read this as a
+# script today.
+- title: "Worklist"
+  target_route: /cases
+  narration: >
+    Every card dispute lands here the moment it's filed — eight OPEN
+    disputes are already queued, sorted by severity. Notice DP-4101 sitting
+    at the top: its Reg E investigation clock already ran out three days
+    ago. That's the single most urgent posture in this workflow — worse than
+    any fraud dollar amount.
+- title: "Regulatory-clock triage"
+  target_route: /cases/DP-4101
+  narration: >
+    Open the overdue case. The reg_e_triage decision table — a deterministic,
+    explainable rule set, not a black-box model — has already classified
+    this as a breached clock with provisional credit still due and proposed
+    routing it to investigation review. It never closes the case on its
+    own; a human always completes the investigation and documents findings.
+- title: "Rule precedence in action"
+  target_route: /cases/DP-4103
+  narration: >
+    DP-4103 is a $610 unauthorized-fraud claim — on dollar amount alone
+    that would route to fraud review. But its provisional-credit clock has
+    only 2 days left, so the table's clock rule fires first: the 12 CFR
+    1005.11 provisional-credit deadline outranks routine fraud severity by
+    design.
+- title: "Approval (four-eyes)"
+  target_route: /inbox
+  narration: >
+    The Dispute Intake Analyst or Fraud Investigator proposes a disposition;
+    the Dispute Operations Manager reviews it here and either approves or
+    overrides. The proposer and approver are always different people — no
+    single role can post a final Reg E determination alone.
+- title: "No default-deny — the governance guardrail"
+  target_route: /cases/DP-4108
+  narration: >
+    DP-4108 is a small quality-defective dispute that doesn't match any
+    specific rule and falls below the merchant-recovery evidence threshold.
+    A naive system would default to denying it. This one doesn't: the
+    table's default_outcome always routes unmatched disputes to a human
+    investigation review, never to an auto-proposed denial — a Reg E denial
+    requires documented investigation findings, and a default-deny posture
+    is a real CFPB exam risk.
+- title: "Audit trail"
+  target_route: /audit
+  narration: >
+    Every disposition, override, and table proposal is logged here with the
+    acting persona, timestamp, and cited evidence — including DP-4109 and
+    DP-4110, two disputes already closed (a chargeback won and a denial that
+    followed a real completed investigation, not a default). Nothing is
+    silent, and nothing is decided without a documented human record.

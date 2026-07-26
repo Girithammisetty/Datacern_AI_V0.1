@@ -480,6 +480,94 @@ func TestDemoReaper_NotLeaderSkipsSweep(t *testing.T) {
 	}
 }
 
+// --- RunScheduledDeletions leader election (docs/initiatives/
+// demo-sandbox-poc-mode.md §3 "Honest gaps") --------------------------------
+
+// TestRunScheduledDeletions_NotLeaderSkipsSweep mirrors
+// TestDemoReaper_NotLeaderSkipsSweep exactly: a non-leader replica must
+// never deprovision, even once a tenant's grace period has fully elapsed.
+// Before TenantService.Lease existed, RunScheduledDeletions was the one
+// scheduled sweep in the codebase still a plain, non-leader-elected ticker
+// -- every other reaper (DemoReaper, TrialSweep) already had this guard.
+func TestRunScheduledDeletions_NotLeaderSkipsSweep(t *testing.T) {
+	f := newDemoFixture(t)
+	ctx := context.Background()
+
+	std, _, err := f.tenants.Create(ctx, domain.CreateTenantRequest{
+		Name: "std-sched", OwnerEmail: "o@stdsched.com", Tier: "pool", Cloud: "aws", Publish: true,
+	}, f.actor())
+	if err != nil {
+		t.Fatalf("create+publish standard tenant: %v", err)
+	}
+	if _, err := f.tenants.Delete(ctx, std.ID, "destroy", false, f.actor()); err != nil {
+		t.Fatalf("delete (grace-scheduled): %v", err)
+	}
+	f.clock.advance(domain.DeletionGracePeriod + time.Hour) // past grace
+
+	f.tenants.Lease = &fakeLease{leader: false}
+	if err := f.tenants.RunScheduledDeletions(ctx); err != nil {
+		t.Fatalf("RunScheduledDeletions (non-leader): %v", err)
+	}
+	got, err := f.store.GetTenant(ctx, std.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TenantDeleting {
+		t.Fatalf("non-leader ran the sweep: status = %s, want still deleting", got.Status)
+	}
+
+	// The same tenant, past the same grace period, IS deprovisioned once
+	// this replica holds the lease -- proving the guard gates leadership,
+	// not the sweep logic itself.
+	f.tenants.Lease = &fakeLease{leader: true}
+	if err := f.tenants.RunScheduledDeletions(ctx); err != nil {
+		t.Fatalf("RunScheduledDeletions (leader): %v", err)
+	}
+	got, err = f.store.GetTenant(ctx, std.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TenantDeleted {
+		t.Fatalf("leader sweep: status = %s, want deleted", got.Status)
+	}
+}
+
+// TestRunScheduledDeletions_NilLeaseAlwaysLeads: nil Lease ("always leader")
+// is the correct default for single-replica dev/tests -- the same contract
+// DemoReaper.Sweep and TrialSweep.SweepOnce document for their own nil
+// LeaseChecker default. TestScheduledDeletion (internal/api/fixes_test.go)
+// already exercises this end to end via HTTP; this is the direct domain-
+// layer equivalent so the invariant is pinned at the layer that owns it.
+func TestRunScheduledDeletions_NilLeaseAlwaysLeads(t *testing.T) {
+	f := newDemoFixture(t)
+	ctx := context.Background()
+
+	std, _, err := f.tenants.Create(ctx, domain.CreateTenantRequest{
+		Name: "std-sched-nil", OwnerEmail: "o@stdschednil.com", Tier: "pool", Cloud: "aws", Publish: true,
+	}, f.actor())
+	if err != nil {
+		t.Fatalf("create+publish standard tenant: %v", err)
+	}
+	if _, err := f.tenants.Delete(ctx, std.ID, "destroy", false, f.actor()); err != nil {
+		t.Fatalf("delete (grace-scheduled): %v", err)
+	}
+	f.clock.advance(domain.DeletionGracePeriod + time.Hour)
+
+	if f.tenants.Lease != nil {
+		t.Fatalf("fixture must not preset Lease for this test")
+	}
+	if err := f.tenants.RunScheduledDeletions(ctx); err != nil {
+		t.Fatalf("RunScheduledDeletions: %v", err)
+	}
+	got, err := f.store.GetTenant(ctx, std.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TenantDeleted {
+		t.Fatalf("nil-lease sweep: status = %s, want deleted", got.Status)
+	}
+}
+
 // --- Reset / Clone (§2.4) -------------------------------------------------
 
 func TestDemoService_ResetReSeedsIdempotently(t *testing.T) {

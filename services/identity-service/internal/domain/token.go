@@ -13,6 +13,13 @@ const (
 	TypService         = "service"
 	TypAgentOBO        = "agent_obo"
 	TypAgentAutonomous = "agent_autonomous"
+	// TypDemoClaim (BRD 70 v1.1, self-serve demo signup) is a narrow,
+	// short-lived, non-admin-issuable token type (isAdminIssuableTyp in
+	// api/middleware.go rejects it, same as agent_obo/agent_autonomous):
+	// its ONLY purpose is proving "I am the visitor who just requested this
+	// one demo tenant" to POST /public/demo-signup/claim. It carries empty
+	// scopes and is never accepted by requireScope/requireSuperAdmin gates.
+	TypDemoClaim = "demo_claim"
 )
 
 // TokenTTL is the platform JWT TTL (MASTER-FR-010: 5 min).

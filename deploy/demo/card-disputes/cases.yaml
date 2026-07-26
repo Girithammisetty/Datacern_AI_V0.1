@@ -1,0 +1,134 @@
+# Open-row seed cases (§2.2): the 8 OPEN disputes become the demo tenant's
+# worklist (mirrors DP-4101..DP-4108 in data/cd_disputes.csv — reg_e_triage
+# is the pack's real deterministic triage decision table, so these are the
+# same rows a live issuer's dispute queue would surface and the same
+# dispositions reg_e_triage.yaml's rules would propose, in rule order). Two
+# more rows (DP-4109, DP-4110) exist only in the CSV, already closed, to
+# give the KPI dashboards and the audit-trail step real history to show —
+# they are deliberately NOT queued here. row_pk resolves against
+# cd_disputes' first required_columns entry (dispute_id) — checked by
+# `packctl demo-lint`.
+- dataset: cd_disputes
+  row_pk: DP-4101
+  severity: critical
+  display_projection:
+    cardholder_id: CH-3001
+    dispute_type: fraud_unauthorized
+    amount: 340.00
+    reason_code: "10.4"
+    deadline_days_left: -3
+  note: >
+    reg_e_triage rule 1 (deadline_days_left < 0): the Reg E investigation
+    clock has ALREADY BREACHED on a live unauthorized-fraud claim with
+    provisional credit still due — the single most urgent posture in the
+    workflow. Routes to route_investigation_review / CRITICAL for immediate
+    human completion and documented findings, not to the fraud track.
+- dataset: cd_disputes
+  row_pk: DP-4102
+  severity: critical
+  display_projection:
+    cardholder_id: CH-3002
+    dispute_type: not_received
+    amount: 89.00
+    reason_code: "13.1"
+    deadline_days_left: 1
+  note: >
+    reg_e_triage rule 2 (deadline_days_left between 0 and 2): 1 business day
+    left on the investigation clock. A clock breach is a workflow emergency,
+    not a fraud question, so this routes to route_investigation_review /
+    CRITICAL even though the underlying claim (item not received) looks
+    routine.
+- dataset: cd_disputes
+  row_pk: DP-4103
+  severity: critical
+  display_projection:
+    cardholder_id: CH-3003
+    dispute_type: fraud_unauthorized
+    amount: 610.00
+    reason_code: "10.4"
+    deadline_days_left: 2
+  note: >
+    reg_e_triage rule 3: reg_flag=reg_e, provisional_credit=due, 2 days left
+    — the 12 CFR 1005.11 provisional-credit clock is at risk (credit due
+    within 10 business days to keep the extended investigation window open).
+    Rule 3 fires ahead of rule 4's high-value-fraud match ($610 would
+    otherwise route to escalate_fraud_review) — the clock emergency takes
+    precedence over routine fraud severity by design.
+- dataset: cd_disputes
+  row_pk: DP-4104
+  severity: high
+  display_projection:
+    cardholder_id: CH-3004
+    dispute_type: fraud_unauthorized
+    amount: 1850.00
+    reason_code: "10.4"
+    deadline_days_left: 25
+  note: >
+    reg_e_triage rule 4 (fraud_unauthorized, $500-$1,000,000): high-value
+    card-not-present unauthorized fraud with 25 days of runway — no clock
+    emergency, so it routes on its merits to escalate_fraud_review / HIGH
+    for fraud-investigation review. Provisional credit already issued.
+- dataset: cd_disputes
+  row_pk: DP-4105
+  severity: low
+  display_projection:
+    cardholder_id: CH-3005
+    dispute_type: fraud_unauthorized
+    amount: 18.00
+    reason_code: "10.4"
+    deadline_days_left: 30
+  note: >
+    reg_e_triage rule 5 (fraud_unauthorized, $0-$50): small-dollar
+    zero-liability quick resolve — investigation cost would exceed the
+    disputed amount (an institution-configured threshold, not a regulatory
+    figure). Routes to resolve_cardholder_favor / LOW.
+- dataset: cd_disputes
+  row_pk: DP-4106
+  severity: medium
+  display_projection:
+    cardholder_id: CH-3006
+    dispute_type: cancelled_recurring
+    amount: 14.99
+    reason_code: "13.2"
+    deadline_days_left: 18
+  note: >
+    reg_e_triage rule 6 / merchant_error_recovery rule 3: recurring
+    streaming charge billed after a documented cancellation — clean
+    merchant-recovery evidence. Routes to file_chargeback / MEDIUM (Visa
+    13.2), representment built on the cancellation record.
+- dataset: cd_disputes
+  row_pk: DP-4107
+  severity: high
+  display_projection:
+    cardholder_id: CH-3007
+    dispute_type: not_received
+    amount: 245.00
+    reason_code: "13.1"
+    deadline_days_left: 9
+  note: >
+    reg_e_triage rule 7 ('item not received'): requires a carrier
+    delivery-confirmation review before disposition — routes to
+    escalate_fraud_review / HIGH. Per the case-triage agent's grounding,
+    repeated not-received claims with delivery confirmed to the address on
+    file are a first-party-abuse pattern; this is CH-3007's first dispute,
+    so it is investigated on its own evidence, not pre-judged.
+- dataset: cd_disputes
+  row_pk: DP-4108
+  severity: medium
+  display_projection:
+    cardholder_id: CH-3008
+    dispute_type: quality_defective
+    amount: 42.00
+    reason_code: "13.5"
+    deadline_days_left: 40
+  note: >
+    Unmatched by every specific rule in reg_e_triage (quality_defective
+    isn't a fraud, recurring-billing, or not-received type) AND below
+    merchant_error_recovery's $100 material-value gate for a return-evidence
+    chargeback. This is the table's default_outcome —
+    route_investigation_review / MEDIUM, routed to a HUMAN analyst. It is
+    NOT auto-proposed as deny_no_error_found: an unmatched dispute defaulting
+    to denial would be a UDAAP/CFPB-exam-risk logic error (the exact fleet
+    defect class the pack-fleet depth audit fixed fleet-wide) — a Reg E
+    denial requires a completed investigation with specific documented
+    findings, never a default-deny posture.

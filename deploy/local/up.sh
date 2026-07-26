@@ -172,14 +172,14 @@ ok "harness JWKS file server up on :${WR_JWKS_PORT} (services verify real tokens
 
 # ============================================================ PHASE 2 services
 # Reuse the e2e harness boot functions verbatim (money-path + retrain tail),
-# then boot the remaining platform services (query/semantic/eval/chart/usage/
+# then boot the remaining platform services (query/semantic/eval/chart/
 # audit/notification), then bff + ui.
 source "$E2E/boot_services.sh"
 source "$E2E/seed.sh"
 
 say "${BLD}PHASE 2${NC}  migrate + boot all services (each wired to real infra + peers)"
 boot_all                 # identity, rbac, realtime, case, ingestion, dataset, memory,
-                         # ai-gateway, tool-plane(registry+gateway), agent-runtime,
+                         # ai-gateway, tool-plane(registry+gateway), agent-runtime, usage,
                          # pipeline, experiment, inference  (+ provisions TENANT_ID, VKEY)
 [ -n "${TENANT_ID:-}" ] || die "boot_all did not provision a tenant"
 
@@ -198,7 +198,7 @@ boot_all                 # identity, rbac, realtime, case, ingestion, dataset, m
 # (boot_all starts it early, alongside identity/rbac/case).
 ( cd "$E2E" && "$PY" lib/seed.py ingestion_tool "$TENANT_ID" ) 2>&1 | tee "$LOG_DIR/seed_ingestion_tool.log"
 
-boot_platform_extra      # query, semantic, chart, usage, audit, notification, eval
+boot_platform_extra      # query, semantic, chart, audit, notification, eval
 
 # Register chart-service's chart.dashboard.create write-proposal tool in
 # tool-plane (idempotent, same recipe as inference_tool/ingestion_tool above)

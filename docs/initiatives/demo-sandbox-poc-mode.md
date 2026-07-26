@@ -598,7 +598,13 @@ BRD 67's close job together.
 ### Out of scope (this design)
 
 - Public self-serve demo signup (BRD 70 §Out of scope carries this already;
-  this design does not revisit it).
+  this design does not revisit it). **Update, v1.1:** this was implemented
+  in a later round as an additive extension on top of slices 1-2's
+  DemoService/DemoReaper machinery — see §3's "Self-serve demo signup
+  (v1.1)" subsection below for what was built and its abuse-prevention
+  tradeoffs. This §2 design text is left as originally written (the v1
+  design genuinely did not plan for it); the v1.1 work did not revise this
+  document's architecture, only added to it.
 - A DB-backed / admin-UI-authored demo bundle format (Option C in §2.2) —
   git-file bundles only for v1.
 - Cross-region/cross-cell hosted demo routing (which cell a demo tenant
@@ -623,7 +629,20 @@ banner built and unit-tested; `packctl demo-lint` built and unit-tested
 against both synthetic fixtures and the real shipped bundle; one live-stack
 Playwright spec written and explicitly gated off (`test.skip`) pending a
 credential prerequisite `tests-live/fixtures.ts` doesn't yet provide. Slice 3
-(POC mode) is NOT started — confirmed still hard-blocked, see below.**
+(POC mode) is now built (identity-service backend + tests) — see the
+dedicated subsection below; ui-web is NOT touched for slice 3, a deliberate
+scope call explained there.**
+
+**v1.1 update: public self-serve demo signup built.** The item this
+document's own §Out of scope explicitly deferred ("Public self-serve demo
+signup ... explicitly rejected for v1, not merely deferred without reason")
+was implemented in a later round: `POST /api/v1/public/demo-signup` +
+`POST /api/v1/public/demo-signup/claim` (identity-service, unauthenticated)
+and a new pre-login `/live-demo` page (ui-web). Built entirely on top of
+slices 1-2's DemoService/DemoReaper/TTL machinery — no new expiry path, no
+new tenant-creation path. See the dedicated subsection below for what was
+built, the exact abuse-prevention measures and their limits (stated plainly,
+including what is NOT covered), and test results.
 
 ### Slice plan (unchanged from the design; slices 1-2 are this build)
 
@@ -638,18 +657,18 @@ credential prerequisite `tests-live/fixtures.ts` doesn't yet provide. Slice 3
   re-seed, §2.4), `POST .../clone` (fresh sibling, §2.4), TTL reaper (§2.5)
   including a real leader-election adapter resolving the prerequisite the
   design flagged as missing.
-- **Slice 3 — POC mode.** ❌ **Not started — confirmed still hard-blocked.**
-  Re-verified against the current repo state before writing any code: BRD 66
-  slice 1 (plan catalog, `commercial_state` guard table, `internal-demo` plan
-  seed — `services/identity-service/README.md`'s "BRD 66 — Commercial plane"
-  table) is shipped, but BRD 66 slice 2 (trial start/extend/convert, the
-  T-14/T-7/T-1 threshold events, the leader-elected trial sweep) is **still
-  not built** — `docs/initiatives/commercial-plane.md` §3 confirms "Slice
-  2 — trials + sweep. ❌ Not started." DSP-FR-020's `POST /poc-tenants`
-  needs exactly that machinery (`commercial_state=trial` + `trial_ends_at`
-  reusing CPL-FR-020..023) to exist first, per §2.1's sequencing note. This
-  slice is untouched: no `poc-tenants` route, no `success_criteria` schema,
-  no `poc-report.v1` export, no BRD 67 billing-exclusion coordination.
+- **Slice 3 — POC mode.** ✅ **Built (2026-07-26), identity-service backend
+  only — see the dedicated subsection below.** BRD 66 slice 2 (trial
+  start/extend/convert, the leader-elected trial sweep) landed in a prior
+  round of this session (`docs/initiatives/commercial-plane.md` §3 now reads
+  "Slice 2 — trials + sweep. ✅ Built"), unblocking this slice exactly as
+  §2.1's sequencing note anticipated. `POST /poc-tenants` now exists, sets
+  `commercial_state=trial` + `trial_ends_at` directly at creation (a small,
+  explicitly-documented deviation from reusing `TrialService.Start` — see
+  below for why), success criteria are a real stored/CRUD'd schema, and
+  `poc-report.v1` exports are checksummed/versioned/downloadable. BRD 67
+  billing-exclusion coordination (DSP-FR-002) remains untouched — BRD 67
+  itself is unbuilt, unrelated to this slice's scope.
 
 ### Files touched
 
@@ -921,11 +940,51 @@ npx playwright test -c playwright.live.config.ts \
   harness's direct-Postgres shortcut (which wouldn't work across service
   boundaries in a real deployment anyway) — but, again, unverified live.
 - **`RunScheduledDeletions` (the pre-existing grace-period deletion sweep,
-  `tenant_service.go`) remains a plain, non-leader-elected ticker.** This
-  initiative's own new reaper (`DemoReaper`) IS real leader-elected; the
-  design's §2.5 gap callout about the pre-existing sweep was about a
-  DIFFERENT sweep this BRD does not own and does not fix here — noted so
-  it isn't mistaken for having been addressed.
+  `tenant_service.go`) is now leader-elected — fixed in a follow-up pass
+  after this section was first written.** Re-investigated before writing any
+  code: contrary to how this gap was originally framed (as "two divergent
+  Go teardown paths"), the actual code already had exactly ONE deprovision
+  implementation — `RunScheduledDeletions` (`tenant_service.go:259-275` as of
+  this fix) calls `s.Engine.Deprovision`, the identical call
+  `TenantService.Delete`'s force-destroy branch and `DemoReaper.reapOne`
+  (`demo_reaper.go:85-91`, the `TenantDeleting` retry branch) both make.
+  There was never a raw-SQL or partial-cleanup divergence inside
+  identity-service's Go code; the only real ad hoc teardown mechanism is
+  `packs/cleanup_pack_tenants.py` (§1b), a local-dev/CI Python harness this
+  BRD explicitly does not generalize (§2.5) and which this fix leaves alone.
+  What WAS genuinely missing — the only real gap — was the leader-election
+  guard: `RunScheduledDeletions` was the one sweep in the codebase still a
+  plain `time.NewTicker`, unlike `DemoReaper.Sweep` and `TrialSweep.SweepOnce`
+  which already had a `LeaseChecker`. Fixed by adding
+  `TenantService.Lease LeaseChecker` (nil = "always leader", the same default
+  every other sweep in this service uses) and gating
+  `RunScheduledDeletions` on it exactly like `DemoReaper.Sweep` does
+  (`if s.Lease != nil && !s.Lease.IsLeader() { return nil }`).
+  `cmd/server/main.go` wires a `leaderlease.Lease` for it under its own
+  Redis key (`"tenant-scheduled-deletions"`, 15s TTL) when `REDIS_ADDR` is
+  set, loud-warned single-replica otherwise — the identical
+  `REQUIRE_REAL_ADAPTERS` gate pattern the demo reaper and trial sweep
+  already use, so all three scheduled sweeps now hold independent leases
+  rather than one of the three racing across replicas. Two new unit tests
+  (`internal/domain/demo_test.go`,
+  `TestRunScheduledDeletions_NotLeaderSkipsSweep` /
+  `TestRunScheduledDeletions_NilLeaseAlwaysLeads`) mirror
+  `TestDemoReaper_NotLeaderSkipsSweep`'s pattern exactly: a non-leader
+  replica must never deprovision even past grace period, and a nil Lease
+  (single-replica dev/tests) still sweeps as before. `go build ./...`,
+  `go vet ./...`, and `go test ./... -short` all pass with this change
+  (135+4 = 139 domain/api-adjacent test functions now green, 0 regressions).
+  The two pre-written `test/integration/demo_test.go` Testcontainers-Postgres
+  tests were re-run in this environment and still SKIP cleanly ("Docker
+  unavailable") — this environment has a local Postgres 16 available
+  directly, but `test/integration/setup_test.go` is hardcoded to
+  `testcontainers-go` (no `DATABASE_URL` escape hatch), and there is still no
+  Docker daemon here (`docker info` succeeds for the client but the server
+  call fails: "dial unix /var/run/docker.sock ... no such file or
+  directory"), so this was not fought, per the same tier-2 constraint already
+  documented above. The separate, pre-existing `test/integration/secretsigner`
+  panic (Docker fully absent, not merely container-less) reproduces exactly
+  as already documented and is untouched by this fix.
 - **`poc-report.v1`'s "stored/checksummed like other audited exports"
   integration point** (§2.9) remains unconfirmed, as the design itself
   already flagged — moot for this build since slice 3 wasn't started, but
@@ -947,6 +1006,535 @@ calling a non-BFF service directly via an `E2E_LIVE_*_URL` env var) so it is
 ready to enable once that prerequisite lands — not a placeholder. Per the
 task's explicit instruction, the live stack was not booted or run.
 
+### Self-serve demo signup (v1.1)
+
+**What this is.** The demo tenant creation flow BRD 70 v1 shipped (slices
+1-2, above) is operator/partner-only: `POST /demo-tenants` sits behind
+`requireSuperAdmin`, and the only public-facing surface was an
+unauthenticated lead-gen contact form
+(`services/ui-web/src/app/api/request-demo/route.ts`) that just forwards to
+a Slack/CRM webhook — it never provisions anything. This round adds a
+genuine self-service path: a public visitor fills a 3-field form, a real
+`profile=demo` tenant is provisioned end to end through the SAME
+`DemoService`/provisioning-saga/TTL-reaper machinery slices 1-2 already
+built, and the visitor is logged straight into it — no operator, no sales
+call, no manual "accept invitation" step.
+
+**Design: create, then claim (why not one call).** Tenant provisioning is
+async in every real deployment (`TenantService.Async=true`,
+`cmd/server/main.go:283`) and can take minutes (Terraform, Keycloak realm
+creation, dataset seeding). A single synchronous HTTP call cannot honestly
+return "you're logged in" before that finishes. The endpoint therefore
+returns one of two shapes:
+- **Fast path (201):** if provisioning already finished by the time the
+  handler checks (true in this build's own tests, where
+  `TenantService.Async=false`, and possibly true on a fast/local
+  deployment) — `{tenant, access_token, token_type, expires_in}`, a real,
+  immediately-usable session.
+- **Async path (202):** `{tenant, operation_id, claim_token,
+  claim_expires_in}` — a short-lived (30 min), narrowly-scoped bearer token
+  (`domain.TypDemoClaim`, rejected everywhere `requireScope`/
+  `requireSuperAdmin` gate, carries zero scopes) the caller polls
+  `POST /public/demo-signup/claim` with until the tenant is active AND its
+  owner user exists (`ClaimSelfServeLogin`), at which point a real session
+  is minted — the SAME claim shape (`Claims{Subject, TenantID, Typ, Scopes:
+  [], Profile, CommercialState}`) `OIDCLogin` mints for a verified SSO
+  login, so downstream rbac-projection-based authorization behaves
+  identically to a real login. The one difference from a real login is
+  deliberate: there is no external IdP verification step, because closing
+  the "is this a real human" question is exactly what the rate limits/cap/
+  denylist below already do at signup time, not a second check at claim
+  time.
+
+ui-web's `/live-demo` page hides this two-step shape behind one form
+submit: `POST /api/live-demo-signup` (session-cookie'd immediately on the
+fast path) or a claim_token stashed in an httpOnly cookie that
+`/api/live-demo-signup/claim` polls on a 3-second cadence until ready, then
+the page redirects into the app. **A pre-existing bug fixed as part of
+this:** `internal/keys/token.go`'s `wireClaims` (the REAL RS256 issuer) had
+never mirrored `domain.Claims.Profile`/`CommercialState` — those claims were
+only ever exercised through fake issuers in unit tests, so a real,
+production-minted token silently dropped the watermark-banner claim end to
+end. Fixed (4-line addition + wire-and-back roundtrip) because this
+feature's login needs the claim to actually reach the browser; flagged here
+since it's a fix bundled into this round rather than a separate pass.
+
+**Abuse-prevention measures implemented (task's five requirements):**
+1. **Rate limiting by IP and by work-email domain.** `domain.RateLimiter`
+   (the same `SlidingWindowLimiter` abstraction `OBORateLimit` already
+   proves out, `ratelimit.go`) — default 3 signups/IP/hour and 8/email-
+   domain/24h (`DefaultSelfServeIPLimit/Window`,
+   `DefaultSelfServeDomainLimit/Window`, `demo_public_signup.go`),
+   overridable via `PUBLIC_DEMO_SIGNUP_{IP,DOMAIN}_LIMIT` /
+   `_WINDOW_MINUTES` env vars (`cmd/server/main.go`). A 429 carries
+   `Retry-After`, matching the existing `AC-14` precedent. Nil-safe: if an
+   operator never wires a limiter, the handler builds and caches a
+   conservative default itself (`publicDemoIPLimiter`/
+   `publicDemoDomainLimiter`, `handlers_public_demo.go`) rather than coming
+   up unrate-limited.
+2. **A hard concurrency cap.** `PUBLIC_DEMO_SIGNUP_CAP` (default 20,
+   `DefaultSelfServeDemoCap`) counts LIVE self-serve demo tenants
+   (`Profile=demo` AND `CreatedBy=SelfServeDemoActorID` — the one marker
+   that distinguishes a self-serve tenant from an operator-created one,
+   since both share `Profile=demo`) and refuses new creates past it with a
+   clear 503 (`EDemoSignupAtCapacity`, `"self-serve demo capacity reached,
+   please try again later"`) — never a silent degrade. An
+   operator/partner-created demo tenant never counts against this cap
+   (`TestCountLiveSelfServeDemoTenants_ExcludesOperatorCreated`,
+   `TestPublicDemoSignup_CapacityExceeded`).
+3. **The existing TTL reaper, untouched.** Every self-serve tenant gets
+   `DefaultDemoTTLDays` exactly like an operator-created one and is swept by
+   the SAME leader-elected `DemoReaper` slice 2 already built — no new
+   expiry path was invented. This is also how the cap in (2) self-clears
+   over time.
+4. **A disposable-email denylist, plus a honeypot, plus mandatory
+   audit logging — explicitly NOT a CAPTCHA.** `domain.IsDisposableEmailDomain`
+   rejects ~25 well-known throwaway providers (mailinator.com,
+   guerrillamail.com, etc. — `demo_public_signup.go`); the ui-web form
+   carries a hidden `website` honeypot field mirroring
+   `request-demo/route.ts`'s existing pattern. Every self-serve creation is
+   logged twice: a structured `slog` line including the caller's IP
+   (`handlers_public_demo.go`, not persisted on the tenant record) and a
+   durable outbox event (`demo.tenant_public_signup`, full name/company/
+   work-email-domain/pack) for a human to review after the fact — both were
+   explicit task requirements. **This repo has no CAPTCHA/Turnstile/
+   reCAPTCHA integration anywhere** (grepped `services/` for
+   `captcha|turnstile|recaptcha`; the only hits are unrelated vendored font
+   glyph names). That is a real, stated gap, not something the denylist/
+   rate-limits are being represented as equivalent to — a determined script
+   using a real (non-disposable) email domain and rotating IPs slower than
+   the rate-limit window can still create tenants up to the concurrency cap.
+   Adding a real CAPTCHA (e.g. Turnstile, which needs no server-side SDK,
+   just a token verify call) is the natural v1.2 follow-up and is flagged
+   here plainly rather than implied as covered.
+5. **Structurally forced `profile=demo`, forced default pack, forced
+   `internal-demo` plan.** `PublicDemoSignupRequest` (the wire body) has
+   exactly three fields — `full_name`, `work_email`, `company` — no `pack`,
+   `tier`, `cloud`, `ttl_days`, or `profile`. `DemoService.PublicSignup`
+   forces every one of those server-side and calls the SAME `Create` path
+   slice 1 built (`Profile: ProfileDemo`, forced `internal-demo` plan
+   assignment, non-convertible `commercial_state`), so this route
+   structurally cannot create a standard/POC tenant or target a
+   non-default pack — verified by
+   `TestPublicDemoSignup_NeverCreatesNonDemoProfile` (extra JSON keys are
+   rejected outright by `decodeBody`'s `DisallowUnknownFields`) and the
+   minted self-serve session's own scope check
+   (`TestPublicDemoSignup_CreatesAndClaimsLiveDemo` asserts the session is
+   rejected on `POST /demo-tenants`, a `requireSuperAdmin` route).
+
+**Public tenant view.** The signup/claim responses expose a deliberately
+narrow `publicTenantView{id, name, display_name, status, profile}` —
+`owner_email`, `schema_prefix`, `k8s_namespace`, `cell_id`, `created_by` are
+never returned to an unauthenticated caller, unlike the operator-facing
+`POST /demo-tenants` response.
+
+**Files touched.**
+- identity-service (domain): `internal/domain/demo_public_signup.go` (new
+  — `PublicSignup`, `ClaimSelfServeLogin`, `MintSelfServeClaimToken`,
+  `CountLiveSelfServeDemoTenants`, `IsDisposableEmailDomain`, all the
+  defaults/constants above); `internal/domain/demo_service.go` (`Tokens
+  *TokenService` field, for the claim-login mint); `internal/domain/
+  errors.go` (`EDemoSignupAtCapacity`); `internal/domain/events.go`
+  (`demo.tenant_public_signup`, `demo.tenant_public_signup_claimed`);
+  `internal/domain/token.go` (`TypDemoClaim`).
+- identity-service (keys): `internal/keys/token.go` (the `wireClaims`
+  Profile/CommercialState fix described above).
+- identity-service (api): `internal/api/handlers_public_demo.go` (new —
+  `handlePublicDemoSignup`, `handlePublicDemoSignupClaim`, the rate-limiter
+  fallback helpers, `clientIP`); `internal/api/server.go` (`Server.PublicDemo*`
+  fields, the two pre-auth routes).
+- identity-service (wiring): `cmd/server/main.go` (`demo.Tokens = tokens`;
+  `envInt`/`envMinutes` helpers; the `PUBLIC_DEMO_SIGNUP_*` env-driven
+  limiter/cap/pack wiring).
+- identity-service (tests, new): `internal/domain/demo_public_signup_test.go`
+  (10 unit tests — forced defaults, blank-field/disposable-domain
+  rejection, the concurrency cap, the operator-vs-self-serve count
+  exclusion, the claim-login flow including the "still provisioning"
+  and "not a self-serve tenant" cases, claim-token scope/binding);
+  `internal/api/handlers_public_demo_test.go` (9 acceptance tests over real
+  HTTP — happy path incl. the minted session actually working against
+  `GET /tenants/self` and being rejected on an admin route, disposable-email
+  rejection, honeypot, IP rate limiting, email-domain rate limiting, the
+  capacity 503 (and that it doesn't block operator creates), the
+  wire-shape-can't-inject-profile check, and claim-token rejection for a
+  wrong-typ/garbage bearer). **Edited:** `internal/api/fixture_test.go`
+  (`Demo.Tokens`, generous default `PublicDemo*` limiter/cap fields tests
+  can override per-test).
+- ui-web (new): `src/app/live-demo/page.tsx` + `live-demo-content.tsx` (the
+  public form/spinner/error states) + `live-demo-content.test.tsx` (7
+  component tests — form render, fast-path redirect, provisioning-spinner +
+  poll-to-ready, 503/429/422 error surfacing, honeypot no-op);
+  `src/app/api/live-demo-signup/route.ts` + `claim/route.ts` + `shared.ts`
+  (the two proxy routes + the shared claim-cookie constant, kept in its own
+  file because Next.js Route Handlers only recognize a fixed export
+  surface on a `route.ts` file).
+- ui-web (edited): `src/app/welcome/welcome-content.tsx` (one new `Link` to
+  `/live-demo` under the hero CTAs — "Or start a live demo yourself right
+  now", the discoverability path per the task's step 4).
+
+**A UI-FR-012 note.** ui-web's ESLint config hard-bans raw `setInterval`
+polling (`no-restricted-syntax`, `.eslintrc.json`) in favor of SSE via the
+realtime-hub EventBridge. `/live-demo`'s claim-polling loop is a deliberate,
+documented exception (comment in `live-demo-content.tsx`): it runs entirely
+pre-login, before any session/tenant exists for the hub to scope a
+subscription to, waiting out a one-time bounded provisioning step rather
+than an ongoing live view. It uses a self-rescheduling `setTimeout` (not
+`setInterval`, not a `setTimeout(...) > refetch()` chain), which passes the
+configured lint rule as written, but the spirit of UI-FR-012 is still
+worth revisiting if a pre-session SSE channel is ever built — flagged as a
+follow-up, not hidden behind the fact that it technically passes lint.
+
+**Test commands + results.**
+```
+cd services/identity-service
+go build ./...                                            → PASS
+go vet ./... && go vet -tags integration ./...             → PASS
+gofmt -l <every file this round touched>                    → clean (3 unrelated
+                                                                pre-existing files
+                                                                elsewhere in the
+                                                                tree are gofmt-dirty
+                                                                but untouched by
+                                                                this change, confirmed
+                                                                via git status)
+go test ./internal/... ./migrations/... -count=1            → PASS, all packages ok
+go test -tags integration -timeout 120s ./test/integration/... 
+                                                              → test/integration
+     itself: ok (skips cleanly, no Docker). The separate, pre-existing
+     test/integration/secretsigner panic (Docker fully absent, not
+     container-less — MustExtractDockerSocket panics instead of returning
+     an error) reproduces exactly as already documented above in this same
+     file's "Honest gaps" section; untouched by this round.
+
+cd services/ui-web
+pnpm exec tsc --noEmit                                      → PASS, 0 errors
+pnpm exec next lint                                         → PASS (same 2
+                                                                 pre-existing
+                                                                 warnings as
+                                                                 documented
+                                                                 above, in files
+                                                                 this round never
+                                                                 touched)
+pnpm exec vitest run                                        → 84 test files, 529
+                                                                 tests passed (3
+                                                                 new files, 28 new
+                                                                 tests vs. this
+                                                                 doc's earlier
+                                                                 81-file/501-test
+                                                                 baseline; 0
+                                                                 failures, 0
+                                                                 broken)
+```
+
+**Honest limitations, stated plainly (not implied as covered):**
+- No CAPTCHA/Turnstile — see requirement 4 above.
+- The claim-login session's TTL (`SelfServeLoginTTL`, 2 hours) is longer
+  than the platform's normal 5-minute session (`TokenTTL`) because a
+  self-serve visitor has no OIDC `refresh_token` to silently re-mint it the
+  way a real SSO login does — after 2 hours the demo session simply expires
+  with no renewal path today. Acceptable for "walk a demo," not acceptable
+  as a durable account.
+- `CountLiveSelfServeDemoTenants` paginates the whole `profile=demo` set on
+  every signup attempt rather than an indexed count query — fine at the
+  cap's expected scale (tens, `DefaultSelfServeDemoCap=20`), a real cost at
+  a much larger cap.
+- The claim-polling loop (`/live-demo`) is timer-based, not SSE — see the
+  UI-FR-012 note above.
+- This round's tests did not run against a live stack (no Docker in this
+  environment, consistent with every other tier of this initiative) — the
+  identity-service HTTP acceptance tests use the same in-memory-store
+  fixture every other acceptance test in the package uses, which is a real
+  chi-routed HTTP round trip but not a live Terraform/Keycloak/Postgres
+  deployment.
+
+### Slice 3 — POC mode (2026-07-26)
+
+**What this is.** DSP-FR-020..022: `POST /poc-tenants {pack?, window_days,
+sponsor, success_criteria[]}` provisions a `profile=poc` tenant on an
+immediate `commercial_state=trial`; a live success dashboard read
+(`GET /tenants/{id}/poc/progress`) computes actual-vs-target per criterion
+from BRD 69's real usage-service data (never fabricated); and
+`POST /tenants/{id}/poc-reports` generates a checksummed, versioned,
+downloadable `poc-report.v1` export. Built entirely in identity-service; no
+usage-service files were touched (its `GET /api/v1/value/summary`, shipped by
+the concurrent BRD 69 session, is called over real HTTP, not imported).
+
+**Design decisions where the source docs were silent or had to be
+reconciled against the actual shipped code:**
+
+1. **`success_criteria` schema — implemented exactly as §2.9 specifies**:
+   `{key, description, metric_ref, target, direction}`
+   (`domain.SuccessCriterion`, `internal/domain/poc.go`). `metric_ref` is
+   the union §2.9 calls for — either a name this build can honestly compute
+   from BRD 69's `GET /value/summary` (`decisions_total`,
+   `hours_saved_est_hours`, `net_value_est_usd`, `adoption_active_users`) or
+   `manual` (sponsor-reported, audited). `direction` is `gte|lte` — a target
+   like AC-5's `cost_per_decision <= $0.40` and a target like "decisions >=
+   500" share one validator. A tenant may declare 1-3 criteria (the task's
+   own framing; `PocService.Create`/`SetCriteria` enforce the range).
+2. **Where POC state lives — the design doc already answered this, and the
+   codebase already had the plumbing**: `Tenant.Profile` already had a
+   `ProfilePOC` value and `commercialTransitionsNonConvertible` already
+   existed (both shipped in slices 1-2, `internal/domain/tenant.go`) — so
+   "reuse `Tenant.Profile=poc` + BRD 66's trial machinery" (§2.1/§2.9) was
+   not a new design decision to make, just the one already committed to.
+   Success criteria attach to the **tenant** (a new `poc_success_criteria`
+   table keyed on `tenant_id`), not to the trial record itself — a POC's
+   agreed success bar outlives any individual trial extension.
+3. **The one real ambiguity: `commercial_state=trial` at CREATE time, not
+   via `TrialService.Start`.** The design's own text (§2.1: "profile=demo|poc
+   tenants have `commercial_state` initialized to `none`/`trial` at
+   creation") already says this should be a creation-time value, not a
+   transition — but it took tracing the actual guard table to see why that
+   phrasing is load-bearing, not incidental: `commercialTransitionsNonConvertible[CommercialNone]`
+   is `{}` (empty) for **both** demo and poc profiles (`tenant.go`), so a
+   literal call to `TrialService.Start` (which re-checks
+   `CanTransitionCommercial` inside the same DB transaction,
+   `postgres.go`'s `StartTrial`) would 409 on every POC tenant, always. This
+   is correct and intentional for `demo` (DSP-FR-003: demo can never reach
+   `trial`), but the same shared guard table also blocks the one legitimate
+   `none→trial` edge `poc` needs at its own creation. Splitting the guard
+   table per-profile to special-case poc's first write was rejected as
+   more invasive than necessary; instead, `CreateTenantRequest` gained a
+   Go-only `TrialDays int` field (mirroring the existing
+   `Profile`/`DemoPack`/`TTLDays` "set once at Create, `json:"-"`, never on
+   the mutable surface" idiom) and `TenantService.Create` sets
+   `CommercialState=CommercialTrial` + `TrialStartedAt`/`TrialEndsAt`
+   directly on the struct before the single `CreateTenant` INSERT — the
+   identical mechanism `CommercialState: CommercialNone` already uses for
+   every other tenant a few lines above it. `PocService.Create` then calls
+   the guard-free `Store.InsertTrialEvent` (already existed, built for the
+   trial sweep's threshold-event emission, `internal/domain/trial_sweep.go`)
+   to write the `trial_events(started)` audit row + `commercial.trial_started`
+   outbox event, so the audit trail is identical in shape to a
+   `TrialService.Start`-driven trial even though the write path differs.
+   `TrialService.Extend`/`Convert`/the leader-elected sweep are all reused
+   completely unmodified — a POC tenant's trial behaves exactly like a
+   standard tenant's from that point on (T-14/7/1 threshold events, expiry
+   to `suspended_commercial`, `POST .../convert` to a real paid plan all
+   just work, because they operate on `commercial_state`/`trial_ends_at`
+   generically and never branch on profile except through the same guard
+   table).
+4. **Progress computation window — BRD 69's summary API is month-scoped, a
+   POC window usually isn't.** `GET /value/summary` takes a single `period`
+   (`YYYY-MM`), not a date range (`services/usage-service/internal/domain/value.go`).
+   Rather than only ever showing "this month," `PocService.Progress`
+   enumerates every calendar month `[trial_started_at, min(trial_ends_at,
+   now)]` spans and calls usage-service once per month, summing the additive
+   fields (`decisions_total`, `hours_saved_est`, `net_value_est_usd`) and
+   taking the latest month's value for the snapshot field (`adoption.active_users`).
+   The honesty rule this build held itself to: **a single gap month makes
+   that field's whole-window aggregate `nil`, never a partial sum presented
+   as the total** — summing only the months that happened to have data and
+   calling it "decisions this POC" would be exactly the kind of invented
+   number ROI-NFR-004 forbids, just laundered through an aggregation step
+   instead of a single missing field. Covered by
+   `TestPocService_Progress_PartialMonthGapMakesAggregateNil`
+   (`internal/domain/poc_test.go`).
+5. **`poc-report.v1` export ownership + storage — identity-service, JSON
+   only, mirroring BRD 69's `value-report.v1` pattern exactly as instructed.**
+   `internal/pocexport/export.go` reimplements usage-service's
+   `internal/valueexport`'s `FSStore` (HMAC-signed local object store,
+   `SHA256Hex`) rather than importing it (services don't share Go packages
+   across DB-per-service boundaries — the same note BRD 69's own
+   `valueexport` package doc comment makes about not importing
+   chart-service's). Deliberately **JSON-only, no CSV** — §2.9's
+   `poc-report.v1` schema is a single JSON document (unlike `value-report.v1`,
+   which explicitly asks for both formats); adding a CSV nobody asked for
+   would be scope creep. `checksum_sha256` is computed exactly per §2.9's
+   spec ("sha256 of this document with checksum_sha256 itself zeroed") —
+   `checksummedJSON` in `poc_service.go` marshals with the field blanked,
+   hashes, then marshals again with the real value. §2.9 flagged "no
+   existing export storage path was located... confirm at implementation
+   time" — confirmed here: `value_exports`/`handlers_value_export.go` in
+   usage-service is exactly the storage pattern this build ported over
+   (checksummed artifact + a `poc_exports` version-numbered row, HMAC-signed
+   download URL, never-overwrite-on-reexport).
+6. **`ValueSummary`'s data carried into the export "verbatim, never
+   re-derived" (§2.9's explicit requirement, echoing BRD 69's own honesty
+   rule)**: rather than re-typing every field usage-service's summary
+   response carries, `valueclient.Client.Summary` decodes the raw HTTP body
+   into both a typed subset (`domain.ValueSummaryView`, the four fields this
+   build interprets) AND a `map[string]any` (`Raw`) that survives untouched
+   into `poc-report.v1`'s `value_summary` field — so a field this build
+   doesn't otherwise use (e.g. `by_pack`, `by_agent`, `provenance.rollup_version`)
+   still round-trips into the export exactly as usage-service returned it.
+   Covered by `TestPocService_ExportReport_CarriesValueSummaryVerbatim`.
+7. **Access control — no distinct "sponsor" role exists anywhere in this
+   platform's RBAC catalog**, so DSP-FR-021's "visible to sponsor role + SE"
+   is implemented as: creation and operator criteria edits are
+   `requireSuperAdmin` (same gate as `/demo-tenants`, matching BRD 70
+   §In-scope's "operator/partner-created in v1"); reads, the manual-value
+   update, and report export/list reuse the exact `ActUserAdmin` +
+   cross-tenant-404 pattern `GET /tenants/{id}/entitlements` already
+   established (`handlers_commercial.go`) — a POC tenant's own tenant-admin
+   caller (in practice, likely the sponsor's own admin login on the POC
+   tenant) stands in for "sponsor," same as every other tenant-self-service
+   surface in this service. Flagged as a real gap, not a hidden shortcut: a
+   genuine cross-role distinction (SE vs sponsor, different read/write
+   scopes) would need a new RBAC role this build did not invent.
+8. **Service-to-service call pattern — HTTP, mirroring `internal/rbacclient`
+   exactly, per the task's own suggestion.** `internal/adapters/valueclient`
+   mints a short-lived `service`-typed token via the same `TokenIssuer` every
+   other cross-service call in this codebase uses, then calls
+   `GET /api/v1/value/summary` on usage-service directly. The token's scope
+   is the wildcard `["*"]` `demoseed`/`deploy/e2e` already use as precedent
+   (usage-service's `RequireAction` gate is OPA-projection-based, not
+   JWT-scope-based, so a narrower `Scopes` list wouldn't tighten anything
+   real) — flagged in the adapter's own doc comment, not hidden.
+
+**Files touched.**
+
+- identity-service (domain, new): `internal/domain/poc.go`
+  (`SuccessCriterion`, `CreatePocTenantRequest`, `CriterionProgress`,
+  `PocProgress`, `PocReport`/`PocReportCriterion`/`PocReportWindow`,
+  `PocExport`, `ValueSummaryView`, `ValueSummaryReader` port,
+  `pocMonthsInWindow`), `internal/domain/poc_service.go` (`PocService`:
+  `Create`/`SetCriteria`/`GetCriteria`/`UpdateManualValue`/`Progress`/
+  `ExportReport`/`ListExports`, the month-aggregation + checksum logic).
+  **Edited**: `internal/domain/tenant_service.go` (`CreateTenantRequest.TrialDays`,
+  Go-only; `Create` sets `CommercialTrial`/`TrialStartedAt`/`TrialEndsAt`
+  directly for `profile=poc` — decision 3 above), `internal/domain/store.go`
+  (`Store` interface: `SetPocSuccessCriteria`/`GetPocSuccessCriteria`/
+  `UpdatePocCriterionManualValue`/`CreatePocExport`/`ListPocExports`),
+  `internal/domain/events.go` (`poc.criteria_set`/`poc.manual_value_updated`/
+  `poc.report_exported`).
+- identity-service (store): `internal/store/memory/memory.go` and
+  `internal/store/postgres/postgres.go` both implement every new `Store`
+  method. `migrations/0014_poc_success_criteria.{up,down}.sql` (new:
+  `poc_success_criteria` — one row per criterion, `UNIQUE(tenant_id, key)`;
+  `poc_exports` — mirrors usage-service's `value_exports` shape; both RLS
+  with the same tenant-isolation + platform-bypass dual-policy shape
+  `trial_events`/`0013` already established).
+- identity-service (adapters, new): `internal/adapters/valueclient/valueclient.go`
+  (`Client`, `domain.ValueSummaryReader` — decision 8 above),
+  `internal/pocexport/export.go` (`FSStore`, `SHA256Hex` — decision 5 above).
+- identity-service (API, new): `internal/api/handlers_poc.go`
+  (`handleCreatePocTenant`, `handleGetPocCriteria`/`handleSetPocCriteria`,
+  `handleUpdatePocManualValue`, `handleGetPocProgress`,
+  `handleExportPocReport`/`handleListPocReports`/`handleDownloadPocReport`,
+  `crossTenantGuard` generalized from `handlers_commercial.go`'s inline
+  entitlements guard). **Edited**: `internal/api/server.go` (`Server.Poc`/
+  `PocExports` fields; `POST /poc-tenants` + `PUT /poc-tenants/{id}/criteria`
+  under the existing `requireSuperAdmin` group; `GET .../poc/criteria`,
+  `GET .../poc/progress`, `PATCH .../poc/criteria/{key}/manual-value`,
+  `POST`/`GET .../poc-reports` under the existing `ActUserAdmin` group;
+  `GET /poc-report-artifacts/*` pre-auth, HMAC-validated, mirroring
+  usage-service's `GET /value-report-artifacts/*`).
+- identity-service (wiring): `cmd/server/main.go` (`valueclient.Client`
+  wired when `USAGE_SERVICE_URL` is set, `mustReal`-gated under
+  `REQUIRE_REAL_ADAPTERS=true` otherwise — same pattern as the `RBAC_URL`-backed
+  last-admin checker; `pocexport.FSStore` wired via `POC_EXPORT_ROOT`/
+  `POC_EXPORT_SIGNING_SECRET`, mirroring usage-service's
+  `VALUE_EXPORT_ROOT`/`VALUE_EXPORT_SIGNING_SECRET`; `PocService` construction
+  with `Commercial` wired for the entitlement-default plan assignment).
+- identity-service (tests, new): `internal/domain/poc_test.go` (13 test
+  functions, several table-driven — creation/trial-state, validation,
+  criteria CRUD, manual-value update rules, progress met/missed/inconclusive,
+  the partial-month-gap honesty case, export checksum/versioning, the
+  nil-adapter fail-loud cases), `internal/api/handlers_poc_test.go` (6
+  acceptance tests over real HTTP: create + read criteria, superadmin gate,
+  cross-tenant-404 + audit event, manual-value update + live progress,
+  export + signed-download + checksum verification, operator criteria
+  replace), `test/integration/poc_pg_test.go` (2 Testcontainers-Postgres
+  tests: full round-trip incl. `Tenant.Profile`/`commercial_state` through
+  the real `tenants` columns + `poc_success_criteria`/`poc_exports` RLS
+  isolation, mirroring `TestDemoTenantSagaOnPostgres`/
+  `TestTrialEventsRLSIsolation`'s exact proof shapes — written/compile-checked,
+  not run, same Docker-unavailable constraint as every other integration
+  test in this initiative's history). **Edited**: `internal/api/fixture_test.go`
+  (`fakeValueSummaryReader`, `f.pocValue`, `Server.Poc`/`PocExports` wired
+  with a real `pocexport.FSStore` rooted at `t.TempDir()` so the acceptance
+  tests exercise the real checksum/signature path, not a stub).
+
+**No usage-service, ui-web, or bff-graphql files were touched.** Per the
+task's own scope guidance ("if you run low on scope budget, prioritize
+backend + tests + docs over UI") and given the size of the backend alone, no
+`ui-web` surface was built for POC mode this round — `/admin/value` (BRD 69)
+and the POC progress/criteria API are both real and callable, but nothing in
+`services/ui-web` renders them yet. This is a real, stated gap, not a
+silent one: a POC progress panel is the natural next increment (either a new
+`/admin/poc` page or a section on `/admin/value` scoped by `?tenant_id=`),
+and would need a `PocClient` in bff-graphql (mirroring `ValueClient`,
+`src/clients/value.ts`) before ui-web has anything to call.
+
+**Test commands + results.**
+
+```
+cd services/identity-service
+go build ./...                                            → PASS
+go vet ./... && go vet -tags integration ./...             → PASS (no findings)
+go test ./internal/... ./migrations/... -count=1            → PASS, all packages ok
+go test ./internal/... ./migrations/... -count=1 -v | grep -c '^--- PASS'
+                                                              → 199 passing test functions
+                                                                (0 failing; 21 of these are
+                                                                new this slice: 13 in
+                                                                internal/domain/poc_test.go,
+                                                                6 in internal/api/
+                                                                handlers_poc_test.go, plus 2
+                                                                integration tests that SKIP
+                                                                rather than PASS, counted
+                                                                separately below)
+go test -tags integration -run TestPoc ./test/integration/... -v
+                                                              → both new tests
+                                                                (TestPocSuccessCriteriaRoundTripOnPostgres,
+                                                                TestPocStoreRLSIsolation) print
+                                                                `--- SKIP` with the standard
+                                                                "Docker unavailable" message
+                                                                (docker info fails the same way
+                                                                already documented throughout
+                                                                this file); compiles clean
+                                                                under go vet -tags integration.
+                                                                The separate, pre-existing
+                                                                test/integration/secretsigner
+                                                                panic (Docker fully absent, not
+                                                                merely container-less)
+                                                                reproduces exactly as already
+                                                                documented above in this same
+                                                                file — untouched by this slice.
+```
+
+**Verified vs written-but-not-run vs deferred (mirroring the format the rest
+of this file uses):**
+
+- **Verified (executed, green):** the creation-time `commercial_state=trial`
+  write and its bypass of `TrialService.Start`'s guard (decision 3);
+  criteria validation (empty/too-many/duplicate keys, bad `metric_ref`/
+  `direction`); the non-`manual` metric hand-update rejection; progress
+  scoring for `met`/`missed`/`inconclusive` including the nil-`ValueSummaryReader`
+  case (never a fabricated actual value) and the partial-month-gap
+  aggregation case (decision 4); `poc-report.v1`'s checksum discipline and
+  version-never-overwrites semantics; the full HTTP surface incl. the
+  `requireSuperAdmin` create/replace gate, the `ActUserAdmin` +
+  cross-tenant-404 read/update/export gate (with the audit event asserted),
+  and a real signed-artifact download whose bytes hash to the API-reported
+  checksum (`TestPocTenants_ExportReportChecksumAndDownload`) — all against
+  the in-memory store + a real `pocexport.FSStore` rooted at a temp
+  directory, a real chi-routed HTTP round trip.
+- **Written but not executed (no Docker in this environment):**
+  `TestPocSuccessCriteriaRoundTripOnPostgres` and `TestPocStoreRLSIsolation`
+  (`test/integration/poc_pg_test.go`) — both compile clean under
+  `go vet -tags integration ./...` and auto-skip via the existing
+  `requirePG` convention, same as every other integration test in this
+  initiative.
+- **Deferred / explicitly out of scope this round:** the ui-web POC progress
+  surface (see above); DSP-FR-022's second conversion path ("POC ran on the
+  customer's real data as a standard-profile trial") — `CreatePocTenantRequest.Pack`
+  is optional and a POC can run with no demo bundle, but this build does not
+  wire `SeedDemoContent` for `profile=poc` (that step is still gated to
+  `t.Profile==ProfileDemo` only, `engine_steps.go`), so a bundle-seeded
+  walkable POC is not yet possible even though the field exists — flagged,
+  not silently half-wired; BRD 67 billing-exclusion coordination (DSP-FR-002)
+  — BRD 67 is unbuilt, out of this slice's reach; DSP-FR-023 (design-partner
+  variant, Could-priority) — not started.
+- **Honest gap, mirroring the demoseed/self-serve-signup precedent already
+  documented above:** `valueclient.Client`'s service-token call into
+  usage-service has never been exercised against a live stack (no
+  Docker/OPA in this environment) — it is real, code-complete, and its
+  wire-decode logic is unit-tested against hand-built JSON, but whether a
+  `service`-typed, wildcard-scoped token actually clears usage-service's
+  `RequireAction(usage.report.read)` OPA check in a real deployment is
+  unverified, flagged in the adapter's own doc comment.
+
 ### A note on git state
 
 While this work was in progress, the environment auto-created intermediate
@@ -959,3 +1547,25 @@ Flagging this again for the orchestrator's awareness since it affects what
 "the diff" means when reviewing this change — the full BRD 70 slice 1-2 diff
 is the union of those snapshot commits' BRD-70-scoped hunks plus the working
 tree at hand-off.
+
+**Recurred during the v1.1 self-serve round.** The same auto-snapshot
+behavior fired again mid-task: `cca592d` ("wip(identity-service,ui-web):
+self-service demo tenant signup") captured every identity-service/ui-web
+file this round touched at a point where the build/tests were already
+green but this doc's §3 update was still being written — again, not a
+`git commit` this agent issued. The only change genuinely left uncommitted
+at hand-off is this documentation update itself (`git status` shows just
+`docs/initiatives/demo-sandbox-poc-mode.md` modified); the code diff is
+`cca592d` in full. No `git push` was performed at any point.
+
+**Recurred again during the slice 3 (POC mode) round.** `f113d76`
+("wip(identity-service): POC success-criteria tracking + poc-report.v1
+export") captured most of this round's identity-service files mid-task —
+again, not a `git commit` this agent issued, and no `git push` was
+performed. `git status` at hand-off shows a handful of files still
+genuinely uncommitted on top of `f113d76`
+(`cmd/server/main.go`, `internal/api/fixture_test.go`,
+`internal/domain/poc_service.go`, `internal/domain/poc_test.go`, plus the
+new, never-snapshotted `internal/api/handlers_poc_test.go` and
+`test/integration/poc_pg_test.go`) — the full slice 3 diff is the union of
+`f113d76`'s hunks and this working-tree state.

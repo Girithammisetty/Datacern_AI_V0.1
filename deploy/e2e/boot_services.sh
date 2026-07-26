@@ -30,6 +30,16 @@ start_identity() {
     KEYCLOAK_URL="http://localhost:8180"
     KEYCLOAK_ADMIN_USER="admin" KEYCLOAK_ADMIN_PASSWORD="admin"
     OPA_URL="$OPA_URL" RBAC_URL="$RBAC_URL"
+    # BRD 70 slice 3 (POC mode): PocService.Value reads real BRD 69 data from
+    # usage-service over HTTP -- REQUIRE_REAL_ADAPTERS=true above means
+    # identity-service now refuses to boot at all without this set (no
+    # fallback, matching Bundles/Seed's fail-loud rule). $USAGE_URL is
+    # config.env's own name for the same http://localhost:$PORT_USAGE every
+    # other caller of usage-service in this harness already uses -- identity
+    # only needs the URL string at boot (the actual HTTP calls happen later,
+    # on demand), so this is safe regardless of exactly when start_usage
+    # itself runs relative to start_identity.
+    USAGE_SERVICE_URL="$USAGE_URL"
     OIDC_ISSUER="${OIDC_ISSUER:-}" OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-}" OIDC_TENANT_ID="${OIDC_TENANT_ID:-}" )
   say "boot identity (bootstrap pass)"
   boot identity "${env[@]}" "$BIN_DIR/identity-e2e"
@@ -548,7 +558,9 @@ boot_platform_extra() {
   start_query
   start_semantic
   start_chart
-  start_usage
+  # start_usage moved to boot_all() -- BRD 67's governed_decision metering
+  # needs usage-service up before the money-path driver's HITL-approve step,
+  # not after it (see boot_all()'s own comment on the move).
   start_audit
   start_notification
   start_eval
@@ -572,6 +584,13 @@ boot_all() {
   [ -n "$VKEY" ] || die "failed to seed ai-gateway model + virtual key"
   ok "ai-gateway seeded; agent virtual key minted"
   start_agent_runtime "$VKEY"
+  # usage-service (BRD 67 slice 1, VMB-FR-001/002/003): must be up and
+  # consuming ai.proposal.v1 off real Kafka before driver.py's step E HITL
+  # approve fires, or step E4's governed_decision poll has nothing to find.
+  # Previously only booted by deploy/local/up.sh's boot_platform_extra(), so
+  # the ingest -> decision -> value/ROI-dashboard loop was never provably
+  # live in a single make-e2e run.
+  start_usage
   # RETRAIN TAIL
   start_pipeline
   start_experiment

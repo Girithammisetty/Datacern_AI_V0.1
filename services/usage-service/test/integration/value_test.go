@@ -78,6 +78,65 @@ func TestAC1_AssumptionsSetAndUnset_ValueSummary(t *testing.T) {
 	require.Nil(t, data2["hours_saved_est"])
 }
 
+// TestAC_HoursSavedEst_ComputesRealNumber_WhenByKindAvailable is BRD 69's
+// "close the gap" test (docs/initiatives/value-roi-reporting.md §3): with
+// real governed_decision events carrying proposal_kind (BRD 69's migration
+// 000007_governed_decision_kind promoted it to a physical rollup column) and
+// assumptions set for that kind, GET /value/summary must return REAL,
+// non-null hours_saved_est/labor_value_est_usd/human_baseline_cost_usd/
+// net_value_est_usd — not the permanent null the ROI-NFR-004 honesty
+// contract previously required because proposal_kind never reached rollup
+// grain. REAL: Kafka, Postgres, HTTP.
+func TestAC_HoursSavedEst_ComputesRealNumber_WhenByKindAvailable(t *testing.T) {
+	h := requireHarness(t)
+	tenant := uuid.New()
+	tok := h.token(t, tenant, "user", "u-exec", nil)
+	period := time.Now().UTC().Format("2006-01")
+
+	// Every governedDecisionPayload carries proposal_kind="case" (the
+	// harness fixture mirrors agent-runtime's real emitted shape, see the
+	// helper's doc comment). Publish 3 approved decisions.
+	for i := 0; i < 3; i++ {
+		h.publish(t, events.TopicAIProposal, tenant, uuid.New(), time.Now().UTC(),
+			governedDecisionPayload("case-triage", "user:u-1", "approved", 1000))
+	}
+	require.Equal(t, 3.0, h.waitRawSum(t, tenant, domain.MeterGovernedDecision, 3, 20*time.Second))
+	require.NoError(t, h.st.RefreshRollups(context.Background(), time.Now().Add(-49*time.Hour)))
+
+	// Set assumptions covering the "case" kind: 15 min/decision, $120/hr.
+	putBody := map[string]any{
+		"minutes_per_decision":   map[string]float64{"case": 15},
+		"loaded_hourly_rate_usd": 120,
+	}
+	pr := h.do(t, "PUT", "/api/v1/value/assumptions", tok, putBody, nil)
+	require.Equal(t, 200, pr.status)
+
+	r := h.do(t, "GET", "/api/v1/value/summary?period="+period, tok, nil, nil)
+	require.Equal(t, 200, r.status)
+	data, _ := r.body["data"].(map[string]any)
+	require.NotNil(t, data)
+
+	decisions, _ := data["decisions"].(map[string]any)
+	require.NotNil(t, decisions)
+	byKind, _ := decisions["by_kind"].(map[string]any)
+	require.EqualValues(t, 3, byKind["case"], "proposal_kind must reach usage_monthly at rollup grain")
+
+	hse, _ := data["hours_saved_est"].(map[string]any)
+	require.NotNil(t, hse, "hours_saved_est must be a REAL number now that by_kind is populated and assumptions cover it")
+	require.InDelta(t, 0.75, hse["value"], 0.01, "3 decisions * 15min / 60 = 0.75 hours")
+	require.EqualValues(t, 1, hse["assumption_version"])
+
+	nve, _ := data["net_value_est_usd"].(map[string]any)
+	require.NotNil(t, nve, "net_value_est_usd must be a REAL number now, not the old permanent null")
+	require.InDelta(t, 90.0, nve["value"], 0.5, "0.75h * $120/hr - $0 ai_cost = $90")
+
+	prov, _ := data["provenance"].(map[string]any)
+	require.EqualValues(t, 1, prov["assumption_version"])
+	if gap, ok := prov["meter_gap"].(string); ok {
+		require.NotContains(t, gap, "by_kind", "the by_kind gap must NOT be disclosed once real by-kind data is present and matched")
+	}
+}
+
 // TestAC2_AssumptionHistory_RecordsVersionsWithActor: editing assumptions
 // twice yields two history rows in version order, each carrying created_by
 // and the before/after values used (ROI-FR-002 point 4).

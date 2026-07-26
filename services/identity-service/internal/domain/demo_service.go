@@ -51,6 +51,15 @@ type DemoService struct {
 	Bundles DemoBundleLoader
 	Seed    DemoSeedRunner
 	Clock   func() time.Time
+	// Tokens backs the self-serve claim-login flow (BRD 70 v1.1, PublicSignup
+	// / ClaimSelfServeLogin in demo_public_signup.go): it mints the real
+	// RS256 claim/session tokens through the SAME Issuer every other login
+	// path (dev-login, real OIDC login, embed tokens) signs with. Nil is a
+	// valid, honest "self-serve signup not configured" state -- PublicSignup
+	// still creates tenants fine without it, but the claim-token/instant-
+	// login half of the flow fails loud (EInternal) rather than silently
+	// no-op'ing, matching Bundles/Seed's own "fail loud on nil adapter" rule.
+	Tokens *TokenService
 }
 
 func (s *DemoService) now() time.Time { return s.Clock().UTC() }

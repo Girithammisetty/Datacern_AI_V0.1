@@ -1056,6 +1056,109 @@ func (s *Store) ListTrialEvents(ctx context.Context, tenantID uuid.UUID) ([]doma
 	return out, err
 }
 
+// --- POC mode (BRD 70 slice 3, DSP-FR-020..022) ---
+
+func (s *Store) SetPocSuccessCriteria(ctx context.Context, tenantID uuid.UUID, criteria []domain.SuccessCriterion, evs ...domain.OutboxEvent) error {
+	return s.tenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM poc_success_criteria WHERE tenant_id=$1`, tenantID); err != nil {
+			return err
+		}
+		for _, c := range criteria {
+			id, _ := uuid.NewV7()
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO poc_success_criteria
+				  (id, tenant_id, key, description, metric_ref, target, direction, manual_value)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+				id, tenantID, c.Key, c.Description, c.MetricRef, c.Target, c.Direction, c.ManualValue); err != nil {
+				return err
+			}
+		}
+		return insertOutbox(ctx, tx, evs)
+	})
+}
+
+func (s *Store) GetPocSuccessCriteria(ctx context.Context, tenantID uuid.UUID) ([]domain.SuccessCriterion, error) {
+	var out []domain.SuccessCriterion
+	err := s.tenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT key, description, metric_ref, target, direction, manual_value
+			FROM poc_success_criteria WHERE tenant_id=$1 ORDER BY created_at ASC`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c domain.SuccessCriterion
+			if err := rows.Scan(&c.Key, &c.Description, &c.MetricRef, &c.Target, &c.Direction, &c.ManualValue); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+func (s *Store) UpdatePocCriterionManualValue(ctx context.Context, tenantID uuid.UUID, key string, value float64, evs ...domain.OutboxEvent) error {
+	return s.tenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		ct, err := tx.Exec(ctx, `
+			UPDATE poc_success_criteria SET manual_value=$3, updated_at=now()
+			WHERE tenant_id=$1 AND key=$2`, tenantID, key, value)
+		if err != nil {
+			return err
+		}
+		if ct.RowsAffected() == 0 {
+			return domain.ENotFound("success criterion")
+		}
+		return insertOutbox(ctx, tx, evs)
+	})
+}
+
+func (s *Store) CreatePocExport(ctx context.Context, tenantID uuid.UUID, e domain.PocExport, evs ...domain.OutboxEvent) (domain.PocExport, error) {
+	err := s.tenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		var maxVersion int
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(MAX(version),0) FROM poc_exports WHERE tenant_id=$1`, tenantID).Scan(&maxVersion); err != nil {
+			return err
+		}
+		id, _ := uuid.NewV7()
+		e.ID = id
+		e.TenantID = tenantID
+		e.Version = maxVersion + 1
+		e.CreatedAt = time.Now().UTC()
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO poc_exports (id, tenant_id, version, json_key, json_sha256, generated_by, created_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+			e.ID, e.TenantID, e.Version, e.JSONKey, e.JSONSHA256, e.GeneratedBy, e.CreatedAt); err != nil {
+			return err
+		}
+		return insertOutbox(ctx, tx, evs)
+	})
+	return e, err
+}
+
+func (s *Store) ListPocExports(ctx context.Context, tenantID uuid.UUID) ([]domain.PocExport, error) {
+	var out []domain.PocExport
+	err := s.tenantTx(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT id, tenant_id, version, json_key, json_sha256, generated_by, created_at
+			FROM poc_exports WHERE tenant_id=$1 ORDER BY created_at DESC`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var e domain.PocExport
+			if err := rows.Scan(&e.ID, &e.TenantID, &e.Version, &e.JSONKey, &e.JSONSHA256, &e.GeneratedBy, &e.CreatedAt); err != nil {
+				return err
+			}
+			out = append(out, e)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // --- cells ---
 
 func (s *Store) CreateCell(ctx context.Context, c *domain.Cell) error {

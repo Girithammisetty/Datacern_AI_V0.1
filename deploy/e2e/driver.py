@@ -665,6 +665,10 @@ def step_e_grant_and_apply(case_id, proposal_id):
     # service's own Postgres for ground truth (see the disposition check just
     # above), poll usage_raw directly for up to the VMB-NFR-001 p95 ingest-lag
     # budget (30s).
+    #
+    # usage-service is now part of boot_all() (see boot_services.sh), so this
+    # check runs unconditionally — a connection/query failure here is a real
+    # regression, not an expected "service wasn't booted" gap.
     if EVID.get("hitl_approved") and proposal_id:
         try:
             import psycopg
@@ -686,7 +690,7 @@ def step_e_grant_and_apply(case_id, proposal_id):
             else:
                 bad("no governed_decision raw row appeared within 30s of HITL approve")
         except Exception as e:
-            info(f"usage-service PG check (governed_decision, slice 1 — usage may not be booted): {e}")
+            bad(f"usage-service PG check (governed_decision, AC-1) errored: {e}")
 
 
 # ============================================================ STEP F learning signal

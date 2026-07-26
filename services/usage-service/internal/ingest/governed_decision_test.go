@@ -64,8 +64,11 @@ func TestGovernedDecisionMapping_HumanApprove(t *testing.T) {
 	if r.PackName != nil {
 		t.Fatalf("pack_name should be nil (null in payload), got %+v", r.PackName)
 	}
-	if r.Meta["proposal_kind"] != "case" {
-		t.Fatalf("meta.proposal_kind should be 'case', got %+v", r.Meta)
+	if r.ProposalKind == nil || *r.ProposalKind != "case" {
+		t.Fatalf("proposal_kind should be a physical dim 'case' (BRD 69 migration 000007), got %+v", r.ProposalKind)
+	}
+	if _, ok := r.Meta["proposal_kind"]; ok {
+		t.Fatalf("proposal_kind must NOT also be duplicated into meta now that it is a physical dim, got %+v", r.Meta)
 	}
 	if r.Meta["decision_latency_ms"] != float64(4200) {
 		t.Fatalf("meta.decision_latency_ms should be 4200, got %+v", r.Meta)

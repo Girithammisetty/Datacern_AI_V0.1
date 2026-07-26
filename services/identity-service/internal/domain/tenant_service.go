@@ -22,6 +22,18 @@ type TenantService struct {
 	Async bool
 	// ReservedNames extends the reserved list with cell names (IDN-FR-002).
 	ReservedNames []string
+	// Lease gates RunScheduledDeletions the same way DemoReaper.Sweep and
+	// TrialSweep.SweepOnce are gated (LeaseChecker, internal/domain/
+	// demo_reaper.go): nil means "always leader", correct for single-replica
+	// dev/tests, but NOT leader-elected for real multi-replica safety. Before
+	// this field existed, this was the one scheduled sweep in the codebase
+	// still a plain, non-leader-elected ticker (docs/initiatives/
+	// demo-sandbox-poc-mode.md §3 "Honest gaps") -- every other reaper
+	// already had a real Redis SET-NX-PX lease. Production wiring
+	// (cmd/server/main.go) sets this to a leaderlease.Lease exactly like the
+	// demo reaper and trial sweep do, using its own resource key so the three
+	// sweeps campaign for independent leases.
+	Lease LeaseChecker
 }
 
 func (s *TenantService) now() time.Time { return s.Clock().UTC() }
@@ -47,6 +59,21 @@ type CreateTenantRequest struct {
 	Profile  TenantProfile `json:"-"`
 	DemoPack string        `json:"-"`
 	TTLDays  *int          `json:"-"`
+	// TrialDays is Go-only (json:"-"), mirroring Profile/DemoPack/TTLDays
+	// above: only PocService.Create (POST /poc-tenants, BRD 70 DSP-FR-020)
+	// populates it. When set (profile=poc only), CommercialState/
+	// TrialStartedAt/TrialEndsAt are initialized directly on the struct
+	// below rather than through a guarded TransitionCommercial call --
+	// CanTransitionCommercial's non-convertible table (tenant.go) has no
+	// edge into CommercialTrial for profile=poc from CommercialNone
+	// (deliberately: DSP-FR-003 forbids reaching CommercialActive, and the
+	// guard doesn't special-case "the very first write"), so the initial
+	// trial state is set at INSERT time, the same way CommercialNone
+	// already is for every other tenant a few lines below -- see
+	// docs/initiatives/demo-sandbox-poc-mode.md §3 for why this mirrors
+	// the Profile "set once, never transitioned into" pattern rather than
+	// reusing TrialService.Start.
+	TrialDays int `json:"-"`
 }
 
 // Create validates and creates a tenant (IDN-FR-001/002/004/005, BR-1:
@@ -98,6 +125,16 @@ func (s *TenantService) Create(ctx context.Context, req CreateTenantRequest, act
 		Profile:  profile,
 		DemoPack: req.DemoPack,
 		TTLDays:  req.TTLDays,
+	}
+	// DSP-FR-020: a profile=poc tenant's commercial_state starts at `trial`
+	// (not `none`), trial_ends_at = window end, set directly here rather
+	// than through TrialService.Start -- see CreateTenantRequest.TrialDays'
+	// doc comment for why.
+	if profile == ProfilePOC && req.TrialDays > 0 {
+		t.CommercialState = CommercialTrial
+		t.TrialStartedAt = &now
+		endsAt := now.Add(time.Duration(req.TrialDays) * 24 * time.Hour)
+		t.TrialEndsAt = &endsAt
 	}
 	// BR-1 / AC-4: uniqueness of name and every derived identifier is
 	// enforced in one transaction; a duplicate (case-insensitive, since
@@ -243,8 +280,22 @@ func (s *TenantService) Delete(ctx context.Context, id uuid.UUID, mode string, f
 }
 
 // RunScheduledDeletions processes tenants whose grace period elapsed
-// (invoked by the scheduler loop in main; directly in tests).
+// (invoked by the scheduler loop in main; directly in tests). Leader-gated
+// (s.Lease, same LeaseChecker seam DemoReaper.Sweep and TrialSweep.SweepOnce
+// use) so a non-leader replica never races another replica to deprovision
+// the same tenant -- a plain single-process ticker was safe with one
+// identity-service replica but not once there is more than one (docs/
+// initiatives/demo-sandbox-poc-mode.md §3 "Honest gaps"). It already drives
+// tenants through the SAME saga every other teardown path uses --
+// s.Engine.Deprovision, the identical call DemoReaper.reapOne makes for a
+// tenant already `deleting` and TenantService.Delete's force-destroy branch
+// kicks off -- so there is exactly one deprovision implementation in this
+// service; this sweep was only ever missing the leader-election guard, not
+// a divergent teardown mechanism.
 func (s *TenantService) RunScheduledDeletions(ctx context.Context) error {
+	if s.Lease != nil && !s.Lease.IsLeader() {
+		return nil
+	}
 	tenants, _, err := s.Store.ListTenants(ctx, TenantFilter{Status: string(TenantDeleting)}, PageRequest{Limit: MaxPageLimit})
 	if err != nil {
 		return err

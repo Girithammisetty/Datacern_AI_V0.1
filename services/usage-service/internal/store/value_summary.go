@@ -13,14 +13,26 @@ import (
 // ValueSummaryInputs reads the ROI-FR-010 summary's raw ingredients from
 // usage_monthly ONLY (ROI-NFR-001 "no raw scans at request time" — the same
 // precedent QueryUsage follows over usage_daily). Returns the
-// governed_decision breakdown, ai_cost_usd (existing LLM token meters priced
-// via the active rate card), adoption (distinct user_id across all meters),
-// and whether the bucket is finalized (for the provenance.rollup_version
-// tag).
+// governed_decision breakdown (including by_kind — see below), ai_cost_usd
+// (existing LLM token meters priced via the active rate card), adoption
+// (distinct user_id across all meters), and whether the bucket is finalized
+// (for the provenance.rollup_version tag).
+//
+// ByKind is populated from usage_monthly's proposal_kind column (BRD 69's
+// migration 000007_governed_decision_kind, docs/initiatives/
+// value-roi-reporting.md §3 "Repo-state finding" / "Known limits" — this
+// closes the gap that migration left open: proposal_kind is now a physical
+// rollup dimension, not raw-detail-only in usage_raw.meta). A decision row
+// with an empty/unset proposal_kind (pre-migration data, or an event that
+// genuinely carried none) does NOT contribute to ByKind — it still counts
+// toward Total/ByDecision/ByAgent/ByPack, but valuecalc.BuildSummary only
+// derives hours_saved_est/etc. from kinds it can see, so decisions with no
+// kind honestly contribute nothing to those estimates rather than being
+// silently dropped or fabricated into an "unknown" bucket.
 func (s *PG) ValueSummaryInputs(ctx context.Context, tenant uuid.UUID, monthStart time.Time, workspaceID string) (domain.DecisionsBreakdown, float64, domain.Adoption, bool, error) {
 	decisions := domain.DecisionsBreakdown{
 		ByDecision: map[string]int64{},
-		ByKind:     map[string]int64{}, // see domain.DecisionsBreakdown doc comment: never populated from this query today
+		ByKind:     map[string]int64{},
 		ByAgent:    map[string]int64{},
 		ByPack:     map[string]int64{},
 	}
@@ -36,7 +48,7 @@ func (s *PG) ValueSummaryInputs(ctx context.Context, tenant uuid.UUID, monthStar
 	err = s.withTenant(ctx, tenant, func(tx pgx.Tx) error {
 		// governed_decision breakdown.
 		rows, err := tx.Query(ctx, `
-			SELECT NULLIF(decision,''), NULLIF(agent_id,''), NULLIF(pack_name,''),
+			SELECT NULLIF(decision,''), NULLIF(agent_id,''), NULLIF(pack_name,''), NULLIF(proposal_kind,''),
 			       quantity_sum::float8, finalized_at
 			FROM usage_monthly
 			WHERE tenant_id=$1 AND meter_key=$2 AND bucket=$3
@@ -47,10 +59,10 @@ func (s *PG) ValueSummaryInputs(ctx context.Context, tenant uuid.UUID, monthStar
 		}
 		first := true
 		for rows.Next() {
-			var decision, agent, pack *string
+			var decision, agent, pack, kind *string
 			var qty float64
 			var finAt *time.Time
-			if err := rows.Scan(&decision, &agent, &pack, &qty, &finAt); err != nil {
+			if err := rows.Scan(&decision, &agent, &pack, &kind, &qty, &finAt); err != nil {
 				rows.Close()
 				return err
 			}
@@ -64,6 +76,9 @@ func (s *PG) ValueSummaryInputs(ctx context.Context, tenant uuid.UUID, monthStar
 			}
 			if pack != nil {
 				decisions.ByPack[*pack] += n
+			}
+			if kind != nil {
+				decisions.ByKind[*kind] += n
 			}
 			if first {
 				finalized = finAt != nil

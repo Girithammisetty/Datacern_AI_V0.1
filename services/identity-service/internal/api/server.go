@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -59,6 +60,37 @@ type Server struct {
 	// own methods are the ones that would nil-panic, so operators must wire
 	// it whenever POST /demo-tenants is reachable -- same contract as Logo).
 	Demo *domain.DemoService
+	// Poc: POC-mode lifecycle (BRD 70 slice 3) -- create-with-criteria,
+	// criteria CRUD, live progress, poc-report.v1 export. Nil-safe like Demo
+	// above: a deployment that never exposes /poc-tenants simply leaves this
+	// unset and the routes below are unreachable in practice (Poc's own
+	// methods would nil-panic if somehow reached).
+	Poc *domain.PocService
+	// PocExports stores poc-report.v1 artifacts (internal/pocexport.FSStore
+	// in production). Nil disables POST/GET .../poc-reports* with a clear
+	// EInternal, matching usage-service's Exports field's nil-safe contract.
+	PocExports domain.PocReportObjectStore
+	// PublicDemo* config the unauthenticated self-serve demo signup surface
+	// (BRD 70 v1.1, POST /public/demo-signup + /public/demo-signup/claim,
+	// handlers_public_demo.go). All nil-safe: an unset limiter/cap simply
+	// falls back to domain's own conservative defaults inside the handler
+	// (see publicDemoIPLimiter/publicDemoDomainLimiter/publicDemoCap below)
+	// -- this endpoint provisions real infrastructure for an unauthenticated
+	// caller, so unlike Demo/Logo ("nil = don't expose this route"), it must
+	// never come up UNrate-limited just because an operator forgot a knob.
+	PublicDemoIPLimiter     domain.RateLimiter
+	PublicDemoDomainLimiter domain.RateLimiter
+	// PublicDemoSelfServeCap: 0 defers to domain.DefaultSelfServeDemoCap.
+	PublicDemoSelfServeCap int
+	// PublicDemoPack: "" defers to domain.DefaultSelfServeDemoPack.
+	PublicDemoPack string
+	// publicDemo*Once/*Fallback back publicDemoIPLimiter/publicDemoDomainLimiter
+	// (handlers_public_demo.go): lazily-built conservative limiters used only
+	// when the corresponding PublicDemo*Limiter field above is left nil.
+	publicDemoIPOnce         sync.Once
+	publicDemoIPFallback     domain.RateLimiter
+	publicDemoDomainOnce     sync.Once
+	publicDemoDomainFallback domain.RateLimiter
 	// TrustedSpiffeIDs may call POST /token/agent (IDN-FR-042: agent-runtime).
 	TrustedSpiffeIDs map[string]bool
 	// TrustSpiffeHeader (F-2) must be explicitly true for the X-Spiffe-Id
@@ -112,6 +144,18 @@ func (s *Server) Router() http.Handler {
 		// external-agent key (wr_xa_...) for a short-lived agent_autonomous
 		// token. The key IS the credential (like /token/embed); no bearer.
 		r.Post("/token/agent/external", s.handleExternalAgentTokenExchange)
+		// BRD 70 v1.1: public, unauthenticated self-serve demo signup --
+		// deliberately NOT under /demo-tenants (requireSuperAdmin below).
+		// See handlers_public_demo.go for the abuse-prevention layering
+		// (rate limits, concurrency cap, disposable-email denylist,
+		// forced profile=demo, mandatory audit log).
+		r.Post("/public/demo-signup", s.handlePublicDemoSignup)
+		r.Post("/public/demo-signup/claim", s.handlePublicDemoSignupClaim)
+
+		// poc-report.v1 signed artifact download is HMAC-validated, not JWT
+		// (BRD 70 slice 3, DSP-FR-022, mirrors usage-service's
+		// GET /value-report-artifacts/*).
+		r.Get("/poc-report-artifacts/*", s.handleDownloadPocReport)
 
 		// Authenticated API.
 		r.Group(func(r chi.Router) {
@@ -126,6 +170,12 @@ func (s *Server) Router() http.Handler {
 			// only) — no admin scope: any member may see their org's name.
 			// Registered before /tenants/{id} so "self" never parses as an id.
 			r.Get("/tenants/self", s.handleGetTenantSelf)
+			// GET /tenants/self/walkthrough — DSP-FR-015 (Should): the caller's
+			// tenant's guided-walkthrough steps. Member-safe, same tier as
+			// /tenants/self above; registered as a static route ahead of
+			// /tenants/{id} so "self" never parses as an id (same reasoning as
+			// /tenants/self/labels below).
+			r.Get("/tenants/self/walkthrough", s.handleGetTenantWalkthrough)
 			// GET /users/profiles — member-visible {id,email,full_name} batch
 			// lookup for display-only hydration (case assignee, comment author,
 			// activity actor). No admin scope: mirrors /tenants/self. Registered
@@ -153,6 +203,16 @@ func (s *Server) Router() http.Handler {
 			// tenant's. Same ActUserAdmin + cross-tenant-404 pattern as
 			// GET /tenants/{id} (handleGetTenant, AC-12).
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/entitlements", s.handleGetTenantEntitlements)
+			// BRD 70 slice 3 (DSP-FR-020/021): a POC tenant's own admin (or
+			// platform) reads its declared criteria/live progress and updates
+			// a manual criterion's reported value -- same ActUserAdmin +
+			// cross-tenant-404 pattern as entitlements above (this codebase has
+			// no distinct "sponsor" role; see handlers_poc.go's header comment).
+			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/poc/criteria", s.handleGetPocCriteria)
+			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/poc/progress", s.handleGetPocProgress)
+			r.With(s.requireScope(ActUserAdmin)).Patch("/tenants/{id}/poc/criteria/{key}/manual-value", s.handleUpdatePocManualValue)
+			r.With(s.requireScope(ActUserAdmin)).Post("/tenants/{id}/poc-reports", s.handleExportPocReport)
+			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/poc-reports", s.handleListPocReports)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/embed-config", s.handleGetEmbedConfig)
 			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/{id}/embed-config", s.handleSetEmbedConfig)
 			// BYO-P4: a tenant admin registers their OWN OIDC IdP (self-scoped;
@@ -192,6 +252,13 @@ func (s *Server) Router() http.Handler {
 				r.Post("/demo-tenants", s.handleCreateDemoTenant)
 				r.Post("/demo-tenants/{id}/reset", s.handleResetDemoTenant)
 				r.Post("/demo-tenants/{id}/clone", s.handleCloneDemoTenant)
+				// BRD 70 slice 3: POC-mode creation + operator criteria edits
+				// (DSP-FR-020). Same requireSuperAdmin gate as demo-tenants
+				// above -- BRD 70 §In-scope keeps both operator/partner-created
+				// in v1. Reads/manual-value-update are ActUserAdmin-gated below,
+				// outside this requireSuperAdmin group.
+				r.Post("/poc-tenants", s.handleCreatePocTenant)
+				r.Put("/poc-tenants/{id}/criteria", s.handleSetPocCriteria)
 				r.Post("/keys/rotate", s.handleRotateKeys)
 				// First-class platform-admin registry (cross-tenant operators).
 				r.Get("/platform/admins", s.handleListPlatformAdmins)

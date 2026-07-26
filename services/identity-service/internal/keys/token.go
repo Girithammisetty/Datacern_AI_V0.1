@@ -43,12 +43,23 @@ type wireClaims struct {
 	Embed          bool     `json:"embed,omitempty"`
 	Surface        []string `json:"surface,omitempty"`
 	FrameAncestors []string `json:"frame_ancestors,omitempty"`
-	Iss            string   `json:"iss"`
-	Aud            string   `json:"aud"`
-	Exp            int64    `json:"exp"`
-	Iat            int64    `json:"iat"`
-	Nbf            int64    `json:"nbf"`
-	JTI            string   `json:"jti"`
+	// Profile/CommercialState (BRD 70 §2.6 / BRD 66 slice 2, CPL-FR-022):
+	// domain.Claims has carried these since demo-sandbox-poc-mode's slice 1,
+	// but this wire struct never mirrored them, so a real RS256-signed token
+	// silently dropped both claims end to end (the round-trip was only ever
+	// exercised through fake issuers in unit tests -- see docs/initiatives/
+	// demo-sandbox-poc-mode.md §3's "Honest gaps" entry on this fix). Added
+	// here rather than left as a future TODO because BRD 70 v1.1's
+	// self-serve demo login depends on Profile actually reaching the wire
+	// for the watermark banner to render for a real login.
+	Profile         string `json:"profile,omitempty"`
+	CommercialState string `json:"commercial_state,omitempty"`
+	Iss             string `json:"iss"`
+	Aud             string `json:"aud"`
+	Exp             int64  `json:"exp"`
+	Iat             int64  `json:"iat"`
+	Nbf             int64  `json:"nbf"`
+	JTI             string `json:"jti"`
 }
 
 // Issue signs claims with the active key via the Signer port.
@@ -69,8 +80,10 @@ func (i *Issuer) IssueWithTTL(c domain.Claims, ttl time.Duration) (string, int, 
 		AgentID: c.AgentID, AgentVersion: c.AgentVersion, OBOSub: c.OBOSub,
 		Scopes: c.Scopes, SessionID: c.SessionID,
 		WorkspaceID: c.WorkspaceID, Embed: c.Embed, Surface: c.Surface,
-		FrameAncestors: c.FrameAncestors,
-		Iss:            i.Iss, Aud: i.Aud,
+		FrameAncestors:  c.FrameAncestors,
+		Profile:         c.Profile,
+		CommercialState: c.CommercialState,
+		Iss:             i.Iss, Aud: i.Aud,
 		Exp: now.Add(ttl).Unix(), Iat: now.Unix(), Nbf: now.Unix(), JTI: jti.String(),
 	}
 	if wc.Scopes == nil {
@@ -124,6 +137,8 @@ func (i *Issuer) Verify(tokenString string) (*domain.Claims, error) {
 	out.AgentVersion, _ = mc["agent_version"].(string)
 	out.OBOSub, _ = mc["obo_sub"].(string)
 	out.SessionID, _ = mc["session_id"].(string)
+	out.Profile, _ = mc["profile"].(string)
+	out.CommercialState, _ = mc["commercial_state"].(string)
 	out.Issuer, _ = mc["iss"].(string)
 	out.JTI, _ = mc["jti"].(string)
 	if raw, ok := mc["scopes"].([]any); ok {

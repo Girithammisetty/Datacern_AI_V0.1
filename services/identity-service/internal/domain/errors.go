@@ -31,9 +31,9 @@ const (
 	// that raise them (pack-service install gate, seat/workspace cap checks,
 	// trial-expired write block) are slice 3 -- the design's slice plan calls
 	// for the codes to exist now so consumers can code against them early.
-	CodeEntitlementRequired   = "ENTITLEMENT_REQUIRED"
-	CodeTrialExpired          = "TRIAL_EXPIRED"
-	CodeCapExceeded           = "CAP_EXCEEDED"
+	CodeEntitlementRequired    = "ENTITLEMENT_REQUIRED"
+	CodeTrialExpired           = "TRIAL_EXPIRED"
+	CodeCapExceeded            = "CAP_EXCEEDED"
 	CodeEntitlementUnavailable = "ENTITLEMENT_UNAVAILABLE"
 )
 
@@ -141,6 +141,21 @@ func ECapExceeded(current, limit int) *Error {
 // writes; reads instead fail open and proceed unchecked).
 func EEntitlementUnavailable() *Error {
 	return &Error{Code: CodeEntitlementUnavailable, HTTP: 503, Message: "entitlement projection unavailable"}
+}
+
+// EDemoSignupAtCapacity: the self-serve demo signup concurrency ceiling
+// (BRD 70 v1.1, PublicSignup's cap parameter) has been reached. Reuses
+// CodeCapExceeded (the same stable machine-readable code CAP_EXCEEDED
+// callers already know from seat_cap/workspace_cap, CPL-FR-031) but as a
+// 503, not a 403: this is a transient resource ceiling that clears on its
+// own as the TTL reaper expires older self-serve tenants, not a permission
+// decision -- "at capacity, try again later", never a silent degrade.
+func EDemoSignupAtCapacity(current, limit int) *Error {
+	return &Error{
+		Code: CodeCapExceeded, HTTP: 503,
+		Message: "self-serve demo capacity reached, please try again later",
+		Details: map[string]int{"current": current, "limit": limit},
+	}
 }
 
 // AsError unwraps err into a *domain.Error if possible.

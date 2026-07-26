@@ -57,7 +57,7 @@ func TestAC1_ApprovedProposal_MetersGovernedDecision(t *testing.T) {
 	row := h.queryGovernedDecisionRow(t, tenant)
 	require.Equal(t, "case-triage", row.agentID)
 	require.Equal(t, "approved", row.decision)
-	require.Equal(t, "case", row.metaProposalKind)
+	require.Equal(t, "case", row.proposalKind, "proposal_kind is a physical column (BRD 69 migration 000007), not meta-only")
 
 	// Replay: publish the identical event_id again — no new row (AC-1, AC-2).
 	h.publish(t, events.TopicAIProposal, tenant, eid, time.Now().UTC(), payload)
@@ -124,9 +124,9 @@ func TestAC_ProposalCreatedAndCancelled_NeverMeter(t *testing.T) {
 }
 
 type governedDecisionRow struct {
-	agentID          string
-	decision         string
-	metaProposalKind string
+	agentID      string
+	decision     string
+	proposalKind string
 }
 
 func (h *harness) queryGovernedDecisionRow(t *testing.T, tenant uuid.UUID) governedDecisionRow {
@@ -139,9 +139,9 @@ func (h *harness) queryGovernedDecisionRow(t *testing.T, tenant uuid.UUID) gover
 	require.NoError(t, err)
 	var row governedDecisionRow
 	require.NoError(t, conn.QueryRow(ctx,
-		`SELECT COALESCE(agent_id,''), COALESCE(decision,''), COALESCE(meta->>'proposal_kind','')
+		`SELECT COALESCE(agent_id,''), COALESCE(decision,''), COALESCE(proposal_kind,'')
 		 FROM usage_raw WHERE tenant_id=$1 AND meter_key=$2 LIMIT 1`,
 		tenant, domain.MeterGovernedDecision,
-	).Scan(&row.agentID, &row.decision, &row.metaProposalKind))
+	).Scan(&row.agentID, &row.decision, &row.proposalKind))
 	return row
 }

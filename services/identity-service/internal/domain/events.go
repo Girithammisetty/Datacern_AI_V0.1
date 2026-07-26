@@ -122,4 +122,26 @@ const (
 	// tenant-affecting action already is (MASTER-FR-031).
 	EvDemoTenantReset  = "demo.tenant_reset"
 	EvDemoTenantCloned = "demo.tenant_cloned"
+
+	// EvDemoTenantPublicSignup / EvDemoTenantPublicSignupClaimed (BRD 70
+	// v1.1, self-serve demo signup -- explicitly out of scope for the v1
+	// design this file's other demo.* events belong to, see docs/
+	// initiatives/demo-sandbox-poc-mode.md §3's v1.1 note) audit the two
+	// halves of the unauthenticated public funnel: the tenant create call
+	// itself (task requirement #4, "log/audit every self-service creation
+	// for a human to review") and, separately, the moment a visitor's
+	// short-lived claim token is actually redeemed for a real login session
+	// (ClaimSelfServeLogin) -- kept as two events because they can be
+	// arbitrarily far apart in time (provisioning is async) and a human
+	// reviewer may care whether a created demo was ever actually claimed.
+	EvDemoTenantPublicSignup        = "demo.tenant_public_signup"
+	EvDemoTenantPublicSignupClaimed = "demo.tenant_public_signup_claimed"
+
+	// POC-mode events (BRD 70 slice 3, DSP-FR-020/021/022). Unversioned
+	// (no ".v1" suffix) since the design doc's §2.9 doesn't name these
+	// literally the way EvDemoTenantReaped/EvCommercialTrialExpired's FRs
+	// do -- following the unversioned-sibling convention documented above.
+	EvPocCriteriaSet        = "poc.criteria_set"
+	EvPocManualValueUpdated = "poc.manual_value_updated"
+	EvPocReportExported     = "poc.report_exported"
 )

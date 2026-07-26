@@ -87,11 +87,14 @@ type Meter struct {
 // tenant-defined meters in v1.
 func Catalog() []Meter {
 	dims := []string{"tenant_id", "workspace_id", "user_id", "agent_id", "resource_urn", "model", "cloud"}
-	// governed_decision dims (VMB-FR-002, design §2.2): pack_name/decision are
-	// physical rollup columns on usage_raw + every rollup table; proposal_kind/
-	// decision_latency_ms/edit_distance_bucket are raw-detail-only, carried in
-	// usage_raw.meta JSONB and never rolled up (§2.2 "raw-detail-only"). Listed
-	// here for API discoverability (Meter.Dimensions is documentation, not a
+	// governed_decision dims (VMB-FR-002, design §2.2): pack_name/decision/
+	// proposal_kind are physical rollup columns on usage_raw + every rollup
+	// table (proposal_kind promoted from raw-detail-only by BRD 69's
+	// migration 000007_governed_decision_kind — see
+	// docs/initiatives/value-roi-reporting.md §3); decision_latency_ms/
+	// edit_distance_bucket remain raw-detail-only, carried in usage_raw.meta
+	// JSONB and never rolled up (§2.2 "raw-detail-only"). Listed here for API
+	// discoverability (Meter.Dimensions is documentation, not a
 	// physical-column enforcement — see store/pg.go SeedMeters/ListMeters).
 	decisionDims := append(append([]string{}, dims...),
 		"pack_name", "decision", "proposal_kind", "decision_latency_ms", "edit_distance_bucket")
@@ -137,14 +140,20 @@ type MeterRecord struct {
 	EventID     uuid.UUID
 	Late        bool
 	// Value-meter dimensions (BRD 67 slice 1, design §2.2). Rollup-worthy:
-	// PackName/Decision are physical columns on usage_raw AND every rollup
-	// table (nil for every existing infra meter — no behavior change there).
-	PackName *string
-	Decision *string
+	// PackName/Decision/ProposalKind are physical columns on usage_raw AND
+	// every rollup table (nil for every existing infra meter — no behavior
+	// change there). ProposalKind was promoted from raw-detail-only
+	// (usage_raw.meta) to a physical rollup column by BRD 69's migration
+	// 000007_governed_decision_kind (docs/initiatives/value-roi-reporting.md
+	// §3 "Repo-state finding" / "Known limits") — it is what feeds
+	// decisions.by_kind and every per-kind *_est figure in internal/valuecalc.
+	PackName     *string
+	Decision     *string
+	ProposalKind *string
 	// Meta carries raw-detail-only fields that no showback query groups by
-	// (proposal_kind, decision_latency_ms, edit_distance_bucket, ...) — a
-	// bounded JSONB blob on usage_raw only, never rolled up (design §2.2,
-	// MASTER-FR-061 carve-out). Nil/empty for every meter that has none.
+	// (decision_latency_ms, edit_distance_bucket, ...) — a bounded JSONB blob
+	// on usage_raw only, never rolled up (design §2.2, MASTER-FR-061
+	// carve-out). Nil/empty for every meter that has none.
 	Meta map[string]any
 }
 

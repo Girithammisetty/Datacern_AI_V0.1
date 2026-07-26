@@ -50,6 +50,10 @@ type Store struct {
 	// trialEvents holds the trial_events audit trail (BRD 66 slice 2), newest
 	// append last per tenant; ListTrialEvents reverses to newest-first.
 	trialEvents map[uuid.UUID][]*domain.TrialEvent
+
+	// --- POC mode (BRD 70 slice 3) ---
+	pocCriteria map[uuid.UUID][]*domain.SuccessCriterion // tenantID -> ordered set
+	pocExports  map[uuid.UUID][]*domain.PocExport        // tenantID -> versions, append order
 }
 
 // commercialDirtyRow mirrors the postgres commercial_dirty table for the
@@ -88,6 +92,8 @@ func New() *Store {
 		tenantPlans:      map[uuid.UUID]*domain.TenantPlan{},
 		overrides:        map[uuid.UUID]map[string]*domain.TenantEntitlementOverride{},
 		trialEvents:      map[uuid.UUID][]*domain.TrialEvent{},
+		pocCriteria:      map[uuid.UUID][]*domain.SuccessCriterion{},
+		pocExports:       map[uuid.UUID][]*domain.PocExport{},
 	}
 }
 
@@ -639,6 +645,84 @@ func (s *Store) ListTrialEvents(_ context.Context, tenantID uuid.UUID) ([]domain
 	defer s.mu.RUnlock()
 	rows := s.trialEvents[tenantID]
 	out := make([]domain.TrialEvent, 0, len(rows))
+	for i := len(rows) - 1; i >= 0; i-- { // newest first
+		out = append(out, *rows[i])
+	}
+	return out, nil
+}
+
+// --- POC mode (BRD 70 slice 3, DSP-FR-020..022) ---
+
+func (s *Store) SetPocSuccessCriteria(_ context.Context, tenantID uuid.UUID, criteria []domain.SuccessCriterion, evs ...domain.OutboxEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.tenants[tenantID]; !ok {
+		return domain.ENotFound("tenant")
+	}
+	rows := make([]*domain.SuccessCriterion, len(criteria))
+	for i, c := range criteria {
+		cp := c
+		rows[i] = &cp
+	}
+	s.pocCriteria[tenantID] = rows
+	s.appendOutboxLocked(evs)
+	return nil
+}
+
+func (s *Store) GetPocSuccessCriteria(_ context.Context, tenantID uuid.UUID) ([]domain.SuccessCriterion, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows := s.pocCriteria[tenantID]
+	out := make([]domain.SuccessCriterion, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, *r)
+	}
+	return out, nil
+}
+
+func (s *Store) UpdatePocCriterionManualValue(_ context.Context, tenantID uuid.UUID, key string, value float64, evs ...domain.OutboxEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows := s.pocCriteria[tenantID]
+	for _, r := range rows {
+		if r.Key == key {
+			v := value
+			r.ManualValue = &v
+			s.appendOutboxLocked(evs)
+			return nil
+		}
+	}
+	return domain.ENotFound("success criterion")
+}
+
+func (s *Store) CreatePocExport(_ context.Context, tenantID uuid.UUID, e domain.PocExport, evs ...domain.OutboxEvent) (domain.PocExport, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.tenants[tenantID]; !ok {
+		return domain.PocExport{}, domain.ENotFound("tenant")
+	}
+	maxVersion := 0
+	for _, e2 := range s.pocExports[tenantID] {
+		if e2.Version > maxVersion {
+			maxVersion = e2.Version
+		}
+	}
+	id, _ := uuid.NewV7()
+	e.ID = id
+	e.TenantID = tenantID
+	e.Version = maxVersion + 1
+	e.CreatedAt = time.Now().UTC()
+	cp := e
+	s.pocExports[tenantID] = append(s.pocExports[tenantID], &cp)
+	s.appendOutboxLocked(evs)
+	return e, nil
+}
+
+func (s *Store) ListPocExports(_ context.Context, tenantID uuid.UUID) ([]domain.PocExport, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows := s.pocExports[tenantID]
+	out := make([]domain.PocExport, 0, len(rows))
 	for i := len(rows) - 1; i >= 0; i-- { // newest first
 		out = append(out, *rows[i])
 	}
