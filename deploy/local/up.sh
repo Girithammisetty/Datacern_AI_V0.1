@@ -191,6 +191,15 @@ boot_all                 # identity, rbac, realtime, case, ingestion, dataset, m
 # start_inference).
 ( cd "$E2E" && "$PY" lib/seed.py inference_tool "$TENANT_ID" ) 2>&1 | tee "$LOG_DIR/seed_inference_tool.log"
 
+# Register case-service's case.apply_disposition tool. This one is the flagship
+# loop -- case-triage proposes a disposition, a human approves, the write is
+# federated to case-service -- and it was the ONE write tool boot never seeded.
+# The recipe existed only in deploy/e2e/driver.py's register_apply_tool(), which
+# up.sh does not call, so on a normal bring-up an approved proposal was denied
+# by tool-plane with `deny_reason: "tool not found"` while the proposal still
+# read `approved` and the case never changed. Found by driving the UI by hand.
+( cd "$E2E" && "$PY" lib/seed.py case_apply_tool "$TENANT_ID" ) 2>&1 | tee "$LOG_DIR/seed_case_apply_tool.log"
+
 # Register ingestion-service's ingestion.create write-proposal tool in tool-
 # plane (idempotent, same recipe as inference_tool above) so an approved
 # agent-runtime onboarding proposal federates to a real ingestion job instead

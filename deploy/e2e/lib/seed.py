@@ -319,6 +319,109 @@ def register_inference_tool(tenant_id: str) -> str:
     return tid
 
 
+
+def register_case_apply_tool(tenant_id: str) -> str:
+    """Idempotently register the ``case.apply_disposition`` write-proposal tool
+    and point it at case-service's MCP backend facade.
+
+    THIS WAS THE GAP THAT BROKE THE FLAGSHIP LOOP. `up.sh` seeded four tools
+    (inference/ingestion/chart/entity-merge) but never this one — the recipe
+    existed only in deploy/e2e/driver.py's register_apply_tool(), which boot
+    does not call. So on any normal local bring-up the case-triage agent could
+    propose, a human could approve, and execution was then denied by tool-plane
+    with `deny_reason: "tool not found"`. The proposal still read `approved` and
+    the case never changed: a silent last-mile failure on the exact loop the
+    product is sold on. Caught by driving the UI, not by any test.
+
+    Mirrors register_inference_tool() exactly and is safe on every boot
+    (registry POSTs are idempotent, tenant-enable is an upsert, mcp_backends
+    carries ON CONFLICT DO UPDATE)."""
+    import psycopg
+
+    su = c.superadmin_token()
+    tid = "case.apply_disposition"
+    ver = "1.2.0"
+    case_url = os.environ.get("CASE_URL", getattr(c, "CASE", "http://localhost:8308"))
+
+    def _post(url, token, body):
+        return requests.post(url, json=body,
+                             headers={"Authorization": f"Bearer {token}",
+                                      "Content-Type": "application/json"}, timeout=15)
+
+    r = _post(f"{c.TOOL_REGISTRY}/api/v1/tools", su,
+              {"tool_id": tid, "display_name": "Apply case disposition",
+               "owner_service": "case-service", "owner_team": "claims",
+               "enabled_by_default": True, "side_effects": "reversible",
+               "tags": ["case"]})
+    print(f"register case.apply_disposition tool: {r.status_code} {r.text[:150]}", file=sys.stderr)
+
+    r = _post(f"{c.TOOL_REGISTRY}/api/v1/tools/{tid}/versions", su,
+              {"version": ver,
+               "semantic_description": "Apply a triage disposition to a case. Use when a human "
+                                       "has approved a copilot proposal to set severity or "
+                                       "disposition.",
+               "input_schema": {"type": "object", "additionalProperties": False,
+                                "properties": {
+                                    # case_id carries the resource URN the gateway resolves
+                                    # for the OPA obo-grant + cross-tenant checks.
+                                    "case_id": {"type": "string",
+                                                "x-datacern-urn":
+                                                    "wr:{tenant}:case:case/{value}"},
+                                    "disposition_id": {"type": "string"},
+                                    "severity": {"type": "string"},
+                                    "resolution_note": {"type": "string"},
+                                    "proposal_urn": {"type": "string"}},
+                                "required": ["case_id", "disposition_id"]},
+               "output_schema": {"type": "object", "additionalProperties": True},
+               "permission_tier": "write-proposal", "cost_weight": 1,
+               "declared_sla": {"p95_ms": 2000}, "side_effects": "reversible", "examples": []})
+    print(f"register case.apply_disposition version: {r.status_code} {r.text[:150]}",
+          file=sys.stderr)
+
+    # The registry resolves a single published version; retire any other so this
+    # one wins (the tool_plane DB persists across boots).
+    try:
+        with psycopg.connect(
+                "postgresql://datacern:datacern_dev@localhost:5432/tool_plane") as cn:
+            pubs = [row[0] for row in cn.execute(
+                "SELECT version FROM tool_versions WHERE tool_id=%s AND status='published' "
+                "AND version<>%s", (tid, ver)).fetchall()]
+        for vv in pubs:
+            requests.post(f"{c.TOOL_REGISTRY}/api/v1/tools/{tid}/versions/{vv}/deprecate",
+                          headers={"Authorization": f"Bearer {su}"}, timeout=15)
+    except Exception as e:
+        print(f"deprecate prior published case.apply_disposition versions: {e}", file=sys.stderr)
+
+    pubr = requests.post(f"{c.TOOL_REGISTRY}/api/v1/tools/{tid}/versions/{ver}/publish",
+                         headers={"Authorization": f"Bearer {su}"}, timeout=20)
+    if pubr.status_code not in (200, 201) and "only draft" not in pubr.text:
+        print(f"publish case.apply_disposition {ver}: {pubr.status_code} {pubr.text[:150]}",
+              file=sys.stderr)
+
+    # Per-tenant enablement MUST use a token whose tenant == the caller tenant;
+    # the nil-tenant superadmin cannot see the tool as enabled for TENANT.
+    tenant_tok = c.service_token("svc:seed", tenant_id, ["*"])
+    requests.put(f"{c.TOOL_REGISTRY}/api/v1/tenants/self/tools/{tid}",
+                 headers={"Authorization": f"Bearer {tenant_tok}",
+                          "Content-Type": "application/json"},
+                 json={"enabled": True}, timeout=15)
+
+    facade_url = f"{case_url}/internal/v1/mcp/invoke"
+    with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane",
+                         autocommit=True) as cn:
+        cn.execute("SELECT set_config('app.role','platform', false)")
+        cn.execute(
+            """INSERT INTO mcp_backends (name, tenant_id, internal_url, spiffe_id, kind, status)
+               VALUES ('case-service','00000000-0000-0000-0000-000000000000',%s,
+                       'spiffe://datacern/ns/tools/sa/mcp-gateway','internal','active')
+               ON CONFLICT (name) DO UPDATE SET internal_url=EXCLUDED.internal_url,
+                   spiffe_id=EXCLUDED.spiffe_id, status='active'""",
+            (facade_url,))
+    print(f"case.apply_disposition registered + enabled; mcp_backends -> {facade_url}",
+          file=sys.stderr)
+    return tid
+
+
 def register_ingestion_tool(tenant_id: str) -> str:
     """Idempotently register the ``ingestion.create`` write-proposal tool in
     tool-plane and point it at ingestion-service's real MCP backend facade
@@ -846,6 +949,8 @@ if __name__ == "__main__":
         seed_evalkey(sys.argv[2])
     elif cmd == "inference_tool":
         register_inference_tool(sys.argv[2])
+    elif cmd == "case_apply_tool":
+        register_case_apply_tool(sys.argv[2])
     elif cmd == "ingestion_tool":
         register_ingestion_tool(sys.argv[2])
     elif cmd == "chart_dashboard_tool":
@@ -856,7 +961,8 @@ if __name__ == "__main__":
         register_ml_lifecycle_tools(sys.argv[2])
     else:
         print("usage: seed.py {tenant|aigw <tenant_id>|evalkey <tenant_id>|"
-             "inference_tool <tenant_id>|ingestion_tool <tenant_id>|"
+             "inference_tool <tenant_id>|case_apply_tool <tenant_id>|"
+             "ingestion_tool <tenant_id>|"
              "chart_dashboard_tool <tenant_id>|entity_merge_tool <tenant_id>|"
              "ml_lifecycle_tools <tenant_id>}",
              file=sys.stderr)
