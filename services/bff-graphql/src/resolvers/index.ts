@@ -11,6 +11,8 @@ import { JSONScalar, DateTimeScalar, DateScalar } from "../schema/scalars.js";
 import type { ChartDataDTO, ChartDTO } from "../clients/chart.js";
 import type { ChartSourceInputBody } from "../clients/chart.js";
 import { budgetScopeString } from "../clients/usage.js";
+import type { AgentKillSwitchDTO, AgentDefinitionDTO, TenantAgentConfigDTO } from "../clients/agent.js";
+import type { EvalGateResultDTO } from "../clients/eval.js";
 import {
   mapUser, mapDataset, mapProfile, mapCase, mapDashboard, mapChart,
   // Tier 4b: case ops (lifecycle, comments/timeline, export, catalog, SLA).
@@ -35,9 +37,11 @@ import {
   mapSemanticModel,
   mapDatasetSchema, mapSemanticModelSummary, mapSemanticModelVersion, mapSemanticCompileResult,
   mapWorkspace, mapGroup, mapGroupMember, mapRole, mapAuthzExplanation, mapServiceAccount, mapTenant, mapAuditEvent,
+  mapTenantCommercial, EMPTY_TENANT_COMMERCIAL,
   // Tier 4b: identity/rbac admin (lifecycle, roles, grants, bulk membership).
   mapCreatedServiceAccount, mapEffectiveAccessEntry, mapContentGrant, mapBulkGroupMembershipResult,
   mapBudget, mapRateCard, mapAnomaly, mapReportSubscription,
+  mapValueSummary, mapValueTrend, mapValueAssumptions, mapValueExport,
   mapChainVerifyResult, mapComplianceJob, mapEvidencePack, mapSiemConfig, mapSiemConfigState,
   decisionAction, urnId,
   mapEvalSuite, mapEvalRun, mapEvalCaseResult, mapEvalDataset, mapEvalCase, mapEvalScorer,
@@ -395,6 +399,244 @@ function triggerBody(i: CaseTriggerInputShape) {
   return b;
 }
 
+// ============================================================================
+// BRD 68 slice 1: Agent Control Tower fleet aggregation
+// (docs/initiatives/agent-control-tower.md). Query.agentFleet and
+// Query.agentFleetSummary both build off buildAgentFleetRows so their
+// degradation behavior and downstream call shape are identical.
+// ============================================================================
+
+const DEFAULT_PERIOD_DAYS = 30;
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function resolveFleetPeriod(a: { periodFrom?: string | null; periodTo?: string | null }): { from: string; to: string } {
+  const to = a.periodTo ? new Date(a.periodTo) : new Date();
+  const from = a.periodFrom
+    ? new Date(a.periodFrom)
+    : new Date(to.getTime() - DEFAULT_PERIOD_DAYS * 24 * 60 * 60 * 1000);
+  return { from: a.periodFrom ?? isoDate(from), to: a.periodTo ?? isoDate(to) };
+}
+
+/** AgentFleetKind derivation. agent-runtime has no `kind`/discriminator field
+ * on AgentDefinition at all (docs/initiatives/agent-control-tower.md §1b) —
+ * this reads only signals the registry ALREADY exposes, never a fabricated
+ * guess:
+ * - EXTERNAL: the active version's graph_ref === "external" — the only
+ *   existing signal for external agents (BRD 60's operator-demo convention).
+ * - CUSTOM: owner_team starts with "tenant:" — registry.py's
+ *   create_custom_agent sets exactly this literal for every tenant-authored
+ *   custom agent (app/api/routes/registry.py:324).
+ * - PLATFORM: everything else — the catalog seed sets owner_team to
+ *   "platform-ai" for all 9 seeded agents (app/agents/catalog.py:122). */
+function fleetKindOf(ownerTeam: string | null | undefined, activeGraphRef: string | null | undefined): "PLATFORM" | "CUSTOM" | "EXTERNAL" {
+  if (activeGraphRef === "external") return "EXTERNAL";
+  if (ownerTeam?.startsWith("tenant:")) return "CUSTOM";
+  return "PLATFORM";
+}
+
+function guardrailPiiEgress(pii?: { block_pii_egress?: boolean; redact?: boolean }): string | null {
+  if (!pii) return null;
+  if (pii.block_pii_egress) return "blocked";
+  if (pii.redact) return "redact";
+  return "off";
+}
+
+/** STALE is derived, not stored (eval-service's GateResult has no such
+ * status — docs/initiatives/agent-control-tower.md §1b): a gate whose
+ * content_digest no longer matches the agent's CURRENTLY active version's
+ * graph_digest is evidence for a version that isn't running anymore. */
+function evalGateStatus(gate: EvalGateResultDTO | null, activeDigest: string | null): "PASS" | "FAIL" | "STALE" | "NONE" {
+  if (!gate) return "NONE";
+  if (activeDigest && gate.content_digest && gate.content_digest !== activeDigest) return "STALE";
+  return gate.gate_passed ? "PASS" : "FAIL";
+}
+
+/** Bucket a usage-service grouped-by-agent report into agent_id -> total USD.
+ * One report row per (agent, meter); summed here into one figure per agent. */
+function bucketSpendByAgent(report: { data?: Record<string, unknown>[]; rows?: Record<string, unknown>[] }): Map<string, number> {
+  const rows = report.data ?? report.rows ?? [];
+  const out = new Map<string, number>();
+  for (const r of rows) {
+    const agentId = (r.agent_id ?? r.agent ?? null) as string | null;
+    if (!agentId) continue;
+    const usd = Number((r.usd ?? r.cost_usd ?? 0) as number) || 0;
+    out.set(agentId, (out.get(agentId) ?? 0) + usd);
+  }
+  return out;
+}
+
+interface FleetRow {
+  key: string;
+  kind: "PLATFORM" | "CUSTOM" | "EXTERNAL";
+  display: string;
+  lifecycle: "ACTIVE" | "KILLED" | "QUARANTINED" | "DEPRECATED";
+  activeVersion: { id: number; graphDigest: string | null; rollout: "STABLE" | "CANARY" | "SHADOW" | "PINNED" | "UNKNOWN" };
+  guardrails: { dataScope: unknown; tokenBudget: number | null; piiEgress: string | null; ruleOfTwo: boolean };
+  toolset: string[];
+  evalGate: { status: "PASS" | "FAIL" | "STALE" | "NONE"; lastRunAt: string | null; suiteKey: string | null; unavailable: boolean };
+  killSwitch: { id: string | null; state: string; updatedAt: string | null; actor: string | null };
+  spend: { periodUsd: number | null; trend7dPct: number | null; unavailable: boolean } | null;
+  decisions: { proposed: null; approved: null; edited: null; rejected: null; period: string; unavailable: true };
+  lastIncidentAt: null;
+  external: { allowListScope: string[]; sdkPrincipal: string; autoExecute: "denied" } | null;
+  liveUpdates: { hubUrl: string; topics: string[] };
+}
+
+/** The one place that builds a fleet row + the fleet-wide spend map, shared by
+ * Query.agentFleet and Query.agentFleetSummary. `workspace` is accepted (SDL
+ * forward-compat) but unused: agent-runtime's registry has no workspace
+ * dimension today (docs/initiatives/agent-control-tower.md §3). */
+async function buildAgentFleetRows(
+  ctx: GraphQLContext,
+  args: { workspace?: string | null; periodFrom?: string | null; periodTo?: string | null },
+): Promise<FleetRow[]> {
+  const period = resolveFleetPeriod(args);
+
+  // Both calls must succeed to build ANY row honestly: kill-switch state
+  // feeds `lifecycle`, a Tier-1 safety signal with no `unavailable` slot on
+  // AgentFleetRow — a 5xx/403 here fails the whole query rather than
+  // fabricating a default lifecycle (see typeDefs.ts AgentFleetRow doc).
+  const [definitions, kills]: [AgentDefinitionDTO[], AgentKillSwitchDTO[]] = await Promise.all([
+    ctx.clients.agent.agentDefinitions(),
+    ctx.clients.agent.killSwitches(),
+  ]);
+
+  const activeKillByAgent = new Map<string, AgentKillSwitchDTO>();
+  for (const k of kills) {
+    if (!k.active || !k.agent_key) continue;
+    const existing = activeKillByAgent.get(k.agent_key);
+    if (!existing || (k.created_at ?? "") > (existing.created_at ?? "")) activeKillByAgent.set(k.agent_key, k);
+  }
+
+  // Fleet-wide spend: ONE grouped call for the requested period + ONE for the
+  // prior window of equal length (trend7dPct's diff), bucketed by agent_id
+  // client-side — never one call per agent (ACT-NFR-001).
+  const periodMs = Math.max(new Date(period.to).getTime() - new Date(period.from).getTime(), 24 * 60 * 60 * 1000);
+  const priorTo = period.from;
+  const priorFrom = isoDate(new Date(new Date(period.from).getTime() - periodMs));
+
+  let spendByAgent: Map<string, number> | null = null;
+  let priorSpendByAgent: Map<string, number> | null = null;
+  let spendUnavailable = false;
+  try {
+    const [current, prior] = await Promise.all([
+      ctx.clients.usage.usageReport({ groupBy: ["agent"], from: period.from, to: period.to, limit: 200 }),
+      ctx.clients.usage.usageReport({ groupBy: ["agent"], from: priorFrom, to: priorTo, limit: 200 }),
+    ]);
+    spendByAgent = bucketSpendByAgent(current);
+    priorSpendByAgent = bucketSpendByAgent(prior);
+  } catch (e) {
+    // NB: this ALSO catches a 403 (no usage.report.read), not just 5xx/
+    // transport. The design's ideal (2.4 mechanism 2) is a distinct
+    // PERMISSION_DENIED field error on `spend` for a caller who lacks the
+    // capability but asks anyway — achievable only with a lazy per-field
+    // resolver. AgentFleetRow is built as one plain object per request here
+    // (matching this file's existing monolithic-resolver style, e.g.
+    // workspaceCostPanel), so ANY error thrown inside buildAgentFleetRows
+    // fails the whole non-null `agentFleet`/`agentFleetSummary` root field,
+    // not just one row's nullable `spend`. Degrading to unavailable:true for
+    // every DownstreamError (not only 5xx) avoids that collateral failure.
+    // The PRIMARY AC-5 mechanism — ui-web omitting `spend` from the query
+    // selection set for a capability-less caller (useAgentFleet's
+    // `includeSpend`) — is unaffected and is what actually satisfies AC-5.
+    if (e instanceof DownstreamError) {
+      spendUnavailable = true;
+    } else {
+      throw e;
+    }
+  }
+
+  const decisionsPeriod = `${period.from}/${period.to}`;
+
+  return Promise.all(
+    definitions.map(async (d): Promise<FleetRow> => {
+      const [versions, tenantConfigSettled, gateSettled] = await Promise.all([
+        ctx.loaders.agentVersionsByAgentKey.load(d.agent_key),
+        ctx.loaders.tenantAgentConfigByAgentKey.load(d.agent_key).then(
+          (v): { ok: true; value: TenantAgentConfigDTO | null } => ({ ok: true, value: v }),
+          (): { ok: false } => ({ ok: false }),
+        ),
+        ctx.loaders.evalGateByAgentKey.load(d.agent_key).then(
+          (v): { ok: true; value: EvalGateResultDTO | null } => ({ ok: true, value: v }),
+          (): { ok: false } => ({ ok: false }),
+        ),
+      ]);
+
+      const published = versions.find((v) => v.version === d.latest_published_version) ?? versions[0] ?? null;
+      const active = published ?? { version: 0, graph_digest: undefined, graph_ref: undefined, toolset: undefined };
+      const activeGraphRef = active.graph_ref ?? null;
+      const kind = fleetKindOf(d.owner_team, activeGraphRef);
+
+      const tenantConfig = tenantConfigSettled.ok ? tenantConfigSettled.value : null;
+      const guardrailPolicy = tenantConfig?.guardrail_policy;
+
+      const rollout: FleetRow["activeVersion"]["rollout"] =
+        tenantConfig?.pinned_version != null ? "PINNED" : "UNKNOWN";
+
+      const gate = gateSettled.ok ? gateSettled.value : null;
+      const evalUnavailable = !gateSettled.ok;
+
+      const activeKill = activeKillByAgent.get(d.agent_key) ?? null;
+
+      const toolset = (active.toolset ?? [])
+        .map((t) => (typeof t === "string" ? t : ((t as Record<string, unknown>)?.tool_id as string | undefined)))
+        .filter((t): t is string => Boolean(t));
+
+      let spend: FleetRow["spend"] = null;
+      if (spendUnavailable) {
+        spend = { periodUsd: null, trend7dPct: null, unavailable: true };
+      } else if (spendByAgent) {
+        const periodUsd = spendByAgent.get(d.agent_key) ?? 0;
+        const priorUsd = priorSpendByAgent?.get(d.agent_key) ?? 0;
+        const trend7dPct = priorUsd > 0 ? ((periodUsd - priorUsd) / priorUsd) * 100 : null;
+        spend = { periodUsd, trend7dPct, unavailable: false };
+      }
+
+      return {
+        key: d.agent_key,
+        kind,
+        display: d.display_name,
+        lifecycle: activeKill ? "KILLED" : "ACTIVE",
+        activeVersion: {
+          id: active.version ?? 0,
+          graphDigest: active.graph_digest ?? null,
+          rollout,
+        },
+        guardrails: {
+          dataScope: guardrailPolicy?.data_scope ?? null,
+          tokenBudget: guardrailPolicy?.budget?.max_tokens_per_session ?? null,
+          piiEgress: guardrailPiiEgress(guardrailPolicy?.pii),
+          ruleOfTwo: true,
+        },
+        toolset,
+        evalGate: {
+          status: evalUnavailable ? "NONE" : evalGateStatus(gate, active.graph_digest ?? null),
+          lastRunAt: gate?.created_at ?? null,
+          suiteKey: gate?.suite_id ?? null,
+          unavailable: evalUnavailable,
+        },
+        killSwitch: {
+          id: activeKill?.kill_id ?? null,
+          state: activeKill ? "killed" : "active",
+          updatedAt: activeKill?.created_at ?? null,
+          actor: activeKill?.set_by ?? null,
+        },
+        spend,
+        decisions: {
+          proposed: null, approved: null, edited: null, rejected: null,
+          period: decisionsPeriod, unavailable: true,
+        },
+        lastIncidentAt: null,
+        external: kind === "EXTERNAL" ? { allowListScope: toolset, sdkPrincipal: d.agent_key, autoExecute: "denied" } : null,
+        liveUpdates: { hubUrl: ctx.config.realtimeHubUrl, topics: ["list:agent"] },
+      };
+    }),
+  );
+}
+
 export const resolvers = {
   JSON: JSONScalar,
   DateTime: DateTimeScalar,
@@ -451,6 +693,48 @@ export const resolvers = {
 
     tenant: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.identity.tenant(a.id).then((d) => mapTenant(ctx, d))),
+
+    // BRD 66 slice 3 (CPL-FR-033): the commercial plane. Reachable by any
+    // authenticated caller in the tenant -- unlike `tenant` above, this does
+    // NOT simply forward-and-404: identity-service's GET
+    // /tenants/{id}/entitlements (built in slice 1) is gated to
+    // identity.user.admin (tenant admin) or platform super-admin, so a
+    // non-admin caller's own JWT would 403 there. The BFF checks the
+    // caller's OWN capabilities first (rbac /me/capabilities, which any
+    // authenticated principal may read for itself) and only forwards the
+    // downstream call when they qualify; otherwise it degrades to the
+    // minimal {commercialState: null, lockedFeatureKeys: []} shape rather
+    // than surfacing a 403 to every non-admin viewer -- ui-web's
+    // entitlement Gate (registry.ts) needs a stable, never-erroring shape
+    // to render locked-feature previews for ANY caller.
+    //
+    // KNOWN LIMITATION (see docs/initiatives/commercial-plane.md §3): this
+    // means a non-admin caller's lockedFeatureKeys is always [] today --
+    // full CPL-FR-013 "gating for every role" needs either a lower-
+    // privilege identity-service read path or BFF service-credential
+    // support, both out of this slice's file-ownership scope
+    // (identity-service is owned by a different slice/agent).
+    tenantCommercial: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      let isTenantAdmin = ctx.identity.claims.platform_admin === true;
+      if (!isTenantAdmin) {
+        try {
+          const caps = await ctx.clients.rbac.meCapabilities();
+          isTenantAdmin = caps.admin || caps.capabilities.includes("identity.user.admin");
+        } catch (e) {
+          console.error("tenantCommercial: rbac meCapabilities failed", e);
+          // Fail-safe: capability unconfirmed -> minimal shape, never blocks the query.
+        }
+      }
+      if (!isTenantAdmin) return EMPTY_TENANT_COMMERCIAL;
+      try {
+        const d = await ctx.clients.identity.tenantCommercial(a.id);
+        return mapTenantCommercial(d);
+      } catch (e) {
+        if (e instanceof DownstreamError && e.httpStatus === 404) return null; // cross-tenant (MASTER-FR-002/003)
+        if (e instanceof DownstreamError && e.httpStatus === 403) return EMPTY_TENANT_COMMERCIAL;
+        throw e;
+      }
+    },
 
     // Cross-tenant list for the platform-admin all-tenants view. identity's
     // requireSuperAdmin gate enforces (a tenant admin's JWT is rejected there).
@@ -1435,6 +1719,39 @@ export const resolvers = {
       return (page.data ?? []).map((d) => mapAnomaly(ctx, d));
     },
 
+    // ---- value & ROI reporting (BRD 69) ----------------------------------
+    valueSummary: async (
+      _p: unknown,
+      a: { period: string; workspaceId?: string },
+      ctx: GraphQLContext,
+    ) => mapValueSummary(await ctx.clients.value.summary(a.period, a.workspaceId)),
+
+    valueTrend: async (
+      _p: unknown,
+      a: { metric: string; granularity?: string; from?: string; to?: string; workspaceId?: string },
+      ctx: GraphQLContext,
+    ) =>
+      mapValueTrend(
+        await ctx.clients.value.trend({
+          metric: a.metric, granularity: a.granularity, from: a.from, to: a.to, workspaceId: a.workspaceId,
+        }),
+      ),
+
+    valueAssumptions: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const d = await ctx.clients.value.assumptions();
+      return d == null ? null : mapValueAssumptions(ctx, d);
+    },
+
+    valueAssumptionHistory: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const rows = await ctx.clients.value.assumptionHistory();
+      return rows.map((d) => mapValueAssumptions(ctx, d));
+    },
+
+    valueExports: async (_p: unknown, a: { period?: string }, ctx: GraphQLContext) => {
+      const rows = await ctx.clients.value.exports(a.period);
+      return rows.map((d) => mapValueExport(ctx, d));
+    },
+
     // ---- pipelines: no-code builder catalog + templates + runs (JWT passthrough)
     pipelineStepTypes: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
       ctx.clients.pipelines.components().then((cs) => cs.map(mapPipelineStepType)),
@@ -1679,6 +1996,42 @@ export const resolvers = {
       const { limit } = toLimitCursor(a, ctx.config.limits);
       const page = await ctx.clients.agent.agentRuns({ agentKey: a.agentKey, limit });
       return toConnection(page, (d) => mapAgentRunListItem(ctx, d));
+    },
+
+    // ---- BRD 68 slice 1: Agent Control Tower fleet aggregation --------------
+    agentFleet: (
+      _p: unknown,
+      a: { workspace?: string | null; periodFrom?: string | null; periodTo?: string | null },
+      ctx: GraphQLContext,
+    ) => buildAgentFleetRows(ctx, a),
+
+    agentFleetSummary: async (
+      _p: unknown,
+      a: { workspace?: string | null; periodFrom?: string | null; periodTo?: string | null },
+      ctx: GraphQLContext,
+    ) => {
+      const rows = await buildAgentFleetRows(ctx, a);
+      const totalByKind: Record<string, number> = { platform: 0, custom: 0, external: 0 };
+      let activeCount = 0;
+      let killedCount = 0;
+      const quarantinedCount = 0; // no backing signal today — see typeDefs.ts AgentFleetLifecycle note.
+      let spendSum = 0;
+      let spendKnown = true;
+      for (const row of rows) {
+        totalByKind[row.kind.toLowerCase()] = (totalByKind[row.kind.toLowerCase()] ?? 0) + 1;
+        if (row.lifecycle === "KILLED") killedCount += 1;
+        else if (row.lifecycle === "ACTIVE") activeCount += 1;
+        if (!row.spend || row.spend.unavailable) spendKnown = false;
+        else spendSum += row.spend.periodUsd ?? 0;
+      }
+      return {
+        totalByKind,
+        activeCount,
+        killedCount,
+        quarantinedCount,
+        periodSpendUsd: spendKnown ? spendSum : null,
+        periodDecisions: null, // no aggregate source in slice 1 — see AgentFleetDecisions.
+      };
     },
 
     // ---- BRD 54 inc2: governed decision tables ------------------------------
@@ -2236,6 +2589,28 @@ export const resolvers = {
         throw new Error(`anomaly ${dismissed.id} was dismissed but no longer appears in the list`);
       }
       return mapAnomaly(ctx, found);
+    },
+
+    // ---- value & ROI reporting (BRD 69) --------------------------------------
+    updateValueAssumptions: async (
+      _p: unknown,
+      a: { input: { minutesPerDecision: Record<string, number>; loadedHourlyRateUsd: number } },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.value.updateAssumptions({
+        minutes_per_decision: a.input.minutesPerDecision,
+        loaded_hourly_rate_usd: a.input.loadedHourlyRateUsd,
+      });
+      return mapValueAssumptions(ctx, d);
+    },
+
+    exportValueReport: async (
+      _p: unknown,
+      a: { period: string; workspaceId?: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.value.exportReport(a.period, a.workspaceId, a.idempotencyKey);
+      return mapValueExport(ctx, d);
     },
 
     // ---- audit: chain-integrity verify + compliance packs -------------------

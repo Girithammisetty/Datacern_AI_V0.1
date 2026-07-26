@@ -38,6 +38,7 @@ import (
 	"github.com/datacern-ai/usage-service/internal/ingest"
 	"github.com/datacern-ai/usage-service/internal/jobs"
 	"github.com/datacern-ai/usage-service/internal/store"
+	"github.com/datacern-ai/usage-service/internal/valueexport"
 )
 
 const (
@@ -174,10 +175,14 @@ func setup() error {
 	// permitted in *_test.go), static RSA verifier. The real OPA path is proven
 	// separately in the OPA test via the real authz.OPAClient.
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	// Real local filesystem object store for value-report exports (BRD 69
+	// design §2.8) — same weight class as chart-service's export mechanics.
+	exportRoot, _ := os.MkdirTemp("", "usage-it-value-exports-*")
 	srv := &api.Server{
 		Store:    st,
 		Authz:    authz.AllowAll{},
 		Verifier: api.NewVerifierStatic(&key.PublicKey, "datacern-test", "datacern"),
+		Exports:  valueexport.NewFSStore(exportRoot, "", []byte("it-secret")),
 		Ready:    func(ctx context.Context) error { return st.Ping(ctx) },
 	}
 	httpSrv := httptest.NewServer(srv.Router())

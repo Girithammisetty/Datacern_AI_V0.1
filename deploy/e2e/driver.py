@@ -656,6 +656,38 @@ def step_e_grant_and_apply(case_id, proposal_id):
     except Exception as e:
         info(f"PG case check: {e}")
 
+    # E4 — BRD 67 slice 1 (VMB-FR-001/002/003, AC-1): the human APPROVE in E2
+    # above is agent-runtime's real decide() commit -> transactional outbox ->
+    # ai.proposal.v1 -> usage-service's real Kafka ingest -> a governed_decision
+    # raw meter row. usage-service has no "get raw records by proposal_id" HTTP
+    # endpoint yet (GET /api/v1/decisions/costs is VMB-FR-011, slice 2) — so,
+    # matching this driver's existing pattern of asserting directly against a
+    # service's own Postgres for ground truth (see the disposition check just
+    # above), poll usage_raw directly for up to the VMB-NFR-001 p95 ingest-lag
+    # budget (30s).
+    if EVID.get("hitl_approved") and proposal_id:
+        try:
+            import psycopg
+            deadline = time.time() + 30
+            found = None
+            while time.time() < deadline and found is None:
+                with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/usage") as cn:
+                    found = cn.execute(
+                        "SELECT agent_id, decision, meta->>'proposal_kind' "
+                        "FROM usage_raw WHERE meter_key='governed_decision' "
+                        "AND agent_id=%s AND decision='approved' "
+                        "ORDER BY created_at DESC LIMIT 1", (c.AGENT_ID,)).fetchone()
+                if found is None:
+                    time.sleep(1.5)
+            if found:
+                ok("BRD 67: approve -> governed_decision meter row (real Kafka ingest, "
+                   "AC-1)", f"agent_id={found[0]} decision={found[1]} proposal_kind={found[2]}")
+                EVID["governed_decision_metered"] = True
+            else:
+                bad("no governed_decision raw row appeared within 30s of HITL approve")
+        except Exception as e:
+            info(f"usage-service PG check (governed_decision, slice 1 — usage may not be booted): {e}")
+
 
 # ============================================================ STEP F learning signal
 def step_f_learning(case_id):

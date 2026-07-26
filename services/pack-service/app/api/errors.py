@@ -12,11 +12,13 @@ from app.domain.errors import AppError
 logger = logging.getLogger(__name__)
 
 
-def error_response(status: int, code: str, message: str, trace_id: str) -> JSONResponse:
-    return JSONResponse(
-        status_code=status,
-        content={"error": {"code": code, "message": message, "trace_id": trace_id}},
-    )
+def error_response(
+    status: int, code: str, message: str, trace_id: str, details: dict | None = None
+) -> JSONResponse:
+    body = {"code": code, "message": message, "trace_id": trace_id}
+    if details is not None:
+        body["details"] = details
+    return JSONResponse(status_code=status, content={"error": body})
 
 
 class TraceMiddleware(BaseHTTPMiddleware):
@@ -33,7 +35,8 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError):  # noqa: ANN202
         trace_id = getattr(request.state, "trace_id", "")
-        return error_response(exc.status, exc.code, exc.message, trace_id)
+        details = getattr(exc, "details", None)
+        return error_response(exc.status, exc.code, exc.message, trace_id, details)
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception):  # noqa: ANN202

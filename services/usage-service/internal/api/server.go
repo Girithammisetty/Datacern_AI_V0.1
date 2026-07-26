@@ -13,6 +13,7 @@ import (
 	"github.com/datacern-ai/usage-service/internal/domain"
 	"github.com/datacern-ai/usage-service/internal/events"
 	"github.com/datacern-ai/usage-service/internal/store"
+	"github.com/datacern-ai/usage-service/internal/valueexport"
 )
 
 // Store is the persistence surface the API depends on (satisfied by *store.PG;
@@ -47,6 +48,15 @@ type Store interface {
 	AcknowledgeReconciliation(ctx context.Context, id uuid.UUID) error
 	RecordAdjustment(ctx context.Context, op domain.Op, a domain.Adjustment) (domain.Adjustment, error)
 
+	// Value & ROI reporting (BRD 69).
+	PutAssumptions(ctx context.Context, op domain.Op, minutesPerDecision map[string]float64, loadedHourlyRateUSD float64) (domain.ValueAssumptions, error)
+	ResolveAssumptions(ctx context.Context, tenant uuid.UUID, at time.Time) (*domain.ValueAssumptions, bool, error)
+	AssumptionHistory(ctx context.Context, tenant uuid.UUID) ([]domain.ValueAssumptions, error)
+	ValueSummaryInputs(ctx context.Context, tenant uuid.UUID, monthStart time.Time, workspaceID string) (domain.DecisionsBreakdown, float64, domain.Adoption, bool, error)
+	ValueTrendPoints(ctx context.Context, tenant uuid.UUID, from, to time.Time, workspaceID string) ([]domain.ValueTrendPoint, error)
+	CreateValueExport(ctx context.Context, op domain.Op, e domain.ValueExport) (domain.ValueExport, error)
+	ListValueExports(ctx context.Context, tenant uuid.UUID, period string) ([]domain.ValueExport, error)
+
 	Ping(ctx context.Context) error
 }
 
@@ -56,6 +66,10 @@ type Server struct {
 	Authz    authz.Authorizer
 	Verifier *Verifier
 	Ready    func(ctx context.Context) error // readiness (DB/Kafka/Redis)
+	// Exports is the object store for value-report artifacts (BRD 69 design
+	// §2.8). Nil disables export generation with a clear error rather than a
+	// panic — see handleExportValueReport.
+	Exports valueexport.ObjectStore
 
 	// guarded records every action bound to a route via RequireAction (set at
 	// Router build time); the action-catalog drift test asserts each is
@@ -77,36 +91,56 @@ func (s *Server) Router() http.Handler {
 	r.Use(RecoverMiddleware)
 	r.Use(metrics.Middleware(chiRoutePattern))
 
-	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK); _, _ = w.Write([]byte("ok")) })
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
 	r.Get("/readyz", s.handleReady)
 	r.Handle("/metrics", metrics.Handler())
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(AuthMiddleware(s.Verifier))
+		r.Group(func(r chi.Router) {
+			r.Use(AuthMiddleware(s.Verifier))
 
-		r.With(s.RequireAction(authz.ActionMeterRead)).Get("/meters", s.handleListMeters)
+			r.With(s.RequireAction(authz.ActionMeterRead)).Get("/meters", s.handleListMeters)
 
-		r.With(s.RequireAction(authz.ActionReportRead)).Get("/reports/usage", s.handleReportUsage)
-		r.With(s.RequireAction(authz.ActionReportRead)).Get("/reports/chargeback", s.handleChargeback)
+			r.With(s.RequireAction(authz.ActionReportRead)).Get("/reports/usage", s.handleReportUsage)
+			r.With(s.RequireAction(authz.ActionReportRead)).Get("/reports/chargeback", s.handleChargeback)
 
-		r.With(s.RequireAction(authz.ActionBudgetCreate)).Post("/budgets", s.handleCreateBudget)
-		r.With(s.RequireAction(authz.ActionBudgetRead)).Get("/budgets", s.handleListBudgets)
-		r.With(s.RequireAction(authz.ActionBudgetRead)).Get("/budgets/{id}", s.handleGetBudget)
-		r.With(s.RequireAction(authz.ActionBudgetUpdate)).Patch("/budgets/{id}", s.handlePatchBudget)
-		r.With(s.RequireAction(authz.ActionBudgetDelete)).Delete("/budgets/{id}", s.handleDeleteBudget)
-		r.With(s.RequireAction(authz.ActionBudgetRead)).Get("/budgets/{id}/state", s.handleBudgetState)
-		r.With(s.RequireAction(authz.ActionBudgetRead)).Get("/budget-states", s.handleBudgetStates)
+			r.With(s.RequireAction(authz.ActionBudgetCreate)).Post("/budgets", s.handleCreateBudget)
+			r.With(s.RequireAction(authz.ActionBudgetRead)).Get("/budgets", s.handleListBudgets)
+			r.With(s.RequireAction(authz.ActionBudgetRead)).Get("/budgets/{id}", s.handleGetBudget)
+			r.With(s.RequireAction(authz.ActionBudgetUpdate)).Patch("/budgets/{id}", s.handlePatchBudget)
+			r.With(s.RequireAction(authz.ActionBudgetDelete)).Delete("/budgets/{id}", s.handleDeleteBudget)
+			r.With(s.RequireAction(authz.ActionBudgetRead)).Get("/budgets/{id}/state", s.handleBudgetState)
+			r.With(s.RequireAction(authz.ActionBudgetRead)).Get("/budget-states", s.handleBudgetStates)
 
-		r.With(s.RequireAction(authz.ActionRateCardCreate)).Post("/rate-cards", s.handleCreateRateCard)
-		r.With(s.RequireAction(authz.ActionRateCardUpdate)).Post("/rate-cards/{id}/activate", s.handleActivateRateCard)
-		r.With(s.RequireAction(authz.ActionRateCardRead)).Get("/rate-cards", s.handleListRateCards)
+			r.With(s.RequireAction(authz.ActionRateCardCreate)).Post("/rate-cards", s.handleCreateRateCard)
+			r.With(s.RequireAction(authz.ActionRateCardUpdate)).Post("/rate-cards/{id}/activate", s.handleActivateRateCard)
+			r.With(s.RequireAction(authz.ActionRateCardRead)).Get("/rate-cards", s.handleListRateCards)
 
-		r.With(s.RequireAction(authz.ActionAnomalyRead)).Get("/anomalies", s.handleListAnomalies)
-		r.With(s.RequireAction(authz.ActionAnomalyUpdate)).Post("/anomalies/{id}/dismiss", s.handleDismissAnomaly)
+			r.With(s.RequireAction(authz.ActionAnomalyRead)).Get("/anomalies", s.handleListAnomalies)
+			r.With(s.RequireAction(authz.ActionAnomalyUpdate)).Post("/anomalies/{id}/dismiss", s.handleDismissAnomaly)
 
-		r.With(s.RequireAction(authz.ActionReconRead)).Get("/reconciliations", s.handleListReconciliations)
-		r.With(s.RequireAction(authz.ActionReconUpdate)).Post("/reconciliations/{id}/acknowledge", s.handleAckReconciliation)
-		r.With(s.RequireAction(authz.ActionReconUpdate)).Post("/adjustments", s.handleCreateAdjustment)
+			r.With(s.RequireAction(authz.ActionReconRead)).Get("/reconciliations", s.handleListReconciliations)
+			r.With(s.RequireAction(authz.ActionReconUpdate)).Post("/reconciliations/{id}/acknowledge", s.handleAckReconciliation)
+			r.With(s.RequireAction(authz.ActionReconUpdate)).Post("/adjustments", s.handleCreateAdjustment)
+
+			// Value & ROI reporting (BRD 69). Read surfaces share usage.report.read
+			// (viewing/exporting current figures is read-shaped); only editing the
+			// assumptions that drive FUTURE figures needs the stronger grant
+			// (design §2.9).
+			r.With(s.RequireAction(authz.ActionReportRead)).Get("/value/summary", s.handleValueSummary)
+			r.With(s.RequireAction(authz.ActionReportRead)).Get("/value/assumptions", s.handleGetAssumptions)
+			r.With(s.RequireAction(authz.ActionAssumptionsUpdate)).Put("/value/assumptions", s.handlePutAssumptions)
+			r.With(s.RequireAction(authz.ActionReportRead)).Get("/value/assumptions/history", s.handleGetAssumptionHistory)
+			r.With(s.RequireAction(authz.ActionReportRead)).Get("/value/trend", s.handleValueTrend)
+			r.With(s.RequireAction(authz.ActionReportRead)).Post("/value-reports", s.handleExportValueReport)
+			r.With(s.RequireAction(authz.ActionReportRead)).Get("/value-reports", s.handleListValueReports)
+		})
+		// Signed artifact download is validated by HMAC, not JWT (design §2.8,
+		// mirrors chart-service's GET /exports/* pattern).
+		r.Get("/value-report-artifacts/*", s.handleDownloadValueExport)
 	})
 
 	return r

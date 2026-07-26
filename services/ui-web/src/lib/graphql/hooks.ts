@@ -51,6 +51,7 @@ import type {
   CreateBudgetInput,
   UpdateBudgetInput,
   CreateRateCardInput,
+  UpdateValueAssumptionsInput,
   CreateIngestionInput,
   CreateUploadInput,
   CompleteUploadInput,
@@ -3000,6 +3001,86 @@ export function useDismissAnomaly() {
   });
 }
 
+/* ------- value & ROI reporting (BRD 69) ------- */
+
+/** Value/ROI summary for a period (usage-service GET /value/summary,
+ * ROI-FR-010). `period` is YYYY-MM. */
+export function useValueSummary(period: string, workspaceId?: string) {
+  return useQuery({
+    queryKey: qk.valueSummary(period, workspaceId),
+    queryFn: () =>
+      graphqlRequest<ops.ValueSummaryResult>(ops.VALUE_SUMMARY, { period, workspaceId }).then((r) => r.valueSummary),
+    enabled: !!period,
+  });
+}
+
+/** Tenure trend of cost_per_decision (usage-service GET /value/trend, ROI-FR-011). */
+export function useValueTrend(
+  metric: string,
+  params: { from?: string; to?: string; workspaceId?: string } = {},
+) {
+  return useQuery({
+    queryKey: qk.valueTrend(metric, params.from, params.to, params.workspaceId),
+    queryFn: () =>
+      graphqlRequest<ops.ValueTrendResult>(ops.VALUE_TREND, {
+        metric, granularity: "month", from: params.from, to: params.to, workspaceId: params.workspaceId,
+      }).then((r) => r.valueTrend),
+  });
+}
+
+/** The tenant's active value-reporting assumptions, or null if never set
+ * (ROI-FR-001 "ships absent" — a legitimate, expected empty state). */
+export function useValueAssumptions() {
+  return useQuery({
+    queryKey: qk.valueAssumptions(),
+    queryFn: () => graphqlRequest<ops.ValueAssumptionsResult>(ops.VALUE_ASSUMPTIONS, {}).then((r) => r.valueAssumptions),
+  });
+}
+
+export function useValueAssumptionHistory() {
+  return useQuery({
+    queryKey: qk.valueAssumptionHistory(),
+    queryFn: () =>
+      graphqlRequest<ops.ValueAssumptionHistoryResult>(ops.VALUE_ASSUMPTION_HISTORY, {}).then(
+        (r) => r.valueAssumptionHistory,
+      ),
+  });
+}
+
+export function useUpdateValueAssumptions() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateValueAssumptionsInput) =>
+      graphqlRequest<ops.UpdateValueAssumptionsResult>(ops.UPDATE_VALUE_ASSUMPTIONS, { input }).then(
+        (r) => r.updateValueAssumptions,
+      ),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: qk.valueAssumptions() });
+      client.invalidateQueries({ queryKey: qk.valueAssumptionHistory() });
+      // Assumption edits change future *_est figures — drop cached summaries.
+      client.invalidateQueries({ queryKey: ["value", "summary"] });
+    },
+  });
+}
+
+export function useValueExports(period?: string) {
+  return useQuery({
+    queryKey: qk.valueExports(period),
+    queryFn: () => graphqlRequest<ops.ValueExportsResult>(ops.VALUE_EXPORTS, { period }).then((r) => r.valueExports),
+  });
+}
+
+export function useExportValueReport() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ period, workspaceId }: { period: string; workspaceId?: string }) =>
+      graphqlRequest<ops.ExportValueReportResult>(ops.EXPORT_VALUE_REPORT, {
+        period, workspaceId, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.exportValueReport),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["value", "exports"] }),
+  });
+}
+
 /* ------- admin: users, workspaces, groups, service accounts, tenant, audit ------- */
 export function useUsers() {
   return useInfiniteQuery({
@@ -3481,6 +3562,23 @@ export function useTenant(id: string) {
     queryFn: () => graphqlRequest<ops.TenantResult>(ops.TENANT, { id }).then((r) => r.tenant),
     enabled: !!id,
     staleTime: 5 * 60_000,
+  });
+}
+
+/** BRD 66 slice 3 (CPL-FR-033): the commercial plane for gating + upsell UI
+ * (lib/authz/useCapabilities.ts merges `lockedFeatureKeys` into the viewer's
+ * CapabilitySet). Reachable by any authenticated caller — the BFF degrades
+ * to the minimal shape rather than erroring for a non-admin viewer, so this
+ * never needs a capability check of its own. */
+export function useTenantCommercial(tenantId: string) {
+  return useQuery({
+    queryKey: qk.tenantCommercial(tenantId),
+    queryFn: () =>
+      graphqlRequest<ops.TenantCommercialResult>(ops.TENANT_COMMERCIAL, { id: tenantId }).then(
+        (r) => r.tenantCommercial ?? null,
+      ),
+    enabled: !!tenantId,
+    staleTime: 60_000,
   });
 }
 
@@ -4837,6 +4935,44 @@ export function useAgentRunsList(vars: { agentKey?: string } = {}) {
     queryFn: () =>
       graphqlRequest<ops.AgentRunsResult>(ops.AGENT_RUNS, { first: 100, ...vars }).then(
         (r) => r.agentRuns,
+      ),
+  });
+}
+
+// ============================================================================
+// BRD 68 slice 1: Agent Control Tower fleet aggregation
+// (docs/initiatives/agent-control-tower.md).
+// ============================================================================
+export interface AgentFleetFilters {
+  workspace?: string;
+  periodFrom?: string;
+  periodTo?: string;
+}
+
+/** `includeSpend` selects between two query documents (AGENT_FLEET vs
+ * AGENT_FLEET_WITH_SPEND) rather than always requesting `spend` — per
+ * docs/initiatives/agent-control-tower.md §2.4, a caller lacking
+ * usage.report.read who asks for `spend` gets a real downstream 403 on that
+ * field, and graphqlRequest throws on ANY GraphQL error (see
+ * lib/graphql/client.ts), which would fail the WHOLE fleet query rather than
+ * just hiding one column. The caller (the fleet table) decides `includeSpend`
+ * from FEATURE_GATES.viewAgentFleetSpend. */
+export function useAgentFleet(filters: AgentFleetFilters = {}, includeSpend = false) {
+  return useQuery({
+    queryKey: qk.agentFleet({ ...filters, includeSpend }),
+    queryFn: () =>
+      graphqlRequest<ops.AgentFleetResult>(includeSpend ? ops.AGENT_FLEET_WITH_SPEND : ops.AGENT_FLEET, { ...filters }).then(
+        (r) => r.agentFleet,
+      ),
+  });
+}
+
+export function useAgentFleetSummary(filters: AgentFleetFilters = {}) {
+  return useQuery({
+    queryKey: qk.agentFleetSummary(filters),
+    queryFn: () =>
+      graphqlRequest<ops.AgentFleetSummaryResult>(ops.AGENT_FLEET_SUMMARY, { ...filters }).then(
+        (r) => r.agentFleetSummary,
       ),
   });
 }

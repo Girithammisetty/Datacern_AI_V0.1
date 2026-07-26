@@ -1,0 +1,66 @@
+# Open-row seed cases (§2.2): the 5 PENDING prior-auth requests become the
+# demo tenant's worklist (mirrors PAR-5001..5005 in data/prior_auth_requests.csv
+# — pa_review_triage is the pack's real triage decision table, so these are
+# the same rows a live payer's PA queue would surface). row_pk resolves
+# against prior_auth_requests' first required_columns entry (par_id) —
+# checked by `packctl demo-lint`.
+- dataset: prior_auth_requests
+  row_pk: PAR-5001
+  severity: high
+  display_projection:
+    member_id: MBR-10501
+    requested_service: lumbar_fusion
+    cpt_code: "22633"
+    urgency: urgent
+  note: >
+    Urgent lumbar fusion PA, 4h in queue. Clinical info complete; copilot
+    recommends approve at 0.88 confidence — spinal-fusion criteria met per
+    submitted imaging + failed 6-week conservative care note.
+- dataset: prior_auth_requests
+  row_pk: PAR-5002
+  severity: medium
+  display_projection:
+    member_id: MBR-10522
+    requested_service: infliximab_infusion
+    cpt_code: J1745
+    urgency: standard
+  note: >
+    Specialty-drug PA (infliximab) for Crohn's — copilot escalates to MD
+    review at 0.61 confidence: step-therapy history in the chart is thin,
+    needs a specialist read before approval.
+- dataset: prior_auth_requests
+  row_pk: PAR-5003
+  severity: medium
+  display_projection:
+    member_id: MBR-10545
+    requested_service: knee_mri
+    cpt_code: "73721"
+    urgency: standard
+  note: >
+    Knee MRI PA — clinical_info_status is INCOMPLETE (missing conservative-
+    care documentation); copilot escalates rather than guessing. Needs a
+    follow-up request to the ordering provider before disposition.
+- dataset: prior_auth_requests
+  row_pk: PAR-5004
+  severity: medium
+  display_projection:
+    member_id: MBR-10567
+    requested_service: home_health_pt
+    cpt_code: "97110"
+    urgency: standard
+  note: >
+    Home-health PT continuation, 28h in queue. Complete clinical info;
+    copilot recommends approve at 0.91 confidence — consistent with the
+    member's post-op recovery plan on file.
+- dataset: prior_auth_requests
+  row_pk: PAR-5005
+  severity: high
+  display_projection:
+    member_id: MBR-10589
+    requested_service: specialty_infusion_rituximab
+    cpt_code: J9312
+    urgency: urgent
+  note: >
+    Urgent oncology specialty infusion (rituximab), 6h in queue. Copilot
+    escalates to MD review at 0.57 confidence — high-cost specialty drug,
+    below the auto-approve confidence threshold by policy.

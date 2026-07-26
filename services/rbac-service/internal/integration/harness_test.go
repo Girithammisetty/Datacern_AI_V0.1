@@ -33,6 +33,7 @@ import (
 	"github.com/datacern-ai/rbac-service/internal/api"
 	"github.com/datacern-ai/rbac-service/internal/authz"
 	"github.com/datacern-ai/rbac-service/internal/domain"
+	"github.com/datacern-ai/rbac-service/internal/entitlements"
 	"github.com/datacern-ai/rbac-service/internal/events"
 	"github.com/datacern-ai/rbac-service/internal/projection"
 	"github.com/datacern-ai/rbac-service/internal/store"
@@ -198,7 +199,7 @@ func setup(ctx context.Context, pg *tcpostgres.PostgresContainer, rd *tcredis.Re
 
 	srv := &api.Server{
 		Store: st, Checker: hh.checker, Writer: writer, Reader: hh.reader,
-		Verifier: verifier, Redis: rdb,
+		Verifier: verifier, Redis: rdb, Entitlements: entitlements.NewReader(rdb),
 	}
 	hh.httpSrv = httptest.NewServer(srv.Router())
 

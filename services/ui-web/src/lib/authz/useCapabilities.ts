@@ -1,6 +1,6 @@
 "use client";
 import { useMemo } from "react";
-import { useMe } from "@/lib/graphql/hooks";
+import { useMe, useTenantCommercial } from "@/lib/graphql/hooks";
 import {
   allows,
   toCapabilitySet,
@@ -41,6 +41,12 @@ export interface Capabilities {
 export function useCapabilities(): Capabilities {
   const me = useMe();
   const viewer = me.data?.me;
+  // BRD 66 slice 3 (CPL-FR-013): locked commercial feature keys, merged into
+  // the same CapabilitySet the entitlement Gate checks. Fail-safe like every
+  // other field here: while loading or on error, lockedFeatureKeys defaults
+  // to [] (toCapabilitySet's default), so an entitlement gate renders
+  // UNLOCKED rather than a false-positive locked upsell before data loads.
+  const tenantCommercial = useTenantCommercial(viewer?.tenantId ?? "");
 
   const set = useMemo<CapabilitySet>(
     () =>
@@ -49,9 +55,10 @@ export function useCapabilities(): Capabilities {
             capabilities: viewer.capabilities,
             roles: viewer.roles,
             isPlatformAdmin: viewer.isPlatformAdmin,
+            lockedFeatureKeys: tenantCommercial.data?.lockedFeatureKeys,
           })
         : EMPTY_CAPABILITIES,
-    [viewer],
+    [viewer, tenantCommercial.data],
   );
 
   return useMemo<Capabilities>(

@@ -1,0 +1,374 @@
+{
+  "pack": "card-disputes",
+  "version": "2.1.0",
+  "workspace_id": "019f96b0-db9b-7d04-ba96-4df2a66bcde1",
+  "tenant_id": "019f96b0-d308-70d2-8b3b-eee60a7249e0",
+  "started_at": "2026-07-25T00:34:25Z",
+  "finished_at": "2026-07-25T00:34:33Z",
+  "actions": [
+    {
+      "kind": "datasets",
+      "identity": "cd_cardholders",
+      "action": "reuse",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:dataset:dataset/019f96b1-b8a8-7f6f-ad04-d10b3a3716e2",
+      "detail": "bound to tenant dataset 'cd-cardholders'"
+    },
+    {
+      "kind": "datasets",
+      "identity": "cd_transactions",
+      "action": "reuse",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:dataset:dataset/019f96b1-b9c3-7d3d-87c6-17df51b14a61",
+      "detail": "bound to tenant dataset 'cd-transactions'"
+    },
+    {
+      "kind": "datasets",
+      "identity": "cd_disputes",
+      "action": "reuse",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:dataset:dataset/019f96b1-ba5f-7a02-ada0-0931d6d96ccc",
+      "detail": "bound to tenant dataset 'cd-disputes'"
+    },
+    {
+      "kind": "semantic_models",
+      "identity": "disputes_core",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:semantic:model/019f96b1-df93-7931-a7ab-8b90a684e26b",
+      "detail": "'disputes_core' published"
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_0",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:semantic:verified_query/019f96b1-e0a1-701d-956b-4fcd9f3911c4",
+      "detail": ""
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_1",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:semantic:verified_query/019f96b1-e15a-77ea-88ea-97ec7a0798d0",
+      "detail": ""
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_2",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:semantic:verified_query/019f96b1-e216-701f-b772-dba733ce1fea",
+      "detail": ""
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_3",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:semantic:verified_query/019f96b1-e2d2-71b1-96f3-bd35fe8692f9",
+      "detail": ""
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_4",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:semantic:verified_query/019f96b1-e37e-7d1f-9da0-2ec4fa32828d",
+      "detail": ""
+    },
+    {
+      "kind": "verified_queries",
+      "identity": "canonical_questions_5",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:semantic:verified_query/019f96b1-e433-7b95-a419-39551c6a6207",
+      "detail": ""
+    },
+    {
+      "kind": "saved_queries",
+      "identity": "dispute_merchant_edges",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:query:query/019f96b1-e4d7-7589-87e9-360ee52bcf7a",
+      "detail": "Disputes: cardholder-merchant network edges"
+    },
+    {
+      "kind": "saved_queries",
+      "identity": "high_value_open_disputes",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:query:query/019f96b1-e517-75b8-abb9-23fbcaa2f3a7",
+      "detail": "Disputes: high-value open queue"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "dispute_command_center",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:chart:dashboard/019f96b1-e57a-7f0b-ad86-8406c2cc6fc8",
+      "detail": "Dispute Command Center"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "dispute_command_center",
+      "action": "verify",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:chart:dashboard/019f96b1-e57a-7f0b-ad86-8406c2cc6fc8",
+      "detail": "5/5 charts resolve data"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "regulatory_clock",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:chart:dashboard/019f96b1-e768-72b3-94e6-4a0f1f5424a6",
+      "detail": "Regulatory Clock & Provisional Credit"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "regulatory_clock",
+      "action": "verify",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:chart:dashboard/019f96b1-e768-72b3-94e6-4a0f1f5424a6",
+      "detail": "5/5 charts resolve data"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "chargeback_recovery",
+      "action": "create",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:chart:dashboard/019f96b1-e8d8-7e05-af0a-e78f60a210e8",
+      "detail": "Chargeback Recovery"
+    },
+    {
+      "kind": "dashboards",
+      "identity": "chargeback_recovery",
+      "action": "verify",
+      "urn": "wr:019f96b0-d308-70d2-8b3b-eee60a7249e0:chart:dashboard/019f96b1-e8d8-7e05-af0a-e78f60a210e8",
+      "detail": "5/5 charts resolve data"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "create",
+      "urn": null,
+      "detail": "resolve_cardholder_favor"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "create",
+      "urn": null,
+      "detail": "deny_no_error_found"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "create",
+      "urn": null,
+      "detail": "file_chargeback"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "create",
+      "urn": null,
+      "detail": "chargeback_won"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "create",
+      "urn": null,
+      "detail": "chargeback_lost"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "create",
+      "urn": null,
+      "detail": "escalate_fraud_review"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "create",
+      "urn": null,
+      "detail": "route_investigation_review"
+    },
+    {
+      "kind": "dispositions",
+      "identity": "dispositions",
+      "action": "create",
+      "urn": null,
+      "detail": "close_merchant_credited"
+    },
+    {
+      "kind": "ontology",
+      "identity": "dispute_ontology",
+      "action": "create",
+      "urn": null,
+      "detail": "cardholder"
+    },
+    {
+      "kind": "ontology",
+      "identity": "dispute_ontology",
+      "action": "create",
+      "urn": null,
+      "detail": "transaction"
+    },
+    {
+      "kind": "ontology",
+      "identity": "dispute_ontology",
+      "action": "create",
+      "urn": null,
+      "detail": "dispute"
+    },
+    {
+      "kind": "ontology",
+      "identity": "dispute_ontology",
+      "action": "create",
+      "urn": null,
+      "detail": "chargeback"
+    },
+    {
+      "kind": "decision_models",
+      "identity": "reg_e_triage",
+      "action": "create",
+      "urn": null,
+      "detail": "'Reg E dispute triage table' (7 rule(s))"
+    },
+    {
+      "kind": "decision_models",
+      "identity": "merchant_error_recovery",
+      "action": "create",
+      "urn": null,
+      "detail": "'Merchant error recovery routing' (5 rule(s))"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "create",
+      "urn": null,
+      "detail": "role 'Dispute Intake Analyst'"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Dispute Intake Analyst' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "create",
+      "urn": null,
+      "detail": "role 'Fraud Investigator'"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Fraud Investigator' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "create",
+      "urn": null,
+      "detail": "role 'Chargeback Specialist'"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Chargeback Specialist' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "create",
+      "urn": null,
+      "detail": "role 'Dispute Operations Manager'"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Dispute Operations Manager' bound to permission group"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "create",
+      "urn": null,
+      "detail": "role 'Dispute Compliance Auditor'"
+    },
+    {
+      "kind": "roles",
+      "identity": "roles",
+      "action": "verify",
+      "urn": null,
+      "detail": "role 'Dispute Compliance Auditor' bound to permission group"
+    },
+    {
+      "kind": "agent_configs",
+      "identity": "agent_configs",
+      "action": "create",
+      "urn": null,
+      "detail": "case-triage prompt_params set"
+    },
+    {
+      "kind": "agent_configs",
+      "identity": "agent_configs",
+      "action": "create",
+      "urn": null,
+      "detail": "analytics prompt_params set"
+    },
+    {
+      "kind": "memories",
+      "identity": "grounding",
+      "action": "create",
+      "urn": null,
+      "detail": "9 grounding records written, 0 already present"
+    },
+    {
+      "kind": "pipelines",
+      "identity": "pipelines",
+      "action": "create",
+      "urn": null,
+      "detail": "'Card transaction anomaly detector (isolation forest)' (isolation_forest, train)"
+    },
+    {
+      "kind": "pipelines",
+      "identity": "pipelines",
+      "action": "create",
+      "urn": null,
+      "detail": "'Dispute outcome scorer (xgboost)' (xgboost, train)"
+    },
+    {
+      "kind": "write_adapters",
+      "identity": "sor_writeback",
+      "action": "create",
+      "urn": null,
+      "detail": "Core processor dispute status sync"
+    },
+    {
+      "kind": "write_adapters",
+      "identity": "sor_writeback",
+      "action": "create",
+      "urn": null,
+      "detail": "Issuer dispute ledger upsert"
+    },
+    {
+      "kind": "connection_templates",
+      "identity": "source_feeds",
+      "action": "create",
+      "urn": null,
+      "detail": "Network chargeback report drop (SFTP)"
+    },
+    {
+      "kind": "connection_templates",
+      "identity": "source_feeds",
+      "action": "create",
+      "urn": null,
+      "detail": "Processor dispute batch files (S3)"
+    }
+  ],
+  "deferred": [
+    {
+      "kind": "agent_recipes",
+      "reason": "Bespoke LangGraph recipes (Dispute Intake Copilot, Chargeback Representment Builder, First-Party Fraud Scorer, Provisional Credit Clock Sentinel) require agent-runtime graph-module registration (BRD 23 BR-12). This pack specializes the existing case-triage + analytics agents via TenantAgentConfig prompt_params + tenant-scope RAG grounding instead."
+    }
+  ],
+  "result": "installed"
+}

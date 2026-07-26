@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/datacern-ai/rbac-service/internal/entitlements"
 	"github.com/datacern-ai/rbac-service/internal/store"
 )
 
@@ -33,10 +34,54 @@ type workspaceRequest struct {
 	Public      *bool   `json:"public"`
 }
 
+// checkWorkspaceCap enforces CPL-FR-031 before a workspace is created: the
+// tenant's workspace_cap entitlement (read directly off entitlements_flat,
+// CPL-NFR-001 -- no synchronous identity-service call) must not already be
+// met. Fail-closed on an unreadable/missing projection (CPL-NFR-004): writes
+// respond 503 ENTITLEMENT_UNAVAILABLE rather than silently proceeding. A
+// tenant with NO workspace_cap entitlement configured is unlimited, not
+// blocked. Returns ok=false after writing the error response itself.
+func (s *Server) checkWorkspaceCap(w http.ResponseWriter, r *http.Request, tenant uuid.UUID) bool {
+	if s.Entitlements == nil {
+		writeError(w, r, http.StatusServiceUnavailable, CodeEntitlementUnavailable,
+			"entitlement projection unavailable", nil)
+		return false
+	}
+	status, limit, err := s.Entitlements.WorkspaceCapStatus(r.Context(), tenant.String())
+	if err != nil {
+		writeError(w, r, http.StatusServiceUnavailable, CodeEntitlementUnavailable,
+			"entitlement projection unavailable", nil)
+		return false
+	}
+	switch status {
+	case entitlements.StatusUnavailable:
+		writeError(w, r, http.StatusServiceUnavailable, CodeEntitlementUnavailable,
+			"entitlement projection unavailable", nil)
+		return false
+	case entitlements.StatusUnlimited:
+		return true
+	default: // StatusCapped
+		current, cerr := s.Store.CountActiveWorkspaces(r.Context(), tenant)
+		if cerr != nil {
+			writeStoreError(w, r, cerr)
+			return false
+		}
+		if entitlements.CapExceeded(current, limit) {
+			writeError(w, r, http.StatusForbidden, CodeCapExceeded, "workspace cap reached",
+				map[string]int{"current": current, "limit": limit})
+			return false
+		}
+		return true
+	}
+}
+
 func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	op, ok := opFrom(r)
 	if !ok {
 		writeError(w, r, http.StatusUnauthorized, "UNAUTHENTICATED", "missing claims", nil)
+		return
+	}
+	if !s.checkWorkspaceCap(w, r, op.Tenant) {
 		return
 	}
 	var req workspaceRequest

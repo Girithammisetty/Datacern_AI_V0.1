@@ -8,8 +8,18 @@ let mockPath = "/";
 vi.mock("next/navigation", () => ({ usePathname: () => mockPath }));
 
 let mockViewer: Viewer | undefined;
+// BRD 66 slice 3 (CPL-FR-013): useCapabilities also reads useTenantCommercial
+// for locked-feature-entitlement keys. Defaults to no data (=> unlocked
+// everything, registry.ts's EMPTY_CAPABILITIES-equivalent default) unless a
+// test overrides mockLockedFeatureKeys.
+let mockLockedFeatureKeys: string[] | undefined;
 vi.mock("@/lib/graphql/hooks", () => ({
   useMe: () => ({ data: mockViewer ? { me: mockViewer } : undefined, isLoading: false, isError: false }),
+  useTenantCommercial: () => ({
+    data: mockLockedFeatureKeys ? { lockedFeatureKeys: mockLockedFeatureKeys } : undefined,
+    isLoading: false,
+    isError: false,
+  }),
 }));
 
 import { Sidebar } from "@/components/shell/Sidebar";
@@ -62,6 +72,7 @@ const navGroups = () =>
 beforeEach(() => {
   mockPath = "/";
   mockViewer = undefined;
+  mockLockedFeatureKeys = undefined;
 });
 
 describe("Sidebar renders only the nav a persona's capabilities unlock", () => {

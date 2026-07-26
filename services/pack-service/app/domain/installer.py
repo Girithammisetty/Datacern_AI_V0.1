@@ -94,13 +94,26 @@ def build_client(settings: Settings, tenant_id: str, workspace_id: str, user_jwt
 
 # ---- dry-run plan -----------------------------------------------------------
 
-def plan(client, manifest, bindings: dict[str, str] | None = None) -> list[dict]:
+def plan(
+    client, manifest, bindings: dict[str, str] | None = None, entitled: bool = True,
+) -> list[dict]:
     """Compute what an install WOULD do without any side effect (PKG-FR-020):
     per component, `create` (new) or `exists` (idempotent no-op); kinds inc1
     doesn't materialize are `deferred` with a reason. File-less dataset
     declarations (the no-dummy-data rule) plan as `bind` (explicit binding
     supplied), `reuse` (a same-name tenant dataset exists), or
-    `requires_binding` (nothing to resolve against — the apply would fail)."""
+    `requires_binding` (nothing to resolve against — the apply would fail).
+
+    `entitled` gates the pack_sku commercial entitlement (CPL-FR-030, BRD 66
+    slice 3): the caller (installs.py) resolves it once against
+    entitlements_flat before calling plan(). When False, the per-component
+    loop never runs -- the plan is a single `blocked` root entry, exactly the
+    design's phrasing ("prepend to the ops list instead of proceeding into
+    the existing per-component loop")."""
+    if not entitled:
+        return [{"kind": "root", "identity": manifest.name,
+                 "action": "blocked", "detail": "entitlement"}]
+
     from packctl.manifest import load_component_file  # noqa: PLC0415
 
     ops: list[dict] = []

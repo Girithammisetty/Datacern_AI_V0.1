@@ -69,6 +69,87 @@ paths:
     get: {summary: Step-by-step provisioning status (IDN-FR-007), parameters: [{$ref: '#/components/parameters/ID'}], responses: {'200': {description: steps, content: {application/json: {schema: {type: object, properties: {steps: {type: array, items: {$ref: '#/components/schemas/ProvisioningStep'}}}}}}}}}
   /tenants/{id}/provisioning/retry:
     post: {summary: Resume from the failed step (US-2/AC-3), parameters: [{$ref: '#/components/parameters/ID'}], responses: {'202': {description: resumed}, '409': {$ref: '#/components/responses/Conflict'}}}
+  /tenants/{id}/entitlements:
+    get:
+      summary: Effective entitlements with provenance (super-admin, or the tenant's own admin) — BRD 66 CPL-FR-011
+      description: Cross-tenant access returns 404 and emits security.cross_tenant_denied, same as GET /tenants/{id}.
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      responses:
+        '200': {description: Effective entitlement set, content: {application/json: {schema: {$ref: '#/components/schemas/EffectiveEntitlementsResponse'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /tenants/{id}/trial:
+    post:
+      summary: Start a trial (super-admin) — BRD 66 slice 2, CPL-FR-021/US-3
+      description: trial_days falls back to the assigned plan's trial_days_default when omitted; a validation error if neither is available.
+      parameters: [{$ref: '#/components/parameters/ID'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {content: {application/json: {schema: {type: object, properties: {trial_days: {type: integer}}}}}}
+      responses:
+        '200': {description: Tenant with commercial_state=trial, content: {application/json: {schema: {$ref: '#/components/schemas/Tenant'}}}}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+  /tenants/{id}/trial/extend:
+    post:
+      summary: Extend an active trial (super-admin) — BRD 66 slice 2, CPL-FR-021
+      description: reason is required and audited via a trial_events row.
+      parameters: [{$ref: '#/components/parameters/ID'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {content: {application/json: {schema: {type: object, required: [days, reason], properties: {days: {type: integer}, reason: {type: string}}}}}}
+      responses:
+        '200': {description: Tenant with the new trial_ends_at, content: {application/json: {schema: {$ref: '#/components/schemas/Tenant'}}}}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+  /tenants/{id}/convert:
+    post:
+      summary: Convert trial->active on a target plan (super-admin) — BRD 66 slice 2, CPL-FR-021
+      parameters: [{$ref: '#/components/parameters/ID'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {content: {application/json: {schema: {type: object, required: [plan_key], properties: {plan_key: {type: string}}}}}}
+      responses:
+        '200': {description: Tenant with commercial_state=active, content: {application/json: {schema: {$ref: '#/components/schemas/Tenant'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /platform/plans:
+    get: {summary: List the plan catalog (super-admin) — BRD 66 CPL-FR-001, responses: {'200': {description: page of plans, content: {application/json: {schema: {type: object, properties: {data: {type: array, items: {$ref: '#/components/schemas/PlanWithEntitlements'}}}}}}}}}
+    post:
+      summary: Create a plan (super-admin) — BRD 66 CPL-FR-001
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/CreatePlanRequest'}}}}
+      responses:
+        '201': {description: Created plan, content: {application/json: {schema: {$ref: '#/components/schemas/PlanWithEntitlements'}}}}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+  /platform/plans/{key}:
+    get: {summary: Get a plan + its current-version defaults (super-admin), parameters: [{name: key, in: path, required: true, schema: {type: string}}], responses: {'200': {description: plan, content: {application/json: {schema: {$ref: '#/components/schemas/PlanWithEntitlements'}}}}, '404': {$ref: '#/components/responses/NotFound'}}}
+    patch:
+      summary: Update a plan (super-admin) — a present "entitlements" field bumps version (CPL-FR-002)
+      parameters: [{name: key, in: path, required: true, schema: {type: string}}]
+      responses:
+        '200': {description: Updated plan, content: {application/json: {schema: {$ref: '#/components/schemas/PlanWithEntitlements'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /platform/tenants/{id}/plan:
+    post:
+      summary: Assign a plan to a tenant, snapshotting the plan version (super-admin) — BRD 66 CPL-FR-002/US-2
+      parameters: [{$ref: '#/components/parameters/ID'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {content: {application/json: {schema: {type: object, required: [plan_key], properties: {plan_key: {type: string}}}}}}
+      responses:
+        '200': {description: Assignment, content: {application/json: {schema: {$ref: '#/components/schemas/TenantPlan'}}}}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+  /platform/tenants/{id}/plan/resync:
+    post: {summary: Re-snapshot to the plan's current version (super-admin, explicit action per CPL-FR-002), parameters: [{$ref: '#/components/parameters/ID'}], responses: {'200': {description: Assignment, content: {application/json: {schema: {$ref: '#/components/schemas/TenantPlan'}}}}}}
+  /platform/tenants/{id}/entitlements/overrides:
+    post:
+      summary: Upsert one tenant entitlement override (super-admin) — BRD 66 CPL-FR-010/US-2
+      parameters: [{$ref: '#/components/parameters/ID'}, {$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody: {content: {application/json: {schema: {type: object, required: [kind, key], properties: {kind: {type: string, enum: [pack_sku, meter_allowance, seat_cap, workspace_cap, feature]}, key: {type: string}, value: {type: object}, reason: {type: string}}}}}}
+      responses:
+        '200': {description: The override, content: {application/json: {schema: {$ref: '#/components/schemas/EntitlementOverride'}}}}
+  /platform/tenants/{id}/entitlements/overrides/{kind}/{key}:
+    delete:
+      summary: Remove one tenant entitlement override (super-admin)
+      parameters:
+        - {$ref: '#/components/parameters/ID'}
+        - {name: kind, in: path, required: true, schema: {type: string}}
+        - {name: key, in: path, required: true, schema: {type: string}}
+      responses:
+        '204': {description: Removed}
+        '404': {$ref: '#/components/responses/NotFound'}
   /users/invite:
     post:
       summary: Invite a user (tenant admin) — IDN-FR-021
@@ -221,3 +302,71 @@ components:
         attempt: {type: integer}
         error: {type: string}
         compensation: {type: string, example: TerraformDestroy}
+    # --- Commercial plane (BRD 66 slice 1) ---
+    Plan:
+      type: object
+      properties:
+        key: {type: string, example: pilot}
+        name: {type: string}
+        description: {type: string}
+        trial_days_default: {type: integer, nullable: true, example: 60}
+        status: {type: string, enum: [active, deprecated]}
+        version: {type: integer, description: 'bumped on any default-entitlement change (CPL-FR-002)'}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    PlanEntitlement:
+      type: object
+      properties:
+        plan_key: {type: string}
+        plan_version: {type: integer}
+        kind: {type: string, enum: [pack_sku, meter_allowance, seat_cap, workspace_cap, feature]}
+        key: {type: string, example: seats}
+        value: {type: object, example: {n: 15}}
+    PlanWithEntitlements:
+      allOf:
+        - {$ref: '#/components/schemas/Plan'}
+        - type: object
+          properties:
+            entitlements: {type: array, items: {$ref: '#/components/schemas/PlanEntitlement'}}
+    CreatePlanRequest:
+      type: object
+      required: [key, name]
+      properties:
+        key: {type: string, example: pilot}
+        name: {type: string}
+        description: {type: string}
+        trial_days_default: {type: integer}
+        entitlements: {type: array, items: {$ref: '#/components/schemas/PlanEntitlement'}}
+    TenantPlan:
+      type: object
+      properties:
+        tenant_id: {type: string, format: uuid}
+        plan_key: {type: string}
+        plan_version_snapshot: {type: integer, description: 'pinned at attach time (CPL-FR-002)'}
+        assigned_at: {type: string, format: date-time}
+        assigned_by: {type: string}
+    EntitlementOverride:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        tenant_id: {type: string, format: uuid}
+        kind: {type: string, enum: [pack_sku, meter_allowance, seat_cap, workspace_cap, feature]}
+        key: {type: string}
+        value: {type: object}
+        granted_by: {type: string}
+        granted_at: {type: string, format: date-time}
+        reason: {type: string}
+    EffectiveEntitlement:
+      type: object
+      properties:
+        kind: {type: string, enum: [pack_sku, meter_allowance, seat_cap, workspace_cap, feature]}
+        key: {type: string}
+        value: {type: object}
+        provenance: {type: string, enum: [plan_default, override]}
+    EffectiveEntitlementsResponse:
+      type: object
+      properties:
+        data: {type: array, items: {$ref: '#/components/schemas/EffectiveEntitlement'}}
+        plan: {type: object, properties: {key: {type: string}, version: {type: integer}}}
+        commercial_state: {type: string, enum: [none, trial, active, suspended_commercial, churned]}
+        trial_ends_at: {type: string, format: date-time, nullable: true}

@@ -5,7 +5,13 @@
  */
 export const en = {
   "app.name": "Datacern AI",
-  "app.tagline": "Decision Intelligence for regulated operations",
+  // Positioning note: deliberately avoids "decision intelligence", "insights"
+  // and "AI-powered". Competitive research (2026-07) found every BI vendor and
+  // the nearest incumbent already claim to improve "decision making" in those
+  // exact words, so the category language is unownable. What no competitor
+  // documents is the accountability primitive — a NAMED approver, distinct from
+  // the requester. Lead with that noun.
+  "app.tagline": "Every AI action has a named approver",
   "nav.home": "Home",
   "nav.data": "Data",
   "nav.datasets": "Datasets",
@@ -55,6 +61,11 @@ export const en = {
   "state.noAccessHint": "Your role doesn't include this area. Contact an admin if you need access.",
   "state.notFound": "Not found",
   "state.livePaused": "Live updates paused",
+
+  // BRD 66 slice 3 (CPL-FR-013): locked commercial feature preview + upsell.
+  "state.featureLocked": "Not included in your plan",
+  "state.featureLockedHint": "This feature isn't part of your current plan. Contact your Datacern account team to add it.",
+  "action.upgradePlan": "Contact us to upgrade",
 
   "ai.label": "AI",
   "ai.disclosure": "You are interacting with an AI system. Responses may be inaccurate — verify before acting.",
@@ -518,6 +529,31 @@ export const en = {
   "killSwitch.field.scope": "Scope",
   "killSwitch.field.reason": "Reason (required)",
   "killSwitch.field.reasonPlaceholder": "e.g. INC-1234 runaway spend",
+
+  "fleet.title": "Fleet",
+  "fleet.subtitle": "Every agent that can act in this tenant — platform, tenant-custom, and external — with lifecycle, guardrails, eval status, and spend in one table.",
+  "fleet.empty": "No agents in the fleet yet.",
+  "fleet.column.agent": "Agent",
+  "fleet.column.kind": "Kind",
+  "fleet.column.state": "State",
+  "fleet.column.version": "Version",
+  "fleet.column.guardrails": "Guardrails",
+  "fleet.column.evalGate": "Eval gate",
+  "fleet.column.spend": "Spend (period)",
+  "fleet.column.decisions": "Decisions",
+  "fleet.unavailable": "unavailable",
+  "fleet.neverRun": "never run",
+  "fleet.tile.totalAgents": "Total agents",
+  "fleet.tile.active": "Active",
+  "fleet.tile.killed": "Killed",
+  "fleet.tile.periodSpend": "Period spend",
+  "fleet.tile.periodDecisions": "Period decisions",
+  "fleet.guardrails.dataScope": "Data scope",
+  "fleet.guardrails.tokenBudget": "Token budget",
+  "fleet.guardrails.piiEgress": "PII egress",
+  "fleet.guardrails.ruleOfTwo": "Rule of two",
+  "fleet.external.badge": "auto-execute: denied",
+  "fleet.kill": "Kill",
 
   "memory.title": "Agent memory",
   "memory.subtitle": "What the agent knows — browse stored memory records and process right-to-be-forgotten requests.",

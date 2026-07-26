@@ -45,6 +45,20 @@ type Server struct {
 	KM       *keys.KeyManager
 	Verifier domain.TokenVerifier
 	Authz    authz.Authorizer
+	// Plans/Commercial: commercial plane (BRD 66 slice 1) plan catalog +
+	// tenant plan assignment / entitlement overrides / effective-entitlements
+	// resolution.
+	Plans      *domain.PlanService
+	Commercial *domain.CommercialService
+	// Trials: commercial plane slice 2 (BRD 66 slice 2, CPL-FR-021) trial
+	// lifecycle: start/extend/convert.
+	Trials *domain.TrialService
+	// Demo: demo-sandbox lifecycle (BRD 70 slice 1/2) -- create/reset/clone.
+	// Nil is a valid, honest "not configured" state on a deployment that
+	// never exposes /demo-tenants (the routes below still register; Demo's
+	// own methods are the ones that would nil-panic, so operators must wire
+	// it whenever POST /demo-tenants is reachable -- same contract as Logo).
+	Demo *domain.DemoService
 	// TrustedSpiffeIDs may call POST /token/agent (IDN-FR-042: agent-runtime).
 	TrustedSpiffeIDs map[string]bool
 	// TrustSpiffeHeader (F-2) must be explicitly true for the X-Spiffe-Id
@@ -90,10 +104,10 @@ func (s *Server) Router() http.Handler {
 		r.Post("/invitations/{token}/accept", s.handleAcceptInvitation)
 		r.Post("/token/obo", s.handleOBO) // subject_token carries the auth
 		r.Post("/token/apikey", s.handleAPIKeyExchange)
-		r.Post("/token/embed", s.handleEmbedToken)       // tenant embed secret in body
-		r.Post("/token/embed/oidc", s.handleEmbedOIDC)   // embed-federated SSO: user OIDC id_token (task #84)
-		r.Post("/token/oidc", s.handleOIDCLogin)         // external OIDC id_token in body (BYO-P4)
-		r.Post("/token/agent", s.handleAgentToken) // SPIFFE-gated
+		r.Post("/token/embed", s.handleEmbedToken)     // tenant embed secret in body
+		r.Post("/token/embed/oidc", s.handleEmbedOIDC) // embed-federated SSO: user OIDC id_token (task #84)
+		r.Post("/token/oidc", s.handleOIDCLogin)       // external OIDC id_token in body (BYO-P4)
+		r.Post("/token/agent", s.handleAgentToken)     // SPIFFE-gated
 		// BRD 60 WS2: a customer's own agent exchanges a tenant-admin-minted
 		// external-agent key (wr_xa_...) for a short-lived agent_autonomous
 		// token. The key IS the credential (like /token/embed); no bearer.
@@ -134,6 +148,11 @@ func (s *Server) Router() http.Handler {
 			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/self/labels", s.handleSetTenantLabels)
 			r.With(s.requireScope(ActUserAdmin)).Delete("/tenants/self/labels/{key}", s.handleDeleteTenantLabel)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}", s.handleGetTenant)
+			// BRD 66 slice 1 (CPL-FR-011, US-4/US-7): a tenant admin reads its own
+			// tenant's effective entitlements; super-admin (below) reads any
+			// tenant's. Same ActUserAdmin + cross-tenant-404 pattern as
+			// GET /tenants/{id} (handleGetTenant, AC-12).
+			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/entitlements", s.handleGetTenantEntitlements)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/embed-config", s.handleGetEmbedConfig)
 			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/{id}/embed-config", s.handleSetEmbedConfig)
 			// BYO-P4: a tenant admin registers their OWN OIDC IdP (self-scoped;
@@ -167,11 +186,36 @@ func (s *Server) Router() http.Handler {
 				r.Post("/tenants/{id}/reactivate", s.handleReactivateTenant)
 				r.Post("/tenants/{id}/provisioning/retry", s.handleRetryProvisioning)
 				r.Get("/tenants/{id}/provisioning", s.handleProvisioningStatus)
+				// BRD 70 slice 1/2: demo-sandbox lifecycle (DSP-FR-010/012).
+				// Operator/partner-scoped in v1 (BRD 70 §In-scope) -- same
+				// requireSuperAdmin gate as /tenants above, not a new action.
+				r.Post("/demo-tenants", s.handleCreateDemoTenant)
+				r.Post("/demo-tenants/{id}/reset", s.handleResetDemoTenant)
+				r.Post("/demo-tenants/{id}/clone", s.handleCloneDemoTenant)
 				r.Post("/keys/rotate", s.handleRotateKeys)
 				// First-class platform-admin registry (cross-tenant operators).
 				r.Get("/platform/admins", s.handleListPlatformAdmins)
 				r.Post("/platform/admins", s.handleCreatePlatformAdmin)
 				r.Delete("/platform/admins/{id}", s.handleDeletePlatformAdmin)
+				// BRD 66 slice 1: commercial plan catalog CRUD (CPL-FR-001/002,
+				// action label platform.plan.manage -- enforced by this same
+				// requireSuperAdmin middleware, not a new RBAC action, mirroring
+				// the /platform/admins precedent).
+				r.Get("/platform/plans", s.handleListPlans)
+				r.Post("/platform/plans", s.handleCreatePlan)
+				r.Get("/platform/plans/{key}", s.handleGetPlan)
+				r.Patch("/platform/plans/{key}", s.handlePatchPlan)
+				// Tenant plan assignment + entitlement overrides (CPL-FR-002/010, US-2).
+				r.Post("/platform/tenants/{id}/plan", s.handleAssignTenantPlan)
+				r.Post("/platform/tenants/{id}/plan/resync", s.handleResyncTenantPlan)
+				r.Post("/platform/tenants/{id}/entitlements/overrides", s.handleUpsertOverride)
+				r.Delete("/platform/tenants/{id}/entitlements/overrides/{kind}/{key}", s.handleDeleteOverride)
+				// BRD 66 slice 2: trial lifecycle (CPL-FR-021, US-3). Paths per
+				// the design doc's endpoint table -- NOT under /platform/... (unlike
+				// plan CRUD above), but same requireSuperAdmin scope.
+				r.Post("/tenants/{id}/trial", s.handleStartTrial)
+				r.Post("/tenants/{id}/trial/extend", s.handleExtendTrial)
+				r.Post("/tenants/{id}/convert", s.handleConvertTrial)
 				// IDN-FR-009 (Should): platform version registry — stub.
 				r.Get("/platform-versions", s.handleNotImplemented("platform version registry (IDN-FR-009)"))
 			})

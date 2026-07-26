@@ -54,6 +54,14 @@ beforeEach(() => {
     if (doc.includes("query AgentDefinitions")) return { agentDefinitions: [] };
     // AgentCatalogCard's persona auto-bind reads the tenant roles (infinite query).
     if (doc.includes("query Roles")) return { roles: { nodes: [], pageInfo: { hasMore: false, nextCursor: null } } };
+    // BRD 68 slice 1: the Control Tower fleet surface above the kill-switch
+    // cards fires these on mount for any viewer who passes viewAgentFleet
+    // (this suite's Admin viewer does) — see AgentFleetTable.test.tsx for the
+    // fleet surface's own dedicated coverage.
+    if (doc.includes("query AgentFleetSummary")) {
+      return { agentFleetSummary: { totalByKind: {}, activeCount: 0, killedCount: 0, quarantinedCount: 0, periodSpendUsd: null, periodDecisions: null } };
+    }
+    if (doc.includes("query AgentFleet")) return { agentFleet: [] };
     return {};
   };
 });

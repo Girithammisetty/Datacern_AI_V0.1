@@ -25,6 +25,11 @@ const (
 	TopicAIToolInvoked = "ai.tool_invoked.v1"
 	TopicAIAgentRun    = "ai.agent_run.v1"
 	TopicAITokenUsage  = "ai.token_usage.v1" // ai-gateway LLM token metering
+	// TopicAIProposal is agent-runtime's proposal-decision topic (BRD 67 slice
+	// 1, VMB-FR-003): governed_decision/auto_executed_action source from its
+	// proposal.approved|edited_approved|rejected event types (design §2.1 —
+	// extends the existing topic rather than minting ai.proposal_decided.v1).
+	TopicAIProposal = "ai.proposal.v1"
 
 	IngestGroup = "usage-ingest"
 )
@@ -33,7 +38,7 @@ const (
 func ConsumedTopics() []string {
 	return []string{
 		TopicUsageMetering, TopicQueryEvents, TopicPipeline,
-		TopicAIToolInvoked, TopicAIAgentRun, TopicAITokenUsage,
+		TopicAIToolInvoked, TopicAIAgentRun, TopicAITokenUsage, TopicAIProposal,
 	}
 }
 
@@ -54,6 +59,15 @@ const (
 
 	EvCrossTenantDenied = "security.cross_tenant_denied" // MASTER-FR-003
 	EvPermissionDenied  = "security.permission_denied"   // MASTER-FR-040
+
+	// EvAssumptionsUpdated fires on every value_assumptions insert (BRD 69
+	// ROI-FR-002, design §2.1 point 4) with {before, after} version summaries.
+	EvAssumptionsUpdated = "value_assumptions.updated"
+	// EvValueReportExported fires on export generation (BRD 69 ROI-FR-021,
+	// design §2.8 step 6). Named without the ".v1" suffix the design doc's
+	// prose uses, matching this file's existing convention (event TYPE names
+	// carry no version suffix; only the outbox TOPIC does — EmitTopic above).
+	EvValueReportExported = "value.report_exported"
 )
 
 // Envelope is the platform event envelope (MASTER-FR-031); partition key is

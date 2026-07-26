@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
+from datacern_common.redisx import build_redis
 from fastapi import FastAPI
 
 from app.api.auth import LocalScopeAuthz, OpaAuthzClient, TokenVerifier
@@ -45,6 +46,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         else LocalScopeAuthz()
     )
     app.state.db = Db(make_engine(settings.database_url))
+
+    # entitlements_flat reader (BRD 66 slice 3, CPL-FR-030): the same shared
+    # projection Redis pack-service already uses for the OPA authz
+    # projection (settings.redis_url) -- entitlements_flat and
+    # permissions_flat live side by side in it. None in local/test mode
+    # (use_real_adapters=False), which the install-entitlement gate treats as
+    # "unavailable" -> fail closed (CPL-NFR-004), never silently entitled.
+    app.state.entitlements_redis = (
+        build_redis(settings.redis_url) if settings.use_real_adapters else None
+    )
 
     # Observability: RED metrics + tracing (env-gated, no-op unless enabled).
     try:

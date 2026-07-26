@@ -52,6 +52,19 @@ const (
 	MeterLLMInputTokens      = "llm_input_tokens"
 	MeterLLMOutputTokens     = "llm_output_tokens"
 	MeterAgentTasksCompleted = "agent_tasks_completed"
+
+	// Value meters (BRD 67 slice 1, VMB-FR-001/002/003). governed_decision is
+	// the pricing unit ("per governed decision"); auto_executed_action is a
+	// separately-counted cut of the same source events for auto- vs
+	// human-decided visibility (design §2.1/§2.2 — no actor exclusion on
+	// governed_decision itself, since an auto-executed proposal is still a
+	// decision made under the governed proposal framework).
+	// case_resolved (VMB-FR-001/004) is NOT added here — it requires
+	// case-service changes (`case.closed` payload fields) that are out of
+	// scope for slice 1 (docs/initiatives/value-metering-billing-export.md
+	// §3 slice plan: slice 1 is governed_decision end-to-end only).
+	MeterGovernedDecision   = "governed_decision"
+	MeterAutoExecutedAction = "auto_executed_action"
 )
 
 // Aggregation kinds (USG-FR-001).
@@ -74,6 +87,14 @@ type Meter struct {
 // tenant-defined meters in v1.
 func Catalog() []Meter {
 	dims := []string{"tenant_id", "workspace_id", "user_id", "agent_id", "resource_urn", "model", "cloud"}
+	// governed_decision dims (VMB-FR-002, design §2.2): pack_name/decision are
+	// physical rollup columns on usage_raw + every rollup table; proposal_kind/
+	// decision_latency_ms/edit_distance_bucket are raw-detail-only, carried in
+	// usage_raw.meta JSONB and never rolled up (§2.2 "raw-detail-only"). Listed
+	// here for API discoverability (Meter.Dimensions is documentation, not a
+	// physical-column enforcement — see store/pg.go SeedMeters/ListMeters).
+	decisionDims := append(append([]string{}, dims...),
+		"pack_name", "decision", "proposal_kind", "decision_latency_ms", "edit_distance_bucket")
 	return []Meter{
 		{MeterAPICalls, "count", AggSum, "Edge API requests completed", dims, false},
 		{MeterQueryBytesScanned, "bytes", AggSum, "Bytes scanned by executed queries", dims, false},
@@ -82,6 +103,12 @@ func Catalog() []Meter {
 		{MeterLLMInputTokens, "tokens", AggSum, "LLM prompt (input) tokens", dims, false},
 		{MeterLLMOutputTokens, "tokens", AggSum, "LLM completion (output) tokens", dims, false},
 		{MeterAgentTasksCompleted, "count", AggSum, "Agent runs completed successfully", dims, false},
+		{MeterGovernedDecision, "count", AggSum,
+			"Terminal human (or policy-auto) decisions on a governed proposal: approve/edit-approve/reject (BRD 67 VMB-FR-001/002)",
+			decisionDims, false},
+		{MeterAutoExecutedAction, "count", AggSum,
+			"Proposals auto-executed by tenant policy (decision.actor=='policy:auto'), a subset of governed_decision (BRD 67 VMB-FR-001)",
+			decisionDims, false},
 	}
 }
 
@@ -109,6 +136,16 @@ type MeterRecord struct {
 	ResourceURN *string
 	EventID     uuid.UUID
 	Late        bool
+	// Value-meter dimensions (BRD 67 slice 1, design §2.2). Rollup-worthy:
+	// PackName/Decision are physical columns on usage_raw AND every rollup
+	// table (nil for every existing infra meter — no behavior change there).
+	PackName *string
+	Decision *string
+	// Meta carries raw-detail-only fields that no showback query groups by
+	// (proposal_kind, decision_latency_ms, edit_distance_bucket, ...) — a
+	// bounded JSONB blob on usage_raw only, never rolled up (design §2.2,
+	// MASTER-FR-061 carve-out). Nil/empty for every meter that has none.
+	Meta map[string]any
 }
 
 // Budget windows (USG-FR-030).

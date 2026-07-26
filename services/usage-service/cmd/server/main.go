@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/datacern-ai/usage-service/internal/metrics"
 	"github.com/datacern-ai/usage-service/internal/register"
 	"github.com/datacern-ai/usage-service/internal/store"
+	"github.com/datacern-ai/usage-service/internal/valueexport"
 )
 
 func env(key, def string) string {
@@ -156,10 +158,26 @@ func main() {
 		}
 	}()
 
+	// Value-report export object store (BRD 69 design §2.8) — real local
+	// filesystem store today (MinIO/S3-compatible in prod), same weight class
+	// as chart-service's export mechanics, no Object-Lock/WORM (not a
+	// compliance record).
+	exportSecret := []byte(os.Getenv("VALUE_EXPORT_SIGNING_SECRET"))
+	if len(exportSecret) == 0 {
+		exportSecret = []byte(uuid.NewString())
+		slog.Warn("VALUE_EXPORT_SIGNING_SECRET unset; generated ephemeral secret (download links break on restart)")
+	}
+	exports := valueexport.NewFSStore(
+		env("VALUE_EXPORT_ROOT", "/var/lib/usage-service/value-exports"),
+		env("PUBLIC_URL", "http://localhost:8080"),
+		exportSecret,
+	)
+
 	srv := &api.Server{
 		Store:    st,
 		Authz:    az,
 		Verifier: verifier,
+		Exports:  exports,
 		Ready: func(ctx context.Context) error {
 			if err := st.Ping(ctx); err != nil {
 				return err

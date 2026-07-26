@@ -98,14 +98,15 @@ func (s *TokenService) EmbedOIDCExchange(ctx context.Context, req EmbedOIDCReque
 	}
 
 	tok, expiresIn, err := s.Issuer.IssueWithTTL(Claims{
-		Subject:        user.ID.String(),
-		TenantID:       tenantID,
-		Typ:            TypUser,
-		Scopes:         scopes,
-		WorkspaceID:    req.WorkspaceID,
-		Embed:          true,
-		Surface:        surface,
-		FrameAncestors: cfg.AllowedOrigins,
+		Subject:         user.ID.String(),
+		TenantID:        tenantID,
+		Typ:             TypUser,
+		Scopes:          scopes,
+		WorkspaceID:     req.WorkspaceID,
+		Embed:           true,
+		Surface:         surface,
+		FrameAncestors:  cfg.AllowedOrigins,
+		CommercialState: string(tenant.CommercialState), // BRD 66 slice 2, CPL-FR-022
 	}, ttl)
 	if err != nil {
 		return nil, err

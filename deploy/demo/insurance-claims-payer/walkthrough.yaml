@@ -1,0 +1,35 @@
+# Guided-walkthrough content for the 5-minute demo script (§2.2,
+# DSP-FR-015, Should). NOT consumed by identity-service's SeedDemoContent
+# step or the ui-web watermark banner in this slice — DSP-FR-015 (the
+# in-product guided-overlay UI) is explicitly deferred, see
+# docs/initiatives/demo-sandbox-poc-mode.md §3 honest gaps. Kept here
+# because §2.2 names walkthrough.yaml as part of the bundle format and an
+# SE running the bundle by hand can read this as a script today.
+- title: "Worklist"
+  target_route: /cases
+  narration: >
+    Every pending prior-auth request lands here the moment it's submitted —
+    five OPEN requests are already queued, sorted by urgency.
+- title: "Copilot triage"
+  target_route: /cases/PAR-5001
+  narration: >
+    Open the urgent lumbar-fusion request. The copilot has already read the
+    clinical documentation and proposed a disposition with its confidence
+    and reasoning — it never approves on its own; a human always decides.
+- title: "Approval (four-eyes)"
+  target_route: /inbox
+  narration: >
+    A Medical Director reviews the copilot's proposal in the approval inbox
+    and either approves or overrides it. The proposer and approver are
+    always different people.
+- title: "Learning loop"
+  target_route: /cases/PAR-5003
+  narration: >
+    PAR-5003 was flagged as incomplete rather than guessed at — that's the
+    same governance discipline as a live deployment: no autonomous action
+    without complete information.
+- title: "Audit trail"
+  target_route: /audit
+  narration: >
+    Every disposition, override, and copilot proposal is logged here with
+    the acting persona, timestamp, and evidence cited — nothing is silent.

@@ -115,6 +115,14 @@ export const qk = {
   rateCards: () => ["usage", "rateCards"] as const,
   anomalies: (status?: string) => ["usage", "anomalies", status ?? null] as const,
 
+  valueSummary: (period: string, workspaceId?: string) =>
+    ["value", "summary", period, workspaceId ?? null] as const,
+  valueTrend: (metric: string, from?: string, to?: string, workspaceId?: string) =>
+    ["value", "trend", metric, from ?? null, to ?? null, workspaceId ?? null] as const,
+  valueAssumptions: () => ["value", "assumptions"] as const,
+  valueAssumptionHistory: () => ["value", "assumptionHistory"] as const,
+  valueExports: (period?: string) => ["value", "exports", period ?? null] as const,
+
   // semantic model authoring
   semanticModelList: (filters: unknown) => ["semantic", "models", filters] as const,
   semanticModelDetail: (id: string) => ["semantic", "model", id] as const,
@@ -137,6 +145,8 @@ export const qk = {
   serviceAccounts: () => ["admin", "serviceAccounts"] as const,
   tenant: (id: string) => ["admin", "tenant", id] as const,
   tenantLabels: () => ["admin", "tenantLabels"] as const,
+  // BRD 66 slice 3: commercial plane (plan/trial/entitlements).
+  tenantCommercial: (id: string) => ["platform", "tenantCommercial", id] as const,
   // Tier 4b: identity/rbac admin — effective access lookup per resource URN.
   contentGrants: (resourceUrn: string) => ["admin", "contentGrants", resourceUrn] as const,
   auditEvents: (filters: unknown) => ["admin", "auditEvents", filters] as const,
@@ -183,6 +193,10 @@ export const qk = {
   agentVersions: (agentKey: string) => ["agentic", "versions", agentKey] as const,
   tenantAgentConfig: (agentKey: string) => ["agentic", "tenantConfig", agentKey] as const,
   agentRuns: (filters: unknown) => ["agentic", "runs", filters] as const,
+
+  // BRD 68 slice 1: Agent Control Tower fleet aggregation
+  agentFleet: (filters: unknown) => ["agentic", "fleet", filters] as const,
+  agentFleetSummary: (filters: unknown) => ["agentic", "fleetSummary", filters] as const,
 
   // Tier 2a: ai-gateway admin
   aiProviders: () => ["aigateway", "providers"] as const,

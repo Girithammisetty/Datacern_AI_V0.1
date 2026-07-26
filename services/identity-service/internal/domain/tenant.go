@@ -49,6 +49,104 @@ var AllTenantStatuses = []TenantStatus{
 	TenantActive, TenantSuspended, TenantDeleting, TenantDeleted,
 }
 
+// TenantProfile is the tenant content/commercial profile (DSP-FR-001, BRD 70).
+// It is a THIRD, independent axis from TenantStatus (infra lifecycle) and
+// CommercialState (paying/trial relationship, BRD 66): Profile answers "what
+// KIND of tenant is this" (a real customer, a synthetic sandbox, or a
+// time-boxed evaluation) and gates content (seed bundles, demo-lint, the
+// watermark claim) rather than infrastructure or billing state. See
+// docs/initiatives/demo-sandbox-poc-mode.md §2.1 "Options weighed" for why
+// this is its own column rather than folded into either existing machine.
+type TenantProfile string
+
+const (
+	ProfileStandard TenantProfile = "standard"
+	ProfileDemo     TenantProfile = "demo"
+	ProfilePOC      TenantProfile = "poc"
+)
+
+// ValidTenantProfiles gates every profile-accepting write path.
+var ValidTenantProfiles = map[TenantProfile]bool{
+	ProfileStandard: true, ProfileDemo: true, ProfilePOC: true,
+}
+
+// CommercialState is the tenant's commercial lifecycle (CPL-FR-020, BRD 66).
+// It is a SECOND, INDEPENDENT state machine from TenantStatus: TenantStatus
+// answers "is this tenant's infrastructure provisioned", CommercialState
+// answers "does this tenant have a paying/trial relationship". The two axes
+// compose (a tenant can be TenantActive+CommercialTrial, or
+// TenantSuspended+CommercialActive if ops-suspended for abuse while its
+// contract is still valid) rather than sharing a transition table — see
+// docs/initiatives/commercial-plane.md "Options considered and rejected" for
+// why threading commercial states into TenantStatus was rejected.
+type CommercialState string
+
+const (
+	CommercialNone                CommercialState = "none"
+	CommercialTrial               CommercialState = "trial"
+	CommercialActive              CommercialState = "active"
+	CommercialSuspendedCommercial CommercialState = "suspended_commercial"
+	CommercialChurned             CommercialState = "churned"
+)
+
+// commercialTransitionsStandard is the guarded transition table (CPL-FR-020)
+// for profile=standard tenants. Slice 1 (BRD 66) only drives none->active
+// (direct plan assignment, no trial); the trial/suspend/convert edges are
+// wired now so the guard table is exhaustively testable from day one, but are
+// only reachable once BRD 66 slice 2 adds the trial start/sweep/convert
+// endpoints.
+var commercialTransitionsStandard = map[CommercialState][]CommercialState{
+	CommercialNone:                {CommercialTrial, CommercialActive},
+	CommercialTrial:               {CommercialActive, CommercialSuspendedCommercial},
+	CommercialActive:              {CommercialChurned},
+	CommercialSuspendedCommercial: {CommercialActive, CommercialChurned},
+}
+
+// commercialTransitionsNonConvertible is the guarded transition table for
+// profile=demo|poc tenants (DSP-FR-003, BRD 70 §2.1): "demo/poc tenants
+// cannot transition to trial|active" is made structural here by simply never
+// listing an edge into CommercialTrial or CommercialActive -- the same
+// "absent transition => 409 CONFLICT" idiom CanTransition already gives free.
+// A demo tenant's commercial_state is set directly to CommercialNone at
+// creation (bypassing this guard, exactly like TenantService.Create does for
+// every profile today) and never legitimately needs to move; the
+// Trial->SuspendedCommercial and SuspendedCommercial->Churned edges are left
+// reachable only so a future profile=poc tenant (BRD 70 slice 3, hard-blocked
+// today -- see docs/initiatives/demo-sandbox-poc-mode.md §2.1 sequencing
+// note) can still be suspended/churned by BRD 66's trial-sweep machinery
+// without ever passing through Active.
+var commercialTransitionsNonConvertible = map[CommercialState][]CommercialState{
+	CommercialNone:                {},
+	CommercialTrial:               {CommercialSuspendedCommercial},
+	CommercialActive:              {CommercialChurned},
+	CommercialSuspendedCommercial: {CommercialChurned},
+}
+
+// CanTransitionCommercial reports whether from -> to is an allowed
+// commercial-state transition FOR THE GIVEN PROFILE (DSP-FR-003 threads
+// non-convertibility through the same guard CPL-FR-020 already checks, per
+// BRD 70 §2.1 -- "one enforcement point instead of two"). Any pair not
+// present is rejected with 409 CONFLICT, mirroring CanTransition. An empty/
+// unrecognized profile is treated as standard (defensive default; every
+// real caller sets Profile explicitly at Create).
+func CanTransitionCommercial(profile TenantProfile, from, to CommercialState) bool {
+	table := commercialTransitionsStandard
+	if profile == ProfileDemo || profile == ProfilePOC {
+		table = commercialTransitionsNonConvertible
+	}
+	for _, t := range table[from] {
+		if t == to {
+			return true
+		}
+	}
+	return false
+}
+
+// AllCommercialStates is exported for the transition-matrix test.
+var AllCommercialStates = []CommercialState{
+	CommercialNone, CommercialTrial, CommercialActive, CommercialSuspendedCommercial, CommercialChurned,
+}
+
 // Quotas per IDN-FR-004 (V1 defaults).
 type Quotas struct {
 	CPU              int    `json:"cpu"`
@@ -83,6 +181,26 @@ type Tenant struct {
 	UpdatedAt           time.Time    `json:"updated_at"`
 	DeletedAt           *time.Time   `json:"deleted_at,omitempty"`
 	DeletionScheduledAt *time.Time   `json:"deletion_scheduled_at,omitempty"`
+
+	// Commercial plane fields (BRD 66 slice 1, CPL-FR-020): a second,
+	// independent state machine from Status (see CommercialState doc). The
+	// tenant's assigned plan is NOT duplicated here -- it lives in
+	// tenant_plan (single source of truth), read via domain.Store.GetTenantPlan.
+	CommercialState CommercialState `json:"commercial_state"`
+	TrialStartedAt  *time.Time      `json:"trial_started_at,omitempty"`
+	TrialEndsAt     *time.Time      `json:"trial_ends_at,omitempty"`
+
+	// Demo/POC profile fields (BRD 70 slice 1/2, DSP-FR-001). Profile is set
+	// once at Create and deliberately never appears in PatchTenantRequest's
+	// allow-list (see tenant_service.go) -- immutability by absence from the
+	// mutable surface, the same pattern ID/CreatedBy already use. DemoPack
+	// names the deploy/demo/<pack>/ bundle a profile=demo tenant was seeded
+	// from (empty for standard/poc); TTLDays is the demo reaper's countdown
+	// (DSP-FR-013, default 14, operator-overridable at create) -- nil for
+	// non-demo tenants, who are never TTL-reaped.
+	Profile  TenantProfile `json:"profile"`
+	DemoPack string        `json:"demo_pack,omitempty"`
+	TTLDays  *int          `json:"ttl_days,omitempty"`
 }
 
 func (t *Tenant) URN() string { return "wr:" + t.ID.String() + ":identity:tenant/" + t.ID.String() }
@@ -93,6 +211,18 @@ func (t *Tenant) Transition(to TenantStatus, now time.Time) error {
 		return EConflict("invalid tenant status transition " + string(t.Status) + " -> " + string(to))
 	}
 	t.Status = to
+	t.UpdatedAt = now.UTC()
+	return nil
+}
+
+// TransitionCommercial applies a guarded commercial-state change
+// (CPL-FR-020). Independent of Transition (TenantStatus) -- see
+// CommercialState doc for why the two axes don't share a transition table.
+func (t *Tenant) TransitionCommercial(to CommercialState, now time.Time) error {
+	if !CanTransitionCommercial(t.Profile, t.CommercialState, to) {
+		return EConflict("invalid commercial state transition " + string(t.CommercialState) + " -> " + string(to))
+	}
+	t.CommercialState = to
 	t.UpdatedAt = now.UTC()
 	return nil
 }

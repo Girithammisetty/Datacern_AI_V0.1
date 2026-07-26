@@ -30,6 +30,11 @@ const MODULE_ROUTES: Array<{ path: string; service: string }> = [
   // queries (packs, agents, decisions, semantic models, roles, ontology,
   // labels, embed, IdP) into one status-card grid, no new backend calls.
   { path: "/admin/customization", service: "customization hub (composition-only)" },
+  // BRD 68 slice 1: Control Tower fleet table + tiles, additive above the
+  // pre-existing kill-switch/catalog cards on this route (docs/initiatives/
+  // agent-control-tower.md). Aggregates agent-runtime + eval-service +
+  // usage-service through bff-graphql's new agentFleet/agentFleetSummary.
+  { path: "/admin/agents", service: "agent-runtime + eval-service + usage-service (fleet aggregation)" },
   { path: "/admin/groups", service: "rbac-service (groups)" },
   { path: "/admin/workspaces", service: "rbac-service (workspaces)" },
   { path: "/admin/teams", service: "rbac-service (teams)" },

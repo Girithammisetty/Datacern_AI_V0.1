@@ -5,6 +5,8 @@
  */
 import type {
   AgentRun,
+  AgentFleetRow,
+  AgentFleetSummary,
   AlgorithmTemplate,
   AuditEvent,
   Case,
@@ -30,6 +32,11 @@ import type {
   RateCard,
   CreateRateCardInput,
   Anomaly,
+  ValueSummary,
+  ValueTrend,
+  ValueAssumptions,
+  UpdateValueAssumptionsInput,
+  ValueExport,
   CreateChartInput,
   CreateConnectionInput,
   CreateDashboardInput,
@@ -128,6 +135,7 @@ import type {
   SiemConfigState,
   TenantIdpConfig,
   Tenant,
+  TenantCommercial,
   UpdateChartInput,
   UpdateDashboardInput,
   UpdatePipelineInput,
@@ -2606,6 +2614,94 @@ export interface DismissAnomalyResult {
   dismissAnomaly: Anomaly;
 }
 
+/* ------- value & ROI reporting (BRD 69) ------- */
+
+const ESTIMATED_VALUE_FIELDS = /* GraphQL */ `value assumptionVersion`;
+const VALUE_SUMMARY_FIELDS = /* GraphQL */ `
+  period workspaceId
+  decisions { total byDecision byKind byAgent byPack }
+  hoursSavedEst { ${ESTIMATED_VALUE_FIELDS} }
+  laborValueEstUsd { ${ESTIMATED_VALUE_FIELDS} }
+  aiCostUsd
+  costPerDecision { value basis }
+  humanBaselineCostUsd { ${ESTIMATED_VALUE_FIELDS} }
+  netValueEstUsd { ${ESTIMATED_VALUE_FIELDS} }
+  ladderSavingsUsd
+  adoption { activeUsers byWorkspace }
+  provenance { rollupVersion assumptionVersion meterGap }
+`;
+
+export const VALUE_SUMMARY = /* GraphQL */ `
+  query ValueSummary($period: String!, $workspaceId: String) {
+    valueSummary(period: $period, workspaceId: $workspaceId) { ${VALUE_SUMMARY_FIELDS} }
+  }
+`;
+export interface ValueSummaryResult {
+  valueSummary: ValueSummary;
+}
+
+export const VALUE_TREND = /* GraphQL */ `
+  query ValueTrend($metric: String!, $granularity: String, $from: String, $to: String, $workspaceId: String) {
+    valueTrend(metric: $metric, granularity: $granularity, from: $from, to: $to, workspaceId: $workspaceId) {
+      metric granularity
+      points { period value basis rollupVersion distilledRungShare }
+    }
+  }
+`;
+export interface ValueTrendResult {
+  valueTrend: ValueTrend;
+}
+
+const VALUE_ASSUMPTIONS_FIELDS = /* GraphQL */ `id urn version minutesPerDecision loadedHourlyRateUsd effectiveFrom status createdBy createdAt`;
+
+export const VALUE_ASSUMPTIONS = /* GraphQL */ `
+  query ValueAssumptions {
+    valueAssumptions { ${VALUE_ASSUMPTIONS_FIELDS} }
+  }
+`;
+export interface ValueAssumptionsResult {
+  valueAssumptions: ValueAssumptions | null;
+}
+
+export const VALUE_ASSUMPTION_HISTORY = /* GraphQL */ `
+  query ValueAssumptionHistory {
+    valueAssumptionHistory { ${VALUE_ASSUMPTIONS_FIELDS} }
+  }
+`;
+export interface ValueAssumptionHistoryResult {
+  valueAssumptionHistory: ValueAssumptions[];
+}
+
+export const UPDATE_VALUE_ASSUMPTIONS = /* GraphQL */ `
+  mutation UpdateValueAssumptions($input: UpdateValueAssumptionsInput!) {
+    updateValueAssumptions(input: $input) { ${VALUE_ASSUMPTIONS_FIELDS} }
+  }
+`;
+export interface UpdateValueAssumptionsResult {
+  updateValueAssumptions: ValueAssumptions;
+}
+export type { UpdateValueAssumptionsInput };
+
+const VALUE_EXPORT_FIELDS = /* GraphQL */ `id urn period workspaceId version jsonUrl jsonSha256 csvUrl csvSha256 assumptionVersion createdAt`;
+
+export const VALUE_EXPORTS = /* GraphQL */ `
+  query ValueExports($period: String) {
+    valueExports(period: $period) { ${VALUE_EXPORT_FIELDS} }
+  }
+`;
+export interface ValueExportsResult {
+  valueExports: ValueExport[];
+}
+
+export const EXPORT_VALUE_REPORT = /* GraphQL */ `
+  mutation ExportValueReport($period: String!, $workspaceId: String, $idempotencyKey: String) {
+    exportValueReport(period: $period, workspaceId: $workspaceId, idempotencyKey: $idempotencyKey) { ${VALUE_EXPORT_FIELDS} }
+  }
+`;
+export interface ExportValueReportResult {
+  exportValueReport: ValueExport;
+}
+
 export const USER = /* GraphQL */ `
   query UserById($id: ID!) {
     user(id: $id) { id urn email fullName status lastLoginAt createdAt }
@@ -3065,6 +3161,22 @@ export const TENANT = /* GraphQL */ `
 `;
 export interface TenantResult {
   tenant: Tenant | null;
+}
+
+/** BRD 66 slice 3 (CPL-FR-033): commercial plane. Any authenticated caller
+ * may issue this — the BFF returns the minimal {commercialState,
+ * lockedFeatureKeys} shape (everything else null) for a non-admin caller,
+ * never a 403. */
+export const TENANT_COMMERCIAL = /* GraphQL */ `
+  query TenantCommercial($id: ID!) {
+    tenantCommercial(id: $id) {
+      commercialState lockedFeatureKeys planKey planVersion trialEndsAt
+      entitlements { kind key value provenance }
+    }
+  }
+`;
+export interface TenantCommercialResult {
+  tenantCommercial: TenantCommercial | null;
 }
 
 /** All tenants (platform-admin only; identity requireSuperAdmin enforces). */
@@ -3532,6 +3644,55 @@ export const DELETE_TOOL_KILL_SWITCH = /* GraphQL */ `
 `;
 export interface DeleteToolKillSwitchResult {
   deleteToolKillSwitch: KillSwitchLiftResult;
+}
+
+// ---- BRD 68 slice 1: Agent Control Tower fleet aggregation ------------------
+// Two documents: AGENT_FLEET (no spend) and AGENT_FLEET_WITH_SPEND (adds the
+// spend field group). Per docs/initiatives/agent-control-tower.md §2.4, spend
+// column visibility is enforced by OMITTING the field from the selection set
+// entirely for a caller without usage.report.read — asking anyway and getting
+// a downstream 403 would fail the WHOLE query (graphqlRequest throws on any
+// GraphQL error), not just null out the one column.
+const AGENT_FLEET_ROW_FIELDS = /* GraphQL */ `
+  key kind display lifecycle
+  activeVersion { id graphDigest rollout }
+  guardrails { dataScope tokenBudget piiEgress ruleOfTwo }
+  toolset
+  evalGate { status lastRunAt suiteKey unavailable }
+  killSwitch { id state updatedAt actor }
+  decisions { proposed approved edited rejected period unavailable }
+  lastIncidentAt
+  external { allowListScope sdkPrincipal autoExecute }
+`;
+
+export const AGENT_FLEET = /* GraphQL */ `
+  query AgentFleet($workspace: ID, $periodFrom: String, $periodTo: String) {
+    agentFleet(workspace: $workspace, periodFrom: $periodFrom, periodTo: $periodTo) {
+      ${AGENT_FLEET_ROW_FIELDS}
+    }
+  }
+`;
+export const AGENT_FLEET_WITH_SPEND = /* GraphQL */ `
+  query AgentFleet($workspace: ID, $periodFrom: String, $periodTo: String) {
+    agentFleet(workspace: $workspace, periodFrom: $periodFrom, periodTo: $periodTo) {
+      ${AGENT_FLEET_ROW_FIELDS}
+      spend { periodUsd trend7dPct unavailable }
+    }
+  }
+`;
+export interface AgentFleetResult {
+  agentFleet: AgentFleetRow[];
+}
+
+export const AGENT_FLEET_SUMMARY = /* GraphQL */ `
+  query AgentFleetSummary($workspace: ID, $periodFrom: String, $periodTo: String) {
+    agentFleetSummary(workspace: $workspace, periodFrom: $periodFrom, periodTo: $periodTo) {
+      totalByKind activeCount killedCount quarantinedCount periodSpendUsd periodDecisions
+    }
+  }
+`;
+export interface AgentFleetSummaryResult {
+  agentFleetSummary: AgentFleetSummary;
 }
 
 // ---- memory (memory-service) ------------------------------------------------

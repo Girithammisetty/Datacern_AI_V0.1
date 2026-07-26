@@ -20,6 +20,10 @@ export interface Persona {
   scopes?: string[];
   /** First-class cross-tenant platform operator — mints the platform_admin claim. */
   platformAdmin?: boolean;
+  /** BRD 70 DSP-FR-014: standard|demo|poc, carried through to the minted
+   * dev-login token (see lib/auth/keys.ts DevClaims.profile) so a demo
+   * tenant's seeded personas render the watermark banner locally too. */
+  profile?: string;
 }
 
 export type LoginResolution =

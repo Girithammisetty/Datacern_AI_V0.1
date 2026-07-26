@@ -76,6 +76,12 @@ make test-integration  # real Postgres/Kafka/Redis/OPA; auto-skips if infra down
 | MASTER-FR-001/003 RLS + cross-tenant 404 | `migrations/000002_rls`, `store/*` | RLS default-role test, AC10 |
 | MASTER-FR-012 OPA authz | `internal/authz/opa_client.go` | OPA-sidecar test |
 | MASTER-FR-034 outbox → Kafka | `store/pg.go`, `events/*` | AC03 (real Kafka) |
+| BRD 67 slice 1 `governed_decision`/`auto_executed_action` meters | `internal/domain/types.go`, `internal/ingest/mapping.go`, `migrations/000004_value_meters` | `test/integration/governed_decision_test.go` |
+| BRD 69 ROI-FR-001/002 value assumptions (versioned, pinned) | `internal/domain/value.go`, `internal/store/value_assumptions.go`, `migrations/000005_value_assumptions` | `internal/valuecalc/valuecalc_test.go`, `test/integration/value_test.go` (AC1-3, written/compile-checked — Docker unavailable in this environment, see docs/initiatives/value-roi-reporting.md §3) |
+| BRD 69 ROI-FR-010 `GET /value/summary`, ROI-NFR-004 `EstimatedValue` null-guarantee | `internal/valuecalc/valuecalc.go`, `internal/api/handlers_value.go`, `internal/store/value_summary.go` | `internal/valuecalc/valuecalc_test.go` (all tiers, run — see below) |
+| BRD 69 new authz action (design §2.9, gates assumption edits) | `internal/authz/authz.go` (`usage.assumptions.update` — see doc comment for the "manage"→"update" verb deviation from the design doc, forced by rbac's closed verb grammar) | `internal/api/drift_test.go` (run) |
+| BRD 69 ROI-FR-011 `GET /value/trend` | `internal/store/value_trend.go`, `internal/api/handlers_value.go` | `test/integration/value_export_test.go` (written/compile-checked, Docker unavailable) |
+| BRD 69 ROI-FR-021 `value-report.v1` export (§2.8) | `internal/valueexport/`, `internal/store/value_exports.go`, `migrations/000006_value_exports`, `internal/api/handlers_value_export.go` | `internal/valueexport/export_test.go` (run — CSV/checksum/FSStore round-trip + never-overwrite); `test/integration/value_export_test.go` (AC4, written/compile-checked) |
 
 ## Known upstream-contract note
 

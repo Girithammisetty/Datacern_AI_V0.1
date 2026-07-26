@@ -74,8 +74,8 @@ func TestEngineHappyPath(t *testing.T) {
 		t.Fatalf("status = %s, want active", got.Status)
 	}
 	steps := f.steps(t)
-	if len(steps) != 7 {
-		t.Fatalf("expected 7 step records, got %d", len(steps))
+	if len(steps) != 8 {
+		t.Fatalf("expected 8 step records, got %d", len(steps))
 	}
 	for _, s := range steps {
 		if s.Status != domain.StepSucceeded {

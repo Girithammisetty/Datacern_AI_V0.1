@@ -13,7 +13,7 @@ import type { Clients } from "../clients/index.js";
 import { DownstreamError } from "../errors/errors.js";
 import type { UserDTO } from "../clients/identity.js";
 import type { DatasetDTO, ProfileDTO } from "../clients/dataset.js";
-import type { ProposalDTO } from "../clients/agent.js";
+import type { ProposalDTO, AgentVersionDTO, TenantAgentConfigDTO } from "../clients/agent.js";
 import { budgetScopeString, type BudgetStateDTO } from "../clients/usage.js";
 import type { RunDTO, ModelDTO } from "../clients/experiment.js";
 import type {
@@ -54,6 +54,26 @@ export interface Loaders {
   evalGatesByKey: DataLoader<string, EvalGateResultDTO[]>;
   /** Eval case results by run id — dedups repeat requests for the same run. */
   evalCasesByRunId: DataLoader<string, EvalCaseResultDTO[]>;
+  /** BRD 68 slice 1 (Agent Control Tower): versions for one agent, newest
+   * first — no batch route exists (agent-runtime is per-agent-key only), so
+   * this loader's value is per-request dedup, not a real batched HTTP call. A
+   * 5xx/transport failure REJECTS the key (AgentFleetVersion has no
+   * `unavailable` sibling in the SDL — see typeDefs.ts — so a failure here
+   * fails the row, not just a field group). */
+  agentVersionsByAgentKey: DataLoader<string, AgentVersionDTO[]>;
+  /** Tenant guardrail config for one agent. A 5xx/transport failure rejects
+   * the key so AgentFleetGuardrails can null its fields; a clean response
+   * (including the "never configured" default view) resolves normally. */
+  tenantAgentConfigByAgentKey: DataLoader<string, TenantAgentConfigDTO | null>;
+  /** Latest eval-gate result for one agent — the 2-hop chain (latest run's
+   * content_digest, then gatesByDigest) collapsed into one per-agent lookup.
+   * No fleet-wide batch endpoint exists in eval-service (confirmed: every
+   * gate/run route is single-agent_key), so this is dedup + per-key error
+   * isolation, not a real batch call. Rejects the key on 5xx/transport
+   * failure (-> AgentFleetEvalGate.unavailable=true); resolves null when the
+   * agent has never run (-> status NONE, unavailable=false — "never ran" is
+   * not "can't tell"). */
+  evalGateByAgentKey: DataLoader<string, EvalGateResultDTO | null>;
 }
 
 export function buildLoaders(clients: Clients): Loaders {
@@ -192,6 +212,59 @@ export function buildLoaders(clients: Clients): Loaders {
     ),
     evalCasesByRunId: new DataLoader<string, EvalCaseResultDTO[]>(async (runIds) =>
       Promise.all(runIds.map((id) => clients.eval.runCases(id).catch(() => []))),
+    ),
+
+    // ---- BRD 68 slice 1: Agent Control Tower fleet aggregation -------------
+    agentVersionsByAgentKey: new DataLoader<string, AgentVersionDTO[]>(
+      async (agentKeys) =>
+        Promise.all(
+          agentKeys.map((k) =>
+            clients.agent.agentVersions(k).catch((e): AgentVersionDTO[] | Error => {
+              if (e instanceof DownstreamError && (e.httpStatus >= 500 || e.httpStatus === 0)) return e;
+              return [];
+            }),
+          ),
+        ),
+      { maxBatchSize: MAX_BATCH },
+    ),
+
+    tenantAgentConfigByAgentKey: new DataLoader<string, TenantAgentConfigDTO | null>(
+      async (agentKeys) =>
+        Promise.all(
+          agentKeys.map((k) =>
+            clients.agent.tenantAgentConfig(k).catch((e): TenantAgentConfigDTO | null | Error => {
+              if (e instanceof DownstreamError && (e.httpStatus >= 500 || e.httpStatus === 0)) return e;
+              return null;
+            }),
+          ),
+        ),
+      { maxBatchSize: MAX_BATCH },
+    ),
+
+    evalGateByAgentKey: new DataLoader<string, EvalGateResultDTO | null>(
+      async (agentKeys) =>
+        Promise.all(
+          agentKeys.map(async (agentKey): Promise<EvalGateResultDTO | null | Error> => {
+            try {
+              const runsPage = await clients.eval.runs({ agentKey, limit: 1 });
+              const latestRun = runsPage.data?.[0];
+              const digest = (latestRun?.candidate as Record<string, unknown> | undefined)?.content_digest as
+                | string
+                | undefined;
+              if (!latestRun || !digest) return null; // never run yet: real absence, not an outage.
+              const gates = await clients.eval.gatesByDigest(agentKey, digest);
+              if (gates.length === 0) return null;
+              // gatesByDigest has no ORDER BY server-side (confirmed: no
+              // fleet-batch/latest endpoint exists) — pick the newest by
+              // created_at client-side.
+              return gates.slice().sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))[0] ?? null;
+            } catch (e) {
+              if (e instanceof DownstreamError && (e.httpStatus >= 500 || e.httpStatus === 0)) return e;
+              return null;
+            }
+          }),
+        ),
+      { maxBatchSize: MAX_BATCH },
     ),
   };
 }

@@ -25,6 +25,16 @@
         }}], "default": null},
         {"name": "decided_at", "type": "string"}
       ]
-    }], "default": null}
+    }], "default": null},
+    {"name": "proposal_kind", "type": ["null", "string"], "default": null,
+     "doc": "BRD 67 VMB-FR-002: derived from tool_id's leading namespace (e.g. case.apply_disposition -> case). Present only on a terminal metered decision (approved|edited_approved|rejected)."},
+    {"name": "pack_name", "type": ["null", "string"], "default": null,
+     "doc": "BRD 67 VMB-FR-002: nullable pending pack-origin plumbing on agent config (deferred, design §2.1). Present only on a terminal metered decision."},
+    {"name": "decision_label", "type": ["null", "string"], "default": null,
+     "doc": "BRD 67 VMB-FR-002 governed_decision dimension: approved|edited|rejected. Present only on a terminal metered decision. Named decision_label (not `decision`) to avoid colliding with the existing `decision` record field above."},
+    {"name": "decision_latency_ms", "type": ["null", "long"], "default": null,
+     "doc": "BRD 67 VMB-FR-002: decision.decided_at - proposal created_at, in ms. Present only on a terminal metered decision."},
+    {"name": "edit_distance_bucket", "type": ["null", "string"], "default": null,
+     "doc": "BRD 67 VMB-FR-002: none|minor|major, edited_approved only."}
   ]
 }

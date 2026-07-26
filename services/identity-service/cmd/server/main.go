@@ -25,20 +25,24 @@ import (
 
 	"github.com/datacern-ai/identity-service/internal/adapters/awskms"
 	"github.com/datacern-ai/identity-service/internal/adapters/azurekeyvault"
+	"github.com/datacern-ai/identity-service/internal/adapters/demobundle"
+	"github.com/datacern-ai/identity-service/internal/adapters/demoseed"
 	"github.com/datacern-ai/identity-service/internal/adapters/denylist"
 	"github.com/datacern-ai/identity-service/internal/adapters/gcpkms"
+	"github.com/datacern-ai/identity-service/internal/adapters/leaderlease"
 	"github.com/google/uuid"
 
 	"github.com/datacern-ai/identity-service/internal/adapters/keycloak"
-	"github.com/datacern-ai/identity-service/internal/blob"
-	"github.com/datacern-ai/identity-service/internal/adapters/oidc"
 	"github.com/datacern-ai/identity-service/internal/adapters/localinfra"
+	"github.com/datacern-ai/identity-service/internal/adapters/oidc"
 	"github.com/datacern-ai/identity-service/internal/adapters/vault"
 	"github.com/datacern-ai/identity-service/internal/api"
 	"github.com/datacern-ai/identity-service/internal/authz"
+	"github.com/datacern-ai/identity-service/internal/blob"
 	"github.com/datacern-ai/identity-service/internal/domain"
 	"github.com/datacern-ai/identity-service/internal/events"
 	"github.com/datacern-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/identity-service/internal/projection"
 	"github.com/datacern-ai/identity-service/internal/rbacclient"
 	"github.com/datacern-ai/identity-service/internal/store/memory"
 	"github.com/datacern-ai/identity-service/internal/store/postgres"
@@ -63,7 +67,7 @@ func main() {
 	// from coming up "healthy" while provisioning users into a map.
 	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
 	mustReal := func(realEnv, adapter string) {
-		log.Error("REQUIRE_REAL_ADAPTERS=true but "+realEnv+" is unset — refusing to boot on the "+adapter+" fallback")
+		log.Error("REQUIRE_REAL_ADAPTERS=true but " + realEnv + " is unset — refusing to boot on the " + adapter + " fallback")
 		os.Exit(1)
 	}
 
@@ -248,7 +252,24 @@ func main() {
 		log.Warn("tenant branding logo store: not configured (set MINIO_ENDPOINT) — logo upload/download will 501")
 	}
 
-	deps := domain.StepDeps{Store: store, Keycloak: kc, Terraform: tf, DB: db, Prober: prober, Clock: clock}
+	// BRD 70 slice 1/2: demo-sandbox bundle loader + seeding runner
+	// (§2.2/§2.3). DEMO_BUNDLES_ROOT/DEMO_SEED_SCRIPT default to the repo
+	// layout this service ships alongside (deploy/demo/, packs/
+	// demo_seed_runner.py) -- override in a container image that places
+	// them elsewhere. A demo tenant hitting an unconfigured/missing bundle
+	// or script fails its SeedDemoContent step loud (engine_steps.go), it
+	// is never silently skipped.
+	demoBundles := &demobundle.FSLoader{Root: envOr("DEMO_BUNDLES_ROOT", "deploy/demo")}
+	demoSeed := &demoseed.SubprocessRunner{
+		PythonBin:  envOr("DEMO_SEED_PYTHON", "python3"),
+		ScriptPath: envOr("DEMO_SEED_SCRIPT", "packs/demo_seed_runner.py"),
+		Timeout:    8 * time.Minute,
+		Issuer:     issuer,
+	}
+	deps := domain.StepDeps{
+		Store: store, Keycloak: kc, Terraform: tf, DB: db, Prober: prober, Clock: clock,
+		DemoBundles: demoBundles, DemoSeed: demoSeed,
+	}
 	notify := func(ctx context.Context, t *domain.Tenant, st *domain.ProvisioningStep) {
 		// IDN-FR-010: provisioning progress events -> realtime-hub via outbox.
 		_ = store.AppendOutbox(ctx, domain.NewEvent(domain.EvTenantStepCompleted, t.ID,
@@ -276,6 +297,17 @@ func main() {
 	}
 	users := &domain.UserService{Store: store, Keycloak: kc, LastAdmin: lastAdmin, Clock: clock}
 	sas := &domain.ServiceAccountService{Store: store, Denylist: deny, Clock: clock}
+	// BRD 66 slice 1: commercial plan catalog + tenant plan assignment /
+	// entitlement overrides / effective-entitlements resolution.
+	plans := &domain.PlanService{Store: store, Clock: clock}
+	commercial := &domain.CommercialService{Store: store, Clock: clock}
+	// BRD 66 slice 2: trial lifecycle (start/extend/convert).
+	trials := &domain.TrialService{Store: store, Clock: clock}
+	// BRD 70 slice 1/2: demo-sandbox lifecycle (create/reset/clone).
+	demo := &domain.DemoService{
+		Store: store, Tenants: tenants, Commercial: commercial,
+		Bundles: demoBundles, Seed: demoSeed, Clock: clock,
+	}
 	tokens := &domain.TokenService{
 		Store: store, Issuer: issuer, Verifier: issuer, Denylist: deny,
 		Limiter: domain.NewSlidingWindowLimiter(domain.OBORateLimit, domain.OBORateWindow), Clock: clock,
@@ -355,6 +387,7 @@ func main() {
 	srv := &api.Server{
 		Store: store, Tenants: tenants, Users: users, SAs: sas, Tokens: tokens,
 		KM: km, Verifier: issuer, Authz: authorizer,
+		Plans: plans, Commercial: commercial, Demo: demo, Trials: trials,
 		TrustedSpiffeIDs: trusted,
 		// F-2: only honor X-Spiffe-Id when explicitly enabled (mesh strips +
 		// re-injects it). TRUST_SPIFFE_HEADER=true to enable.
@@ -386,6 +419,118 @@ func main() {
 	}
 	poller := &events.Poller{Store: store, Publisher: publisher, Interval: 2 * time.Second, BatchSize: 100, Log: log}
 	go poller.Run(ctx)
+
+	// entitlements_flat projection worker (BRD 66 slice 1, CPL-FR-011):
+	// mirrors rbac-service's permissions_flat discipline (outbox/dirty-queue
+	// -driven recompute, ent.invalidate pub/sub). Slice 1 ships this dark --
+	// no consumer reads it synchronously yet (that's slice 3's enforcement
+	// hooks) -- so an unset REDIS_ADDR just leaves the projection uncomputed
+	// rather than blocking boot; identity-service's own
+	// GET /tenants/{id}/entitlements reads live from Postgres, not this cache.
+	if redisAddr := os.Getenv("REDIS_ADDR"); redisAddr != "" {
+		projRDB := redisx.NewFromEnv(redisAddr, os.Getenv)
+		loader := projection.StoreLoader{Store: store, Commercial: commercial, Now: clock}
+		writer := projection.NewRedisWriter(projRDB.R, projection.DefaultTTL)
+		worker := projection.NewWorker("identity-"+uuid.NewString(), loader, writer)
+		worker.Log = log
+		go worker.Run(ctx)
+		log.Info("commercial projection worker: redis", "addr", redisAddr)
+
+		// BRD 66 slice 2 (CPL-FR-031): identity-service's own invite-path
+		// seat_cap gate reads entitlements_flat directly (CPL-NFR-001, no
+		// synchronous call to this service's own HTTP API) via the same Redis
+		// connection as the projection worker above. Unlike the worker itself
+		// (which is allowed to ship "dark" -- nothing reads it yet in slice
+		// 1), this IS a live enforcement point, so an unset REDIS_ADDR in
+		// strict/production mode fails closed at boot (mustReal) rather than
+		// silently shipping an unenforced cap.
+		users.Entitlements = domain.EntitlementReaderFunc(
+			func(rctx context.Context, tenantID uuid.UUID) (domain.EffectiveSet, bool, error) {
+				return projection.ReadSet(rctx, projRDB.R, tenantID.String())
+			})
+	} else {
+		if requireReal {
+			mustReal("REDIS_ADDR", "seat_cap invite enforcement (CPL-FR-031) has no entitlements_flat to read")
+		}
+		log.Warn("commercial projection worker: disabled (set REDIS_ADDR) — entitlements_flat will not be populated")
+		log.Warn("seat_cap invite enforcement: disabled (set REDIS_ADDR) — invites will not be capped")
+	}
+
+	// BRD 70 §2.5 (DSP-FR-013): the demo-tenant TTL reaper. Real leader
+	// election over Redis when REDIS_ADDR is set (leaderlease.Lease mirrors
+	// realtime-hub's proven SET-NX-PX + Lua-CAS pattern, RTH-FR-042);
+	// without it, Reaper.Lease stays nil ("always leader") -- correct for
+	// single-replica dev/tests but NOT leader-elected for real multi-replica
+	// safety, so this is loud-warned exactly like the other REDIS_ADDR-gated
+	// adapters above rather than silently degrading.
+	reaper := &domain.DemoReaper{Store: store, Tenants: tenants, Engine: engine, Clock: clock}
+	if redisAddr := os.Getenv("REDIS_ADDR"); redisAddr != "" {
+		lease := leaderlease.NewLease(redisx.NewFromEnv(redisAddr, os.Getenv).R,
+			"demo-reaper", "identity-"+uuid.NewString(), 15*time.Second)
+		go lease.Run(ctx)
+		reaper.Lease = lease
+		log.Info("demo TTL reaper: leader-elected (redis)", "addr", redisAddr)
+	} else {
+		if requireReal {
+			mustReal("REDIS_ADDR", "single-replica demo TTL reaper (not leader-elected; a second replica could double-reap)")
+		}
+		log.Warn("demo TTL reaper: single-replica (set REDIS_ADDR for real leader election across replicas)")
+	}
+	go func() { // demo-tenant TTL sweep (DSP-FR-013): minute-or-coarser per §2.5
+		t := time.NewTicker(5 * time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if n, err := reaper.Sweep(ctx); err != nil {
+					log.Error("demo TTL reaper sweep failed", "error", err)
+				} else if n > 0 {
+					log.Info("demo TTL reaper: tenants reaped", "count", n)
+				}
+			}
+		}
+	}()
+
+	// BRD 66 slice 2 (CPL-FR-022, design doc "Trial sweep job"): the
+	// leader-elected trial-expiry + T-14/T-7/T-1 threshold-event sweep.
+	// Copies the demo reaper's exact leaderlease.NewLease wiring above, but
+	// with the design's own literal parameters: resource "commercial:
+	// trial-sweep", 5s TTL (renewed at half-TTL = 2.5s by Lease.Run, matching
+	// "5s TTL, 2.5s renew" verbatim) rather than the reaper's coarser 15s.
+	sweep := &domain.TrialSweep{Store: store, Clock: clock, Log: log}
+	if redisAddr := os.Getenv("REDIS_ADDR"); redisAddr != "" {
+		trialLease := leaderlease.NewLease(redisx.NewFromEnv(redisAddr, os.Getenv).R,
+			"commercial:trial-sweep", "identity-"+uuid.NewString(), 5*time.Second)
+		go trialLease.Run(ctx)
+		sweep.Lease = trialLease
+		log.Info("trial sweep: leader-elected (redis)", "addr", redisAddr)
+	} else {
+		if requireReal {
+			mustReal("REDIS_ADDR", "single-replica trial sweep (not leader-elected; a second replica could double-transition/double-emit)")
+		}
+		log.Warn("trial sweep: single-replica (set REDIS_ADDR for real leader election across replicas)")
+	}
+	go func() { // 1-minute ticker: tight enough that CPL-NFR-003's "exactly-once
+		// per tenant/day" holds even with the ≤60s projection staleness budget
+		// elsewhere (design doc "Trial sweep job").
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if expired, ending, err := sweep.SweepOnce(ctx); err != nil {
+					log.Error("trial sweep failed", "error", err)
+				} else if expired > 0 || ending > 0 {
+					log.Info("trial sweep: tick complete", "expired", expired, "threshold_events", ending)
+				}
+			}
+		}
+	}()
+
 	go func() { // key-cache refresh so retirements take effect (AC-8)
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()
@@ -416,6 +561,14 @@ func main() {
 		log.Error("server error", "error", err)
 		os.Exit(1)
 	}
+}
+
+// envOr returns the env var if set (even to a non-empty override), else def.
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 // buildSigner selects the keys.Signer backend via SECRETS_BACKEND=

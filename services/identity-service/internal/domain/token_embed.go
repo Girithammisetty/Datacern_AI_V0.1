@@ -153,14 +153,15 @@ func (s *TokenService) EmbedExchange(ctx context.Context, req EmbedRequest, trac
 		scopes = []string{"chart.dashboard.read"}
 	}
 	tok, expiresIn, err := s.Issuer.IssueWithTTL(Claims{
-		Subject:        req.Sub,
-		TenantID:       tenantID,
-		Typ:            TypUser,
-		Scopes:         scopes,
-		WorkspaceID:    req.WorkspaceID,
-		Embed:          true,
-		Surface:        surface,
-		FrameAncestors: cfg.AllowedOrigins,
+		Subject:         req.Sub,
+		TenantID:        tenantID,
+		Typ:             TypUser,
+		Scopes:          scopes,
+		WorkspaceID:     req.WorkspaceID,
+		Embed:           true,
+		Surface:         surface,
+		FrameAncestors:  cfg.AllowedOrigins,
+		CommercialState: string(tenant.CommercialState), // BRD 66 slice 2, CPL-FR-022
 	}, ttl)
 	if err != nil {
 		return nil, err

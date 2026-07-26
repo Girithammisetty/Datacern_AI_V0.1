@@ -17,15 +17,20 @@ export const ADMIN_ROLE = "Admin";
 /** The wildcard capability rbac returns for a tenant admin. */
 export const WILDCARD = "*";
 
-/** A gate is satisfied by an action capability, a role, platform-admin, or is
- * always open. `platform` is ORTHOGONAL to tenant admin: a tenant `Admin` does
- * NOT pass it — only a first-class platform operator does. */
+/** A gate is satisfied by an action capability, a role, platform-admin, a
+ * commercial entitlement, or is always open. `platform` is ORTHOGONAL to
+ * tenant admin: a tenant `Admin` does NOT pass it — only a first-class
+ * platform operator does. `entitlement` is ORTHOGONAL to both: it answers
+ * "does this tenant's plan include this", never "is this user allowed to" —
+ * see the `entitlement` case in `allows()` below for why it behaves
+ * differently from every other gate kind (never fail-hide). */
 export type Gate =
   | { kind: "public" }
   | { kind: "capability"; action: string }
   | { kind: "role"; role: string }
   | { kind: "platform" }
-  | { kind: "anyOf"; gates: Gate[] };
+  | { kind: "anyOf"; gates: Gate[] }
+  | { kind: "entitlement"; key: string };
 
 export const publicGate: Gate = { kind: "public" };
 export const cap = (action: string): Gate => ({ kind: "capability", action });
@@ -36,6 +41,10 @@ export const platformGate: Gate = { kind: "platform" };
 /** Passes when ANY of the given gates passes. Used for the /admin hub, reachable
  * by a tenant admin OR a platform admin. */
 export const anyOf = (...gates: Gate[]): Gate => ({ kind: "anyOf", gates });
+/** Gate for a commercial `feature` entitlement (BRD 66, CPL-FR-013). Unlike
+ * every other gate kind, failing this does NOT mean "hide" — see
+ * `isEntitlementLocked` and the component doc below. */
+export const entitlementGate = (key: string): Gate => ({ kind: "entitlement", key });
 
 /** The viewer's effective capability view (derived from bff `viewer`). */
 export interface CapabilitySet {
@@ -44,29 +53,55 @@ export interface CapabilitySet {
   isAdmin: boolean;
   /** First-class cross-tenant platform operator (viewer.isPlatformAdmin). */
   isPlatform: boolean;
+  /** LOCKED commercial `feature` entitlement keys for the caller's tenant
+   * (BRD 66, CPL-FR-013) — populated from the BFF's `tenantCommercial` query
+   * (`lockedFeatureKeys`), NOT from `capabilities`/`roles`. Note the
+   * inversion versus every other CapabilitySet field: membership here means
+   * "NOT entitled", not "entitled" — see `allows()`'s "entitlement" case. */
+  entitlements: ReadonlySet<string>;
 }
 
 export function toCapabilitySet(input: {
   capabilities?: string[] | null;
   roles?: string[] | null;
   isPlatformAdmin?: boolean | null;
+  /** Locked commercial feature keys (bff `tenantCommercial.lockedFeatureKeys`). */
+  lockedFeatureKeys?: string[] | null;
 }): CapabilitySet {
   const capabilities = new Set(input.capabilities ?? []);
   const roles = new Set(input.roles ?? []);
   const isAdmin = capabilities.has(WILDCARD) || roles.has(ADMIN_ROLE);
-  return { capabilities, roles, isAdmin, isPlatform: input.isPlatformAdmin === true };
+  return {
+    capabilities,
+    roles,
+    isAdmin,
+    isPlatform: input.isPlatformAdmin === true,
+    entitlements: new Set(input.lockedFeatureKeys ?? []),
+  };
 }
 
-/** The empty (fail-safe) capability set: nothing is allowed. */
+/** The empty (fail-safe) capability set: nothing is allowed. Entitlements
+ * default to the EMPTY locked-set, i.e. "nothing confirmed locked yet" —
+ * matches this module's existing fail-safe-hide convention for every OTHER
+ * gate kind (capability/role/platform default to denied), even though for
+ * `entitlement` specifically an empty locked-set actually means "passes" —
+ * see `allows()`. Until the viewer's tenantCommercial data loads, entitlement
+ * gates render unlocked rather than a false-positive locked upsell. */
 export const EMPTY_CAPABILITIES: CapabilitySet = {
   capabilities: new Set(),
   roles: new Set(),
   isAdmin: false,
   isPlatform: false,
+  entitlements: new Set(),
 };
 
 /** Whether a viewer with `caps` may pass `gate`. Tenant admin passes capability
- * and role gates; the platform gate is orthogonal (platform operators only). */
+ * and role gates; the platform gate is orthogonal (platform operators only).
+ * The `entitlement` gate is commercial, not RBAC — it passes unless the key is
+ * in the viewer's LOCKED set, and admin/platform status never overrides it
+ * (buying a plan, not a role, unlocks a feature). Callers that need the
+ * "render a locked preview instead of hiding" behavior (CPL-FR-013) should
+ * use `isEntitlementLocked` directly instead of (or alongside) `allows()`. */
 export function allows(gate: Gate, caps: CapabilitySet): boolean {
   switch (gate.kind) {
     case "public":
@@ -79,7 +114,18 @@ export function allows(gate: Gate, caps: CapabilitySet): boolean {
       return caps.isPlatform;
     case "anyOf":
       return gate.gates.some((g) => allows(g, caps));
+    case "entitlement":
+      return !caps.entitlements.has(gate.key);
   }
+}
+
+/** True when `key` is a LOCKED commercial feature for the viewer's tenant
+ * (BRD 66, CPL-FR-013). Distinct from `allows()`: a locked entitlement gate
+ * must render a preview + upsell CTA, NEVER hide (registry.ts's usual
+ * fail-safe-hide convention, documented at the top of this file, is for
+ * CAPABILITY absence — commercial gating is the opposite UX). */
+export function isEntitlementLocked(key: string, caps: CapabilitySet): boolean {
+  return caps.entitlements.has(key);
 }
 
 /** A sidebar section header. Items sharing a `group` are rendered contiguously
@@ -285,6 +331,14 @@ export const FEATURE_GATES = {
   viewAnomalies: cap("usage.anomaly.read"),
   /** Dismiss a detected anomaly (usage-service POST /anomalies/{id}/dismiss). */
   dismissAnomaly: cap("usage.anomaly.update"),
+  /** Edit value-reporting assumptions (usage-service PUT /value/assumptions,
+   * BRD 69 ROI-FR-002). Read access to the whole /admin/value page reuses
+   * viewCostPanel (usage.report.read) above per design §2.7 — this gate only
+   * covers the assumptions edit form. Maps to usage.assumptions.update, not
+   * the design doc's literal "usage.report.manage" — see usage-service's
+   * internal/authz/authz.go doc comment for why (rbac's closed verb
+   * grammar has no "manage" verb). */
+  manageValueAssumptions: cap("usage.assumptions.update"),
   /** Archive a dataset (dataset-service DELETE /datasets/{id}). */
   archiveDataset: cap("dataset.dataset.delete"),
   /** Restore an archived dataset (dataset-service POST /datasets/{id}/restore). */
@@ -559,6 +613,24 @@ export const FEATURE_GATES = {
    * principal downstream; the browse page reuses the proposal-inbox read
    * gate so it appears exactly for personas who work with agent activity. */
   viewAgentRunHistory: cap("ai.proposal.read"),
+
+  // ==========================================================================
+  // BRD 68 slice 1: Agent Control Tower fleet table (docs/initiatives/
+  // agent-control-tower.md §2.4). ACT-FR-002 names the capability
+  // "agent.registry.read" in the BRD text; the capability actually seeded and
+  // enforced downstream (agent-runtime registry.py _require_agent_cap) is
+  // "ai.agent.read" — same reconciliation already made for viewAgentCatalog
+  // above. The BFF adds no authz layer of its own (bff-graphql README): this
+  // gate only controls what the UI renders/requests, never what's enforced.
+  // ==========================================================================
+  /** Top-level fleet-table gate (Query.agentFleet / agentFleetSummary). */
+  viewAgentFleet: cap("ai.agent.read"),
+  /** Spend column — additionally needs usage.report.read (ACT-FR-002),
+   * mirroring viewCostPanel above. Absence of this capability makes the fleet
+   * table OMIT the `spend` field from its query entirely (useAgentFleet's
+   * `includeSpend` param) rather than request-then-hide, since a downstream
+   * 403 on `spend` would fail the whole agentFleet query. */
+  viewAgentFleetSpend: cap("usage.report.read"),
 
   // ==========================================================================
   // Tier 4a: data-plane secondary CRUD/lifecycle — saved-query authoring,

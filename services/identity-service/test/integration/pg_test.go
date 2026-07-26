@@ -293,8 +293,8 @@ func TestProvisioningPersistenceAndResume(t *testing.T) {
 		t.Fatalf("after resume: %s", got.Status)
 	}
 	steps, _ = store.ListProvisioningSteps(ctx, tn.ID, domain.WorkflowIDFor(tn.ID))
-	if len(steps) != 7 {
-		t.Fatalf("expected 7 persisted steps, got %d", len(steps))
+	if len(steps) != 8 {
+		t.Fatalf("expected 8 persisted steps, got %d", len(steps))
 	}
 	for _, s := range steps {
 		if s.Status != domain.StepSucceeded {

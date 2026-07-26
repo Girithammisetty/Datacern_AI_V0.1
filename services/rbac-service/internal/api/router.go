@@ -9,18 +9,30 @@ import (
 
 	"github.com/datacern-ai/go-common/metricsx"
 	"github.com/datacern-ai/rbac-service/internal/authz"
+	"github.com/datacern-ai/rbac-service/internal/entitlements"
 	"github.com/datacern-ai/rbac-service/internal/projection"
 	"github.com/datacern-ai/rbac-service/internal/store"
 )
 
+// CapReader is the port the workspace-create handler depends on for the
+// workspace_cap entitlement gate (CPL-FR-031) -- lets Server.Entitlements be
+// swapped for a fake in unit tests without a live Redis, mirroring the
+// Store/Checker interface seams already used elsewhere in this package.
+// *entitlements.Reader satisfies it; a nil Server.Entitlements fails closed
+// (StatusUnavailable) exactly like a nil *entitlements.Reader does.
+type CapReader interface {
+	WorkspaceCapStatus(ctx context.Context, tenantID string) (entitlements.Status, int, error)
+}
+
 // Server aggregates the dependencies of the HTTP layer.
 type Server struct {
-	Store    *store.Store
-	Checker  *authz.Checker
-	Writer   *projection.RedisWriter
-	Reader   *projection.RedisReader
-	Verifier *Verifier
-	Redis    redis.UniversalClient
+	Store        *store.Store
+	Checker      *authz.Checker
+	Writer       *projection.RedisWriter
+	Reader       *projection.RedisReader
+	Verifier     *Verifier
+	Redis        redis.UniversalClient
+	Entitlements CapReader
 }
 
 // Router wires all routes (base path /api/v1, MASTER-FR-020).

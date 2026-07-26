@@ -325,6 +325,32 @@ export interface Tenant {
   embedConfig?: EmbedConfig | null;
 }
 
+/** BRD 66 slice 3 (CPL-FR-011): one row of a tenant's effective commercial
+ * entitlement set. Only present in the FULL-detail shape of TenantCommercial
+ * (tenant-admin capability required). */
+export interface CommercialEntitlement {
+  kind: string;
+  key: string;
+  value?: Record<string, unknown> | null;
+  provenance: string; // plan_default | override
+}
+
+/** BRD 66 slice 3 (CPL-FR-033): the commercial plane's tenant-facing view.
+ * A non-admin caller gets only commercialState + lockedFeatureKeys populated
+ * (everything else null) — that minimal shape is what drives ui-web's
+ * `entitlement` Gate (lib/authz/registry.ts) so locked features render a
+ * preview + upsell CTA for ANY authenticated caller, never a blank/hidden
+ * control. Full plan/trial/entitlement detail additionally needs the
+ * identity.user.admin capability. */
+export interface TenantCommercial {
+  commercialState: string | null;
+  lockedFeatureKeys: string[];
+  planKey?: string | null;
+  planVersion?: number | null;
+  trialEndsAt?: string | null;
+  entitlements?: CommercialEntitlement[] | null;
+}
+
 /** A tenant's embedded-UI (iframe) configuration. The secret is never
  * readable after generation — only its presence (configured) is exposed. */
 export interface EmbedConfig {
@@ -1537,6 +1563,103 @@ export interface CreateRateCardInput {
   version: number;
   effectiveFrom: string;
   items: Record<string, number>;
+}
+
+/* ------- value & ROI reporting (BRD 69) ------- */
+
+/** A derived figure that only exists paired with its assumption version
+ * (ROI-NFR-004). null means "not computable" — assumptions unset, or a
+ * genuine data gap (see ValueSummary.provenance.meterGap) — never a
+ * fabricated zero. */
+export interface EstimatedValue {
+  value: number;
+  assumptionVersion: number;
+}
+
+export interface CostPerDecision {
+  value: number;
+  /** "blended" (tenant/period average) | "attributed" (true per-decision grain, not built yet). */
+  basis: string;
+}
+
+export interface ValueDecisions {
+  total: number;
+  byDecision: JSONValue;
+  byKind: JSONValue;
+  byAgent: JSONValue;
+  byPack: JSONValue;
+}
+
+export interface ValueAdoption {
+  activeUsers: number;
+  byWorkspace: JSONValue;
+}
+
+export interface ValueProvenance {
+  rollupVersion: string;
+  assumptionVersion?: number | null;
+  /** Present = "here's what's missing and why"; null = fully available. */
+  meterGap?: string | null;
+}
+
+export interface ValueSummary {
+  period: string;
+  workspaceId?: string | null;
+  decisions?: ValueDecisions | null;
+  hoursSavedEst?: EstimatedValue | null;
+  laborValueEstUsd?: EstimatedValue | null;
+  aiCostUsd: number;
+  costPerDecision?: CostPerDecision | null;
+  humanBaselineCostUsd?: EstimatedValue | null;
+  netValueEstUsd?: EstimatedValue | null;
+  ladderSavingsUsd?: number | null;
+  adoption: ValueAdoption;
+  provenance: ValueProvenance;
+}
+
+export interface ValueTrendPoint {
+  period: string;
+  value?: number | null;
+  basis?: string | null;
+  rollupVersion: string;
+  distilledRungShare?: number | null;
+}
+
+export interface ValueTrend {
+  metric: string;
+  granularity: string;
+  points: ValueTrendPoint[];
+}
+
+export interface ValueAssumptions {
+  id: ID;
+  urn: string;
+  version: number;
+  minutesPerDecision: JSONValue;
+  loadedHourlyRateUsd: number;
+  effectiveFrom: string;
+  status: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface UpdateValueAssumptionsInput {
+  minutesPerDecision: Record<string, number>;
+  loadedHourlyRateUsd: number;
+}
+
+export interface ValueExport {
+  id: ID;
+  urn: string;
+  period: string;
+  workspaceId?: string | null;
+  version: number;
+  jsonUrl?: string | null;
+  jsonSha256: string;
+  csvUrl?: string | null;
+  csvSha256: string;
+  assumptionVersion?: number | null;
+  createdAt: string;
 }
 
 export interface Connection<T> {
@@ -3122,4 +3245,88 @@ export interface AgentRunListItem {
   usage?: JSONValue;
   error?: JSONValue;
   createdAt?: string | null;
+}
+
+// ============================================================================
+// BRD 68 slice 1: Agent Control Tower fleet aggregation (bff-graphql
+// Query.agentFleet / agentFleetSummary — docs/initiatives/
+// agent-control-tower.md).
+// ============================================================================
+export type AgentFleetKind = "PLATFORM" | "CUSTOM" | "EXTERNAL";
+export type AgentFleetLifecycle = "ACTIVE" | "KILLED" | "QUARANTINED" | "DEPRECATED";
+export type AgentFleetRollout = "STABLE" | "CANARY" | "SHADOW" | "PINNED" | "UNKNOWN";
+export type EvalGateStatusValue = "PASS" | "FAIL" | "STALE" | "NONE";
+
+export interface AgentFleetVersion {
+  id: number;
+  graphDigest?: string | null;
+  rollout: AgentFleetRollout;
+}
+
+export interface AgentFleetGuardrails {
+  dataScope?: JSONValue;
+  tokenBudget?: number | null;
+  piiEgress?: string | null;
+  ruleOfTwo: boolean;
+}
+
+export interface AgentFleetEvalGate {
+  status: EvalGateStatusValue;
+  lastRunAt?: string | null;
+  suiteKey?: string | null;
+  unavailable: boolean;
+}
+
+export interface AgentFleetKillSwitchState {
+  id?: ID | null;
+  state: string;
+  updatedAt?: string | null;
+  actor?: string | null;
+}
+
+export interface AgentFleetSpend {
+  periodUsd?: number | null;
+  trend7dPct?: number | null;
+  unavailable: boolean;
+}
+
+export interface AgentFleetDecisions {
+  proposed?: number | null;
+  approved?: number | null;
+  edited?: number | null;
+  rejected?: number | null;
+  period: string;
+  unavailable: boolean;
+}
+
+export interface AgentFleetExternalInfo {
+  allowListScope: string[];
+  sdkPrincipal: string;
+  autoExecute: string;
+}
+
+export interface AgentFleetRow {
+  key: ID;
+  kind: AgentFleetKind;
+  display: string;
+  lifecycle: AgentFleetLifecycle;
+  activeVersion: AgentFleetVersion;
+  guardrails: AgentFleetGuardrails;
+  toolset: string[];
+  evalGate: AgentFleetEvalGate;
+  killSwitch: AgentFleetKillSwitchState;
+  spend?: AgentFleetSpend | null;
+  decisions: AgentFleetDecisions;
+  lastIncidentAt?: string | null;
+  external?: AgentFleetExternalInfo | null;
+  liveUpdates: { hubUrl: string; topics: string[] };
+}
+
+export interface AgentFleetSummary {
+  totalByKind: JSONValue;
+  activeCount: number;
+  killedCount: number;
+  quarantinedCount: number;
+  periodSpendUsd?: number | null;
+  periodDecisions?: number | null;
 }

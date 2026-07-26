@@ -15,6 +15,14 @@ type ErrorBody struct {
 	Error ErrorDetail `json:"error"`
 }
 
+// Commercial-plane enforcement codes (BRD 66 slice 3, CPL-FR-031):
+// workspace-create's workspace_cap gate, per the design's exact envelope
+// (docs/initiatives/commercial-plane.md "Enforcement hook contracts").
+const (
+	CodeCapExceeded            = "CAP_EXCEEDED"
+	CodeEntitlementUnavailable = "ENTITLEMENT_UNAVAILABLE"
+)
+
 type ErrorDetail struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`

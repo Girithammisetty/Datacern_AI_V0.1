@@ -7,6 +7,7 @@ import { DatasetClient } from "./dataset.js";
 import { CaseClient } from "./case.js";
 import { ChartClient } from "./chart.js";
 import { UsageClient } from "./usage.js";
+import { ValueClient } from "./value.js";
 import { ExperimentClient } from "./experiment.js";
 import { InferenceClient } from "./inference.js";
 import { AgentClient } from "./agent.js";
@@ -29,6 +30,8 @@ export interface Clients {
   case: CaseClient;
   chart: ChartClient;
   usage: UsageClient;
+  /** Value & ROI reporting (BRD 69) — same usage-service base URL as `usage`. */
+  value: ValueClient;
   experiment: ExperimentClient;
   inference: InferenceClient;
   agent: AgentClient;
@@ -60,6 +63,7 @@ export function buildClients(cfg: Config, ctx: ClientRequestContext, fetchImpl?:
     case: new CaseClient(svc("case-service", cfg.services.case, ctx, cfg, fetchImpl)),
     chart: new ChartClient(svc("chart-service", cfg.services.chart, ctx, cfg, fetchImpl)),
     usage: new UsageClient(svc("usage-service", cfg.services.usage, ctx, cfg, fetchImpl)),
+    value: new ValueClient(svc("usage-service", cfg.services.usage, ctx, cfg, fetchImpl)),
     experiment: new ExperimentClient(svc("experiment-service", cfg.services.experiment, ctx, cfg, fetchImpl)),
     inference: new InferenceClient(svc("inference-service", cfg.services.inference, ctx, cfg, fetchImpl)),
     agent: new AgentClient(svc("agent-runtime", cfg.services.agentRuntime, ctx, cfg, fetchImpl)),

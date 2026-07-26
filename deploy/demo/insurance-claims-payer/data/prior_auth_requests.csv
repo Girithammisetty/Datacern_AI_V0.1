@@ -1,0 +1,9 @@
+par_id,member_id,provider_npi,requested_service,cpt_code,icd10_code,urgency,submitted_month,status,turnaround_hours,product_type,member_state,specialty_drug_flag,clinical_info_status,agent_recommendation,agent_confidence
+PAR-5001,MBR-10501,1912345670,lumbar_fusion,22633,M51.36,urgent,2026-07,pending,4,ppo,TX,no,complete,approve,0.88
+PAR-5002,MBR-10522,1922345681,infliximab_infusion,J1745,K50.10,standard,2026-07,pending,36,ppo,TX,yes,complete,escalate_md,0.61
+PAR-5003,MBR-10545,1932345692,knee_mri,73721,M17.11,standard,2026-07,pending,20,hmo,OK,no,incomplete,escalate_md,0.42
+PAR-5004,MBR-10567,1942345703,home_health_pt,97110,M62.81,standard,2026-07,pending,28,ppo,TX,no,complete,approve,0.91
+PAR-5005,MBR-10589,1952345714,specialty_infusion_rituximab,J9312,C83.30,urgent,2026-07,pending,6,epo,NM,yes,complete,escalate_md,0.57
+PAR-5006,MBR-10602,1962345725,shoulder_arthroscopy,29827,M75.121,standard,2026-06,approved,18,ppo,TX,no,complete,approve,0.93
+PAR-5007,MBR-10618,1972345736,ct_abdomen,74177,K63.5,standard,2026-06,denied,22,ppo,OK,no,complete,escalate_md,0.55
+PAR-5008,MBR-10641,1982345747,epidural_injection,64483,M54.16,standard,2026-06,approved,16,ppo,TX,no,complete,approve,0.90

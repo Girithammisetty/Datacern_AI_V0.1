@@ -56,6 +56,8 @@ import type {
   UserDTO, ServiceAccountDTO, TenantDTO,
   // Tier 4b: identity/rbac admin (service-account create/rotate carries api_key once).
   CreatedServiceAccountDTO,
+  // BRD 66 slice 3 (CPL-FR-033): commercial plane (plan/trial/entitlements).
+  TenantEntitlementsDTO,
 } from "../clients/identity.js";
 import type {
   WorkspaceDTO, GroupDTO, MemberDTO, RoleDTO, ExplainAuthzDTO,
@@ -72,6 +74,9 @@ import type {
   SiemConfigStateDTO,
 } from "../clients/audit.js";
 import { budgetScopeString, type BudgetDTO, type RateCardDTO, type AnomalyDTO } from "../clients/usage.js";
+import type {
+  ValueSummaryDTO, ValueTrendDTO, ValueAssumptionsDTO, ValueExportDTO, EstimatedValueDTO,
+} from "../clients/value.js";
 import type {
   ConnectorTypeDTO, ConnectionDTO, ConnectionTestDTO, IngestionDTO, UploadDTO,
   ScheduleDTO, ScheduleFireDTO, ConnectionPreviewDTO, WritebackDTO,
@@ -270,6 +275,63 @@ export function mapTenant(ctx: GraphQLContext, d: TenantDTO) {
     updatedAt: d.updated_at ?? null,
   };
 }
+
+// --- BRD 66 slice 3 (CPL-FR-033): commercial plane --------------------------
+
+/** Named commercial `feature` entitlement keys the platform currently
+ * defines (mirrors ui-web's FEATURE_GATES registration pattern). Empty
+ * today: no plan seeds a `feature`-kind entitlement yet (see
+ * services/identity-service/migrations/0010_commercial_plans.up.sql --
+ * only pack_sku/seat_cap/workspace_cap are seeded), so there is nothing to
+ * lock. This is the registration point for future named commercial
+ * features; until an entry is added here (and to a plan's defaults),
+ * lockedFeatureKeys is always []. CPL-FR-013 is a Should, not a Must, for
+ * this slice. */
+const KNOWN_COMMERCIAL_FEATURE_KEYS: readonly string[] = [];
+
+/** Locked = a known commercial feature key the tenant's effective set does
+ * NOT carry as an owned `feature` entitlement. Never hidden by ui-web
+ * (CPL-FR-013) -- this list drives a preview + upsell CTA, not a hide. */
+function computeLockedFeatureKeys(entitlements: TenantEntitlementsDTO["data"]): string[] {
+  const owned = new Set(entitlements.filter((e) => e.kind === "feature").map((e) => e.key));
+  return KNOWN_COMMERCIAL_FEATURE_KEYS.filter((k) => !owned.has(k));
+}
+
+/** Full-detail mapping (tenant-admin capability confirmed by the resolver) --
+ * every TenantCommercial field populated from identity-service's
+ * GET /tenants/{id}/entitlements (CPL-FR-011). */
+export function mapTenantCommercial(d: TenantEntitlementsDTO) {
+  return {
+    __typename: "TenantCommercial" as const,
+    commercialState: d.commercial_state,
+    lockedFeatureKeys: computeLockedFeatureKeys(d.data ?? []),
+    planKey: d.plan?.key ?? null,
+    planVersion: d.plan?.version ?? null,
+    trialEndsAt: d.trial_ends_at ?? null,
+    entitlements: (d.data ?? []).map((e) => ({
+      __typename: "CommercialEntitlement" as const,
+      kind: e.kind,
+      key: e.key,
+      value: e.value ?? null,
+      provenance: e.provenance,
+    })),
+  };
+}
+
+/** Minimal public shape (CPL-FR-033's "for gating locked UI regardless of
+ * role"): only commercialState + lockedFeatureKeys, everything else null.
+ * Used both when the caller lacks tenant-admin capability and as the
+ * fail-safe fallback on a downstream error (mirrors this file's other
+ * degrade-to-empty mappers, e.g. viewerBranding in resolvers/index.ts). */
+export const EMPTY_TENANT_COMMERCIAL = {
+  __typename: "TenantCommercial" as const,
+  commercialState: null,
+  lockedFeatureKeys: [] as string[],
+  planKey: null,
+  planVersion: null,
+  trialEndsAt: null,
+  entitlements: null,
+};
 
 // --- admin: audit trail -----------------------------------------------------
 /** Flatten the audit eventDTO (nested actor / via_agent objects) into the flat
@@ -1713,6 +1775,97 @@ export function mapAnomaly(ctx: GraphQLContext, d: AnomalyDTO) {
     status: d.status,
     dismissedBy: d.dismissed_by ?? null,
     suppressedReason: d.suppressed_reason ?? null,
+    createdAt: d.created_at,
+  };
+}
+
+// --- value & ROI reporting (BRD 69) ------------------------------------------
+
+/** ROI-NFR-004 null-propagation: usage-service serializes a nil
+ * *EstimatedValue as JSON null (never a bare number) — this passes that
+ * through unchanged rather than coercing to 0, all the way to the GraphQL
+ * layer (design §2.6's null-propagation test-plan requirement). */
+function mapEstimatedValue(d: EstimatedValueDTO | null | undefined) {
+  if (d == null) return null;
+  return { value: d.value, assumptionVersion: d.assumption_version };
+}
+
+export function mapValueSummary(d: ValueSummaryDTO) {
+  return {
+    __typename: "ValueSummary" as const,
+    period: d.period,
+    workspaceId: d.workspace_id ?? null,
+    decisions: d.decisions == null ? null : {
+      total: d.decisions.total,
+      byDecision: d.decisions.by_decision ?? {},
+      byKind: d.decisions.by_kind ?? {},
+      byAgent: d.decisions.by_agent ?? {},
+      byPack: d.decisions.by_pack ?? {},
+    },
+    hoursSavedEst: mapEstimatedValue(d.hours_saved_est),
+    laborValueEstUsd: mapEstimatedValue(d.labor_value_est_usd),
+    aiCostUsd: d.ai_cost_usd,
+    costPerDecision: d.cost_per_decision == null ? null : {
+      value: d.cost_per_decision.value, basis: d.cost_per_decision.basis,
+    },
+    humanBaselineCostUsd: mapEstimatedValue(d.human_baseline_cost_usd),
+    netValueEstUsd: mapEstimatedValue(d.net_value_est_usd),
+    ladderSavingsUsd: d.ladder_savings_usd ?? null,
+    adoption: {
+      activeUsers: d.adoption?.active_users ?? 0,
+      byWorkspace: d.adoption?.by_workspace ?? {},
+    },
+    provenance: {
+      rollupVersion: d.provenance?.rollup_version ?? "",
+      assumptionVersion: d.provenance?.assumption_version ?? null,
+      meterGap: d.provenance?.meter_gap ?? null,
+    },
+  };
+}
+
+export function mapValueTrend(d: ValueTrendDTO) {
+  return {
+    __typename: "ValueTrend" as const,
+    metric: d.metric,
+    granularity: d.granularity,
+    points: (d.points ?? []).map((p) => ({
+      period: p.period,
+      value: p.value ?? null,
+      basis: p.basis ?? null,
+      rollupVersion: p.rollup_version,
+      distilledRungShare: p.distilled_rung_share ?? null,
+    })),
+  };
+}
+
+export function mapValueAssumptions(ctx: GraphQLContext, d: ValueAssumptionsDTO) {
+  return {
+    __typename: "ValueAssumptions" as const,
+    id: d.id,
+    urn: urn(ctx, "usage", "value_assumptions", d.id),
+    version: d.version,
+    minutesPerDecision: d.minutes_per_decision ?? {},
+    loadedHourlyRateUsd: d.loaded_hourly_rate_usd,
+    effectiveFrom: d.effective_from,
+    status: d.status,
+    createdBy: d.created_by,
+    createdAt: d.created_at,
+  };
+}
+
+export function mapValueExport(ctx: GraphQLContext, d: ValueExportDTO) {
+  return {
+    __typename: "ValueExport" as const,
+    id: d.id,
+    urn: urn(ctx, "usage", "value_export", d.id),
+    period: d.period,
+    workspaceId: d.workspace_id ?? null,
+    version: d.version,
+    jsonUrl: d.json_url ?? null,
+    jsonSha256: d.json_sha256,
+    csvUrl: d.csv_url ?? null,
+    csvSha256: d.csv_sha256,
+    assumptionVersion: d.assumption_version ?? null,
     createdAt: d.created_at,
   };
 }

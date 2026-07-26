@@ -1,0 +1,11 @@
+claim_id,member_id,provider_npi,provider_specialty,plan_year,product_type,service_month,place_of_service,cpt_code,icd10_code,service_line,billed_amount,allowed_amount,paid_amount,status,network_status,member_state
+CLM-2001,MBR-10045,1912345670,orthopedics,2026,ppo,2026-04,outpatient,29881,M23.51,surgical,8400.00,5200.00,0.00,denied,in_network,TX
+CLM-2002,MBR-10082,1922345681,cardiology,2026,hmo,2026-04,outpatient,93306,I50.9,diagnostic,1200.00,780.00,780.00,paid,in_network,TX
+CLM-2003,MBR-10119,1932345692,physical_therapy,2026,ppo,2026-05,office,97110,M54.5,therapy,220.00,140.00,0.00,denied,in_network,OK
+CLM-2004,MBR-10045,1912345670,orthopedics,2026,ppo,2026-05,outpatient,29881,M23.51,surgical,8400.00,5200.00,0.00,denied,in_network,TX
+CLM-2005,MBR-10203,1942345703,oncology,2026,ppo,2026-05,outpatient,96413,C50.911,infusion,3100.00,2400.00,2400.00,paid,in_network,TX
+CLM-2006,MBR-10241,1952345714,radiology,2026,hmo,2026-06,outpatient,72148,M51.36,diagnostic,1750.00,980.00,0.00,denied,out_of_network,OK
+CLM-2007,MBR-10287,1962345725,gastroenterology,2026,ppo,2026-06,outpatient,45380,K63.5,procedure,2600.00,1650.00,1650.00,paid,in_network,TX
+CLM-2008,MBR-10312,1972345736,orthopedics,2026,epo,2026-06,outpatient,27447,M17.11,surgical,26400.00,18900.00,0.00,denied,in_network,NM
+CLM-2009,MBR-10358,1982345747,pain_management,2026,ppo,2026-07,office,64483,M54.16,procedure,980.00,610.00,610.00,paid,in_network,TX
+CLM-2010,MBR-10402,1992345758,orthopedics,2026,ppo,2026-07,outpatient,29827,M75.121,surgical,9200.00,6100.00,0.00,denied,in_network,OK

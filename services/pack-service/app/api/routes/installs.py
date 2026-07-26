@@ -7,8 +7,13 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from app.api.auth import Principal, get_bearer, require
-from app.domain import catalog, installer
-from app.domain.errors import NotFound, ValidationFailed
+from app.domain import catalog, entitlements, installer
+from app.domain.errors import (
+    EntitlementRequired,
+    EntitlementUnavailable,
+    NotFound,
+    ValidationFailed,
+)
 from app.store import repo
 
 router = APIRouter(prefix="/api/v1")
@@ -49,12 +54,29 @@ async def create_install(
     settings = request.app.state.settings
     db = request.app.state.db
     user_jwt = get_bearer(request)
+
+    # Commercial entitlement gate (CPL-FR-030, BRD 66 slice 3): pack_sku must
+    # be entitled before any planning/materialization. Checked ONCE here,
+    # ahead of plan() (dry-run) AND before execute proceeds — fail closed on
+    # an unreadable projection (CPL-NFR-004), never silently entitled.
+    ent_status = await entitlements.check_pack_sku(
+        getattr(request.app.state, "entitlements_redis", None), principal.tenant_id, manifest.name,
+    )
+    if ent_status is entitlements.EntitlementStatus.UNAVAILABLE:
+        raise EntitlementUnavailable()
+    entitled = ent_status is entitlements.EntitlementStatus.ENTITLED
+
     client = installer.build_client(settings, principal.tenant_id, ws, user_jwt)
 
-    plan = await asyncio.to_thread(installer.plan, client, manifest, body.dataset_bindings)
+    plan = await asyncio.to_thread(
+        installer.plan, client, manifest, body.dataset_bindings, entitled,
+    )
     if body.dry_run:
         return {"data": {"pack": manifest.name, "version": manifest.version,
                          "workspace_id": ws, "dry_run": True, "plan": plan}}
+
+    if not entitled:
+        raise EntitlementRequired(manifest.name)
 
     install_id = str(uuid.uuid4())
     snapshot = installer.snapshot_bundle(manifest)  # durable version record for rollback
