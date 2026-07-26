@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -341,12 +340,13 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, domain.EGone("download link expired or invalid", nil))
 		return
 	}
-	path, err := s.Results.ExportCSV(t.Tenant, t.ExecID)
+	data, err := s.Results.ExportCSV(t.Tenant, t.ExecID)
 	if err != nil {
 		writeErr(w, r, domain.EGone("results expired", map[string]string{"re_run_hint": "re-run the query"}))
 		return
 	}
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(path)))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", t.ExecID.String()+".csv"))
 	w.Header().Set("Content-Type", "text/csv")
-	http.ServeFile(w, r, path)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }

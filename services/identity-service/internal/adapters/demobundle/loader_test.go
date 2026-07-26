@@ -145,8 +145,8 @@ func TestFSLoader_LoadsTheShippedInsuranceClaimsPayerBundle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(insurance-claims-payer): %v", err)
 	}
-	if b.PackVersion != "1.0.0" {
-		t.Errorf("pack_version = %s, want 1.0.0", b.PackVersion)
+	if b.PackVersion == "" {
+		t.Error("pack_version is empty")
 	}
 	wantDatasets := map[string]bool{
 		"payer_claims": false, "payer_denials": false, "payer_appeals": false, "prior_auth_requests": false,

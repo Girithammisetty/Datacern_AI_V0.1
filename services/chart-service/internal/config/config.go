@@ -48,6 +48,11 @@ type Config struct {
 	RBACURL            string
 	SigningKeyPEM      string
 	SigningKID         string
+	MinIOEndpoint      string // host:port; empty selects the local-filesystem FSStore fallback
+	MinIOAccessKey     string
+	MinIOSecretKey     string
+	MinIOUseSSL        bool
+	ExportBucket       string
 }
 
 // Load reads configuration from the environment with real-by-default values.
@@ -77,6 +82,11 @@ func Load() Config {
 		RBACURL:            env("RBAC_URL", "http://localhost:8081"),
 		SigningKeyPEM:      os.Getenv("PLATFORM_SIGNING_KEY_PEM"),
 		SigningKID:         os.Getenv("PLATFORM_SIGNING_KID"),
+		MinIOEndpoint:      os.Getenv("MINIO_ENDPOINT"),
+		MinIOAccessKey:     env("MINIO_ACCESS_KEY", "datacern"),
+		MinIOSecretKey:     env("MINIO_SECRET_KEY", "datacern_dev"),
+		MinIOUseSSL:        os.Getenv("MINIO_USE_SSL") == "true",
+		ExportBucket:       env("CHART_EXPORT_BUCKET", "datacern-chart-exports"),
 	}
 }
 

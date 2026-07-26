@@ -27,6 +27,7 @@ import (
 	"github.com/datacern-ai/query-service/internal/store"
 
 	"github.com/datacern-ai/go-common/dbcheck"
+	"github.com/datacern-ai/go-common/objectstore"
 	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/otelx"
 )
@@ -95,8 +96,38 @@ func main() {
 	}
 	st := store.NewPG(pool)
 
-	resultsRoot := env("RESULTS_ROOT", "/var/lib/query-service")
-	resStore := results.NewStore(resultsRoot)
+	// Query-result object store (QRY-FR-060..062): real MinIO/S3 when
+	// MINIO_ENDPOINT is set (multi-replica safe, every real deploy -- a result
+	// set written by the replica that ran the query must be readable by
+	// whichever replica later serves the page/download request), the local
+	// filesystem otherwise (single-replica dev/demo only).
+	var resStore *results.Store
+	if minioEndpoint := os.Getenv("MINIO_ENDPOINT"); minioEndpoint != "" || requireReal {
+		if minioEndpoint == "" {
+			minioEndpoint = "localhost:9000"
+		}
+		osClient, err := objectstore.New(ctx, objectstore.Config{
+			Endpoint:  minioEndpoint,
+			AccessKey: env("MINIO_ACCESS_KEY", "datacern"),
+			SecretKey: env("MINIO_SECRET_KEY", "datacern_dev"),
+			UseSSL:    os.Getenv("MINIO_USE_SSL") == "true",
+			Bucket:    env("QUERY_RESULTS_BUCKET", "datacern-query-results"),
+		})
+		if err != nil {
+			if requireReal {
+				slog.Error("query result store init failed", "err", err)
+				os.Exit(1)
+			}
+			slog.Warn("query result store: minio unavailable, falling back to local filesystem (dev only)", "err", err)
+			resStore = results.NewStore(env("RESULTS_ROOT", "/var/lib/query-service"))
+		} else {
+			resStore = results.NewS3Store(osClient)
+			slog.Info("query result store: minio (real)", "endpoint", minioEndpoint)
+		}
+	} else {
+		resStore = results.NewStore(env("RESULTS_ROOT", "/var/lib/query-service"))
+		slog.Warn("query result store: local filesystem (set MINIO_ENDPOINT for multi-replica deploys)")
+	}
 
 	var resolver datasets.Resolver
 	if base := os.Getenv("DATASET_SERVICE_URL"); base != "" {

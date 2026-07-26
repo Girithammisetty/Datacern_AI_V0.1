@@ -22,6 +22,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/objectstore"
 	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/otelx"
 	"github.com/datacern-ai/go-common/redisx"
@@ -49,6 +50,13 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Stabilization guard (rule: no fake/mock/stub in a runtime path). When
+	// REQUIRE_REAL_ADAPTERS=true — set in every real deploy — the service REFUSES
+	// to boot on a fallback adapter (here: the local-filesystem export store)
+	// instead of silently running multi-replica-unsafe. Absent (local unit dev),
+	// the loud-warn fallback below keeps dev self-contained.
+	requireReal := os.Getenv("REQUIRE_REAL_ADAPTERS") == "true"
 
 	// Distributed tracing (no-op unless datacern_OTEL_ENABLED / an OTLP endpoint
 	// is configured) — installs the global TracerProvider + W3C propagator.
@@ -158,20 +166,47 @@ func main() {
 		}
 	}()
 
-	// Value-report export object store (BRD 69 design §2.8) — real local
-	// filesystem store today (MinIO/S3-compatible in prod), same weight class
-	// as chart-service's export mechanics, no Object-Lock/WORM (not a
+	// Value-report export object store (BRD 69 design §2.8): real MinIO/S3 when
+	// MINIO_ENDPOINT is set (multi-replica safe, every real deploy), the local
+	// filesystem FSStore otherwise (single-replica dev/demo only — its files are
+	// pinned to whichever replica wrote them, same weight class as
+	// chart-service's export mechanics, no Object-Lock/WORM since this is not a
 	// compliance record).
-	exportSecret := []byte(os.Getenv("VALUE_EXPORT_SIGNING_SECRET"))
-	if len(exportSecret) == 0 {
-		exportSecret = []byte(uuid.NewString())
-		slog.Warn("VALUE_EXPORT_SIGNING_SECRET unset; generated ephemeral secret (download links break on restart)")
+	var exports valueexport.ObjectStore
+	if minioEndpoint := os.Getenv("MINIO_ENDPOINT"); minioEndpoint != "" || requireReal {
+		if minioEndpoint == "" {
+			minioEndpoint = "localhost:9000"
+		}
+		osClient, err := objectstore.New(ctx, objectstore.Config{
+			Endpoint:  minioEndpoint,
+			AccessKey: env("MINIO_ACCESS_KEY", "datacern"),
+			SecretKey: env("MINIO_SECRET_KEY", "datacern_dev"),
+			UseSSL:    os.Getenv("MINIO_USE_SSL") == "true",
+			Bucket:    env("VALUE_EXPORT_BUCKET", "datacern-value-exports"),
+		})
+		if err != nil {
+			if requireReal {
+				slog.Error("value-report export store init failed", "err", err)
+				os.Exit(1)
+			}
+			slog.Warn("value-report export store: minio unavailable, exports will fail loud until fixed", "err", err)
+		} else {
+			exports = valueexport.NewS3Store(osClient)
+			slog.Info("value-report export store: minio (real)", "endpoint", minioEndpoint)
+		}
+	} else {
+		exportSecret := []byte(os.Getenv("VALUE_EXPORT_SIGNING_SECRET"))
+		if len(exportSecret) == 0 {
+			exportSecret = []byte(uuid.NewString())
+			slog.Warn("VALUE_EXPORT_SIGNING_SECRET unset; generated ephemeral secret (download links break on restart)")
+		}
+		exports = valueexport.NewFSStore(
+			env("VALUE_EXPORT_ROOT", "/var/lib/usage-service/value-exports"),
+			env("PUBLIC_URL", "http://localhost:8080"),
+			exportSecret,
+		)
+		slog.Warn("value-report export store: local filesystem (set MINIO_ENDPOINT for multi-replica deploys)")
 	}
-	exports := valueexport.NewFSStore(
-		env("VALUE_EXPORT_ROOT", "/var/lib/usage-service/value-exports"),
-		env("PUBLIC_URL", "http://localhost:8080"),
-		exportSecret,
-	)
 
 	srv := &api.Server{
 		Store:    st,

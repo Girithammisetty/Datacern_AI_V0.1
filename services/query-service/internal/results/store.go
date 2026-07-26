@@ -2,16 +2,17 @@ package results
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
+	"path"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/datacern-ai/go-common/objectstore"
 	"github.com/datacern-ai/query-service/internal/engine"
 )
 
@@ -41,20 +42,31 @@ type PartInfo struct {
 	Rows int64  `json:"rows"`
 }
 
-// Store is the filesystem-backed result store, layout
-// <root>/results/<tenant>/<execution_id>/{manifest.json,part-N.jsonl}
-// (tenant-prefixed per QRY-FR-060; object-storage backend is a deploy-time
-// swap behind this same type).
+// Store is the result store, layout
+// results/<tenant>/<execution_id>/{manifest.json,part-N.jsonl} (tenant-
+// prefixed per QRY-FR-060). The bytes live on the local filesystem (NewStore,
+// dev/demo default) or in real S3/MinIO (NewS3Store, prod default and the
+// only multi-replica-safe option -- local files are pinned to whichever
+// replica wrote them).
 type Store struct {
 	Root string
 	// Now is injectable for retention tests (AC-13).
-	Now func() time.Time
+	Now     func() time.Time
+	backend backend
 }
 
-func NewStore(root string) *Store { return &Store{Root: root, Now: time.Now} }
+// NewStore builds a local-filesystem-backed Store rooted at root.
+func NewStore(root string) *Store {
+	return &Store{Root: root, Now: time.Now, backend: &localBackend{root: root}}
+}
+
+// NewS3Store builds a Store backed by real S3/MinIO object storage.
+func NewS3Store(client *objectstore.Client) *Store {
+	return &Store{Now: time.Now, backend: &s3Backend{client: client}}
+}
 
 func (s *Store) dir(tenant, execID uuid.UUID) string {
-	return filepath.Join(s.Root, "results", tenant.String(), execID.String())
+	return path.Join("results", tenant.String(), execID.String())
 }
 
 // URI returns the logical result location recorded in history.
@@ -80,13 +92,9 @@ type Writer struct {
 	sealed bool
 }
 
-// NewWriter creates the result directory and returns a streaming writer.
+// NewWriter returns a streaming writer for one execution's results.
 func (s *Store) NewWriter(tenant, execID uuid.UUID) (*Writer, error) {
-	dir := s.dir(tenant, execID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-	return &Writer{store: s, dir: dir, warns: map[string]bool{}}, nil
+	return &Writer{store: s, dir: s.dir(tenant, execID), warns: map[string]bool{}}, nil
 }
 
 func (w *Writer) Start(cols []engine.Column) error {
@@ -139,26 +147,12 @@ func (w *Writer) flush() error {
 		return nil
 	}
 	name := fmt.Sprintf("part-%05d.jsonl", len(w.parts))
-	f, err := os.Create(filepath.Join(w.dir, name))
-	if err != nil {
-		return err
-	}
-	bw := bufio.NewWriter(f)
+	var buf bytes.Buffer
 	for _, line := range w.buf {
-		if _, err := bw.Write(line); err != nil {
-			f.Close()
-			return err
-		}
-		if err := bw.WriteByte('\n'); err != nil {
-			f.Close()
-			return err
-		}
+		buf.Write(line)
+		buf.WriteByte('\n')
 	}
-	if err := bw.Flush(); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
+	if err := w.store.backend.write(path.Join(w.dir, name), buf.Bytes()); err != nil {
 		return err
 	}
 	w.parts = append(w.parts, PartInfo{File: name, Rows: int64(len(w.buf))})
@@ -188,15 +182,15 @@ func (w *Writer) Seal() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(w.dir, "manifest.json"), b, 0o644); err != nil {
+	if err := w.store.backend.write(path.Join(w.dir, "manifest.json"), b); err != nil {
 		return err
 	}
 	w.sealed = true
 	return nil
 }
 
-// Abort removes a partial result directory (failed/cancelled runs).
-func (w *Writer) Abort() { _ = os.RemoveAll(w.dir) }
+// Abort removes a partial result set (failed/cancelled runs).
+func (w *Writer) Abort() { _ = w.store.backend.removePrefix(w.dir) }
 
 // ---- Reader -----------------------------------------------------------------
 
@@ -212,7 +206,7 @@ type Page struct {
 
 // Manifest loads an execution's manifest; ErrGone after GC (BR-9, AC-13).
 func (s *Store) Manifest(tenant, execID uuid.UUID) (*Manifest, error) {
-	b, err := os.ReadFile(filepath.Join(s.dir(tenant, execID), "manifest.json"))
+	b, err := s.backend.read(path.Join(s.dir(tenant, execID), "manifest.json"))
 	if err != nil {
 		return nil, ErrGone
 	}
@@ -234,7 +228,11 @@ func (s *Store) ReadPage(tenant, execID uuid.UUID, cursor Cursor, limit int) (*P
 	dir := s.dir(tenant, execID)
 	part, skip := cursor.Part, cursor.Row
 	for part < len(m.Parts) && len(page.Rows) < limit {
-		rows, err := readPart(filepath.Join(dir, m.Parts[part].File))
+		data, err := s.backend.read(path.Join(dir, m.Parts[part].File))
+		if err != nil {
+			return nil, ErrGone
+		}
+		rows, err := parsePart(data)
 		if err != nil {
 			return nil, ErrGone
 		}
@@ -254,14 +252,9 @@ func (s *Store) ReadPage(tenant, execID uuid.UUID, cursor Cursor, limit int) (*P
 	return page, nil
 }
 
-func readPart(path string) ([][]any, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
+func parsePart(data []byte) ([][]any, error) {
 	var rows [][]any
-	sc := bufio.NewScanner(f)
+	sc := bufio.NewScanner(bytes.NewReader(data))
 	sc.Buffer(make([]byte, 1<<20), 16<<20)
 	for sc.Scan() {
 		var row []any
@@ -275,36 +268,33 @@ func readPart(path string) ([][]any, error) {
 
 // ---- Export (QRY-FR-062) ----------------------------------------------------
 
-// ExportCSV streams the full result set into a CSV file and returns its
-// path. Parquet export is a Should-tier stub at the API layer.
-func (s *Store) ExportCSV(tenant, execID uuid.UUID) (string, error) {
+// ExportCSV streams the full result set into an in-memory CSV (regenerated on
+// every call from the sealed parts, never persisted as its own object — the
+// caller serves the bytes directly, so there's nothing to retain or GC).
+// Parquet export is a Should-tier stub at the API layer.
+func (s *Store) ExportCSV(tenant, execID uuid.UUID) ([]byte, error) {
 	m, err := s.Manifest(tenant, execID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	dir := filepath.Join(s.Root, "exports", tenant.String())
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	path := filepath.Join(dir, execID.String()+".csv")
-	f, err := os.Create(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	cw := csv.NewWriter(f)
+	var buf bytes.Buffer
+	cw := csv.NewWriter(&buf)
 	header := make([]string, len(m.Columns))
 	for i, c := range m.Columns {
 		header[i] = c.Name
 	}
 	if err := cw.Write(header); err != nil {
-		return "", err
+		return nil, err
 	}
-	resDir := s.dir(tenant, execID)
+	dir := s.dir(tenant, execID)
 	for _, p := range m.Parts {
-		rows, err := readPart(filepath.Join(resDir, p.File))
+		data, err := s.backend.read(path.Join(dir, p.File))
 		if err != nil {
-			return "", err
+			return nil, err
+		}
+		rows, err := parsePart(data)
+		if err != nil {
+			return nil, err
 		}
 		rec := make([]string, len(m.Columns))
 		for _, row := range rows {
@@ -316,65 +306,56 @@ func (s *Store) ExportCSV(tenant, execID uuid.UUID) (string, error) {
 				}
 			}
 			if err := cw.Write(rec); err != nil {
-				return "", err
+				return nil, err
 			}
 		}
 	}
 	cw.Flush()
-	return path, cw.Error()
+	if err := cw.Error(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // ---- Retention GC (QRY-FR-062) ----------------------------------------------
 
-// GC removes result directories older than maxAge by manifest created_at.
-// Returns bytes freed (metric result_gc_bytes_total).
+// GC removes result sets older than maxAge by manifest created_at. Returns
+// bytes freed (metric result_gc_bytes_total). An execution whose manifest
+// can't be read/parsed is left alone (best-effort; it's picked up once
+// readable, or ages out with the rest once the backend heals).
 func (s *Store) GC(maxAge time.Duration) (int64, error) {
-	root := filepath.Join(s.Root, "results")
-	tenants, err := os.ReadDir(root)
+	objs, err := s.backend.list("results/")
 	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
 		return 0, err
 	}
 	cutoff := s.Now().Add(-maxAge)
-	var freed int64
-	for _, td := range tenants {
-		execs, err := os.ReadDir(filepath.Join(root, td.Name()))
+	sizeByExec := map[string]int64{}
+	for _, o := range objs {
+		sizeByExec[path.Dir(o.Key)] += o.Size
+	}
+	var toRemove []string
+	for _, o := range objs {
+		if path.Base(o.Key) != "manifest.json" {
+			continue
+		}
+		b, err := s.backend.read(o.Key)
 		if err != nil {
 			continue
 		}
-		for _, ed := range execs {
-			dir := filepath.Join(root, td.Name(), ed.Name())
-			b, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
-			var createdAt time.Time
-			if err == nil {
-				var m Manifest
-				if json.Unmarshal(b, &m) == nil {
-					createdAt = m.CreatedAt
-				}
-			}
-			if createdAt.IsZero() {
-				if info, err := ed.Info(); err == nil {
-					createdAt = info.ModTime()
-				}
-			}
-			if createdAt.Before(cutoff) {
-				freed += dirSize(dir)
-				_ = os.RemoveAll(dir)
-			}
+		var m Manifest
+		if json.Unmarshal(b, &m) != nil || m.CreatedAt.IsZero() {
+			continue
+		}
+		if m.CreatedAt.Before(cutoff) {
+			toRemove = append(toRemove, path.Dir(o.Key))
 		}
 	}
-	return freed, nil
-}
-
-func dirSize(dir string) int64 {
-	var n int64
-	_ = filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() {
-			n += info.Size()
+	var freed int64
+	for _, execDir := range toRemove {
+		if err := s.backend.removePrefix(execDir); err != nil {
+			continue
 		}
-		return nil
-	})
-	return n
+		freed += sizeByExec[execDir]
+	}
+	return freed, nil
 }

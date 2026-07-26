@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/datacern-ai/go-common/objectstore"
 )
 
 // RowFetcher fetches the live full row for a case from query-service
@@ -151,4 +153,63 @@ func (s *FSSnapshotStore) PutBytes(_ context.Context, key string, data []byte) (
 // GetBytes reads back an object written by PutBytes.
 func (s *FSSnapshotStore) GetBytes(_ context.Context, ref string) ([]byte, error) {
 	return os.ReadFile(filepath.Join(s.Root, ref))
+}
+
+// S3SnapshotStore is the real MinIO/S3-compatible SnapshotStore (prod
+// default, safe under multiple replicas -- unlike FSSnapshotStore, whose
+// files are pinned to whichever replica wrote them). The ref returned by
+// Put/PutBytes is the object key itself, so Get/GetBytes need no separate
+// pointer translation.
+type S3SnapshotStore struct {
+	Client *objectstore.Client
+}
+
+// NewS3SnapshotStore builds an S3SnapshotStore over an already-connected client.
+func NewS3SnapshotStore(c *objectstore.Client) *S3SnapshotStore { return &S3SnapshotStore{Client: c} }
+
+func (s *S3SnapshotStore) Put(ctx context.Context, tenant, caseID uuid.UUID, row map[string]any) (string, error) {
+	key := "snapshots/" + tenant.String() + "/" + caseID.String() + ".json.gz"
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if err := json.NewEncoder(gz).Encode(row); err != nil {
+		return "", err
+	}
+	if err := gz.Close(); err != nil {
+		return "", err
+	}
+	if _, err := s.Client.Put(ctx, key, buf.Bytes(), "application/gzip"); err != nil {
+		return "", err
+	}
+	return key, nil
+}
+
+func (s *S3SnapshotStore) Get(ctx context.Context, ref string) (map[string]any, error) {
+	b, err := s.Client.Get(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	gz, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	defer gz.Close()
+	var out map[string]any
+	if err := json.NewDecoder(gz).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// PutBytes writes raw object bytes under exports/<key> (CASE-FR-044 CSV export).
+func (s *S3SnapshotStore) PutBytes(ctx context.Context, key string, data []byte) (string, error) {
+	ref := "exports/" + key
+	if _, err := s.Client.Put(ctx, ref, data, "application/gzip"); err != nil {
+		return "", err
+	}
+	return ref, nil
+}
+
+// GetBytes reads back an object written by PutBytes.
+func (s *S3SnapshotStore) GetBytes(ctx context.Context, ref string) ([]byte, error) {
+	return s.Client.Get(ctx, ref)
 }

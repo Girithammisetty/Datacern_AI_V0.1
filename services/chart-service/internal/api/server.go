@@ -91,7 +91,7 @@ type Server struct {
 	Authz      authz.Authorizer
 	Resolver   Resolver
 	Verifier   *authjwt.Verifier
-	Exports    *export.FSStore
+	Exports    export.ObjectStore
 	Fields     FieldValidator // optional; nil in dev
 	PreviewSem chan struct{}  // per-tenant preview concurrency cap (BR-11)
 	// PNGRenderer is the headless-renderer sidecar base URL. Empty → PNG export

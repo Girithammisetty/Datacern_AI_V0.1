@@ -26,6 +26,7 @@ import (
 	"github.com/datacern-ai/go-common/dbcheck"
 	gcevent "github.com/datacern-ai/go-common/event"
 	gckafka "github.com/datacern-ai/go-common/kafka"
+	"github.com/datacern-ai/go-common/objectstore"
 	"github.com/datacern-ai/go-common/otelx"
 	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/redisx"
@@ -150,6 +151,39 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Closure-snapshot / bulk-export object store (CASE-FR-006, CASE-FR-044):
+	// real MinIO/S3 when MINIO_ENDPOINT is set (multi-replica safe, every real
+	// deploy -- same MINIO_* env vars evidence storage above reads, own
+	// bucket), the local filesystem FSSnapshotStore otherwise (single-replica
+	// dev/demo only -- its files are pinned to whichever replica wrote them).
+	var snapshots api.SnapshotStore
+	if minioEndpoint := os.Getenv("MINIO_ENDPOINT"); minioEndpoint != "" || requireReal {
+		if minioEndpoint == "" {
+			minioEndpoint = "localhost:9000"
+		}
+		snapClient, err := objectstore.New(ctx, objectstore.Config{
+			Endpoint:  minioEndpoint,
+			AccessKey: env("MINIO_ACCESS_KEY", "datacern"),
+			SecretKey: env("MINIO_SECRET_KEY", "datacern_dev"),
+			UseSSL:    os.Getenv("MINIO_USE_SSL") == "true",
+			Bucket:    env("CASE_SNAPSHOT_BUCKET", "datacern-case-snapshots"),
+		})
+		if err != nil {
+			if requireReal {
+				slog.Error("case snapshot store init failed", "err", err)
+				os.Exit(1)
+			}
+			slog.Warn("case snapshot store: minio unavailable, snapshot/export ops will fail loud until fixed", "err", err)
+			snapshots = api.NewFSSnapshotStore(env("SNAPSHOT_ROOT", "/var/lib/case-service/snapshots"))
+		} else {
+			snapshots = api.NewS3SnapshotStore(snapClient)
+			slog.Info("case snapshot store: minio (real)", "endpoint", minioEndpoint)
+		}
+	} else {
+		snapshots = api.NewFSSnapshotStore(env("SNAPSHOT_ROOT", "/var/lib/case-service/snapshots"))
+		slog.Warn("case snapshot store: local filesystem (set MINIO_ENDPOINT for multi-replica deploys)")
+	}
+
 	verifier := api.NewVerifierJWKS(
 		env("JWKS_URL", "http://identity-service/api/v1/.well-known/jwks.json"),
 		os.Getenv("JWT_ISSUER"), os.Getenv("JWT_AUDIENCE"))
@@ -161,7 +195,7 @@ func main() {
 		Authz:      az,
 		Verifier:   verifier,
 		RowFetcher: api.NewHTTPRowFetcher(os.Getenv("QUERY_SERVICE_URL")),
-		Snapshots:  api.NewFSSnapshotStore(env("SNAPSHOT_ROOT", "/var/lib/case-service/snapshots")),
+		Snapshots:  snapshots,
 		Evidence:   evidence,
 		Redis:      redisx.NewFromEnv(env("REDIS_ADDR", "localhost:6379"), os.Getenv), // bulk concurrency gate (CASE-FR-032)
 	}
