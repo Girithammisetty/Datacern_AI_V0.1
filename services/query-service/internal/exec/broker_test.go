@@ -632,6 +632,10 @@ func TestBrokerTenantSuspension(t *testing.T) {
 
 	_, err = f.broker.Run(context.Background(), f.runReq("SELECT region FROM {{dataset('Orders')}}"))
 	require.Error(t, err, "new executions blocked while suspended")
+	de, ok := domain.AsError(err)
+	require.True(t, ok)
+	assert.Equal(t, domain.CodeTenantSuspended, de.Code)
+	assert.Equal(t, 403, de.HTTP)
 
 	f.broker.ResumeTenant(f.tenant)
 	f.duck.block = nil

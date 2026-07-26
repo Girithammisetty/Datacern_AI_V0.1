@@ -27,9 +27,11 @@ import (
 	"github.com/datacern-ai/query-service/internal/store"
 
 	"github.com/datacern-ai/go-common/dbcheck"
+	gckafka "github.com/datacern-ai/go-common/kafka"
 	"github.com/datacern-ai/go-common/objectstore"
-	gcoutbox "github.com/datacern-ai/go-common/outbox"
 	"github.com/datacern-ai/go-common/otelx"
+	gcoutbox "github.com/datacern-ai/go-common/outbox"
+	"github.com/datacern-ai/go-common/redisx"
 )
 
 func env(key, def string) string {
@@ -268,6 +270,34 @@ func main() {
 	// B6 (BRD 58): published outbox rows are drained but never pruned; sweep
 	// them past a retention window so the table doesn't grow unboundedly.
 	go gcoutbox.NewPruner(pool, "outbox", "app.role", "platform").Run(ctx)
+
+	// Inbound consumer (§6): identity-service's tenant.suspended/tenant.
+	// reactivated on identity.events.v1 drive the broker's suspended-tenant
+	// set, so a suspended tenant's queries are actually blocked (ETenantSuspended)
+	// instead of only being rejected by intent in a doc comment. Same
+	// KAFKA_BROKERS=false escape hatch as the outbox publisher above; with no
+	// live consumer group, suspension is enforced only via whatever calls
+	// broker.SuspendTenant directly (tests).
+	if brokers == "false" {
+		if requireReal {
+			mustReal("KAFKA_BROKERS", "no inbound tenant-suspension consumer (suspended tenants would keep running queries)")
+		}
+		slog.Warn("KAFKA_BROKERS=false; tenant-suspension events are not consumed (local dev only)")
+	} else {
+		rc := redisx.NewFromEnv(env("REDIS_ADDR", "localhost:6379"), os.Getenv)
+		kafkaSASL, kafkaTLS := gckafka.SASLFromEnv(os.Getenv), gckafka.TLSFromEnv(os.Getenv)
+		dlq := gckafka.NewProducer(gckafka.Config{Brokers: strings.Split(brokers, ","), SASL: kafkaSASL, TLS: kafkaTLS})
+		consumer := &events.Consumer{Broker: broker}
+		inbound := gckafka.NewConsumerGroup(gckafka.ConsumerConfig{
+			Brokers: strings.Split(brokers, ","), GroupID: "query-inbound",
+			Topics:  []string{"identity.events.v1"},
+			Handler: consumer.KafkaHandler(),
+			Dedup:   rc, DLQ: dlq,
+			SASL: kafkaSASL, TLS: kafkaTLS,
+		})
+		go inbound.Run(ctx)
+		defer func() { _ = inbound.Close() }()
+	}
 
 	// Result retention GC (QRY-FR-062: 24h then GC; history row persists).
 	go func() {
