@@ -20,6 +20,7 @@ selection happens client-side on typed values. No literal splicing anywhere.
 
 from __future__ import annotations
 
+import contextlib
 import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
@@ -299,6 +300,74 @@ class IngestResult:
     columns: list[str] = field(default_factory=list)
 
 
+async def run_file_ingest(
+    *,
+    list_refs: Callable[[], Any],
+    stream: Callable[[str], AsyncIterator[bytes]],
+    close: Callable[[], Any],
+    glob: str | None,
+    since: datetime | None,
+    file_format: str,
+    table_writer: Any,
+    table: str,
+    ingestion_id: str,
+    source_label: str,
+    batch_size: int = 5000,
+    error_row_limit: int = 100,
+) -> IngestResult:
+    """The file-source pipeline itself: list → filter (glob + incremental mtime)
+    → stream-decode each match → exactly one snapshot (BR-9).
+
+    Split out of ObjectSourceIngestor so a NON-object file source (SFTP/FTP —
+    see drivers/filesource.py) reuses this exact code path instead of a parallel
+    copy. Everything backend-specific is behind the three callables: how to list,
+    how to stream one entry, how to disconnect. Memory-bounded either way — the
+    whole file is never held in memory.
+
+    A connect/list failure is TRANSIENT (ING-FR-081, retryable); a decode failure
+    is not caught here and keeps whatever category the decoder assigned.
+    """
+    try:
+        all_refs = await list_refs()
+    except Exception as exc:  # noqa: BLE001 — connect/list failure -> retryable
+        with contextlib.suppress(Exception):
+            await close()
+        category, detail = _classify(exc)
+        raise TransientSourceError(category, detail) from exc
+
+    try:
+        refs = select_objects(all_refs, glob=glob, since=coerce_since(since))
+        stats = DecodeStats()
+        opts = DecodeOptions(
+            file_format=file_format, error_row_limit=error_row_limit, batch_size=batch_size
+        )
+
+        async def batches() -> AsyncIterator[Any]:
+            for ref in refs:
+                async for batch in decode_stream(stream(ref.key), opts, stats):
+                    yield batch
+
+        staged = await table_writer.stage(
+            table, batches(), {"ingestion_id": ingestion_id, "source": source_label}
+        )
+    finally:
+        await close()
+
+    result = await table_writer.commit(staged)
+    return IngestResult(
+        rows=result.rows_appended,
+        objects=len(refs),
+        bytes_written=result.bytes_written,
+        snapshot_id=result.snapshot_id,
+        columns=staged.columns,
+        new_watermark=(
+            serialize_watermark(newest_mtime(refs))
+            if refs
+            else (serialize_watermark(since) if since else None)
+        ),
+    )
+
+
 class ObjectSourceIngestor:
     """Full data-lake source pull: list → filter (glob + incremental mtime) →
     stream-decode every matching object → single Iceberg/bronze snapshot.
@@ -307,6 +376,9 @@ class ObjectSourceIngestor:
     it reuses the shared decoders and the two-phase TableWriter (BR-9: exactly one
     snapshot). Memory-bounded: each object is streamed chunk-by-chunk through the
     decoder — the whole file is never held in memory.
+
+    The backend client is synchronous, so listing/closing are wrapped in threads
+    and handed to the shared `run_file_ingest` pipeline.
     """
 
     def __init__(self, factory: ClientFactory, *, connect_timeout_s: float = 15.0) -> None:
@@ -329,50 +401,30 @@ class ObjectSourceIngestor:
 
         connector_type = getattr(config, "connector_type", "object")
         prefix = _norm_prefix(getattr(config, "root_prefix", "/"))
-        glob = getattr(config, "glob", None)
-        file_format = getattr(config, "file_format", "csv")
+        client: Any = None
 
-        try:
-            client = await asyncio.to_thread(
-                self._factory, config, secrets, self.connect_timeout_s
-            )
-            all_refs = await asyncio.to_thread(client.list_objects, prefix)
-        except Exception as exc:  # noqa: BLE001 — connect/list failure -> retryable (ING-FR-081)
-            category, detail = _classify(exc)
-            raise TransientSourceError(category, detail) from exc
+        async def list_refs() -> list[ObjectRef]:
+            nonlocal client
+            client = await asyncio.to_thread(self._factory, config, secrets, self.connect_timeout_s)
+            return await asyncio.to_thread(client.list_objects, prefix)
 
-        try:
-            refs = select_objects(all_refs, glob=glob, since=coerce_since(since))
-            stats = DecodeStats()
-            opts = DecodeOptions(
-                file_format=file_format, error_row_limit=error_row_limit, batch_size=batch_size
-            )
+        async def close() -> None:
+            if client is not None:
+                await asyncio.to_thread(_safe_close, client)
 
-            async def batches() -> AsyncIterator[Any]:
-                for ref in refs:
-                    async for batch in decode_stream(
-                        _stream_object(client, ref.key), opts, stats
-                    ):
-                        yield batch
-
-            staged = await table_writer.stage(
-                table,
-                batches(),
-                {"ingestion_id": ingestion_id, "source": f"object:{connector_type}"},
-            )
-        finally:
-            await asyncio.to_thread(_safe_close, client)
-
-        result = await table_writer.commit(staged)
-        return IngestResult(
-            rows=result.rows_appended,
-            objects=len(refs),
-            bytes_written=result.bytes_written,
-            snapshot_id=result.snapshot_id,
-            columns=staged.columns,
-            new_watermark=serialize_watermark(newest_mtime(refs)) if refs else (
-                serialize_watermark(since) if since else None
-            ),
+        return await run_file_ingest(
+            list_refs=list_refs,
+            stream=lambda key: _stream_object(client, key),
+            close=close,
+            glob=getattr(config, "glob", None),
+            since=since,
+            file_format=getattr(config, "file_format", "csv"),
+            table_writer=table_writer,
+            table=table,
+            ingestion_id=ingestion_id,
+            source_label=f"object:{connector_type}",
+            batch_size=batch_size,
+            error_row_limit=error_row_limit,
         )
 
 

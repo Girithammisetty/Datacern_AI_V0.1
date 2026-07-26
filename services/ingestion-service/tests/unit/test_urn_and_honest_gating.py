@@ -176,11 +176,17 @@ def test_unsupported_connector_error_shape() -> None:
 
 
 def test_real_container_defaults_are_unsupported(monkeypatch, tmp_path) -> None:
-    """_build_real wires honest-failing defaults; presto (the only declared
-    connector without a real driver) resolves to them, while every wired type
-    resolves to a real driver, not a fake."""
+    """_build_real wires honest-failing DEFAULTS, and no declared connector type
+    silently resolves to a fake.
+
+    `presto` used to be asserted here as the one declared type with no driver;
+    it is now wired (app/domain/drivers/presto.py), so the default is exercised
+    through an unregistered type instead. Keeping the assertion on presto would
+    have quietly become a test of nothing.
+    """
     from app.config import Settings
     from app.container import _build_real
+    from app.domain.connectors import CONNECTOR_TYPES
     from app.domain.probers import FakeConnectionProber
     from app.domain.querysource import FakeQuerySource as FQS
 
@@ -190,12 +196,14 @@ def test_real_container_defaults_are_unsupported(monkeypatch, tmp_path) -> None:
         data_dir=str(tmp_path / "data"),
     )
     c = _build_real(settings)
-    assert isinstance(c.probers.get("presto"), UnsupportedConnectorProber)
-    assert isinstance(c.query_sources.get("presto"), UnsupportedQuerySource)
-    for ctype in ("postgres", "mysql", "snowflake", "bigquery", "s3"):
+    # The default itself still fails honestly for anything not wired.
+    assert isinstance(c.probers.get("not-a-connector"), UnsupportedConnectorProber)
+    assert isinstance(c.query_sources.get("not-a-connector"), UnsupportedQuerySource)
+    # ...and every DECLARED type now has a real prober.
+    for ctype in CONNECTOR_TYPES:
         assert not isinstance(c.probers.get(ctype), (FakeConnectionProber,
-                                                     UnsupportedConnectorProber))
-    for ctype in ("postgres", "mysql", "snowflake", "bigquery"):
+                                                     UnsupportedConnectorProber)), ctype
+    for ctype in ("postgres", "mysql", "snowflake", "bigquery", "presto"):
         assert not isinstance(c.query_sources.get(ctype), (FQS, UnsupportedQuerySource))
 
 

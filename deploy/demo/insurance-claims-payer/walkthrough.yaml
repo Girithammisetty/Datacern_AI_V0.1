@@ -1,10 +1,8 @@
 # Guided-walkthrough content for the 5-minute demo script (§2.2,
-# DSP-FR-015, Should). NOT consumed by identity-service's SeedDemoContent
-# step or the ui-web watermark banner in this slice — DSP-FR-015 (the
-# in-product guided-overlay UI) is explicitly deferred, see
-# docs/initiatives/demo-sandbox-poc-mode.md §3 honest gaps. Kept here
-# because §2.2 names walkthrough.yaml as part of the bundle format and an
-# SE running the bundle by hand can read this as a script today.
+# DSP-FR-015). Served to demo-profile tenants by identity-service
+# (GET /api/v1/tenants/self/walkthrough) and rendered in-product by
+# ui-web's WalkthroughOverlay (src/components/demo/WalkthroughOverlay.tsx).
+# Also readable as a stand-alone script by an SE running the bundle by hand.
 - title: "Worklist"
   target_route: /cases
   narration: >

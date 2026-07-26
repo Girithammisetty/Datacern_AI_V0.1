@@ -19,6 +19,7 @@ Auto-skips with a clear message when Docker is unavailable.
 
 from __future__ import annotations
 
+import asyncio
 import socket
 import threading
 from collections.abc import AsyncIterator
@@ -449,3 +450,72 @@ async def test_http_probe_unreachable_is_source_unreachable() -> None:
 def test_localhost_reachable_smoke() -> None:
     # keeps the module importable even if every container skips
     assert socket.AF_INET is not None
+
+
+# ------------------------------------------------- SFTP as an ingestion SOURCE
+
+
+async def test_sftp_file_poll_ingests_a_real_drop_incrementally(sftp_server, tmp_path) -> None:
+    """The file-drop path (ING-FR-064) against a REAL SFTP server.
+
+    Before this existed, an sftp connection tested green and previewed rows and
+    then could not ingest at all — `file_poll` fell through to
+    UnsupportedObjectIngestor. Proves the whole pipeline for real: list the
+    directory, honour the glob, decode into bronze as ONE snapshot (BR-9), and
+    on the second run pull only the file that appeared after the watermark.
+    """
+    from app.domain.drivers.filesource import SftpFileIngestor
+    from app.domain.tablewriter import ParquetFileTableWriter
+
+    cfg = SftpConfig(
+        host=sftp_server["host"],
+        port=sftp_server["port"],
+        username=sftp_server["username"],
+        root_directory="/upload",
+        file_format="csv",
+        # Narrow to this test's own files: the SFTP container is session-scoped
+        # and another test already dropped /upload/data.csv there, so `*.csv`
+        # would pick up its rows too.
+        glob="claims-*.csv",
+    )
+    secrets = {"password": sftp_server["password"]}
+
+    async def put(name: str, payload: bytes) -> None:
+        async with asyncssh.connect(
+            host=sftp_server["host"], port=sftp_server["port"],
+            username=sftp_server["username"], password=sftp_server["password"],
+            known_hosts=None,
+        ) as ssh:
+            async with ssh.start_sftp_client() as sftp:
+                async with sftp.open(f"/upload/{name}", "wb") as fh:
+                    await fh.write(payload)
+
+    await put("claims-1.csv", b"id,name\n1,alpha\n2,beta\n")
+    await put("claims-1.txt", b"not data")  # right prefix, excluded by the extension
+
+    writer = ParquetFileTableWriter(tmp_path / "bronze-poll")
+    ingestor = SftpFileIngestor(connect_timeout_s=15)
+
+    first = await ingestor.ingest(
+        cfg, secrets, table_writer=writer, table="drop", ingestion_id="poll-1"
+    )
+    assert first.rows == 2
+    assert first.objects == 1  # claims-1.txt (and the other test's data.csv) filtered out
+    assert len(writer.all_snapshots()) == 1
+    assert first.new_watermark is not None
+
+    # A second run with the watermark and nothing new pulls no files at all.
+    since = datetime.fromisoformat(first.new_watermark.replace("Z", "+00:00"))
+    empty = await ingestor.ingest(
+        cfg, secrets, table_writer=writer, table="drop", ingestion_id="poll-2", since=since
+    )
+    assert empty.objects == 0
+
+    # Drop a newer file: only that one is pulled.
+    await asyncio.sleep(1.1)  # SFTP mtimes are whole seconds
+    await put("claims-2.csv", b"id,name\n3,gamma\n")
+    third = await ingestor.ingest(
+        cfg, secrets, table_writer=writer, table="drop", ingestion_id="poll-3", since=since
+    )
+    assert third.objects == 1
+    assert third.rows == 1

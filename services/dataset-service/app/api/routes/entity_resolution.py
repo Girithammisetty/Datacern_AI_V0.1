@@ -2,9 +2,12 @@
 
 inc1: run first-party resolution over a dataset's rows and read the resolved-
 entity view + below-auto merge candidates. inc2: persist the run (versioned
-config + clusters + lineage + merge queue), read prior runs/candidates, and
-apply a four-eyes-approved merge. Read-only over the SOURCE — a LINK layer,
-never mutating records (ER-FR-050)."""
+config + clusters + lineage + merge queue) and read prior runs/candidates.
+The merge-candidate queue is READ-ONLY today: there is no approve/reject/
+apply endpoint yet, so a four-eyes-approved merge action is still to build
+(the golden-record materialization at POST .../materialize applies the
+auto-merge clusters only). Read-only over the SOURCE — a LINK layer, never
+mutating records (ER-FR-050)."""
 
 from __future__ import annotations
 

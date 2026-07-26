@@ -6,6 +6,9 @@
 package metricsx
 
 import (
+	"bufio"
+	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -80,6 +83,26 @@ func (s *statusRecorder) Flush() {
 	if f, ok := s.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+// Hijack is the same gap as Flush above, for the other half of realtime-hub's
+// transport. A WebSocket upgrade takes the raw connection via http.Hijacker,
+// and that interface is no more promoted by the embedded http.ResponseWriter
+// than http.Flusher is — so gorilla's Upgrade() failed
+// "response does not implement http.Hijacker" and answered 500 on EVERY
+// upgrade attempt once this middleware was in the chain. Not a degraded
+// transport: no WS client could connect at all.
+//
+// Returning an error (rather than panicking on a failed assertion) keeps a
+// non-hijackable writer — HTTP/2, or a test recorder — a clean upgrade
+// failure instead of a crashed handler.
+func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := s.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("metricsx: underlying %T does not implement http.Hijacker",
+			s.ResponseWriter)
+	}
+	return h.Hijack()
 }
 
 // routeOf resolves a low-cardinality route label. It prefers a chi route

@@ -199,6 +199,11 @@ class SftpConfig(_Cfg):
     port: int = 22
     username: str
     root_directory: str = "/"
+    # file_poll ingestion (ING-FR-064): which files under root_directory to pull
+    # and how to decode them. Defaulted so existing sftp connections keep
+    # validating unchanged; FtpConfig already carried the same two fields.
+    file_format: FileFormat = "csv"
+    glob: str | None = None
 
 
 class FtpConfig(_Cfg):

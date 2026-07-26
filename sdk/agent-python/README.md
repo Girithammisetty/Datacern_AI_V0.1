@@ -8,13 +8,15 @@ every write becomes a four-eyes proposal that lands in a tamper-evident WORM
 audit chain and only takes effect after a distinct human approves it. You keep
 your agent; Datacern makes its actions accountable.
 
-Zero runtime dependencies (stdlib only) — `pip install` it, or vendor the
-single `datacern_agent/` package into your project.
+Zero runtime dependencies (stdlib only) — install from this repo, or vendor
+the single `datacern_agent/` package into your project.
 
 ## Install
 
+Not yet published to PyPI. Install from the repo (or vendor the folder):
+
 ```bash
-pip install datacern-agent          # or: copy the datacern_agent/ folder in
+pip install ./sdk/agent-python      # or: copy the datacern_agent/ folder in
 ```
 
 ## Use

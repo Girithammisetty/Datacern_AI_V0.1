@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -21,6 +22,8 @@ from typing import Protocol
 from zoneinfo import ZoneInfo
 
 from croniter import croniter
+
+logger = logging.getLogger(__name__)
 
 FireCallback = Callable[[str], Awaitable[None]]
 
@@ -56,6 +59,10 @@ class Scheduler(Protocol):
     async def run_now(self, schedule_id: str) -> None: ...
 
     def next_fire_at(self, schedule_id: str) -> datetime | None: ...
+
+    def start(self, poll_interval: float = ...) -> None: ...
+
+    async def stop(self) -> None: ...
 
 
 def compute_next_fire(
@@ -121,7 +128,13 @@ class InProcessScheduler:
         return entry.next_fire_at if entry else None
 
     async def tick(self, now: datetime | None = None) -> list[str]:
-        """Fire all due entries; returns fired schedule ids (test-drivable)."""
+        """Fire all due entries; returns fired schedule ids (test-drivable).
+
+        `next_fire_at` is advanced BEFORE the callback runs and a failing fire
+        is logged rather than raised: one tenant's broken connection must not
+        stall every other tenant's schedules behind it, and must not leave an
+        entry stuck in the past where it re-fires on every poll.
+        """
         now = now or datetime.now(UTC)
         fired = []
         for entry in list(self._entries.values()):
@@ -131,15 +144,36 @@ class InProcessScheduler:
                 entry.cron, entry.interval_seconds, entry.timezone, now
             )
             if self._callback is not None:
-                await self._callback(entry.schedule_id)
+                try:
+                    await self._callback(entry.schedule_id)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001
+                    logger.exception(
+                        "scheduled fire failed", extra={"schedule_id": entry.schedule_id}
+                    )
+                    continue
             fired.append(entry.schedule_id)
         return fired
 
     def start(self, poll_interval: float = 1.0) -> None:
+        """Run the poll loop in the background until `stop()`.
+
+        The loop swallows non-cancellation errors on purpose: an unhandled one
+        would kill the task and silently end ALL scheduling for the life of the
+        process, with a healthy /healthz the whole time.
+        """
+
         async def _loop() -> None:
             while True:
-                await asyncio.sleep(poll_interval)
-                await self.tick()
+                try:
+                    await asyncio.sleep(poll_interval)
+                    await self.tick()
+                except asyncio.CancelledError:
+                    break
+                except Exception:  # noqa: BLE001
+                    logger.exception("scheduler tick failed")
+                    await asyncio.sleep(poll_interval)
 
         self._task = asyncio.get_running_loop().create_task(_loop())
 

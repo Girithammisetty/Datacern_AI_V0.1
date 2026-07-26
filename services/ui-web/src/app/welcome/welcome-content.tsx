@@ -793,6 +793,11 @@ function IndustryShipsCard({ ind }: { ind: (typeof INDUSTRIES)[number] }) {
         </ul>
       ) : (
         <div key={seg.id} className="wr-swap mt-5">
+          {/* Rule #1: the stat tiles below are a product mock, and the rendered
+           * page must say so — not just this comment. */}
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Illustrative product mock — not customer data
+          </div>
           <div className="grid grid-cols-3 gap-2">
             {seg.workflow.kpis.map(([label, value]) => (
               <div key={label} className="rounded-lg border border-border/70 bg-background/60 px-2 py-2 text-center">
@@ -859,7 +864,15 @@ export default function WelcomeContent() {
             <a href="#how" className="transition-colors hover:text-foreground">How it works</a>
             <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
           </nav>
-          <Button onClick={() => setDemoOpen(true)}>Request a demo</Button>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/login"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Sign in
+            </Link>
+            <Button onClick={() => setDemoOpen(true)}>Request a demo</Button>
+          </div>
         </div>
       </header>
 
@@ -905,6 +918,17 @@ export default function WelcomeContent() {
                 Or start a live demo yourself right now <ArrowRight className="size-3.5" />
               </Link>
               <span className="ml-1.5 text-muted-foreground">— no sales call, no operator.</span>
+            </p>
+            <p className="mt-2 text-sm">
+              <Link
+                href="/welcome/walkthrough"
+                className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+              >
+                See the walkthrough first <ArrowRight className="size-3.5" />
+              </Link>
+              <span className="ml-1.5 text-muted-foreground">
+                — one decision, end to end, in five steps.
+              </span>
             </p>
           </div>
           <div className="flex justify-center md:justify-end">

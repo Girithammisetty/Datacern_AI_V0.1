@@ -1,4 +1,4 @@
-"""Agent catalog seed (ART-FR-040): the 8 agent definitions, with real published
+"""Agent catalog seed (ART-FR-040): the 9 agent definitions, with real published
 v1 graphs for the priority agents (case-triage, governance, analytics). Adding an
 agent is a definition + graph module — no runtime fork.
 """

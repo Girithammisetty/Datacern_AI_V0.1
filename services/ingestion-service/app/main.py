@@ -78,6 +78,29 @@ async def _retention_loop(container) -> None:
             logger.exception("retention prune failed", extra={"table": "outbox"})
 
 
+async def _start_scheduler(container) -> None:
+    """Rehydrate persisted schedules and start the tick loop (ING-FR-060/062).
+
+    Nothing started the scheduler before this: `InProcessScheduler.start()` had
+    no caller anywhere in the service, so a cron/interval schedule created
+    through the API was stored, reported a `next_fire_at`, and then never fired
+    — `run_now` was the only path that ever produced an ingestion. Rehydration
+    is the other half: the registry is in-process, so without a boot-time
+    reload a restart silently forgets every schedule that already exists.
+
+    Single-instance by design, matching the replicas:1 pin this service already
+    carries for its outbox relay (deploy/helm/datacern/values.yaml). Two
+    replicas would each hold their own registry and fire every schedule twice;
+    `overlap_policy` narrows but does not close that window. Read that comment
+    before bumping the replica count.
+    """
+    from app.domain.services.schedules import rehydrate
+
+    restored = await rehydrate(container)
+    container.scheduler.start()
+    logger.info("ingestion scheduler started", extra={"schedules_restored": restored})
+
+
 def create_app(container: Container | None = None, settings: Settings | None = None) -> FastAPI:
     container = container or build_container(settings)
 
@@ -99,9 +122,17 @@ def create_app(container: Container | None = None, settings: Settings | None = N
             logger.info("ingestion outbox relay worker started")
             retention_task = asyncio.create_task(_retention_loop(container))
             logger.info("ingestion retention reaper started (outbox)")
+            # Schedules fire from here. Failing to start it must not take the
+            # service down -- the request API is still fully usable without
+            # the scheduler -- but it must be loud, not silent.
+            try:
+                await _start_scheduler(container)
+            except Exception:  # noqa: BLE001
+                logger.exception("ingestion scheduler failed to start; schedules will NOT fire")
         try:
             yield
         finally:
+            await container.scheduler.stop()
             for t in (relay_task, retention_task):
                 if t is not None:
                     t.cancel()

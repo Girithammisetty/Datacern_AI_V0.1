@@ -73,14 +73,19 @@ overturned-appeals number is the money slide."*
   webhook endpoint.
   **Corrected 2026-07-24 — the previous wording here claimed "X12 835 SFTP drop
   is a built-in, decoded natively". Half of that was false.** The 835 *decoder*
-  is real (`services/ingestion-service/app/domain/x12.py`), but there is no
-  SFTP *drop* ingestion path: `sftp` has no query driver wired
-  (`app/domain/querysource.py:34-38` returns `UNSUPPORTED_CONNECTOR`), the SFTP
-  fetcher is never called by any runner, and `file_poll` schedules are rejected
-  at create time (`app/domain/services/schedules.py:88-97`). An 835 can only
-  enter today by manual upload or a supported connector. The same applies to
-  `s3`/`gcs`/`azure_blob`/`ftp`/`http_api`/`presto` — these connection types
-  test green and preview rows, then cannot ingest. Do not promise a file drop.
+  is real (`services/ingestion-service/app/domain/x12.py`), but there was no
+  SFTP *drop* ingestion path.
+  **Updated 2026-07-26 — the SFTP drop is now real.** All of it is wired:
+  object-store sources (`s3`/`gcs`/`azure_blob`) and now `sftp`/`ftp` ingest via
+  `file_poll` schedules (`app/domain/drivers/filesource.py`, live-verified
+  against a real SFTP server: glob filter, incremental mtime watermark, one
+  bronze snapshot per run), and `presto` has a real query driver
+  (`app/domain/drivers/presto.py`, live-verified against Trino). Scheduled polls
+  fire on their own since the scheduler was wired (`app/main.py`).
+  **Still not true: `http_api` tests green and previews, and cannot ingest** —
+  it has a fetcher no runner calls and no `file_poll` ingestor. So: an 835
+  dropped on SFTP or in a bucket is picked up on a schedule; an 835 behind an
+  HTTP endpoint still needs a manual upload. Don't promise the HTTP pull.
 - **"Can the AI deny/appeal on its own?"** No, architecturally: every write
   is a proposal; execution requires a signed human-approval grant, a
   per-resource authorization on the exact case, and per-tenant tool

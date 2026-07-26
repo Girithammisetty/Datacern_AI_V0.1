@@ -25,6 +25,10 @@ dependencies = [
     "pyarrow>=16",
     "fastavro>=1.9",
     "httpx>=0.27",
+    # Presto / Trino source connector. A base dep, not a `cloud` extra: the
+    # local stack runs a real Trino coordinator, so this driver is verified
+    # live rather than only through an injected connection.
+    "trino>=0.330",
     "datacern-common",
 ]
 
