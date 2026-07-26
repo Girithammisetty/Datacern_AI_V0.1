@@ -42,6 +42,11 @@ provenance: "synthetic, no real PII"
   note: "evidence-rich note"
 `)
 	writeFile(t, filepath.Join(dir, "data", "widgets.csv"), "id,name\nW-1,Widget One\n")
+	writeFile(t, filepath.Join(dir, "walkthrough.yaml"), `
+- title: "Worklist"
+  target_route: /cases
+  narration: "Every pending request lands here."
+`)
 
 	l := &demobundle.FSLoader{Root: root}
 	b, err := l.Load("sample-pack")
@@ -59,6 +64,32 @@ provenance: "synthetic, no real PII"
 	}
 	if len(b.Cases) != 1 || b.Cases[0].RowPK != "W-1" {
 		t.Fatalf("cases = %+v", b.Cases)
+	}
+	if len(b.Walkthrough) != 1 || b.Walkthrough[0].TargetRoute != "/cases" {
+		t.Fatalf("walkthrough = %+v", b.Walkthrough)
+	}
+}
+
+func TestFSLoader_MissingWalkthroughYieldsEmptySlice(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "no-walkthrough-pack")
+	writeFile(t, filepath.Join(dir, "demo.yaml"), `
+demo_manifest: 1
+pack: no-walkthrough-pack
+pack_version: 1.0.0
+version: 1.0.0
+provenance: "synthetic, no real PII"
+`)
+	writeFile(t, filepath.Join(dir, "personas.yaml"), `[]`)
+	writeFile(t, filepath.Join(dir, "data", "widgets.csv"), "id\nW-1\n")
+
+	l := &demobundle.FSLoader{Root: root}
+	b, err := l.Load("no-walkthrough-pack")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if b.Walkthrough == nil || len(b.Walkthrough) != 0 {
+		t.Fatalf("walkthrough = %+v, want empty non-nil slice", b.Walkthrough)
 	}
 }
 
@@ -142,6 +173,14 @@ func TestFSLoader_LoadsTheShippedInsuranceClaimsPayerBundle(t *testing.T) {
 	for _, c := range b.Cases {
 		if c.Dataset != "prior_auth_requests" {
 			t.Errorf("case %s dataset = %s, want prior_auth_requests", c.RowPK, c.Dataset)
+		}
+	}
+	if len(b.Walkthrough) != 5 {
+		t.Errorf("walkthrough = %d steps, want 5", len(b.Walkthrough))
+	}
+	for _, ws := range b.Walkthrough {
+		if ws.Title == "" || ws.TargetRoute == "" || ws.Narration == "" {
+			t.Errorf("walkthrough step missing a field: %+v", ws)
 		}
 	}
 }

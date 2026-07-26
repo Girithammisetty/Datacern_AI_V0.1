@@ -126,6 +126,12 @@ func (s *Server) Router() http.Handler {
 			// only) — no admin scope: any member may see their org's name.
 			// Registered before /tenants/{id} so "self" never parses as an id.
 			r.Get("/tenants/self", s.handleGetTenantSelf)
+			// GET /tenants/self/walkthrough — DSP-FR-015 (Should): the caller's
+			// tenant's guided-walkthrough steps. Member-safe, same tier as
+			// /tenants/self above; registered as a static route ahead of
+			// /tenants/{id} so "self" never parses as an id (same reasoning as
+			// /tenants/self/labels below).
+			r.Get("/tenants/self/walkthrough", s.handleGetTenantWalkthrough)
 			// GET /users/profiles — member-visible {id,email,full_name} batch
 			// lookup for display-only hydration (case assignee, comment author,
 			// activity actor). No admin scope: mirrors /tenants/self. Registered

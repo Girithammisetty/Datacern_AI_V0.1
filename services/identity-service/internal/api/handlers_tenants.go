@@ -85,6 +85,35 @@ func (s *Server) handleGetTenantSelf(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GET /tenants/self/walkthrough — DSP-FR-015 (Should): the caller's own
+// tenant's guided-walkthrough steps, if any. Member-safe (no admin scope),
+// same tier as GET /tenants/self and /tenants/self/labels above -- every
+// signed-in member of a demo tenant may read its walkthrough script, not
+// just admins. Always 200; a non-demo tenant, a demo tenant whose bundle
+// ships no walkthrough.yaml, or a deployment with no Demo/Bundles adapter
+// configured all return {"steps": []} rather than an error, so ui-web can
+// treat "no steps" as the single "don't show the overlay" signal without
+// distinguishing those cases.
+func (s *Server) handleGetTenantWalkthrough(w http.ResponseWriter, r *http.Request) {
+	claims := ClaimsFrom(r.Context())
+	t, err := s.Store.GetTenant(r.Context(), claims.TenantID)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	steps := []domain.WalkthroughStep{}
+	if t.Profile == domain.ProfileDemo && t.DemoPack != "" && s.Demo != nil && s.Demo.Bundles != nil {
+		if bundle, err := s.Demo.Bundles.Load(t.DemoPack); err == nil && bundle != nil {
+			steps = bundle.Walkthrough
+		}
+		// A load error here (e.g. bundle missing on this deployment) is not
+		// surfaced to the caller -- the walkthrough is a Should-have tour,
+		// never load-bearing for using the tenant, so we degrade to "no
+		// steps" the same as the not-configured case above.
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"steps": steps})
+}
+
 // PUT /tenants/{id}/embed-config (IDN-FR-043): set the tenant's allowed
 // embedding origins and (re)generate the embed secret. Returns the plaintext
 // secret ONCE (like an API key). Tenant-admin scoped; a tenant admin may only
