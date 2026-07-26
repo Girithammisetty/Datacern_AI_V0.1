@@ -50,7 +50,7 @@ func (r *Resolver) Resolve(ctx context.Context, token string, chart *domain.Char
 	}
 
 	// Choose source: semantic measure (hero path) or saved query.
-	src := primarySource(chart)
+	src := PrimarySource(chart)
 	var exec ExecResult
 	switch src.SourceType {
 	case domain.SourceSavedQuery:
@@ -122,7 +122,7 @@ func (r *Resolver) buildCompile(chart *domain.Chart, cfg domain.ChartConfig, req
 
 // resolveArtifact handles metric/parameter/run charts (CHART-FR-025).
 func (r *Resolver) resolveArtifact(ctx context.Context, token string, chart *domain.Chart, ct domain.ChartType) (*domain.ShapedResult, error) {
-	src := primarySource(chart)
+	src := PrimarySource(chart)
 	if src.SourceURN == "" || r.Artifacts == nil {
 		return nil, domain.ESourceBroken("no artifact source configured")
 	}
@@ -188,7 +188,10 @@ func (r *Resolver) Drilldown(ctx context.Context, token, queryURN string, dr Dri
 
 // --- helpers ---
 
-func primarySource(c *domain.Chart) domain.ChartSource {
+// PrimarySource returns the lowest-position chart source — the one Resolve
+// dispatches on. Exposed for write-time known-field validation, which must
+// resolve the same source the render path would use (CHART-FR-013).
+func PrimarySource(c *domain.Chart) domain.ChartSource {
 	if len(c.Sources) == 0 {
 		return domain.ChartSource{}
 	}
@@ -246,6 +249,13 @@ func workspaceFromChart(chart *domain.Chart) string {
 	}
 	_ = json.Unmarshal(chart.DisplayMeta, &meta)
 	return meta.WorkspaceID
+}
+
+// ChartWorkspace returns a chart's workspace id (from display_meta), used to
+// disambiguate a semantic model referenced by name. Exposed alongside
+// ChartModel for write-time known-field validation (CHART-FR-013).
+func ChartWorkspace(chart *domain.Chart) string {
+	return workspaceFromChart(chart)
 }
 
 // identRe validates a SQL identifier (letters, digits, underscore, dots).

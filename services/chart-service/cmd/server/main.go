@@ -117,14 +117,16 @@ func main() {
 	}
 
 	srv := &api.Server{
-		Store:       st,
-		Cache:       core.Cache,
-		Authz:       core.Authz,
-		Resolver:    core.Resolver,
-		Verifier:    core.Verifier,
-		Exports:     exports,
-		PreviewSem:  make(chan struct{}, 5),
-		PNGRenderer: cfg.PNGRenderer,
+		Store:        st,
+		Cache:        core.Cache,
+		Authz:        core.Authz,
+		Resolver:     core.Resolver,
+		Verifier:     core.Verifier,
+		Exports:      exports,
+		Fields:       core.Semantic, // real known-field validation (CHART-FR-013)
+		DefaultModel: cfg.DefaultModel,
+		PreviewSem:   make(chan struct{}, 5),
+		PNGRenderer:  cfg.PNGRenderer,
 	}
 
 	// Outbox relay → real Kafka (MASTER-FR-034). KAFKA_BROKERS=false disables.

@@ -96,6 +96,10 @@ type Core struct {
 	Authz    *authz.OPA
 	Cache    *cache.Redis
 	Resolver *resolve.Resolver
+	// Semantic is the real semantic-service client Resolver compiles through;
+	// also used directly for write-time known-field validation (CHART-FR-013),
+	// so both paths hit the same adapter instance.
+	Semantic *resolve.HTTPSemantic
 	Verifier *authjwt.Verifier
 	Producer *kafka.Producer
 	Redis    *redisx.Client
@@ -121,6 +125,7 @@ func BuildCore(cfg Config) *Core {
 		Authz:    authz.NewOPA(cfg.OPAURL, cfg.RedisAddr),
 		Cache:    cache.NewRedis(rc),
 		Resolver: &resolve.Resolver{Semantic: sem, Query: qry, Artifacts: arts, DefaultModel: cfg.DefaultModel},
+		Semantic: sem,
 		Verifier: authjwt.NewJWKS(cfg.JWKSURL, cfg.JWTIssuer, cfg.JWTAudience),
 		Producer: producer,
 		Redis:    rc,

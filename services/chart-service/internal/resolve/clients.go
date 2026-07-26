@@ -104,6 +104,66 @@ func (h *HTTPSemantic) Compile(ctx context.Context, token string, req CompileReq
 	return out.Data, nil
 }
 
+// toolResult decodes a semantic-service MCP tool-facade response whose "data"
+// carries a single named list of {"name": ...} items.
+type toolResult struct {
+	Data map[string][]struct {
+		Name string `json:"name"`
+	} `json:"data"`
+}
+
+// toolNames POSTs {model, workspace_id} to a get_metrics/get_dimensions tool
+// endpoint and returns the item names under listKey.
+func (h *HTTPSemantic) toolNames(ctx context.Context, token, path, model, workspaceID, listKey string) (map[string]bool, error) {
+	body, _ := json.Marshal(map[string]string{"model": model, "workspace_id": workspaceID})
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, h.BaseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := h.Client.Do(httpReq)
+	if err != nil {
+		return nil, domain.EUpstream("semantic-service unreachable: " + err.Error())
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode != http.StatusOK {
+		return nil, domain.EUpstream(fmt.Sprintf("semantic %s status %d: %s", path, resp.StatusCode, string(raw)))
+	}
+	var out toolResult
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, domain.EUpstream("semantic " + path + ": bad response body")
+	}
+	names := make(map[string]bool, len(out.Data[listKey]))
+	for _, item := range out.Data[listKey] {
+		names[item.Name] = true
+	}
+	return names, nil
+}
+
+// KnownFields returns the published measure + dimension names for model
+// (CHART-FR-013's write-time field validation), via the same real
+// get_metrics/get_dimensions MCP tool endpoints the agent tool-plane calls —
+// no separate semantic-model-fetching client. model may be an id or a
+// (workspaceID-scoped) name, matching Compile's resolution.
+func (h *HTTPSemantic) KnownFields(ctx context.Context, token, model, workspaceID string) (map[string]bool, error) {
+	known, err := h.toolNames(ctx, token, "/api/v1/tools/get_metrics", model, workspaceID, "metrics")
+	if err != nil {
+		return nil, err
+	}
+	dims, err := h.toolNames(ctx, token, "/api/v1/tools/get_dimensions", model, workspaceID, "dimensions")
+	if err != nil {
+		return nil, err
+	}
+	for name := range dims {
+		known[name] = true
+	}
+	return known, nil
+}
+
 // ExecResult is the executed columns + rows + optional next cursor.
 type ExecResult struct {
 	Columns    []domain.ExecColumn
