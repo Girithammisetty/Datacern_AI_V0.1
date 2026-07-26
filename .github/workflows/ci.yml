@@ -243,6 +243,21 @@ jobs:
       - name: Lint
         working-directory: ${{ matrix.path }}
         run: pnpm lint
+      # A production build, because tsc and vitest do NOT cover the framework's
+      # own constraints. Next validates every page module's export shape at
+      # build time — a stray named component export from a page fails with
+      # "<name> is not a valid Page export field" while typecheck, lint and the
+      # whole vitest suite stay green. That exact defect reached this branch and
+      # was caught by hand, not by CI. Guarded on a `build` script so the lane's
+      # non-Next entries (bff-graphql) skip it.
+      - name: Production build
+        working-directory: ${{ matrix.path }}
+        run: |
+          if node -e "process.exit(require('./package.json').scripts.build?0:1)"; then
+            pnpm run build
+          else
+            echo "no build script for ${{ matrix.name }} — skipping"
+          fi
       # WS5 (BRD 58): coverage-gated unit tests (see each service's
       # vitest.config.ts for the measured starting floor + ratchet note), then
       # the integration tier too where a service has one (bff-graphql; ui-web

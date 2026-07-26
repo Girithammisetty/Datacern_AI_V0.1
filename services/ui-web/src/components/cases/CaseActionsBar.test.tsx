@@ -3,7 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/utils";
 import type { Case } from "@/lib/graphql/types";
-import { CaseActionsBar } from "./page";
+import { CaseActionsBar } from "./CaseActionsBar";
 
 let handler: (doc: string, vars: unknown) => unknown = () => ({});
 vi.mock("@/lib/graphql/client", async (importActual) => {
