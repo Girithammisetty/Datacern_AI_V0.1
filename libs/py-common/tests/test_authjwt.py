@@ -95,7 +95,8 @@ async def test_commercial_state_claim_drives_writes_suspended():
     assert principal.writes_suspended is True
 
     for state in ("active", "trial", "none", "churned"):
-        principal = await verifier.verify(_token(key, _valid_claims() | {"commercial_state": state}))
+        claims = _valid_claims() | {"commercial_state": state}
+        principal = await verifier.verify(_token(key, claims))
         assert principal.writes_suspended is False, state
 
     # claim absent entirely (pre-commercial-plane token)
