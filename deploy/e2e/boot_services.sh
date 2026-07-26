@@ -548,7 +548,9 @@ boot_platform_extra() {
   start_query
   start_semantic
   start_chart
-  start_usage
+  # start_usage moved to boot_all() -- BRD 67's governed_decision metering
+  # needs usage-service up before the money-path driver's HITL-approve step,
+  # not after it (see boot_all()'s own comment on the move).
   start_audit
   start_notification
   start_eval
@@ -572,6 +574,13 @@ boot_all() {
   [ -n "$VKEY" ] || die "failed to seed ai-gateway model + virtual key"
   ok "ai-gateway seeded; agent virtual key minted"
   start_agent_runtime "$VKEY"
+  # usage-service (BRD 67 slice 1, VMB-FR-001/002/003): must be up and
+  # consuming ai.proposal.v1 off real Kafka before driver.py's step E HITL
+  # approve fires, or step E4's governed_decision poll has nothing to find.
+  # Previously only booted by deploy/local/up.sh's boot_platform_extra(), so
+  # the ingest -> decision -> value/ROI-dashboard loop was never provably
+  # live in a single make-e2e run.
+  start_usage
   # RETRAIN TAIL
   start_pipeline
   start_experiment
