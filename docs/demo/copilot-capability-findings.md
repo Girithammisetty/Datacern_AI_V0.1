@@ -115,14 +115,22 @@ Two proposals, approved by the same person (admin), opposite outcomes:
 refuses. You cannot approve your own proposal. This is the platform's central
 claim and it holds under a real UI test.
 
-### But the refusal is SILENT — fix this
+### CORRECTION: the refusal is NOT silent — I was wrong
 
-Clicking Approve on your own proposal does nothing observable: no toast, no
-error, no console message, no state change. The user's only signal is that the
-row stubbornly stays pending. Everyone who hits this will conclude the button
-is broken rather than that they were correctly refused — and the control that
-most deserves to be *seen* working is the one that says nothing. The gate needs
-to surface "You proposed this — a different person must approve it."
+An earlier revision of this document claimed the self-approval refusal was
+completely silent and called it a defect. **That was my error.** The UI shows a
+toast with the title "Decision failed", the exact reason
+("self-approval not permitted for this tenant") and a trace id — verified by
+watching the DOM immediately after the click. The API returns a clean
+`403 PERMISSION_DENIED` with the same message.
+
+I originally screenshotted ~20 seconds after clicking, by which point the toast
+had auto-dismissed, and a console check would never have shown it either. The
+error handling here is good; nothing needs fixing.
+
+Worth keeping as a testing lesson: a screenshot taken after the fact cannot
+prove the *absence* of transient UI. Assert on the DOM at the moment of the
+action, or you will report working behaviour as broken.
 
 ### Approved does not always mean executed
 
