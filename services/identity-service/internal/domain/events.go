@@ -136,4 +136,12 @@ const (
 	// reviewer may care whether a created demo was ever actually claimed.
 	EvDemoTenantPublicSignup        = "demo.tenant_public_signup"
 	EvDemoTenantPublicSignupClaimed = "demo.tenant_public_signup_claimed"
+
+	// POC-mode events (BRD 70 slice 3, DSP-FR-020/021/022). Unversioned
+	// (no ".v1" suffix) since the design doc's §2.9 doesn't name these
+	// literally the way EvDemoTenantReaped/EvCommercialTrialExpired's FRs
+	// do -- following the unversioned-sibling convention documented above.
+	EvPocCriteriaSet        = "poc.criteria_set"
+	EvPocManualValueUpdated = "poc.manual_value_updated"
+	EvPocReportExported     = "poc.report_exported"
 )

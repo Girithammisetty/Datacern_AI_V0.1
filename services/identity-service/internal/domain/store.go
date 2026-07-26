@@ -221,6 +221,30 @@ type Store interface {
 	// (US-4 "no surprises" / operator visibility; also the test-verification
 	// seam for sweep idempotency and threshold dedup).
 	ListTrialEvents(ctx context.Context, tenantID uuid.UUID) ([]TrialEvent, error)
+
+	// --- POC success criteria + reports (poc_success_criteria/poc_exports,
+	// RLS; BRD 70 slice 3, DSP-FR-020..022) ---
+
+	// SetPocSuccessCriteria replaces a tenant's full criteria set in one
+	// transaction (delete-then-insert, mirroring the codebase's other
+	// "small owned set" replace idioms like SetTenantLabels) and persists
+	// evs. Called both at POC creation and by any later operator edit.
+	SetPocSuccessCriteria(ctx context.Context, tenantID uuid.UUID, criteria []SuccessCriterion, evs ...OutboxEvent) error
+	// GetPocSuccessCriteria returns a tenant's declared criteria in
+	// insertion order; empty slice (not error) if none are set yet.
+	GetPocSuccessCriteria(ctx context.Context, tenantID uuid.UUID) ([]SuccessCriterion, error)
+	// UpdatePocCriterionManualValue updates ONE criterion's manual_value
+	// in place (DSP-FR-021: "manual criteria updatable by sponsor with
+	// audit") without touching the rest of the set; NOT_FOUND if key
+	// doesn't exist on this tenant.
+	UpdatePocCriterionManualValue(ctx context.Context, tenantID uuid.UUID, key string, value float64, evs ...OutboxEvent) error
+	// CreatePocExport inserts the next version for tenantID (never
+	// overwrites a prior version's row, mirroring usage-service's
+	// CreateValueExport / design §2.9's "stored/checksummed like other
+	// audited exports").
+	CreatePocExport(ctx context.Context, tenantID uuid.UUID, e PocExport, evs ...OutboxEvent) (PocExport, error)
+	// ListPocExports returns a tenant's poc-report.v1 exports, newest first.
+	ListPocExports(ctx context.Context, tenantID uuid.UUID) ([]PocExport, error)
 }
 
 // CommercialDirtyClaim is one claimed batch of commercial_dirty rows for a

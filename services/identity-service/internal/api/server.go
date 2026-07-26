@@ -60,6 +60,16 @@ type Server struct {
 	// own methods are the ones that would nil-panic, so operators must wire
 	// it whenever POST /demo-tenants is reachable -- same contract as Logo).
 	Demo *domain.DemoService
+	// Poc: POC-mode lifecycle (BRD 70 slice 3) -- create-with-criteria,
+	// criteria CRUD, live progress, poc-report.v1 export. Nil-safe like Demo
+	// above: a deployment that never exposes /poc-tenants simply leaves this
+	// unset and the routes below are unreachable in practice (Poc's own
+	// methods would nil-panic if somehow reached).
+	Poc *domain.PocService
+	// PocExports stores poc-report.v1 artifacts (internal/pocexport.FSStore
+	// in production). Nil disables POST/GET .../poc-reports* with a clear
+	// EInternal, matching usage-service's Exports field's nil-safe contract.
+	PocExports domain.PocReportObjectStore
 	// PublicDemo* config the unauthenticated self-serve demo signup surface
 	// (BRD 70 v1.1, POST /public/demo-signup + /public/demo-signup/claim,
 	// handlers_public_demo.go). All nil-safe: an unset limiter/cap simply
@@ -142,6 +152,11 @@ func (s *Server) Router() http.Handler {
 		r.Post("/public/demo-signup", s.handlePublicDemoSignup)
 		r.Post("/public/demo-signup/claim", s.handlePublicDemoSignupClaim)
 
+		// poc-report.v1 signed artifact download is HMAC-validated, not JWT
+		// (BRD 70 slice 3, DSP-FR-022, mirrors usage-service's
+		// GET /value-report-artifacts/*).
+		r.Get("/poc-report-artifacts/*", s.handleDownloadPocReport)
+
 		// Authenticated API.
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMiddleware, s.idempotencyMiddleware)
@@ -188,6 +203,16 @@ func (s *Server) Router() http.Handler {
 			// tenant's. Same ActUserAdmin + cross-tenant-404 pattern as
 			// GET /tenants/{id} (handleGetTenant, AC-12).
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/entitlements", s.handleGetTenantEntitlements)
+			// BRD 70 slice 3 (DSP-FR-020/021): a POC tenant's own admin (or
+			// platform) reads its declared criteria/live progress and updates
+			// a manual criterion's reported value -- same ActUserAdmin +
+			// cross-tenant-404 pattern as entitlements above (this codebase has
+			// no distinct "sponsor" role; see handlers_poc.go's header comment).
+			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/poc/criteria", s.handleGetPocCriteria)
+			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/poc/progress", s.handleGetPocProgress)
+			r.With(s.requireScope(ActUserAdmin)).Patch("/tenants/{id}/poc/criteria/{key}/manual-value", s.handleUpdatePocManualValue)
+			r.With(s.requireScope(ActUserAdmin)).Post("/tenants/{id}/poc-reports", s.handleExportPocReport)
+			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/poc-reports", s.handleListPocReports)
 			r.With(s.requireScope(ActUserAdmin)).Get("/tenants/{id}/embed-config", s.handleGetEmbedConfig)
 			r.With(s.requireScope(ActUserAdmin)).Put("/tenants/{id}/embed-config", s.handleSetEmbedConfig)
 			// BYO-P4: a tenant admin registers their OWN OIDC IdP (self-scoped;
@@ -227,6 +252,13 @@ func (s *Server) Router() http.Handler {
 				r.Post("/demo-tenants", s.handleCreateDemoTenant)
 				r.Post("/demo-tenants/{id}/reset", s.handleResetDemoTenant)
 				r.Post("/demo-tenants/{id}/clone", s.handleCloneDemoTenant)
+				// BRD 70 slice 3: POC-mode creation + operator criteria edits
+				// (DSP-FR-020). Same requireSuperAdmin gate as demo-tenants
+				// above -- BRD 70 §In-scope keeps both operator/partner-created
+				// in v1. Reads/manual-value-update are ActUserAdmin-gated below,
+				// outside this requireSuperAdmin group.
+				r.Post("/poc-tenants", s.handleCreatePocTenant)
+				r.Put("/poc-tenants/{id}/criteria", s.handleSetPocCriteria)
 				r.Post("/keys/rotate", s.handleRotateKeys)
 				// First-class platform-admin registry (cross-tenant operators).
 				r.Get("/platform/admins", s.handleListPlatformAdmins)

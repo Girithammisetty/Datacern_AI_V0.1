@@ -59,6 +59,21 @@ type CreateTenantRequest struct {
 	Profile  TenantProfile `json:"-"`
 	DemoPack string        `json:"-"`
 	TTLDays  *int          `json:"-"`
+	// TrialDays is Go-only (json:"-"), mirroring Profile/DemoPack/TTLDays
+	// above: only PocService.Create (POST /poc-tenants, BRD 70 DSP-FR-020)
+	// populates it. When set (profile=poc only), CommercialState/
+	// TrialStartedAt/TrialEndsAt are initialized directly on the struct
+	// below rather than through a guarded TransitionCommercial call --
+	// CanTransitionCommercial's non-convertible table (tenant.go) has no
+	// edge into CommercialTrial for profile=poc from CommercialNone
+	// (deliberately: DSP-FR-003 forbids reaching CommercialActive, and the
+	// guard doesn't special-case "the very first write"), so the initial
+	// trial state is set at INSERT time, the same way CommercialNone
+	// already is for every other tenant a few lines below -- see
+	// docs/initiatives/demo-sandbox-poc-mode.md §3 for why this mirrors
+	// the Profile "set once, never transitioned into" pattern rather than
+	// reusing TrialService.Start.
+	TrialDays int `json:"-"`
 }
 
 // Create validates and creates a tenant (IDN-FR-001/002/004/005, BR-1:
@@ -110,6 +125,16 @@ func (s *TenantService) Create(ctx context.Context, req CreateTenantRequest, act
 		Profile:  profile,
 		DemoPack: req.DemoPack,
 		TTLDays:  req.TTLDays,
+	}
+	// DSP-FR-020: a profile=poc tenant's commercial_state starts at `trial`
+	// (not `none`), trial_ends_at = window end, set directly here rather
+	// than through TrialService.Start -- see CreateTenantRequest.TrialDays'
+	// doc comment for why.
+	if profile == ProfilePOC && req.TrialDays > 0 {
+		t.CommercialState = CommercialTrial
+		t.TrialStartedAt = &now
+		endsAt := now.Add(time.Duration(req.TrialDays) * 24 * time.Hour)
+		t.TrialEndsAt = &endsAt
 	}
 	// BR-1 / AC-4: uniqueness of name and every derived identifier is
 	// enforced in one transaction; a duplicate (case-insensitive, since

@@ -35,6 +35,7 @@ import (
 	"github.com/datacern-ai/identity-service/internal/adapters/keycloak"
 	"github.com/datacern-ai/identity-service/internal/adapters/localinfra"
 	"github.com/datacern-ai/identity-service/internal/adapters/oidc"
+	"github.com/datacern-ai/identity-service/internal/adapters/valueclient"
 	"github.com/datacern-ai/identity-service/internal/adapters/vault"
 	"github.com/datacern-ai/identity-service/internal/api"
 	"github.com/datacern-ai/identity-service/internal/authz"
@@ -42,6 +43,7 @@ import (
 	"github.com/datacern-ai/identity-service/internal/domain"
 	"github.com/datacern-ai/identity-service/internal/events"
 	"github.com/datacern-ai/identity-service/internal/keys"
+	"github.com/datacern-ai/identity-service/internal/pocexport"
 	"github.com/datacern-ai/identity-service/internal/projection"
 	"github.com/datacern-ai/identity-service/internal/rbacclient"
 	"github.com/datacern-ai/identity-service/internal/store/memory"
@@ -345,6 +347,35 @@ func main() {
 	// through the same Issuer/Workspaces every other login path uses.
 	demo.Tokens = tokens
 
+	// BRD 70 slice 3: POC-mode lifecycle (create-with-criteria, progress,
+	// poc-report.v1 export). Value reads real BRD 69 data from usage-service
+	// over HTTP when USAGE_SERVICE_URL is set -- same real-adapter-vs-honest-
+	// fallback gate as the RBAC_URL-backed last-admin checker above; unlike
+	// that checker (which has an allow-all fallback), Poc.Value has no
+	// fallback at all -- Progress/ExportReport simply fail loud (EInternal)
+	// rather than fabricate figures when unset, matching Bundles/Seed's own
+	// "fail loud on nil adapter" rule.
+	poc := &domain.PocService{Store: store, Tenants: tenants, Clock: clock}
+	if usageURL := os.Getenv("USAGE_SERVICE_URL"); usageURL != "" {
+		poc.Value = &valueclient.Client{BaseURL: usageURL, Issuer: issuer}
+		log.Info("poc value reader: usage-service", "url", usageURL)
+	} else {
+		if requireReal {
+			mustReal("USAGE_SERVICE_URL", "poc progress/export disabled (no ValueSummaryReader configured)")
+		}
+		log.Warn("poc value reader: not configured — POC progress/export will fail loud until USAGE_SERVICE_URL is set")
+	}
+	pocExportSecret := []byte(os.Getenv("POC_EXPORT_SIGNING_SECRET"))
+	if len(pocExportSecret) == 0 {
+		pocExportSecret = []byte(uuid.NewString())
+		log.Warn("POC_EXPORT_SIGNING_SECRET unset; generated ephemeral secret (poc report download links break on restart)")
+	}
+	poc.Exports = pocexport.NewFSStore(
+		envOr("POC_EXPORT_ROOT", "/var/lib/identity-service/poc-reports"),
+		envOr("PUBLIC_URL", "http://localhost:8080"),
+		pocExportSecret,
+	)
+
 	// BYO-P4 per-tenant IdP: build an OIDC provider from a tenant's stored config
 	// (tenant_idp_configs). Injected so the domain layer stays free of the OIDC
 	// adapter; the token service caches the built provider per tenant.
@@ -430,6 +461,7 @@ func main() {
 		Store: store, Tenants: tenants, Users: users, SAs: sas, Tokens: tokens,
 		KM: km, Verifier: issuer, Authz: authorizer,
 		Plans: plans, Commercial: commercial, Demo: demo, Trials: trials,
+		Poc: poc, PocExports: poc.Exports,
 		TrustedSpiffeIDs: trusted,
 		// F-2: only honor X-Spiffe-Id when explicitly enabled (mesh strips +
 		// re-injects it). TRUST_SPIFFE_HEADER=true to enable.
