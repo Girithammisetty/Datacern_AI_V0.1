@@ -197,14 +197,14 @@ Phased: **Phase 1 unblocks revenue capture → Phase 2 opens self-serve top-of-f
 | 2 | Plans / entitlements / trials | B1 | M | 🟡 built; 4/5 kinds + trial expiry enforce (07-26); `feature`/`meter_allowance` and the Go write paths remain | Everything commercial |
 | 3 | Billing pipeline (Lago or Stripe/Metronome) | B2 | M | ❌ | Revenue capture |
 | 4 | Exec ROI/value dashboard | B5 | M | ✅ done (ladder-savings + PDF pending) | Renewals, POC conversion |
-| 5 | Agent Control Tower surface + inventory export | A1 | S–M | 🟡 fleet page done; export + realtime pending | Demo, EU AI Act inventory |
-| 6 | Demo sandbox tenants (hosted, per vertical) | B6 | M | ✅ core done; 2/27 verticals bundled | Top-of-funnel, sales efficiency |
+| 5 | Agent Control Tower surface + inventory export | A1 | S–M | 🟡 fleet page ✅ + inventory CSV export ✅ (07-26); realtime patching (slice 2) pending | Demo, EU AI Act inventory |
+| 6 | Demo sandbox tenants (hosted, per vertical) | B6 | M | ✅ core done; **4/27 verticals bundled** (07-26: +banking-aml, +payer-fwa-siu) | Top-of-funnel, sales efficiency |
 | 7 | SOC 2 start + trust center + BAA/DPA | B10 | M (long lead) | ❌ (security posture doc ✅) | Every regulated deal |
 | 8 | Published pricing + calculator | B3 | S | ❌ | Trust, inbound qualification |
 | 9 | Product analytics (self-hosted) | B8 | S–M | ❌ | Funnel tuning, expansion signals |
 | 10 | POC mode + design-partner tooling | B7 | M | 🟡 POC core done; conversion/design-partner pending | Pilot→production conversion |
 | 11 | Guardrails to ML-grade (Presidio/XPIA) | A4 | M | ❌ (regex tier improved) | Security review survival |
-| 12 | Compliance artifacts as product output | A6 | M | ❌ (no control mappings in any pack manifest) | Compliance-budget revenue |
+| 12 | Compliance artifacts as product output | A6 | M | 🟡 pack `control_mappings` schema + lint + 2 flagship packs mapped (07-26); auto-generated model/agent cards, validation reports and the Annex IV kit remain | Compliance-budget revenue |
 | 13 | Bedrock/Vertex adapters | A5 | S–M | ❌ (4 providers real, 2 stubs) | Cloud-native deals, B12 |
 | 14 | Productized BYOC (zero-access split-plane) | B11 | L | ❌ | Sovereignty deals |
 | 15 | Cloud marketplace listings + private offers | B12 | M | ❌ | Procurement channel |
