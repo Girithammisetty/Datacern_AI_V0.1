@@ -148,11 +148,41 @@ every ordinary bring-up. Fixed by adding `register_case_apply_tool()` to
 `seed.py` and calling it from `up.sh`; the tool now registers, publishes, and
 resolves at version 1.2.0.
 
-**Cause 2 (OPEN).** With the tool registered, the same approval is denied one
-layer deeper: `deny_reason: "permission denied: obo_grant"`. The signed
-on-behalf-of grant that binds (tenant, tool, args, decider) is not satisfying
-OPA. **The loop still does not close.** This is the same bug family as the
-earlier ml-engineer promote fix (obo-grant URN shape), so start there.
+**Cause 2 (NOT A BUG — an unmet precondition).** With the tool registered the
+denial moved to `permission denied: obo_grant`. That is the policy working.
+`proposals/service.py` deliberately executes as the **decider**, not the
+original trigger user, and says why: obo_sub=obo_user was tried and case-service
+rejected every apply with 403 because the trigger user only holds
+`case.case.update`. So the approver must hold a per-resource grant on the case —
+and grants are minted by **assignment**, which none of the seeded cases had.
+I nearly "fixed" this by weakening the policy; it needed data, not code.
+
+**Cause 3 (also correct).** With a grant in place the denial moved again, to
+`backend_rejected: INVALID_TRANSITION: resolve requires an in_progress case,
+got draft` — case-service's own state machine. Start the case first.
+
+### The loop DOES close — verified end to end
+
+Sequence that works, all live, no mocks:
+
+1. assign the case to the approver (mints an `editor` grant on the case URN)
+2. start the case (`draft -> in_progress`)
+3. admin's `case-triage` agent proposes a disposition
+4. **manager** approves (different person — four-eyes satisfied)
+5. tool-plane: `allowed`
+6. case-service applies it — `status=2`, `disposition_id` set, the agent's
+   resolution note written to the case
+
+So the governed write path is real. What was missing was one tool registration
+(fixed) plus two preconditions nobody surfaces: the approver needs a grant on
+the resource, and the case must be in progress.
+
+### The demo implication
+
+A demo tenant whose cases are **unassigned** or in **draft** cannot complete
+this loop, and every failure is silent. Any demo script must assign + start
+before showing an approval, or the money moment ends with "approved" and an
+unchanged case.
 
 ### The shape of this failure is the real lesson
 
