@@ -793,6 +793,11 @@ function IndustryShipsCard({ ind }: { ind: (typeof INDUSTRIES)[number] }) {
         </ul>
       ) : (
         <div key={seg.id} className="wr-swap mt-5">
+          {/* Rule #1: the stat tiles below are a product mock, and the rendered
+           * page must say so — not just this comment. */}
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Illustrative product mock — not customer data
+          </div>
           <div className="grid grid-cols-3 gap-2">
             {seg.workflow.kpis.map(([label, value]) => (
               <div key={label} className="rounded-lg border border-border/70 bg-background/60 px-2 py-2 text-center">

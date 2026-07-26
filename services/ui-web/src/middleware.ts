@@ -87,8 +87,9 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Guard everything except login, API routes, and static assets.
+  // Guard everything except login, the public marketing pages (welcome and its
+  // subpages, live-demo signup), API routes, and static assets.
   matcher: [
-    "/((?!login|welcome|api|_next/static|_next/image|favicon.ico|icon.svg|datacern-embed.js).*)",
+    "/((?!login|welcome|live-demo|api|_next/static|_next/image|favicon.ico|icon.svg|datacern-embed.js).*)",
   ],
 };
