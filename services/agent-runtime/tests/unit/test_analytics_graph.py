@@ -106,11 +106,79 @@ async def test_analytics_grounds_on_the_case_when_a_case_id_is_supplied():
     assert any(e.get("event") == "case_grounded" for e in outcome.trace)
 
 
-async def test_analytics_without_a_case_id_behaves_exactly_as_before():
-    """No case_id (e.g. a general /data question) -> ground is a no-op and the
-    prompt is exactly the user's raw query, unchanged from pre-grounding
-    behaviour."""
+async def test_analytics_without_a_case_id_refuses_instead_of_improvising():
+    """No case_id -> no data of any kind, so the question is wrapped in a refusal
+    instruction rather than passed through bare.
+
+    This test previously asserted the opposite — that the prompt was "exactly the
+    user's raw query, unchanged" — and so pinned the defect in place. Handing a
+    live model a data question with no data is what produced the fabricated
+    "Claim #1234" answer; passing the query through unchanged was the bug, not
+    the contract. Do not restore the old assertion.
+    """
     llm = _RecordingLlm(_ANSWER)
     deps = GraphDeps(llm=llm)
     await run_analytics(deps, {"tenant_id": TENANT_A, "query": "How many claims total?"})
-    assert llm.user_prompts == ["How many claims total?"]
+
+    prompt = llm.user_prompts[0]
+    assert "How many claims total?" in prompt  # the question is not dropped
+    assert "NO DATA" in prompt  # ...but it is explicitly marked unanswerable
+    assert prompt != "How many claims total?"
+
+
+# --------------------------------------------------------------- no-data guard
+#
+# These assert on what is SENT TO THE MODEL, not on what a fake model returns.
+# That is the only part the graph controls, and it is where the real defect was:
+# with no case_id the graph passed the bare question through, and a live model
+# answered by inventing "Claim #1234" with a 0.4 confidence score from a
+# "keyword extraction model" — then credited the governed semantic layer for it.
+# A FakeLlm returning canned text cannot catch that; the prompt contract can.
+
+
+async def test_ungrounded_question_instructs_the_model_to_refuse():
+    """No case_id -> no data exists, so the graph must tell the model to refuse
+    rather than hand it a bare question it can only answer by inventing one."""
+    llm = FakeLlm(content="I can't answer that from this screen.")
+    await run_analytics(GraphDeps(llm=llm), {"tenant_id": TENANT_A,
+                                             "query": "Which claim is riskiest?"})
+
+    user_msg = llm.calls[0]["messages"][-1]["content"]
+    assert "NO DATA" in user_msg
+    assert "do not invent" in user_msg.lower()
+    # The question still reaches the model — we refuse it, we don't drop it.
+    assert "Which claim is riskiest?" in user_msg
+
+
+async def test_system_prompt_never_tells_the_model_to_claim_governed_provenance():
+    """The original prompt said to 'cite that the answer is grounded in the
+    governed semantic layer' unconditionally — so an ungrounded model dutifully
+    claimed provenance it never had. Fabricated provenance is the one failure
+    this product cannot ship."""
+    llm = FakeLlm(content="ok")
+    await run_analytics(GraphDeps(llm=llm), {"tenant_id": TENANT_A, "query": "anything"})
+
+    system = llm.calls[0]["messages"][0]["content"].lower()
+    assert "cite that the answer is grounded" not in system
+    assert "never claim an answer is grounded" in system
+
+
+async def test_grounded_case_question_still_passes_the_real_case_data():
+    """The refusal path must not swallow the branch that actually works: with a
+    case_id, the case JSON still reaches the model."""
+    llm = FakeLlm(content="The case is a duplicate invoice.")
+    deps = GraphDeps(llm=llm, case_reader=FakeCaseReader(), evidence_reader=FakeEvidenceReader())
+    await run_analytics(deps, {"tenant_id": TENANT_A, "case_id": "case-1",
+                               "query": "What is this case about?"})
+
+    user_msg = llm.calls[0]["messages"][-1]["content"]
+    assert "Case (JSON):" in user_msg
+    assert "NO DATA" not in user_msg
+
+
+async def test_answers_are_not_truncated_mid_sentence_by_a_tight_token_cap():
+    """The live answer stopped at exactly 300 output tokens, mid-sentence
+    ("Please let me know if"). Keep real headroom."""
+    llm = FakeLlm(content="ok")
+    await run_analytics(GraphDeps(llm=llm), {"tenant_id": TENANT_A, "query": "anything"})
+    assert llm.calls[0]["max_tokens"] >= 800

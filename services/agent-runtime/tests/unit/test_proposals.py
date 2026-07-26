@@ -444,3 +444,80 @@ async def test_guardrail_blocks_tier_above_ceiling():
     with pytest.raises(GuardrailViolation):
         await c.proposal_service.create_from_intent(
             run=run, intent=too_high, obo_user="u-77", auto_execute_policy={})
+
+
+# ---- execution outcome is recorded, not assumed (live-found) ----------------
+#
+# A manager approved a real disposition, tool-plane refused it, the workflow
+# completed, and the proposal still read `approved` while the case never
+# changed. The only trace was a deny_reason in a table nobody opens. An audit
+# trail is not entitled to assert a decision was applied when it was not.
+
+
+class _RefusingToolClient:
+    """tool-plane refuses the write (as it does for an unregistered tool, a
+    missing obo grant, or a backend that rejects the apply)."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def call(self, *, tool_id, arguments, tenant_id, auth_token, version=None,
+                   proposal_grant=None):
+        from app.domain.ports import ToolResult
+        self.calls.append({"tool_id": tool_id, "arguments": arguments})
+        return ToolResult(ok=False, status="error", code="NOT_FOUND")
+
+
+async def test_successful_execution_is_recorded_on_the_proposal():
+    c = _container()
+    run = await _run(c)
+    prop, _ = await c.proposal_service.create_from_intent(
+        run=run, intent=_intent(), obo_user="u-77", auto_execute_policy={})
+    await c.proposal_service.decide(
+        tenant_id=TENANT_A, proposal_id=prop.proposal_id, actor_sub="u-super",
+        action="approve")
+
+    stored = await c.store.get_proposal(TENANT_A, prop.proposal_id)
+    assert stored.decision["execution"]["ok"] is True
+    assert stored.decision["execution"]["at"]
+    # the human decision it annotates is still intact
+    assert stored.decision["actor"] == "user:u-super"
+
+
+async def test_refused_execution_does_not_read_as_a_clean_approval():
+    """The whole point: `approved` must not be the only thing the record says."""
+    c = _container()
+    c.tool_client = _RefusingToolClient()
+    c.proposal_service._tools = c.tool_client
+    run = await _run(c)
+    prop, _ = await c.proposal_service.create_from_intent(
+        run=run, intent=_intent(), obo_user="u-77", auto_execute_policy={})
+    decided = await c.proposal_service.decide(
+        tenant_id=TENANT_A, proposal_id=prop.proposal_id, actor_sub="u-super",
+        action="approve")
+
+    # The human decision stands — a refused write does not un-approve it...
+    assert decided.status == "approved"
+    # ...but the record now carries what actually happened.
+    stored = await c.store.get_proposal(TENANT_A, prop.proposal_id)
+    ex = stored.decision["execution"]
+    assert ex["ok"] is False
+    assert ex["code"] == "NOT_FOUND"
+
+
+async def test_a_refused_execution_is_emitted_not_just_stored():
+    """Queryable is not the same as surfaced — the failure must raise an event
+    so something can notify a human, rather than waiting to be discovered."""
+    c = _container()
+    c.tool_client = _RefusingToolClient()
+    c.proposal_service._tools = c.tool_client
+    run = await _run(c)
+    prop, _ = await c.proposal_service.create_from_intent(
+        run=run, intent=_intent(), obo_user="u-77", auto_execute_policy={})
+    await c.proposal_service.decide(
+        tenant_id=TENANT_A, proposal_id=prop.proposal_id, actor_sub="u-super",
+        action="approve")
+
+    failed = c.bus.of_type("proposal.execution_failed")
+    assert failed, "a refused write must raise an event, not only a DB column"
+    assert failed[0]["payload"]["decision"]["execution"]["code"] == "NOT_FOUND"

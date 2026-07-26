@@ -277,11 +277,38 @@ your *own* proposal as the author — the platform blocks it.
 not the requester's, and it is enforced server-side with a signed grant bound to
 this exact tenant, tool, and arguments — not a UI convention."*
 
+> **Check these BEFORE you demo the approval — all three fail silently.**
+> An approval whose write is refused still shows `approved`, and the case simply
+> does not change. Found the hard way on 2026-07-26; each of these produced
+> exactly that symptom:
+>
+> 1. **The tool must be registered.** `case.apply_disposition` was missing from
+>    the registry on any ordinary `up.sh` bring-up (fixed — `seed.py
+>    case_apply_tool` now runs at boot). Verify:
+>    `psql -d tool_plane -c "select tool_id,version,status from tool_versions"`.
+> 2. **The approver needs a grant on the case.** Execution runs as the *decider*,
+>    and per-resource grants are minted by **assignment** — so an unassigned case
+>    is refused with `permission denied: obo_grant`. Assign the case to whoever
+>    will approve it.
+> 3. **The case must be in progress.** case-service refuses to resolve a `draft`
+>    case (`INVALID_TRANSITION`). Start it first.
+>
+> When a write is refused the reason lands in `tool_plane.invocation_log`
+> (`decision`, `deny_reason`) and, since the execution-outcome fix, on the
+> proposal itself as `decision.execution`. Check there before assuming the
+> platform is broken.
+
 ### Step 6 — the receipt
 
 The case carries the disposition and the rule trace. **Audit** shows the whole
 chain — who proposed, who approved, what executed — hash-chained and
 exportable to the customer's SIEM.
+
+Confirm the write actually landed rather than trusting the `approved` badge —
+the case's disposition and resolution note should now be the agent's proposed
+ones. Verified end to end on 2026-07-26 with the three preconditions above met:
+agent proposed → a different human approved → tool-plane `allowed` →
+case-service applied it.
 
 ---
 
@@ -364,9 +391,9 @@ Honest list. Each was observed, not assumed.
 
    | Step | Automatic? |
    |---|---|
-   | Data arriving | **No.** Nothing polls, listens or wakes up. Every load is human-initiated: upload, query-pull, `run_now`, or an approved agent proposal. The recurring scheduler exists but `start()`/`tick()` are never called and **no env flag enables it**; Temporal schedules are a `NotImplementedFeatureError` stub; webhook-batch creation 501s; SFTP/object-store fetchers are never invoked. |
+   | Data arriving | **Yes, on a schedule — since 2026-07-26.** Previously "nothing polls, listens or wakes up"; that is now out of date. `app/main.py` starts the in-process scheduler at boot and rehydrates every enabled schedule, so a cron/interval schedule fires on its own and survives a restart. Object-store (`s3`/`gcs`/`azure_blob`) and now `sftp`/`ftp` sources ingest via `file_poll`. Still true: `http_api` tests green and cannot ingest; webhook-batch creation 501s; Temporal schedules remain a stub. Single-replica only — the tick registry has no cross-replica lease. |
    | Rows becoming cases | **Yes — once a human authors an intake rule.** `ingestion.completed` → case-trigger evaluation → cases materialized, dedup-keyed on `(dataset_urn, row_pk)`. Fully wired, no feature flag, real Postgres integration test. Without a trigger, an operator must tick rows in the dataset/dashboard grid and click "Create cases" every time. |
-   | Agent triaging a new case | **No.** `AR_EVENT_TRIGGERS_ENABLED` defaults `false` and is set nowhere in `deploy/`. Worse, if enabled it would fail: the dispatcher passes the event payload straight through as graph inputs, but case-service's real `case.created` payload has no `case_id`/`tenant_id`, which the triage graph requires — a `KeyError`. The unit test that appears to prove it hand-writes a payload shape case-service never emits. There is also **no UI control to run triage**; the only working entry is `POST /api/v1/agents/case-triage/chat/completions` with `metadata.case_id`. |
+   | Agent triaging a new case | **Not automatically — but now reachable from the UI.** `AR_EVENT_TRIGGERS_ENABLED` still defaults `false` and is set nowhere in `deploy/`, so nothing triages on its own. The `KeyError` that would have crashed it if enabled is fixed (the dispatcher now derives `case_id`/`tenant_id` from the event envelope). The "no UI control" claim is out of date: the case detail page has a **Draft recommendation** button, which is the supported way to run triage on demand. |
    | Decision table across a worklist | **No.** `POST /decision-models/{id}/batch-evaluate` is real and defaults to dry-run, but **no UI component calls it** — the React hook exists with zero callers. Operator must hit the API. |
    | Inference → auto-create case | **Dead path.** The consumer is wired, but no service emits `inference.completed` and nothing anywhere sets `auto_case`. |
 

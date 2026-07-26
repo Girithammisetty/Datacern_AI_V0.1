@@ -11,8 +11,16 @@ When the caller (e.g. the case-detail Copilot drawer) supplies a case_id, the
 ``ground`` node fetches that case + its evidence attachments (the same reader
 helpers triage/persona_copilot use — best-effort, XPIA-defended, never
 raises) so the model actually answers about the specific case instead of
-giving generic, context-free guidance. No case_id -> ground is a no-op and
-behaviour is unchanged.
+giving generic, context-free guidance.
+
+With NO case_id there is currently no factual input at all, so the agent
+REFUSES rather than answering. That is deliberate: while the data tools are
+unwired, any answer on a global surface (the home-page Copilot drawer) is
+necessarily invented. Live testing caught exactly that — asked which open claim
+was riskiest, it described "Claim #1234" with a 0.4 confidence score from a
+"keyword extraction model", none of which exist, and closed by attributing the
+analysis to the governed semantic layer. An honest refusal is the only correct
+behaviour until a real data path exists.
 """
 
 from __future__ import annotations
@@ -50,7 +58,6 @@ def build_analytics_graph(deps: GraphDeps):
         directive = role_directive(state.get("caller"))
         if directive:
             sys = f"{_SYS} {directive}"
-        user_content = state["query"]
         case = state.get("case") or {}
         if case:
             evidence_block = _format_evidence(state.get("evidence_docs", []))
@@ -61,10 +68,30 @@ def build_analytics_graph(deps: GraphDeps):
                 "Answer using ONLY the case data and evidence above; say what "
                 "you don't know rather than guessing."
             )
+        else:
+            # No case id and no data tool wired yet (see the module docstring —
+            # semantic-layer tools are still a follow-up), so NOTHING factual is
+            # available for this question. The old code sent the bare question
+            # here, and the model duly invented a claim number, a confidence
+            # score and a "keyword extraction model", then attributed all of it
+            # to the governed semantic layer because the system prompt told it
+            # to. Refusing is the only honest branch: this mirrors
+            # UnsupportedQuerySource in ingestion — fail visibly rather than
+            # produce confident nonsense.
+            user_content = (
+                f"Question: {state['query']}\n"
+                "NO DATA has been provided to you for this question — you have "
+                "no records, metrics or model output available. Do not answer "
+                "it and do not invent an illustrative example. Reply in one or "
+                "two sentences: state that you cannot answer from this screen "
+                "because no data was supplied, and suggest opening a specific "
+                "case and asking again there."
+            )
         result = await deps.llm.chat(
             messages=[{"role": "system", "content": sys},
                       {"role": "user", "content": user_content}],
-            tenant_id=state["tenant_id"], temperature=0.2, max_tokens=300)
+            # 300 truncated real answers mid-sentence ("Please let me know if").
+            tenant_id=state["tenant_id"], temperature=0.2, max_tokens=800)
         state["draft"] = result.content
         state["usage"] = {"input_tokens": result.input_tokens,
                           "output_tokens": result.output_tokens, "model": result.model}
