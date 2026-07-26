@@ -420,6 +420,21 @@ class ProposalService:
             topic=f"agent_run:{prop.run_id}", event="tool_call_result",
             data={"tool_id": prop.tool_id, "ok": result.ok, "status": result.status},
             tenant_id=prop.tenant_id)
+
+        # An approved proposal whose write was refused must not keep reading as
+        # a clean `approved`. Live-observed: a manager approved a disposition,
+        # tool-plane denied it ("tool not found"), the workflow completed, the
+        # proposal still said approved, and the case never changed — the only
+        # trace was a deny_reason in a table nobody opens. Record the outcome on
+        # the proposal, and emit on failure so it is not merely queryable but
+        # actually surfaced. Both the inline and Temporal paths land here.
+        outcome = {"ok": bool(result.ok), "status": result.status,
+                   "code": getattr(result, "code", None), "at": now().isoformat()}
+        await self._store.record_execution(
+            tenant_id=prop.tenant_id, proposal_id=prop.proposal_id, execution=outcome)
+        if not result.ok:
+            await self._emit(prop, "proposal.execution_failed",
+                             decision={**(prop.decision or {}), "execution": outcome})
         return result
 
     # ---- events ------------------------------------------------------------

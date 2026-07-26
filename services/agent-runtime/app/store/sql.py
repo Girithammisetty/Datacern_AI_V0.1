@@ -617,6 +617,30 @@ class SqlStore:
                  "id": proposal_id})).mappings().first()
         return _proposal(r) if r else None
 
+    async def record_execution(
+        self, *, tenant_id: str, proposal_id: str, execution: dict,
+    ) -> None:
+        """Persist the EXECUTION outcome alongside the human decision.
+
+        Without this a proposal reads `approved` whether or not the write
+        actually landed — which is precisely the assertion the audit trail is
+        not entitled to make. Live-observed: a disposition was approved by a
+        named manager, tool-plane refused it, and the record still said
+        approved while the case never changed.
+
+        Merged into the existing `decision` jsonb rather than a new column: the
+        decision and what came of it are one fact, and a merge needs no
+        migration and cannot lose the decision it is annotating.
+        """
+        async with self._tenant(tenant_id) as s:
+            await s.execute(text(
+                """UPDATE proposals
+                      SET decision = coalesce(decision, '{}'::jsonb)
+                                     || jsonb_build_object('execution', cast(:e as jsonb)),
+                          updated_at = now()
+                    WHERE proposal_id = cast(:id as uuid)"""),
+                {"e": _j(execution), "id": proposal_id})
+
     async def supersede_pending(
         self, *, tenant_id: str, run_id: str, tool_id: str, urns: list[str], except_id: str
     ) -> None:

@@ -313,6 +313,16 @@ class InMemoryStore:
         p.updated_at = decided_at
         return copy.copy(p)
 
+    async def record_execution(
+        self, *, tenant_id: str, proposal_id: str, execution: dict,
+    ) -> None:
+        """Annotate the decision with what execution actually did (see the SQL
+        store for why this exists)."""
+        p = self._proposals.get(proposal_id)
+        if p is None or p.tenant_id != tenant_id:
+            return
+        p.decision = {**(p.decision or {}), "execution": execution}
+
     # ---- SLM transcript corpus (milestone 1) -------------------------------
     async def record_transcript(self, t: Transcript) -> None:
         self._transcripts.setdefault(t.transcript_id, copy.copy(t))
