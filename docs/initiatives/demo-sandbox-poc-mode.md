@@ -598,7 +598,13 @@ BRD 67's close job together.
 ### Out of scope (this design)
 
 - Public self-serve demo signup (BRD 70 §Out of scope carries this already;
-  this design does not revisit it).
+  this design does not revisit it). **Update, v1.1:** this was implemented
+  in a later round as an additive extension on top of slices 1-2's
+  DemoService/DemoReaper machinery — see §3's "Self-serve demo signup
+  (v1.1)" subsection below for what was built and its abuse-prevention
+  tradeoffs. This §2 design text is left as originally written (the v1
+  design genuinely did not plan for it); the v1.1 work did not revise this
+  document's architecture, only added to it.
 - A DB-backed / admin-UI-authored demo bundle format (Option C in §2.2) —
   git-file bundles only for v1.
 - Cross-region/cross-cell hosted demo routing (which cell a demo tenant
@@ -624,6 +630,17 @@ against both synthetic fixtures and the real shipped bundle; one live-stack
 Playwright spec written and explicitly gated off (`test.skip`) pending a
 credential prerequisite `tests-live/fixtures.ts` doesn't yet provide. Slice 3
 (POC mode) is NOT started — confirmed still hard-blocked, see below.**
+
+**v1.1 update: public self-serve demo signup built.** The item this
+document's own §Out of scope explicitly deferred ("Public self-serve demo
+signup ... explicitly rejected for v1, not merely deferred without reason")
+was implemented in a later round: `POST /api/v1/public/demo-signup` +
+`POST /api/v1/public/demo-signup/claim` (identity-service, unauthenticated)
+and a new pre-login `/live-demo` page (ui-web). Built entirely on top of
+slices 1-2's DemoService/DemoReaper/TTL machinery — no new expiry path, no
+new tenant-creation path. See the dedicated subsection below for what was
+built, the exact abuse-prevention measures and their limits (stated plainly,
+including what is NOT covered), and test results.
 
 ### Slice plan (unchanged from the design; slices 1-2 are this build)
 
@@ -987,6 +1004,246 @@ calling a non-BFF service directly via an `E2E_LIVE_*_URL` env var) so it is
 ready to enable once that prerequisite lands — not a placeholder. Per the
 task's explicit instruction, the live stack was not booted or run.
 
+### Self-serve demo signup (v1.1)
+
+**What this is.** The demo tenant creation flow BRD 70 v1 shipped (slices
+1-2, above) is operator/partner-only: `POST /demo-tenants` sits behind
+`requireSuperAdmin`, and the only public-facing surface was an
+unauthenticated lead-gen contact form
+(`services/ui-web/src/app/api/request-demo/route.ts`) that just forwards to
+a Slack/CRM webhook — it never provisions anything. This round adds a
+genuine self-service path: a public visitor fills a 3-field form, a real
+`profile=demo` tenant is provisioned end to end through the SAME
+`DemoService`/provisioning-saga/TTL-reaper machinery slices 1-2 already
+built, and the visitor is logged straight into it — no operator, no sales
+call, no manual "accept invitation" step.
+
+**Design: create, then claim (why not one call).** Tenant provisioning is
+async in every real deployment (`TenantService.Async=true`,
+`cmd/server/main.go:283`) and can take minutes (Terraform, Keycloak realm
+creation, dataset seeding). A single synchronous HTTP call cannot honestly
+return "you're logged in" before that finishes. The endpoint therefore
+returns one of two shapes:
+- **Fast path (201):** if provisioning already finished by the time the
+  handler checks (true in this build's own tests, where
+  `TenantService.Async=false`, and possibly true on a fast/local
+  deployment) — `{tenant, access_token, token_type, expires_in}`, a real,
+  immediately-usable session.
+- **Async path (202):** `{tenant, operation_id, claim_token,
+  claim_expires_in}` — a short-lived (30 min), narrowly-scoped bearer token
+  (`domain.TypDemoClaim`, rejected everywhere `requireScope`/
+  `requireSuperAdmin` gate, carries zero scopes) the caller polls
+  `POST /public/demo-signup/claim` with until the tenant is active AND its
+  owner user exists (`ClaimSelfServeLogin`), at which point a real session
+  is minted — the SAME claim shape (`Claims{Subject, TenantID, Typ, Scopes:
+  [], Profile, CommercialState}`) `OIDCLogin` mints for a verified SSO
+  login, so downstream rbac-projection-based authorization behaves
+  identically to a real login. The one difference from a real login is
+  deliberate: there is no external IdP verification step, because closing
+  the "is this a real human" question is exactly what the rate limits/cap/
+  denylist below already do at signup time, not a second check at claim
+  time.
+
+ui-web's `/live-demo` page hides this two-step shape behind one form
+submit: `POST /api/live-demo-signup` (session-cookie'd immediately on the
+fast path) or a claim_token stashed in an httpOnly cookie that
+`/api/live-demo-signup/claim` polls on a 3-second cadence until ready, then
+the page redirects into the app. **A pre-existing bug fixed as part of
+this:** `internal/keys/token.go`'s `wireClaims` (the REAL RS256 issuer) had
+never mirrored `domain.Claims.Profile`/`CommercialState` — those claims were
+only ever exercised through fake issuers in unit tests, so a real,
+production-minted token silently dropped the watermark-banner claim end to
+end. Fixed (4-line addition + wire-and-back roundtrip) because this
+feature's login needs the claim to actually reach the browser; flagged here
+since it's a fix bundled into this round rather than a separate pass.
+
+**Abuse-prevention measures implemented (task's five requirements):**
+1. **Rate limiting by IP and by work-email domain.** `domain.RateLimiter`
+   (the same `SlidingWindowLimiter` abstraction `OBORateLimit` already
+   proves out, `ratelimit.go`) — default 3 signups/IP/hour and 8/email-
+   domain/24h (`DefaultSelfServeIPLimit/Window`,
+   `DefaultSelfServeDomainLimit/Window`, `demo_public_signup.go`),
+   overridable via `PUBLIC_DEMO_SIGNUP_{IP,DOMAIN}_LIMIT` /
+   `_WINDOW_MINUTES` env vars (`cmd/server/main.go`). A 429 carries
+   `Retry-After`, matching the existing `AC-14` precedent. Nil-safe: if an
+   operator never wires a limiter, the handler builds and caches a
+   conservative default itself (`publicDemoIPLimiter`/
+   `publicDemoDomainLimiter`, `handlers_public_demo.go`) rather than coming
+   up unrate-limited.
+2. **A hard concurrency cap.** `PUBLIC_DEMO_SIGNUP_CAP` (default 20,
+   `DefaultSelfServeDemoCap`) counts LIVE self-serve demo tenants
+   (`Profile=demo` AND `CreatedBy=SelfServeDemoActorID` — the one marker
+   that distinguishes a self-serve tenant from an operator-created one,
+   since both share `Profile=demo`) and refuses new creates past it with a
+   clear 503 (`EDemoSignupAtCapacity`, `"self-serve demo capacity reached,
+   please try again later"`) — never a silent degrade. An
+   operator/partner-created demo tenant never counts against this cap
+   (`TestCountLiveSelfServeDemoTenants_ExcludesOperatorCreated`,
+   `TestPublicDemoSignup_CapacityExceeded`).
+3. **The existing TTL reaper, untouched.** Every self-serve tenant gets
+   `DefaultDemoTTLDays` exactly like an operator-created one and is swept by
+   the SAME leader-elected `DemoReaper` slice 2 already built — no new
+   expiry path was invented. This is also how the cap in (2) self-clears
+   over time.
+4. **A disposable-email denylist, plus a honeypot, plus mandatory
+   audit logging — explicitly NOT a CAPTCHA.** `domain.IsDisposableEmailDomain`
+   rejects ~25 well-known throwaway providers (mailinator.com,
+   guerrillamail.com, etc. — `demo_public_signup.go`); the ui-web form
+   carries a hidden `website` honeypot field mirroring
+   `request-demo/route.ts`'s existing pattern. Every self-serve creation is
+   logged twice: a structured `slog` line including the caller's IP
+   (`handlers_public_demo.go`, not persisted on the tenant record) and a
+   durable outbox event (`demo.tenant_public_signup`, full name/company/
+   work-email-domain/pack) for a human to review after the fact — both were
+   explicit task requirements. **This repo has no CAPTCHA/Turnstile/
+   reCAPTCHA integration anywhere** (grepped `services/` for
+   `captcha|turnstile|recaptcha`; the only hits are unrelated vendored font
+   glyph names). That is a real, stated gap, not something the denylist/
+   rate-limits are being represented as equivalent to — a determined script
+   using a real (non-disposable) email domain and rotating IPs slower than
+   the rate-limit window can still create tenants up to the concurrency cap.
+   Adding a real CAPTCHA (e.g. Turnstile, which needs no server-side SDK,
+   just a token verify call) is the natural v1.2 follow-up and is flagged
+   here plainly rather than implied as covered.
+5. **Structurally forced `profile=demo`, forced default pack, forced
+   `internal-demo` plan.** `PublicDemoSignupRequest` (the wire body) has
+   exactly three fields — `full_name`, `work_email`, `company` — no `pack`,
+   `tier`, `cloud`, `ttl_days`, or `profile`. `DemoService.PublicSignup`
+   forces every one of those server-side and calls the SAME `Create` path
+   slice 1 built (`Profile: ProfileDemo`, forced `internal-demo` plan
+   assignment, non-convertible `commercial_state`), so this route
+   structurally cannot create a standard/POC tenant or target a
+   non-default pack — verified by
+   `TestPublicDemoSignup_NeverCreatesNonDemoProfile` (extra JSON keys are
+   rejected outright by `decodeBody`'s `DisallowUnknownFields`) and the
+   minted self-serve session's own scope check
+   (`TestPublicDemoSignup_CreatesAndClaimsLiveDemo` asserts the session is
+   rejected on `POST /demo-tenants`, a `requireSuperAdmin` route).
+
+**Public tenant view.** The signup/claim responses expose a deliberately
+narrow `publicTenantView{id, name, display_name, status, profile}` —
+`owner_email`, `schema_prefix`, `k8s_namespace`, `cell_id`, `created_by` are
+never returned to an unauthenticated caller, unlike the operator-facing
+`POST /demo-tenants` response.
+
+**Files touched.**
+- identity-service (domain): `internal/domain/demo_public_signup.go` (new
+  — `PublicSignup`, `ClaimSelfServeLogin`, `MintSelfServeClaimToken`,
+  `CountLiveSelfServeDemoTenants`, `IsDisposableEmailDomain`, all the
+  defaults/constants above); `internal/domain/demo_service.go` (`Tokens
+  *TokenService` field, for the claim-login mint); `internal/domain/
+  errors.go` (`EDemoSignupAtCapacity`); `internal/domain/events.go`
+  (`demo.tenant_public_signup`, `demo.tenant_public_signup_claimed`);
+  `internal/domain/token.go` (`TypDemoClaim`).
+- identity-service (keys): `internal/keys/token.go` (the `wireClaims`
+  Profile/CommercialState fix described above).
+- identity-service (api): `internal/api/handlers_public_demo.go` (new —
+  `handlePublicDemoSignup`, `handlePublicDemoSignupClaim`, the rate-limiter
+  fallback helpers, `clientIP`); `internal/api/server.go` (`Server.PublicDemo*`
+  fields, the two pre-auth routes).
+- identity-service (wiring): `cmd/server/main.go` (`demo.Tokens = tokens`;
+  `envInt`/`envMinutes` helpers; the `PUBLIC_DEMO_SIGNUP_*` env-driven
+  limiter/cap/pack wiring).
+- identity-service (tests, new): `internal/domain/demo_public_signup_test.go`
+  (10 unit tests — forced defaults, blank-field/disposable-domain
+  rejection, the concurrency cap, the operator-vs-self-serve count
+  exclusion, the claim-login flow including the "still provisioning"
+  and "not a self-serve tenant" cases, claim-token scope/binding);
+  `internal/api/handlers_public_demo_test.go` (9 acceptance tests over real
+  HTTP — happy path incl. the minted session actually working against
+  `GET /tenants/self` and being rejected on an admin route, disposable-email
+  rejection, honeypot, IP rate limiting, email-domain rate limiting, the
+  capacity 503 (and that it doesn't block operator creates), the
+  wire-shape-can't-inject-profile check, and claim-token rejection for a
+  wrong-typ/garbage bearer). **Edited:** `internal/api/fixture_test.go`
+  (`Demo.Tokens`, generous default `PublicDemo*` limiter/cap fields tests
+  can override per-test).
+- ui-web (new): `src/app/live-demo/page.tsx` + `live-demo-content.tsx` (the
+  public form/spinner/error states) + `live-demo-content.test.tsx` (7
+  component tests — form render, fast-path redirect, provisioning-spinner +
+  poll-to-ready, 503/429/422 error surfacing, honeypot no-op);
+  `src/app/api/live-demo-signup/route.ts` + `claim/route.ts` + `shared.ts`
+  (the two proxy routes + the shared claim-cookie constant, kept in its own
+  file because Next.js Route Handlers only recognize a fixed export
+  surface on a `route.ts` file).
+- ui-web (edited): `src/app/welcome/welcome-content.tsx` (one new `Link` to
+  `/live-demo` under the hero CTAs — "Or start a live demo yourself right
+  now", the discoverability path per the task's step 4).
+
+**A UI-FR-012 note.** ui-web's ESLint config hard-bans raw `setInterval`
+polling (`no-restricted-syntax`, `.eslintrc.json`) in favor of SSE via the
+realtime-hub EventBridge. `/live-demo`'s claim-polling loop is a deliberate,
+documented exception (comment in `live-demo-content.tsx`): it runs entirely
+pre-login, before any session/tenant exists for the hub to scope a
+subscription to, waiting out a one-time bounded provisioning step rather
+than an ongoing live view. It uses a self-rescheduling `setTimeout` (not
+`setInterval`, not a `setTimeout(...) > refetch()` chain), which passes the
+configured lint rule as written, but the spirit of UI-FR-012 is still
+worth revisiting if a pre-session SSE channel is ever built — flagged as a
+follow-up, not hidden behind the fact that it technically passes lint.
+
+**Test commands + results.**
+```
+cd services/identity-service
+go build ./...                                            → PASS
+go vet ./... && go vet -tags integration ./...             → PASS
+gofmt -l <every file this round touched>                    → clean (3 unrelated
+                                                                pre-existing files
+                                                                elsewhere in the
+                                                                tree are gofmt-dirty
+                                                                but untouched by
+                                                                this change, confirmed
+                                                                via git status)
+go test ./internal/... ./migrations/... -count=1            → PASS, all packages ok
+go test -tags integration -timeout 120s ./test/integration/... 
+                                                              → test/integration
+     itself: ok (skips cleanly, no Docker). The separate, pre-existing
+     test/integration/secretsigner panic (Docker fully absent, not
+     container-less — MustExtractDockerSocket panics instead of returning
+     an error) reproduces exactly as already documented above in this same
+     file's "Honest gaps" section; untouched by this round.
+
+cd services/ui-web
+pnpm exec tsc --noEmit                                      → PASS, 0 errors
+pnpm exec next lint                                         → PASS (same 2
+                                                                 pre-existing
+                                                                 warnings as
+                                                                 documented
+                                                                 above, in files
+                                                                 this round never
+                                                                 touched)
+pnpm exec vitest run                                        → 84 test files, 529
+                                                                 tests passed (3
+                                                                 new files, 28 new
+                                                                 tests vs. this
+                                                                 doc's earlier
+                                                                 81-file/501-test
+                                                                 baseline; 0
+                                                                 failures, 0
+                                                                 broken)
+```
+
+**Honest limitations, stated plainly (not implied as covered):**
+- No CAPTCHA/Turnstile — see requirement 4 above.
+- The claim-login session's TTL (`SelfServeLoginTTL`, 2 hours) is longer
+  than the platform's normal 5-minute session (`TokenTTL`) because a
+  self-serve visitor has no OIDC `refresh_token` to silently re-mint it the
+  way a real SSO login does — after 2 hours the demo session simply expires
+  with no renewal path today. Acceptable for "walk a demo," not acceptable
+  as a durable account.
+- `CountLiveSelfServeDemoTenants` paginates the whole `profile=demo` set on
+  every signup attempt rather than an indexed count query — fine at the
+  cap's expected scale (tens, `DefaultSelfServeDemoCap=20`), a real cost at
+  a much larger cap.
+- The claim-polling loop (`/live-demo`) is timer-based, not SSE — see the
+  UI-FR-012 note above.
+- This round's tests did not run against a live stack (no Docker in this
+  environment, consistent with every other tier of this initiative) — the
+  identity-service HTTP acceptance tests use the same in-memory-store
+  fixture every other acceptance test in the package uses, which is a real
+  chi-routed HTTP round trip but not a live Terraform/Keycloak/Postgres
+  deployment.
+
 ### A note on git state
 
 While this work was in progress, the environment auto-created intermediate
@@ -999,3 +1256,13 @@ Flagging this again for the orchestrator's awareness since it affects what
 "the diff" means when reviewing this change — the full BRD 70 slice 1-2 diff
 is the union of those snapshot commits' BRD-70-scoped hunks plus the working
 tree at hand-off.
+
+**Recurred during the v1.1 self-serve round.** The same auto-snapshot
+behavior fired again mid-task: `cca592d` ("wip(identity-service,ui-web):
+self-service demo tenant signup") captured every identity-service/ui-web
+file this round touched at a point where the build/tests were already
+green but this doc's §3 update was still being written — again, not a
+`git commit` this agent issued. The only change genuinely left uncommitted
+at hand-off is this documentation update itself (`git status` shows just
+`docs/initiatives/demo-sandbox-poc-mode.md` modified); the code diff is
+`cca592d` in full. No `git push` was performed at any point.
