@@ -54,8 +54,8 @@ type DemoCase struct {
 }
 
 // WalkthroughStep is one ordered step of a bundle's walkthrough.yaml
-// (§2.2, DSP-FR-015): a guided-tour script an SE (or, once ui-web wires it
-// up, the in-product overlay) walks a demo tenant through. TargetRoute is
+// (§2.2, DSP-FR-015): a guided-tour script the in-product overlay
+// (ui-web WalkthroughOverlay) walks a demo tenant through. TargetRoute is
 // an app route (e.g. "/cases"), not a DOM selector -- the overlay
 // navigates the viewer to the route and shows Narration alongside it,
 // matching the granularity the shipped bundle actually authors at

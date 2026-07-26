@@ -45,8 +45,8 @@ that a customer never thinks about — until an auditor asks.
 **The packs.** Pre-built kits for one specific job — card disputes, insurance
 claims, money-laundering alerts, supplier invoices. A pack brings the industry
 rules, the outcome codes, the dashboards and the AI instructions for that job.
-**27 exist.** Installing one turns the generic platform into a working dispute
-department.
+**28 exist** (27 industry packs plus 1 shared library). Installing one turns
+the generic platform into a working dispute department.
 
 **The agents.** Nine AI workers, each with one job — triage a case, design a
 dashboard, set up a data feed, train a model, watch for model drift. Each is
@@ -102,7 +102,11 @@ Read this before saying anything to a customer or an investor.
 
 - **Zero customers. Zero pilots.** It has never run outside a laptop.
 - **Never load-tested.** We do not know what happens with 50 concurrent users.
-- Only **1 of 27 packs** is proven to install in its current form.
+- All 28 packs have recorded installs at their v1.0.0 form (install ledgers,
+  2026-07-15/16), and every pack's current version passes the automated
+  cross-component coherence check in CI — but only **card disputes** has a
+  recorded install at the current v2.1.0. The other 27 current versions
+  haven't been install-tested yet.
 - The chat assistant **cannot answer questions about your data** yet — it reasons about one case at a time.
 - Fully unattended AI runs are **degraded**; only human-initiated work is solid.
 - No independent security audit.

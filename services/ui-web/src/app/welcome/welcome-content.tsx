@@ -911,6 +911,17 @@ export default function WelcomeContent() {
               </Link>
               <span className="ml-1.5 text-muted-foreground">— no sales call, no operator.</span>
             </p>
+            <p className="mt-2 text-sm">
+              <Link
+                href="/welcome/walkthrough"
+                className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+              >
+                See the walkthrough first <ArrowRight className="size-3.5" />
+              </Link>
+              <span className="ml-1.5 text-muted-foreground">
+                — one decision, end to end, in five steps.
+              </span>
+            </p>
           </div>
           <div className="flex justify-center md:justify-end">
             <HeroMock />
