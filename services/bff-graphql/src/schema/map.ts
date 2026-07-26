@@ -966,6 +966,7 @@ export function mapProposal(ctx: GraphQLContext, d: ProposalDTO) {
     tool: d.tool_id ?? d.tool ?? null,
     argsDiff: d.args ?? d.args_diff ?? null,
     rationale: d.rationale ?? null,
+    rationaleSource: d.rationale_source ?? null,
     affectedUrns: d.affected_urns ?? [],
     predictedEffect: d.predicted_effect ?? null,
     status: up(d.status),

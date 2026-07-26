@@ -560,16 +560,18 @@ class SqlStore:
             await s.execute(text(
                 """INSERT INTO proposals (proposal_id, tenant_id, session_id, run_id, agent_key,
                      agent_version, obo_user, tool_id, tool_version, tier, side_effects, args,
-                     rationale, affected_urns, predicted_effect, expires_at, status, workspace_id)
+                     rationale, affected_urns, predicted_effect, expires_at, status, workspace_id,
+                     rationale_source)
                    VALUES (cast(:id as uuid), cast(:t as uuid), :sid, cast(:rid as uuid), :k, :v,
                            :obo, :tid, :tv, :tier, :se, cast(:args as jsonb), :rat, :urns,
-                           cast(:pe as jsonb), :exp, :st, cast(:ws as uuid))"""),
+                           cast(:pe as jsonb), :exp, :st, cast(:ws as uuid), :rats)"""),
                 {"id": p.proposal_id, "t": p.tenant_id,
                  "sid": p.session_id, "rid": p.run_id, "k": p.agent_key, "v": p.agent_version,
                  "obo": p.obo_user, "tid": p.tool_id, "tv": p.tool_version, "tier": p.tier,
                  "se": p.side_effects, "args": _j(p.args), "rat": p.rationale,
                  "urns": list(p.affected_urns), "pe": _j(p.predicted_effect),
-                 "exp": p.expires_at, "st": p.status, "ws": p.workspace_id})
+                 "exp": p.expires_at, "st": p.status, "ws": p.workspace_id,
+                 "rats": p.rationale_source})
 
     async def get_proposal(self, tenant_id: str, proposal_id: str) -> Proposal | None:
         async with self._tenant(tenant_id) as s:
@@ -1044,4 +1046,5 @@ def _proposal(r) -> Proposal:
         predicted_effect=_load(r["predicted_effect"]) or {}, expires_at=r["expires_at"],
         status=r["status"], decision=_load(r["decision"]),
         workspace_id=str(r["workspace_id"]) if r["workspace_id"] else None,
+        rationale_source=r["rationale_source"] or "llm",
         created_at=r["created_at"], updated_at=r["updated_at"])

@@ -2107,6 +2107,13 @@ export const typeDefs = gql`
     no authz/business decision here."""
     riskTier: String
     rationale: String
+    """
+    Provenance of rationale: "llm" (a real model call produced it) or
+    "fallback_template" (the LLM call failed/was empty and agent-runtime
+    substituted a canned sentence in the same shape). Lets the approver tell
+    a genuine LLM-reasoned proposal from a fallback one.
+    """
+    rationaleSource: String
     affectedUrns: [String!]!
     """
     Structured predicted-effect object from the originating agent (e.g.

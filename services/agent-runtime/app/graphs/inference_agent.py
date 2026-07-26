@@ -322,6 +322,9 @@ def build_inference_graph(deps: GraphDeps):
                 rationale = (f"Input dataset '{dataset.get('name')}' is incompatible "
                              f"with '{model.get('name')}' v{prod.get('version')}: "
                              f"{len(report['violations'])} feature issue(s).")
+            state["rationale_source"] = "fallback_template"
+        else:
+            state["rationale_source"] = "llm"
         state["rationale"] = rationale[:4000]
         state.setdefault("trace", []).append(
             {"event": "reflection", "iteration": 0, "verdict": verdict,
@@ -357,6 +360,7 @@ def build_inference_graph(deps: GraphDeps):
             tool_id=INFERENCE_TOOL_ID, tool_version=INFERENCE_TOOL_VERSION,
             tier="write-proposal", side_effects="reversible", args=args,
             rationale=state["rationale"],
+            rationale_source=state.get("rationale_source", "llm"),
             affected_urns=[mv_urn, ds_urn],
             required_action="inference.job.create",
             predicted_effect={

@@ -1407,7 +1407,7 @@ export const CASE_DETAIL = /* GraphQL */ `
       assignee { id email fullName }
       sourceDataset { id urn name status rowCount }
       proposals {
-        id urn agentKey tool riskTier rationale predictedEffect status affectedUrns argsDiff createdAt
+        id urn agentKey tool riskTier rationale rationaleSource predictedEffect status affectedUrns argsDiff createdAt
       }
       evidence { id caseId filename contentType sizeBytes uploadedBy createdAt }
     }
@@ -1760,7 +1760,7 @@ export const PROPOSALS_INBOX = /* GraphQL */ `
   query ProposalsInbox($status: ProposalStatus, $agentKey: String, $first: Int, $after: String) {
     proposalsInbox(status: $status, agentKey: $agentKey, first: $first, after: $after) {
       nodes {
-        id urn agentKey tool riskTier rationale predictedEffect status affectedUrns argsDiff createdAt
+        id urn agentKey tool riskTier rationale rationaleSource predictedEffect status affectedUrns argsDiff createdAt
       }
       pageInfo { nextCursor hasMore }
     }
@@ -1773,7 +1773,7 @@ export interface ProposalsInboxResult {
 export const PROPOSAL = /* GraphQL */ `
   query ProposalDetail($id: ID!) {
     proposal(id: $id) {
-      id urn agentKey tool riskTier rationale predictedEffect status affectedUrns argsDiff decision createdAt
+      id urn agentKey tool riskTier rationale rationaleSource predictedEffect status affectedUrns argsDiff decision createdAt
     }
   }
 `;

@@ -74,6 +74,18 @@ describe("ProposalDetail (UI-FR-033)", () => {
     expect(screen.getByText(/Escalated for your review/i)).toBeInTheDocument();
   });
 
+  it("warns the approver when the rationale is a canned fallback, not LLM-reasoned", () => {
+    const fallback: Proposal = { ...proposal, rationaleSource: "fallback_template" };
+    renderWithProviders(<ProposalDetail proposal={fallback} />);
+    expect(screen.getByText(/auto-generated fallback, not LLM-reasoned/i)).toBeInTheDocument();
+  });
+
+  it("shows no fallback warning for a real LLM-reasoned rationale", () => {
+    const real: Proposal = { ...proposal, rationaleSource: "llm" };
+    renderWithProviders(<ProposalDetail proposal={real} />);
+    expect(screen.queryByText(/auto-generated fallback/i)).not.toBeInTheDocument();
+  });
+
   it("renders the evidence citations the recommendation is grounded in", () => {
     const withCitations: Proposal = {
       ...proposal,

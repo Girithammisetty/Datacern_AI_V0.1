@@ -18,6 +18,10 @@ export interface ProposalDTO {
   /** Legacy field name, kept for defensiveness during contract transition. */
   args_diff?: unknown;
   rationale?: string;
+  /** "llm" (real model call) or "fallback_template" (canned sentence
+   * substituted when the LLM call failed/was empty) — agent-runtime
+   * proposal_view. */
+  rationale_source?: string;
   affected_urns?: string[];
   predicted_effect?: string;
   expires_at?: string;
