@@ -44,7 +44,7 @@ def make_settings(**over) -> Settings:
 
 
 def make_token(*, sub: str, tenant_id: str, typ: str = "user", scopes=None,
-               obo_sub: str | None = None) -> str:
+               obo_sub: str | None = None, commercial_state: str | None = None) -> str:
     now = int(time.time())
     claims = {
         "iss": "https://identity.datacern.local", "aud": "datacern", "sub": sub,
@@ -53,6 +53,11 @@ def make_token(*, sub: str, tenant_id: str, typ: str = "user", scopes=None,
     }
     if obo_sub:
         claims["obo_sub"] = obo_sub
+    # BRD 66 CPL-FR-022: identity-service mints this with `omitempty`, so a
+    # token without a commercial plane simply has no claim -- mirror that here
+    # rather than defaulting to a state, so the "absent claim" path stays real.
+    if commercial_state:
+        claims["commercial_state"] = commercial_state
     return pyjwt.encode(claims, TEST_PRIV, algorithm="RS256")
 
 

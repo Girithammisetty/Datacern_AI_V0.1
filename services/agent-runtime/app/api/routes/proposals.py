@@ -11,9 +11,17 @@ from fastapi import APIRouter, Body, Query, Request
 from app.api.auth import principal_of
 from app.api.schemas import proposal_view
 from app.domain.entities import now
-from app.domain.errors import NotFound, ValidationFailed
+from app.domain.errors import NotFound, TrialExpired, ValidationFailed
 
 router = APIRouter(prefix="/api/v1")
+
+#: Decide actions refused while the tenant is read-only after trial expiry
+#: (CPL-FR-022, AC-2). These are the value-delivering ones: `approve` and
+#: `edit_args` release a signed execution grant, and `respond` continues an
+#: agent run (spending model budget). `reject` is deliberately NOT here --
+#: rejecting executes nothing, and a suspended tenant must still be able to
+#: drain its approval queue rather than be trapped with work it cannot clear.
+_SUSPENDED_WRITE_ACTIONS = frozenset({"approve", "edit_args", "respond"})
 
 
 @router.get("/proposals")
@@ -53,6 +61,13 @@ async def decide_proposal(request: Request, proposal_id: str, body: dict = Body(
     action = body.get("action")
     if action not in ("approve", "reject", "edit_args", "respond"):
         raise ValidationFailed("action must be approve|reject|edit_args|respond")
+
+    # Commercial gate (CPL-FR-022, AC-2): once the trial sweep has moved the
+    # tenant to suspended_commercial, approving is refused while every read
+    # above (list/get) keeps working. Checked before the proposal is loaded so
+    # a suspended tenant cannot probe existence through this path.
+    if action in _SUSPENDED_WRITE_ACTIONS and principal.writes_suspended:
+        raise TrialExpired("trial has expired; approvals are suspended")
 
     # self-approval policy from tenant config
     p = await c.store.get_proposal(principal.tenant_id, proposal_id)

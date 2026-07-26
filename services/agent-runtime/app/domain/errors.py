@@ -64,6 +64,21 @@ class PermissionDenied(AppError):
     code = "PERMISSION_DENIED"
 
 
+class TrialExpired(AppError):
+    """The tenant's trial lapsed and the sweep moved it to
+    suspended_commercial, so value-delivering writes are refused while reads
+    keep working (BRD 66 CPL-FR-022, AC-2).
+
+    This is a COMMERCIAL gate, deliberately distinct from PermissionDenied:
+    the caller has the capability, the tenant just has no live entitlement to
+    spend. Keeping the code separate is what lets the UI offer "convert" here
+    instead of the "ask your admin for access" it shows on a 403 authz denial.
+    """
+
+    status = 403
+    code = "TRIAL_EXPIRED"
+
+
 class Unauthorized(AppError):
     status = 401
     code = "UNAUTHENTICATED"
