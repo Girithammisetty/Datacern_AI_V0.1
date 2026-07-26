@@ -154,3 +154,67 @@ func TestSeatCap_NilReaderUnenforced(t *testing.T) {
 		t.Fatalf("invite with nil Entitlements: status %d body %s, want 201", r.status, string(r.raw))
 	}
 }
+
+// TestSeatCap_ResizeViaOverride_TakesEffectThroughRealWritePath: every case
+// above wires UserService.Entitlements to entReaderWithCap, a hardcoded fake
+// that never touches CommercialService/the store -- so none of them would
+// catch a regression in the actual admin resize path (POST .../entitlements/
+// overrides -> CommercialService.UpsertOverride -> Store -> the effective-set
+// resolution GET /tenants/{id}/entitlements also uses). This test wires the
+// reader to that SAME CommercialService.EffectiveEntitlements call instead
+// (production wires the identical resolution result through the
+// entitlements_flat Redis projection -- cmd/server/main.go's REDIS_ADDR
+// branch, internal/projection/worker.go's Loader.Snapshot -- this test just
+// skips the Redis hop, which is orthogonal to whether the override itself
+// took effect) to prove the full resize->persist->read->enforce chain
+// through the real HTTP override handler, not just checkSeatCap's decision
+// logic against a canned value.
+func TestSeatCap_ResizeViaOverride_TakesEffectThroughRealWritePath(t *testing.T) {
+	f := newFixture(t)
+	tn := f.activeTenant("resizeco")
+	f.srv.Users.Entitlements = domain.EntitlementReaderFunc(
+		func(ctx context.Context, tenantID uuid.UUID) (domain.EffectiveSet, bool, error) {
+			eff, err := f.srv.Commercial.EffectiveEntitlements(ctx, tenantID)
+			if err != nil {
+				return domain.EffectiveSet{}, false, err
+			}
+			return eff, len(eff.Entitlements) > 0, nil
+		})
+
+	setCap := func(n int) resp {
+		return f.do(http.MethodPost, "/api/v1/platform/tenants/"+tn.ID.String()+"/entitlements/overrides", f.superToken(),
+			map[string]any{"kind": "seat_cap", "key": "seats", "value": map[string]any{"n": n}, "reason": "capacity fix"})
+	}
+
+	// Owner already occupies the tenant's one seat (f.activeTenant provisions
+	// it) -- seat_cap=1 blocks a second invite.
+	if r := setCap(1); r.status != http.StatusOK {
+		t.Fatalf("set seat_cap=1: %d %s", r.status, string(r.raw))
+	}
+	r := f.do(http.MethodPost, "/api/v1/users/invite", f.adminToken(tn.ID), map[string]any{"email": "blocked@resizeco.com"})
+	if r.status != http.StatusForbidden || r.errCode(t) != domain.CodeCapExceeded {
+		t.Fatalf("invite at seat_cap=1: status=%d code=%s, want 403 CAP_EXCEEDED", r.status, r.errCode(t))
+	}
+
+	// The admin resizes the cap -- the same override endpoint an operator
+	// hits in production to fix a capacity problem.
+	if r := setCap(5); r.status != http.StatusOK {
+		t.Fatalf("resize seat_cap to 5: %d %s", r.status, string(r.raw))
+	}
+
+	// Read-back reflects the resize immediately.
+	get := f.do(http.MethodGet, "/api/v1/tenants/"+tn.ID.String()+"/entitlements", f.superToken(), nil)
+	data := get.body["data"].([]any)
+	if len(data) != 1 || data[0].(map[string]any)["value"].(map[string]any)["n"] != float64(5) {
+		t.Fatalf("entitlements read-back after resize: %v, want seat_cap n=5", data)
+	}
+
+	// The same invite that was just blocked now succeeds -- the resize took
+	// effect on the enforcement check without any process restart, because
+	// checkSeatCap resolves through the identical CommercialService call the
+	// GET above (and, in production, the projection worker) use.
+	r = f.do(http.MethodPost, "/api/v1/users/invite", f.adminToken(tn.ID), map[string]any{"email": "blocked@resizeco.com"})
+	if r.status != http.StatusCreated {
+		t.Fatalf("invite after resize to 5: status=%d body=%s, want 201", r.status, string(r.raw))
+	}
+}
