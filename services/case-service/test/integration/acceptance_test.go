@@ -573,3 +573,84 @@ func TestBulkByFilterAsync(t *testing.T) {
 }
 
 var _ = fmt.Sprintf
+
+// ---- BR-9: idempotency must not swallow a DISTINCT approved decision --------
+
+// facadeApply invokes the tool-plane backend facade the way the mcp-gateway
+// does. proposalURN == "" reproduces the real governed call: agent-runtime
+// cannot put proposal_urn in args, because tool-plane enforces
+// additionalProperties:false against each tool's registered input schema.
+func (h *harness) facadeApply(t *testing.T, a actorCtx, caseID, dispID, note, proposalURN string) resp {
+	t.Helper()
+	args := map[string]any{"case_id": caseID, "disposition_id": dispID, "resolution_note": note}
+	if proposalURN != "" {
+		args["proposal_urn"] = proposalURN
+	}
+	return h.do(t, "POST", "/internal/v1/mcp/invoke", "", map[string]any{
+		"tool_id": "case.apply_disposition", "version": "1.2.0", "args": args,
+		"tenant": a.tenant.String(), "obo_sub": uuid.NewString(), "agent_id": "case-triage",
+	}, map[string]string{"X-Spiffe-Id": "spiffe://datacern/ns/tools/sa/mcp-gateway"})
+}
+
+// TestBR9_FacadeIdempotencyDoesNotSwallowDistinctDecisions pins the fix for a
+// live-reproduced defect (2026-07-26): the facade fabricated a replay key
+// "wr:<tenant>:ai:proposal/<tool>/<case>" whenever the caller supplied no
+// proposal_urn. That key is a pure function of (tenant, tool, case), so EVERY
+// approved disposition on a case shared it. The first one applied; every later
+// one returned HTTP 200 {applied:true, replayed:true} and wrote nothing —
+// tool-plane logged `allowed`, the proposal read `approved`, and the case never
+// moved. A human approved a decision and the platform silently did nothing.
+//
+// Two decisions on the same case, with a reopen between, must BOTH take effect.
+func TestBR9_FacadeIdempotencyDoesNotSwallowDistinctDecisions(t *testing.T) {
+	h := requireHarness(t)
+	t.Setenv("CASE_FACADE_ALLOWED_SPIFFE", "spiffe://datacern/ns/tools/sa/mcp-gateway")
+	a := h.newActor(t)
+	first := h.seedDisposition(t, a, "confirmed-"+uuid.NewString()[:6], false)
+	second := h.seedDisposition(t, a, "cleared-"+uuid.NewString()[:6], false)
+
+	id := h.createOne(t, a, uuid.NewString(), time.Now().Add(24*time.Hour), nil)["id"].(string)
+	require.Equal(t, http.StatusOK, h.do(t, "POST", "/api/v1/cases/"+id+"/start", a.tok, nil, nil).status)
+
+	r1 := h.facadeApply(t, a, id, first, "first decision", "")
+	require.Equal(t, http.StatusOK, r1.status, "%v", r1.body)
+	g := dataMap(h.do(t, "GET", "/api/v1/cases/"+id, a.tok, nil, nil))
+	require.Equal(t, first, g["disposition_id"], "first approved decision must apply")
+
+	// A human reopens and a second proposal is approved with a DIFFERENT
+	// disposition. This is the case the fabricated key silently ate.
+	require.Equal(t, http.StatusOK,
+		h.do(t, "POST", "/api/v1/cases/"+id+"/reopen", a.tok, map[string]any{"reason": "new evidence"}, nil).status)
+
+	r2 := h.facadeApply(t, a, id, second, "second decision", "")
+	require.Equal(t, http.StatusOK, r2.status, "%v", r2.body)
+	out2, _ := r2.body["output"].(map[string]any)
+	assert.NotEqual(t, true, out2["replayed"],
+		"a distinct decision must not be reported as a replay of an earlier one")
+
+	g2 := dataMap(h.do(t, "GET", "/api/v1/cases/"+id, a.tok, nil, nil))
+	assert.Equal(t, second, g2["disposition_id"],
+		"THE CASE MUST ACTUALLY CHANGE: the second approved decision was swallowed")
+	assert.Equal(t, "resolved", g2["status"])
+}
+
+// TestBR9_FacadeReplaysOnRepeatedProposalURN is the other half of the contract:
+// genuine idempotency still works when the caller DOES supply a key, so a
+// retried delivery of the same proposal cannot double-apply.
+func TestBR9_FacadeReplaysOnRepeatedProposalURN(t *testing.T) {
+	h := requireHarness(t)
+	t.Setenv("CASE_FACADE_ALLOWED_SPIFFE", "spiffe://datacern/ns/tools/sa/mcp-gateway")
+	a := h.newActor(t)
+	disp := h.seedDisposition(t, a, "confirmed-"+uuid.NewString()[:6], false)
+
+	id := h.createOne(t, a, uuid.NewString(), time.Now().Add(24*time.Hour), nil)["id"].(string)
+	require.Equal(t, http.StatusOK, h.do(t, "POST", "/api/v1/cases/"+id+"/start", a.tok, nil, nil).status)
+
+	urn := "wr:" + a.tenant.String() + ":ai:proposal/" + uuid.NewString()
+	require.Equal(t, http.StatusOK, h.facadeApply(t, a, id, disp, "once", urn).status)
+
+	r2 := h.facadeApply(t, a, id, disp, "once", urn)
+	require.Equal(t, http.StatusOK, r2.status, "%v", r2.body)
+	out2, _ := r2.body["output"].(map[string]any)
+	assert.Equal(t, true, out2["replayed"], "same proposal_urn must replay, not re-apply")
+}

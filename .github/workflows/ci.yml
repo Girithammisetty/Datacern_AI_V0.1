@@ -576,6 +576,18 @@ jobs:
       - name: Health gate (make doctor)
         run: make doctor
 
+      # The flagship assertion, and the reason this job exists. Everything above
+      # proves the stack BOOTS; this proves an approved AI decision actually
+      # CHANGES A ROW -- agent proposes -> a different human approves -> the
+      # tool-plane authorizes -> case-service writes -> the case is different.
+      # Deliberately placed BEFORE the Playwright suite: it takes ~2min, it gets
+      # a clean unperturbed fixture, and if the governed write loop is broken
+      # there is no point spending 20 minutes on UI assertions. On 2026-07-26
+      # that loop was completely dead while every other check in this file was
+      # green, because they all check components and none checked the journey.
+      - name: Governed write loop (make journey)
+        run: make journey
+
       - name: Run live-stack E2E suite (pnpm e2e:live)
         working-directory: services/ui-web
         env:

@@ -1,7 +1,7 @@
 SERVICES := $(wildcard services/*)
 
 .PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up up-platform down reset doctor soak soak-volume \
-        demo-list demo-load demo-clean demo-clean-all security-probe
+        journey demo-list demo-load demo-clean demo-clean-all security-probe
 
 # Capstone: provision the WHOLE platform locally and open it in a browser for
 # hands-on end-user testing. Preflight -> infra -> migrate+boot all 22 services
@@ -54,6 +54,15 @@ soak:
 #   make soak-volume VOLUME_ROWS=1000000 # the BRD's literal 1M-row scale, ~90s
 soak-volume:
 	VOLUME_ROWS=$(VOLUME_ROWS) deploy/local/soak_volume.sh
+
+# Governed write loop: does an APPROVED AI decision actually change the row?
+# The one check that would have caught the 2026-07-26 defect, where the whole
+# flagship loop was dead (case.apply_disposition unregistered -> every approved
+# disposition silently dropped) while 1538 unit tests and 63 CI checks were all
+# green. They check components; this checks the JOURNEY, and asserts on STATE
+# rather than on the platform's own "approved" acknowledgement. Needs `make up`.
+journey:
+	deploy/e2e/.venv/bin/python deploy/e2e/test_governed_write_loop.py
 
 # ---- Demo pack control -----------------------------------------------------
 # Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway
