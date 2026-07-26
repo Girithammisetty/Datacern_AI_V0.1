@@ -62,10 +62,24 @@ output 300→42.)
 - **Analytics has no data path on global surfaces.** The fix converts a lie
   into an honest limit; it does not make the agent able to answer. Any "ask
   your data a question from anywhere" capability is **not real today**.
-- **8 of 11 agent prompts have no anti-fabrication guard.** Only `analytics`
-  (now), `triage` and `persona_copilot` do. This matters most where the model
-  writes the *rationale a human approves* — four-eyes approval on an invented
-  justification is a subtler version of the same failure.
+- **CORRECTED: it was 2 gaps, not 8.** An earlier revision claimed "8 of 11
+  agent prompts have no anti-fabrication guard". That was a grep artifact — my
+  pattern matched "do not invent" but not "never invent", and "only … provided"
+  but not "ONLY … present in the catalog". Reading all eleven:
+  `dashboard_designer` ("never invent a metric, dimension or chart type"),
+  `data_pipeline_builder` ("taken VERBATIM from the catalog"), `ml_engineer` and
+  `model_training` ("ONLY parameter names present in the schema") were already
+  well guarded, and `meta_router` is structurally constrained to a fixed key
+  list.
+
+  The two REAL gaps were `governance` and `inference` — both one-line prompts
+  that write the sentence a human reads when approving a retrain or a batch job,
+  with nothing stopping them inventing a metric or feature name. Both now say to
+  use only the supplied figures and to defer to the deterministic verdict.
+  `onboarding` had a partial gap (it grounded column types "when present" but
+  said nothing about the no-preview case, where a mapping invented from the
+  request text is indistinguishable from one derived from a real schema); it now
+  returns an empty mapping and says so.
 - **A test was pinning the bug.** `test_analytics_without_a_case_id_behaves_
   exactly_as_before` asserted the raw query passed through "unchanged" — it
   encoded the defect as the contract. A green suite was protecting it. Tests
