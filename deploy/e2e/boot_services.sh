@@ -30,6 +30,16 @@ start_identity() {
     KEYCLOAK_URL="http://localhost:8180"
     KEYCLOAK_ADMIN_USER="admin" KEYCLOAK_ADMIN_PASSWORD="admin"
     OPA_URL="$OPA_URL" RBAC_URL="$RBAC_URL"
+    # BRD 70 slice 3 (POC mode): PocService.Value reads real BRD 69 data from
+    # usage-service over HTTP -- REQUIRE_REAL_ADAPTERS=true above means
+    # identity-service now refuses to boot at all without this set (no
+    # fallback, matching Bundles/Seed's fail-loud rule). $USAGE_URL is
+    # config.env's own name for the same http://localhost:$PORT_USAGE every
+    # other caller of usage-service in this harness already uses -- identity
+    # only needs the URL string at boot (the actual HTTP calls happen later,
+    # on demand), so this is safe regardless of exactly when start_usage
+    # itself runs relative to start_identity.
+    USAGE_SERVICE_URL="$USAGE_URL"
     OIDC_ISSUER="${OIDC_ISSUER:-}" OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-}" OIDC_TENANT_ID="${OIDC_TENANT_ID:-}" )
   say "boot identity (bootstrap pass)"
   boot identity "${env[@]}" "$BIN_DIR/identity-e2e"
