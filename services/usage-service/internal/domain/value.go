@@ -146,6 +146,26 @@ type ValueProvenance struct {
 	MeterGap          *string `json:"meter_gap"`
 }
 
+// MeterAllowanceView is one contracted meter allowance and how much of it the
+// tenant has consumed in the summary period (BRD 66, CPL-FR-032 — a surfacing
+// requirement, explicitly "no billing math here"; nothing is refused when an
+// allowance is exhausted).
+//
+// UsedQty/RemainingQty are pointers because the allowance and the usage come
+// from two different places: the contract from the entitlements projection,
+// the consumption from the rollups. When the rollup for that meter can't be
+// read, "included 100, used ?" is the truthful report -- emitting used=0 would
+// assert the tenant consumed nothing, which is a different and possibly false
+// statement. RemainingQty may be negative: an overage is a real fact and is
+// reported rather than clamped to zero.
+type MeterAllowanceView struct {
+	MeterKey     string   `json:"meter_key"`
+	IncludedQty  float64  `json:"included_qty"`
+	Period       string   `json:"period"`
+	UsedQty      *float64 `json:"used_qty"`
+	RemainingQty *float64 `json:"remaining_qty"`
+}
+
 // ValueSummary is the GET /api/v1/value/summary response body (ROI-FR-010).
 // Decisions is a pointer (nil = Tier 0, governed_decision meter unavailable);
 // the four *_est fields are *EstimatedValue (nil = not computable, either
@@ -163,7 +183,13 @@ type ValueSummary struct {
 	NetValueEstUSD       *EstimatedValue     `json:"net_value_est_usd"`
 	LadderSavingsUSD     *float64            `json:"ladder_savings_usd"`
 	Adoption             ValueAdoptionView   `json:"adoption"`
-	Provenance           ValueProvenance     `json:"provenance"`
+	// Allowances is nil (JSON null) when the entitlements projection could not
+	// be consulted, and an empty array when it was read and the tenant simply
+	// has no contracted allowances -- a distinction the cost panel needs to
+	// avoid rendering "no allowances" over a projection outage (CPL-NFR-004
+	// lets reads proceed when the projection is down).
+	Allowances           []MeterAllowanceView `json:"allowances"`
+	Provenance           ValueProvenance      `json:"provenance"`
 }
 
 // ValueTrendPoint is one point of GET /api/v1/value/trend (ROI-FR-011).

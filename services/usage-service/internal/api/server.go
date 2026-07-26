@@ -11,6 +11,7 @@ import (
 	"github.com/datacern-ai/go-common/metricsx"
 	"github.com/datacern-ai/usage-service/internal/authz"
 	"github.com/datacern-ai/usage-service/internal/domain"
+	"github.com/datacern-ai/usage-service/internal/entitlements"
 	"github.com/datacern-ai/usage-service/internal/events"
 	"github.com/datacern-ai/usage-service/internal/store"
 	"github.com/datacern-ai/usage-service/internal/valueexport"
@@ -53,6 +54,9 @@ type Store interface {
 	ResolveAssumptions(ctx context.Context, tenant uuid.UUID, at time.Time) (*domain.ValueAssumptions, bool, error)
 	AssumptionHistory(ctx context.Context, tenant uuid.UUID) ([]domain.ValueAssumptions, error)
 	ValueSummaryInputs(ctx context.Context, tenant uuid.UUID, monthStart time.Time, workspaceID string) (domain.DecisionsBreakdown, float64, domain.Adoption, bool, error)
+	// DailyTotals supplies the consumed quantity for a contracted meter
+	// allowance (CPL-FR-032); already used by anomaly detection (USG-FR-050).
+	DailyTotals(ctx context.Context, tenant uuid.UUID, meter string, from, to time.Time) (map[string]float64, error)
 	ValueTrendPoints(ctx context.Context, tenant uuid.UUID, from, to time.Time, workspaceID string) ([]domain.ValueTrendPoint, error)
 	CreateValueExport(ctx context.Context, op domain.Op, e domain.ValueExport) (domain.ValueExport, error)
 	ListValueExports(ctx context.Context, tenant uuid.UUID, period string) ([]domain.ValueExport, error)
@@ -70,6 +74,12 @@ type Server struct {
 	// §2.8). Nil disables export generation with a clear error rather than a
 	// panic — see handleExportValueReport.
 	Exports valueexport.ObjectStore
+
+	// Entitlements reads contracted meter allowances from the commercial
+	// projection for the value summary (CPL-FR-032). Nil (or an unreachable
+	// projection) simply omits the allowance rows -- reads proceed when the
+	// projection is unavailable (CPL-NFR-004); this gates nothing.
+	Entitlements *entitlements.Reader
 
 	// guarded records every action bound to a route via RequireAction (set at
 	// Router build time); the action-catalog drift test asserts each is
