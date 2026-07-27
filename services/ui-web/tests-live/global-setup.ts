@@ -105,6 +105,12 @@ export default async function globalSetup(): Promise<void> {
       adjuster: pick("adjuster@") ?? admin,
       manager: pick("manager@") ?? admin,
       datascientist: pick("datascientist@") ?? admin,
+      // Cross-tenant platform operator — a DIFFERENT principal from the tenant
+      // `admin` above. /admin/tools, /admin/ai-gateway, /admin/tenants and
+      // /admin/platform are gated by platformGate and are correctly denied to a
+      // tenant admin (see lib/authz/registry.ts ROUTE_RULES). Specs that drive
+      // those surfaces must use this persona or they assert the wrong thing.
+      platformAdmin: pick("platform-admin@") ?? admin,
     },
     allEmails: emails,
     generatedAt: new Date().toISOString(),

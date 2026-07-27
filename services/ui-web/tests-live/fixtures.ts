@@ -11,7 +11,7 @@ import { resolve } from "node:path";
 interface LiveContext {
   baseUrl: string;
   tenantId: string;
-  personas: { admin: string; adjuster: string; manager: string; datascientist: string };
+  personas: { admin: string; adjuster: string; manager: string; datascientist: string; platformAdmin: string };
   allEmails: string[];
   generatedAt: string;
 }
