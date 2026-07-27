@@ -3,7 +3,7 @@
 **Prepared:** 2026-07-25 · **Updated:** 2026-07-26 (full status re-verification against code — every claim below re-checked; stale statements corrected in place and items annotated ✅ built / 🟡 partial / ❌ not started) · **Audience:** founder / strategy · **Status:** analysis + prioritized roadmap
 **Inputs:** full codebase audit (23 services, **28 packs — 27 installable verticals + 1 shared `library` pack**, **71 BRDs**), mid-2026 competitive research (web-sourced, cited), GTM feature-pattern research across enterprise AI/data platforms.
 
-Companion docs: [`DATACERN_PARTNER_BRIEFING.md`](DATACERN_PARTNER_BRIEFING.md) (partner motion), [`DATACERN_REALTIME_HEALTHCARE_POSITION.md`](DATACERN_REALTIME_HEALTHCARE_POSITION.md) (healthcare objection handling), [`DATACERN_2035_VISION.md`](DATACERN_2035_VISION.md) (5–10 year direction; this doc governs the 0–24 month window).
+Companion docs: [`DATACERN_POSITIONING_OPTIONS_SLM_AND_AGENTS.md`](DATACERN_POSITIONING_OPTIONS_SLM_AND_AGENTS.md) (repositioning options: SLM training + agent building), [`DATACERN_PARTNER_BRIEFING.md`](DATACERN_PARTNER_BRIEFING.md) (partner motion), [`DATACERN_REALTIME_HEALTHCARE_POSITION.md`](DATACERN_REALTIME_HEALTHCARE_POSITION.md) (healthcare objection handling), [`DATACERN_2035_VISION.md`](DATACERN_2035_VISION.md) (5–10 year direction; this doc governs the 0–24 month window).
 
 ---
 
