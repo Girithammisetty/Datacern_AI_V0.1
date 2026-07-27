@@ -31,7 +31,7 @@ VERSIONS: dict[str, int] = {
     "persona_copilot.system": 2,
     "dashboard_designer.system": 1,
     "inference.system": 1,
-    "meta_router.system": 1,
+    "meta_router.system": 2,
     "onboarding.system": 1,
     "model_training.system": 1,
     "ml_engineer.system": 1,
