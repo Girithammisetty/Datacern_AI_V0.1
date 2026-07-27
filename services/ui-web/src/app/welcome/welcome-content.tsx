@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { DatacernLogo } from "@/components/brand/DatacernLogo";
+import { DecisionLoopDiagram } from "@/components/marketing/DecisionLoopDiagram";
 import { Button } from "@/components/ui/button";
 
 /* ------------------------------------------------------------------ */
@@ -172,11 +173,9 @@ const AGENTS: [string, string][] = [
   ["Model Ops Agent", "trains, evaluates and promotes your models"],
 ];
 
-const STEPS = [
-  ["AI does the reading", "Agents gather the evidence, check it against your rules, and draft a clear recommendation with the reasoning laid out."],
-  ["Your expert decides", "Approve, adjust or override. People stay accountable for every outcome — nothing acts on its own."],
-  ["It learns and improves", "Each decision becomes training data. Quality climbs, the routine gets automated, and your team is freed for the hard calls."],
-];
+/* The "how it works" steps now live in the diagram itself
+ * (components/marketing/DecisionLoopDiagram) so the copy and the picture can
+ * never drift apart. */
 
 /* Solutions organized by industry — each use case is a real installable
  * capability pack. Industry is the primary way a buyer navigates: pick your
@@ -1224,22 +1223,15 @@ export default function WelcomeContent() {
           <Reveal>
             <h2 className="text-3xl font-bold tracking-tight">How every decision flows</h2>
             <p className="mt-3 max-w-2xl text-muted-foreground">
-              Three steps, every time — so the work moves quickly and the accountability never leaves your people.
+              A loop, not a pipeline — the work moves quickly, the accountability never leaves your
+              people, and every decision makes the next one better.
             </p>
           </Reveal>
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            {STEPS.map(([title, body], i) => (
-              <Reveal key={title} delay={i * 90}>
-                <div className="wr-glass wr-ring relative h-full rounded-2xl p-7">
-                  <div className="flex size-9 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary ring-1 ring-primary/30">
-                    {i + 1}
-                  </div>
-                  <h3 className="mt-4 text-lg font-semibold">{title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
+          <Reveal delay={90}>
+            <div className="mt-10">
+              <DecisionLoopDiagram />
+            </div>
+          </Reveal>
           <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="text-sm font-medium text-foreground">What changes for your team:</span>
             {["Shorter backlogs", "Consistent determinations", "Confident audits", "Lower cost per decision", "Experts on judgment, not busywork"].map((o) => (
