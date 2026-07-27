@@ -605,6 +605,7 @@ class RunService:
 
     async def _build_training_spec(self, tenant_id, run, template, version) -> TrainingSpec:
         params = dict(run.run_parameters or {})
+        resources = self._run_resources(version)
         algorithm = (params.get("algorithm")
                      or (template.algorithm_template_name if template else None)
                      or (version.definition.get("metadata", {}).get("algorithm"))
@@ -631,6 +632,7 @@ class RunService:
             experiment=(params.get("mlflow_experiment")
                         or self.d.settings.mlflow_experiment),
             registered_model_name=reg_name, mlflow_run_id=run.mlflow_run_id,
+            cpus=resources["cpus"],
             tags={"run_id": run.id, "template_id": run.template_id})
 
     def _algo_from_definition(self, definition) -> str | None:
@@ -650,9 +652,10 @@ class RunService:
         ta, _, _ = edge.get("to", "").rpartition(".")
         return (fa or edge.get("from", ""), ta or edge.get("to", ""))
 
-    def _row_budget(self, version) -> int:
-        """Rows this run may materialize, from the SAME resolved resources the
-        compiler turns into pod limits — the run is sized by its largest node."""
+    def _run_resources(self, version) -> dict:
+        """The run's effective resource envelope, from the SAME resolve_resources
+        output the compiler turns into pod requests/limits — the run is sized by
+        its largest node. Returns {cpus, ram_gb, timeout_minutes}."""
         # Tolerate a node with no alias: a definition can reach here before dag
         # validation has run (and unit callers build minimal ones), and sizing is
         # not worth a KeyError on the training path — an unaliased node still
@@ -661,9 +664,13 @@ class RunService:
                  for i, n in enumerate(version.definition.get("nodes", []))}
         edges = [self._edge_aliases(e) for e in version.definition.get("edges", [])]
         effective = resolve_resources(nodes, edges, dict(PLATFORM_CEILING))
-        ram_gb = max((r["ram_gb"] for r in effective.values()),
-                     default=DEFAULTS["ram_gb"])
-        return training_row_budget(ram_gb)
+        if not effective:
+            return dict(DEFAULTS)
+        return {k: max(r[k] for r in effective.values()) for k in DEFAULTS}
+
+    def _row_budget(self, version) -> int:
+        """Rows this run may materialize, given its resolved RAM."""
+        return training_row_budget(self._run_resources(version)["ram_gb"])
 
     def _refuse_oversized(self, actual: int, budget: int, source: str) -> None:
         raise TrainingDataExceedsBudget(

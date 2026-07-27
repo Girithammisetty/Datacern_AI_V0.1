@@ -249,3 +249,47 @@ def test_row_budget_scales_with_declared_ram():
     # Never zero: a node clamped to the floor still gets a usable budget.
     assert training_row_budget(0) >= 1
     assert training_row_budget(PLATFORM_CEILING["ram_gb"]) > training_row_budget(2)
+
+
+# ---- the same resolved resources also size the training spec's CPUs ---------
+
+def _cpu_version(cpus: int | None):
+    node = {"alias": "train-1", "component": "random_forest-train", "parameters": {}}
+    if cpus is not None:
+        node["resources"] = {"cpus": cpus, "ram_gb": 4, "timeout_minutes": 30}
+    return SimpleNamespace(definition={"nodes": [node], "edges": []})
+
+
+@pytest.mark.parametrize("declared,expected", [
+    (4, 4),
+    (None, 1),                      # DEFAULTS["cpus"]
+    (99, 7),                        # clamped to PLATFORM_CEILING["cpus"]
+])
+async def test_training_spec_carries_the_resolved_cpu_count(container, declared,
+                                                            expected):
+    """The compiler already turns resolve_resources' cpus into the pod's cpu
+    request; the spec has to carry the same figure or the executor cannot spend
+    it on cross-validation and the declared cores sit idle."""
+    run = SimpleNamespace(id="run-1", template_id="tpl-1", mlflow_run_id=None,
+                          run_parameters={"training_data": [{"amount": 1,
+                                                             "label": "y"}]})
+
+    spec = await container.run_service._build_training_spec(
+        TENANT_A, run, None, _cpu_version(declared))
+
+    assert spec.cpus == expected
+
+
+async def test_run_resources_are_the_max_across_nodes(container):
+    """A run is sized by its largest node — the same rule the row budget uses, so
+    cpus and ram_gb cannot disagree about which node set the envelope."""
+    version = SimpleNamespace(definition={"nodes": [
+        {"alias": "a", "component": "read-from-warehouse",
+         "resources": {"cpus": 2, "ram_gb": 2, "timeout_minutes": 30}},
+        {"alias": "b", "component": "random_forest-train",
+         "resources": {"cpus": 5, "ram_gb": 4, "timeout_minutes": 30}},
+    ], "edges": []})
+
+    res = container.run_service._run_resources(version)
+
+    assert res["cpus"] == 5 and res["ram_gb"] == 4

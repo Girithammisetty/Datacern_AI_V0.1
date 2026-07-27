@@ -38,6 +38,21 @@ _SEARCH_SPACES: dict[str, dict[str, list]] = {
 _SCORING = {"classification": "f1_weighted", "regression": "r2"}
 
 
+def _worker_count(n_jobs) -> int:
+    """Parallel CV workers, from the run's DECLARED cpu count.
+
+    Never -1. joblib reads -1 as "every core on the host", which on the local
+    backend means one tenant's grid search saturating a box that other runs share
+    — the pod's cpu request is the only figure that is actually ours to spend, and
+    it is what the compiler already put in the manifest. Anything unusable
+    (None, 0, negative, non-numeric) falls back to serial rather than guessing.
+    """
+    try:
+        return max(1, int(n_jobs))
+    except (TypeError, ValueError):
+        return 1
+
+
 def search_space(algorithm: str) -> dict[str, list]:
     """The declared search space for an algorithm, or {} if none (single-fit)."""
     return dict(_SEARCH_SPACES.get(algorithm, {}))
@@ -48,11 +63,14 @@ def supports_search(algorithm: str) -> bool:
 
 
 def run_search(base_estimator, algorithm, X, y, *, kind="grid", n_trials=20,
-               cv_folds=5, scoring=None, family="classification", random_state=42):
+               cv_folds=5, scoring=None, family="classification", random_state=42,
+               n_jobs=1):
     """Run a REAL grid/random search with k-fold CV over the algorithm's space.
 
     Returns (best_estimator, best_params, cv_score). Falls back to a single fit
     (empty space / too few rows / no CV requested) — honestly, never faking a search.
+
+    `n_jobs` is the run's DECLARED cpu count (see `_worker_count`), not -1.
     """
     from sklearn.model_selection import (
         GridSearchCV,
@@ -75,18 +93,19 @@ def run_search(base_estimator, algorithm, X, y, *, kind="grid", n_trials=20,
         n_iter = max(1, min(int(n_trials or 20), n_grid))
         search = RandomizedSearchCV(
             base_estimator, space, n_iter=n_iter, cv=folds, scoring=scoring,
-            random_state=random_state, refit=True, n_jobs=1, error_score="raise")
+            random_state=random_state, refit=True, n_jobs=_worker_count(n_jobs),
+            error_score="raise")
     else:
         search = GridSearchCV(
             base_estimator, space, cv=folds, scoring=scoring, refit=True,
-            n_jobs=1, error_score="raise")
+            n_jobs=_worker_count(n_jobs), error_score="raise")
     search.fit(X, y)
     return (search.best_estimator_, dict(search.best_params_),
             float(search.best_score_))
 
 
 def wrap_feature_selection(estimator, *, kind="sequential", n_features=None,
-                           direction="forward", scoring=None, cv_folds=3):
+                           direction="forward", scoring=None, cv_folds=3, n_jobs=1):
     """Compose a wrapper feature selector in front of the estimator as an sklearn
     Pipeline, so the selected columns persist into the fitted/logged model. `kind`:
     'sequential' (SequentialFeatureSelector) | 'kbest' (SelectKBest f-stat).
@@ -104,7 +123,8 @@ def wrap_feature_selection(estimator, *, kind="sequential", n_features=None,
     else:
         selector = SequentialFeatureSelector(
             estimator, n_features_to_select=(n_features or "auto"),
-            direction=direction, cv=max(2, int(cv_folds or 3)), scoring=scoring, n_jobs=1)
+            direction=direction, cv=max(2, int(cv_folds or 3)), scoring=scoring,
+            n_jobs=_worker_count(n_jobs))
     return Pipeline([("select", selector), ("model", estimator)])
 
 
