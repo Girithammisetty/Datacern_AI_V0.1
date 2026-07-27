@@ -40,9 +40,23 @@ const MODULE_ROUTES: Array<{ path: string; service: string }> = [
   { path: "/admin/teams", service: "rbac-service (teams)" },
   { path: "/admin/audit", service: "audit-service" },
   { path: "/admin/usage", service: "usage-service" },
-  { path: "/admin/tools", service: "tool-registry" },
   { path: "/admin/memory", service: "memory-service" },
   { path: "/admin/notifications", service: "notification-service" },
+];
+
+/**
+ * Cross-tenant PLATFORM-OPERATOR surfaces. These sit under /admin but are gated
+ * by `platformGate`, NOT the per-tenant Admin role (lib/authz/registry.ts
+ * ROUTE_RULES: "need the platform gate — NOT the per-tenant Admin role").
+ *
+ * They lived in MODULE_ROUTES above and were driven by the TENANT admin, who is
+ * correctly denied — so the guard rendered NoAccess, no heading existed, and the
+ * spec failed. That stale expectation predates the Platform Admin split and is
+ * the reason the live suite sat red: a test asserting the opposite of the
+ * intended governance rule.
+ */
+const PLATFORM_ROUTES = [
+  { path: "/admin/tools", service: "tool-registry" },
   { path: "/admin/ai-gateway/providers", service: "ai-gateway" },
 ];
 
@@ -60,6 +74,25 @@ test.describe("smoke: live stack renders across all modules", () => {
       // The Next route itself must not 5xx.
       expect(resp?.status() ?? 0, `${path} document status`).toBeLessThan(500);
       await expectPageHealthy(page, { notRedirectedFrom: path });
+    });
+  }
+});
+
+test.describe("smoke: platform-operator surfaces", () => {
+  for (const { path, service } of PLATFORM_ROUTES) {
+    test(`renders ${path} for a PLATFORM admin  [${service}]`, async ({ page }) => {
+      await loginAs(page, PERSONAS().platformAdmin);
+      const resp = await page.goto(path, { waitUntil: "domcontentloaded" });
+      expect(resp?.status() ?? 0, `${path} document status`).toBeLessThan(500);
+      await expectPageHealthy(page, { notRedirectedFrom: path });
+    });
+
+    // The governance property that actually matters, and the one the old spec
+    // had inverted: a TENANT admin must be refused a cross-tenant surface.
+    test(`denies ${path} to a TENANT admin  [${service}]`, async ({ page }) => {
+      await loginAs(page, PERSONAS().admin);
+      await page.goto(path, { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("no-access")).toBeVisible();
     });
   }
 });

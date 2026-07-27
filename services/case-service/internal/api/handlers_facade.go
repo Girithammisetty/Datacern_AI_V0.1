@@ -89,10 +89,29 @@ func (s *Server) handleToolFacade(w http.ResponseWriter, r *http.Request) {
 	}
 	note, _ := req.Args["resolution_note"].(string)
 	newSeverity, _ := req.Args["severity"].(string)
+	// BR-9 idempotency is keyed on the CALLER'S proposal URN. Do NOT fabricate
+	// one when it is absent.
+	//
+	// This previously fell back to "wr:<tenant>:ai:proposal/<tool>/<case>" — a
+	// pure function of (tenant, tool, case), and therefore IDENTICAL for every
+	// proposal ever raised against that case. agent-runtime does not put
+	// proposal_urn in args (it cannot: tool-plane enforces
+	// additionalProperties:false per tool schema), so every governed apply hit
+	// that one synthetic key. Consequence, reproduced live 2026-07-26: the
+	// FIRST approved disposition on a case applied; every later one on the same
+	// case took the replay branch below and returned HTTP 200
+	// {applied:true, replayed:true} WITHOUT WRITING. tool-plane logged
+	// `allowed`, the proposal read `approved`, the timeline showed nothing, and
+	// the case did not move. A human approved a decision and the platform
+	// silently did nothing — the exact failure mode this product exists to
+	// prevent, dressed as success.
+	//
+	// With no key there is no replay to detect, so the call proceeds normally.
+	// A genuine duplicate is then caught loudly by the state machine
+	// (INVALID_TRANSITION: resolve requires an in_progress case) instead of
+	// being swallowed quietly. Callers that want replay protection supply
+	// proposal_urn, exactly as the human apply path does (handlers_proposal.go).
 	proposalURN, _ := req.Args["proposal_urn"].(string)
-	if proposalURN == "" {
-		proposalURN = "wr:" + req.Tenant + ":ai:proposal/" + req.ToolID + "/" + caseID.String()
-	}
 
 	// Load the case for its workspace (authz context) and existence.
 	c0, err := s.Store.GetCase(r.Context(), tenant, caseID)
@@ -117,10 +136,12 @@ func (s *Server) handleToolFacade(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Idempotent replay by proposal_urn (BR-9).
-	if prev, ok, err := s.Store.GetAppliedProposal(r.Context(), tenant, proposalURN); err == nil && ok {
-		facadeOutput(w, map[string]any{"applied": true, "case_id": caseID.String(), "replayed": true, "case": prev})
-		return
+	// Idempotent replay by proposal_urn (BR-9) — only when the caller gave one.
+	if proposalURN != "" {
+		if prev, ok, err := s.Store.GetAppliedProposal(r.Context(), tenant, proposalURN); err == nil && ok {
+			facadeOutput(w, map[string]any{"applied": true, "case_id": caseID.String(), "replayed": true, "case": prev})
+			return
+		}
 	}
 
 	if newSeverity != "" && !domain.ValidSeverity(newSeverity) {
@@ -172,7 +193,9 @@ func (s *Server) handleToolFacade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := caseView(c)
-	_ = s.Store.PutAppliedProposal(r.Context(), tenant, proposalURN, c.ID, view)
+	if proposalURN != "" {
+		_ = s.Store.PutAppliedProposal(r.Context(), tenant, proposalURN, c.ID, view)
+	}
 	facadeOutput(w, map[string]any{
 		"applied": true, "case_id": caseID.String(), "proposal_urn": proposalURN,
 		"disposition_code": disp.Code, "severity": c.Severity, "case": view,
