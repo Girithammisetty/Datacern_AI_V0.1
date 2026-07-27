@@ -8,8 +8,13 @@ published before it commits.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import logging
 import math
+import os
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any
 
 from app.domain.algorithms import instantiate
@@ -34,12 +39,14 @@ from app.domain.errors import (
     CannotCompile,
     CannotRunPipelineType,
     Conflict,
+    DependencyUnavailable,
     NotFound,
     RateLimited,
+    RunOrphaned,
     TrainingDataExceedsBudget,
     ValidationFailed,
 )
-from app.domain.ports import RunFilters, TemplateFilters, TrainingSpec
+from app.domain.ports import RunFilters, TemplateFilters, TrainingResult, TrainingSpec
 from app.domain.resources import (
     DEFAULTS,
     PLATFORM_CEILING,
@@ -48,6 +55,8 @@ from app.domain.resources import (
 )
 from app.events.envelope import make_envelope, run_urn, template_urn
 from app.utils import new_id
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -63,6 +72,7 @@ class ServiceDeps:
     feature_source: Any = None
     dataset_reader: Any = None  # HttpDatasetReader (real) / InMemoryDatasetReader (unit)
     workflow_backend: Any = None  # ArgoWorkflowExecutor when executor_backend="argo"
+    orphan_scanner: Any = None  # Sql/MemoryOrphanScanner — cross-tenant, worker session
     events_topic: str = "pipeline.events.v1"
     extras: dict = field(default_factory=dict)
 
@@ -334,6 +344,12 @@ class TemplateService:
         await uow.outbox.add(self.d.events_topic, env)
 
 
+def _all_succeeded(nodes: dict) -> dict:
+    """The workflow reached Succeeded, so every node that reported did too — the
+    last watch event often arrives before Argo has stamped each node individually."""
+    return {alias: {**node, "phase": "Succeeded"} for alias, node in nodes.items()}
+
+
 def template_run_params(template) -> dict:
     return {}
 
@@ -352,6 +368,15 @@ class RunService:
     def __init__(self, deps: ServiceDeps, template_service: TemplateService):
         self.d = deps
         self.templates = template_service
+        #: In-flight re-attachments spawned by recover_orphans. Held so the loop
+        #: keeps a strong reference (a bare create_task can be garbage collected
+        #: mid-run) and so callers can await a sweep's work.
+        self._recovery_tasks: set = set()
+
+    async def wait_for_recoveries(self) -> None:
+        """Await every re-attachment this instance spawned (tests + shutdown)."""
+        while self._recovery_tasks:
+            await asyncio.gather(*list(self._recovery_tasks), return_exceptions=True)
 
     async def create_run(self, ctx: CallCtx, template_id: str, run_parameters: dict,
                          *, retried_from: str | None = None, trigger: str = "manual"):
@@ -476,27 +501,55 @@ class RunService:
 
     # ---- execution (local executor path; Argo path via the informer adapter) ----
 
-    async def drive_run(self, tenant_id: str, run_id: str):
-        """Advance a submitted run to a terminal state by running REAL training via
-        the executor, updating status + emitting lifecycle events at each step."""
+    @property
+    def instance_id(self) -> str:
+        """Identity written into `lease_owner`, so a recovered run's history says
+        which pod dropped it."""
+        return (self.d.settings.instance_id
+                or os.getenv("POD_NAME") or os.getenv("HOSTNAME") or "orchestrator")
+
+    async def drive_run(self, tenant_id: str, run_id: str, *, resuming: bool = False):
+        """Advance a submitted run to a terminal state, holding a lease throughout.
+
+        Nothing here runs without an unexpired lease. That is what lets the
+        orchestrator scale on demand: a pod evicted mid-run stops heartbeating, and
+        the reaper hands the run to another instance instead of leaving it stuck in
+        `running` forever, still consuming the tenant's concurrency.
+
+        `resuming` is the reaper's re-entry — the run is already `running` and its
+        Argo workflow is still alive in Kubernetes, so it must not be re-started
+        (and must not be re-submitted, which would train it twice).
+        """
         ctx = CallCtx(tenant_id=tenant_id, actor={"type": "service",
                                                   "id": "pipeline-orchestrator"})
+        now = self.d.clock.now()
+        lease_ttl = timedelta(seconds=self.d.settings.run_lease_seconds)
+        expected = int(RunStatus.running) if resuming else int(RunStatus.submitted)
+
         async with self.d.uow_factory(tenant_id) as uow:
             run = await uow.runs.get(run_id)
-            if run is None or run.status != int(RunStatus.submitted):
+            if run is None or run.status != expected:
+                return run
+            if not await uow.runs.claim_lease(run_id, self.instance_id, now,
+                                              now + lease_ttl):
+                # Another instance is already driving it. Racing them would train
+                # the run twice and register two models for one approval.
+                logger.info("run %s already leased by %s", run_id, run.lease_owner)
                 return run
             template = await uow.templates.get(run.template_id)
             version = await uow.versions.get_by_id(run.version_id)
-            prev = run.status
-            run.status = int(RunStatus.running)
-            run.started_at = self.d.clock.now()
-            run.components_status = {"train-1": {"alias": "train-1", "phase": "Running",
-                                                 "started_at": run.started_at.isoformat()}}
-            await uow.runs.update(run)
-            await self._emit_run(uow, ctx, "pipeline.run.started", run,
-                                 {"argo_workflow_name": run.argo_workflow_name,
-                                  "started_at": run.started_at.isoformat()})
-            await self._emit_status_changed(uow, ctx, run, prev)
+            if not resuming:
+                prev = run.status
+                run.status = int(RunStatus.running)
+                run.started_at = now
+                run.components_status = {
+                    "train-1": {"alias": "train-1", "phase": "Running",
+                                "started_at": run.started_at.isoformat()}}
+                await uow.runs.update(run)
+                await self._emit_run(uow, ctx, "pipeline.run.started", run,
+                                     {"argo_workflow_name": run.argo_workflow_name,
+                                      "started_at": run.started_at.isoformat()})
+                await self._emit_status_changed(uow, ctx, run, prev)
 
         # BRD 62 inc3: data-prep / feature-engineering / profiling / scheduled runs
         # execute the operator DAG locally (real pandas) and persist the output via the
@@ -504,12 +557,14 @@ class RunService:
         ptype = template.pipeline_type if template else None
         is_dataprep = ptype in (int(PipelineType.data_prep), int(PipelineType.profiling),
                                 int(PipelineType.scheduled))
+        heartbeat = asyncio.create_task(self._heartbeat_lease(tenant_id, run_id))
         try:
             if (self.d.settings.executor_backend == "argo"
                     and self.d.workflow_backend is not None):
-                # INFRA-GATED real path: compile + submit to the Argo server (raises
-                # DependencyUnavailable when no k8s cluster/Argo server is reachable).
-                await self._drive_argo(tenant_id, run, template, version)
+                # INFRA-GATED real path: submit to the Argo server and watch the
+                # workflow to a terminal phase (raises DependencyUnavailable when
+                # no k8s cluster/Argo server is reachable).
+                await self._drive_argo(ctx, run, template, version, resuming=resuming)
             elif is_dataprep:
                 await self._drive_data_prep(ctx, run, template, version)
             else:
@@ -518,24 +573,191 @@ class RunService:
                 await self._finish_success(ctx, run_id, result)
         except Exception as exc:  # noqa: BLE001 — surface as a failed run
             await self._finish_failure(ctx, run_id, exc)
+        finally:
+            heartbeat.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat
+            async with self.d.uow_factory(tenant_id) as uow:
+                await uow.runs.release_lease(run_id)
         await self._dequeue_next(ctx)
         async with self.d.uow_factory(tenant_id) as uow:
             return await uow.runs.get(run_id)
 
-    async def _drive_argo(self, tenant_id, run, template, version) -> None:
-        """INFRA-GATED: submit the compiled workflow to the real Argo server. Without a
-        reachable k8s cluster this raises DependencyUnavailable, which surfaces as a
-        failed run (the documented infra-gated path)."""
-        manifest = None
-        if version.compiled_manifest_ref:
-            manifest = await self.d.manifest_store.get(version.compiled_manifest_ref)
-        if manifest is None:
-            raise CannotCompile("no compiled manifest for argo submission")
-        await self.d.workflow_backend.submit(
-            tenant_id, manifest,
-            {"mlflow_run_id": run.mlflow_run_id, "current_context": tenant_id})
-        # A real informer would now drive status → Kafka; unreachable infra never gets
-        # here (submit already raised DependencyUnavailable on the Mac).
+    async def _heartbeat_lease(self, tenant_id: str, run_id: str) -> None:
+        """Renew the lease while we are actually driving the run.
+
+        Renewing at a third of the TTL means two consecutive missed beats (a GC
+        pause, a slow database) still leave a full interval of margin before
+        anyone else may reclaim — the reaper must never take a run away from a
+        driver that is merely slow.
+        """
+        interval = max(1.0, self.d.settings.run_lease_seconds / 3)
+        ttl = timedelta(seconds=self.d.settings.run_lease_seconds)
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                async with self.d.uow_factory(tenant_id) as uow:
+                    held = await uow.runs.renew_lease(
+                        run_id, self.instance_id, self.d.clock.now() + ttl)
+                if not held:
+                    # Someone reclaimed the run. Say so loudly: it means a healthy
+                    # driver was declared dead, which points at a TTL that is too
+                    # short for this workload rather than at a lost pod.
+                    logger.warning("lost lease on run %s (reclaimed by another "
+                                   "instance) — still driving it here", run_id)
+                    return
+            except Exception:  # noqa: BLE001 — a failed beat must not kill the run
+                logger.exception("lease heartbeat failed for run %s", run_id)
+
+    async def _drive_argo(self, ctx, run, template, version, *,
+                          resuming: bool = False) -> None:
+        """INFRA-GATED: submit the compiled workflow to Argo and WATCH it to a
+        terminal phase.
+
+        Submitting alone was never enough — before this the method returned right
+        after submit, so a run on the Argo backend went to `running` and stayed
+        there forever: `_finish_success` was unreachable, and the elastic backend
+        could not complete a single run. The watch stream is the informer that
+        closes the loop, mapping Argo phases onto run states and per-node status
+        onto components_status so the UI shows real pod-level progress.
+        """
+        tenant_id = ctx.tenant_id
+        workflow_name = run.argo_workflow_name if resuming else None
+        if workflow_name is None:
+            manifest = None
+            if version.compiled_manifest_ref:
+                manifest = await self.d.manifest_store.get(version.compiled_manifest_ref)
+            if manifest is None:
+                raise CannotCompile("no compiled manifest for argo submission")
+            workflow_name = await self.d.workflow_backend.submit(
+                tenant_id, manifest,
+                {"mlflow_run_id": run.mlflow_run_id, "current_context": tenant_id})
+            # Persist BEFORE watching: if this pod dies mid-watch, recovery needs the
+            # name to re-attach to the workflow that is still running in Kubernetes.
+            async with self.d.uow_factory(tenant_id) as uow:
+                fresh = await uow.runs.get(run.id)
+                if fresh is not None:
+                    fresh.argo_workflow_name = workflow_name
+                    await uow.runs.update(fresh)
+
+        nodes: dict = {}
+        async for event in self.d.workflow_backend.watch(tenant_id, workflow_name):
+            status = event.get("status")
+            nodes = await self._record_argo_nodes(ctx, run.id, event.get("nodes") or {}) \
+                or nodes
+            if status == "succeeded":
+                result = await self._argo_training_result(run)
+                # Carry Argo's real per-node status through: the local executor's
+                # synthetic single "train-1" row would otherwise replace genuine
+                # pod-level detail with less information than we already had.
+                await self._finish_success(ctx, run.id, result,
+                                           components_status=_all_succeeded(nodes))
+                return
+            if status == "failed":
+                raise DependencyUnavailable(
+                    f"Argo workflow {workflow_name} finished in phase "
+                    f"{event.get('phase')}")
+        # The stream ended without a terminal phase — the workflow's fate is
+        # genuinely unknown, so do not guess at success.
+        raise DependencyUnavailable(
+            f"Argo watch stream for {workflow_name} ended before a terminal phase")
+
+    async def _record_argo_nodes(self, ctx, run_id: str, nodes: dict) -> dict:
+        """Project Argo's per-node status onto components_status, so the run detail
+        view shows real per-component progress instead of a single opaque row.
+        Returns the projection (empty when the event carried no nodes)."""
+        if not nodes:
+            return {}
+        projected = {}
+        for node in nodes.values():
+            alias = node.get("displayName") or node.get("name")
+            if not alias:
+                continue
+            projected[alias] = {
+                "alias": alias, "phase": node.get("phase"),
+                "started_at": node.get("startedAt"), "finished_at": node.get("finishedAt"),
+                "message": node.get("message"),
+            }
+        if not projected:
+            return {}
+        async with self.d.uow_factory(ctx.tenant_id) as uow:
+            run = await uow.runs.get(run_id)
+            if run is not None and run.components_status != projected:
+                run.components_status = projected
+                await uow.runs.update(run)
+        return projected
+
+    async def _argo_training_result(self, run) -> TrainingResult:
+        """On the Argo path the TRAINING POD owns MLflow — it logs the metrics and
+        registers the model. Read the outcome back from MLflow rather than
+        inventing one, so a run's recorded metrics are always the ones actually
+        produced by the fit."""
+        result = await self.d.mlflow.result_for_run(run.mlflow_run_id)
+        if result is None:
+            raise DependencyUnavailable(
+                f"Argo workflow succeeded but MLflow run {run.mlflow_run_id!r} has no "
+                "registered model — the training component did not report a result")
+        return result
+
+    async def recover_orphans(self, limit: int = 50) -> list[str]:
+        """Recover runs whose driver is gone. Returns the ids acted on.
+
+        This is the other half of scaling on demand. Two outcomes, and which one
+        applies is decided by where the work actually lives:
+
+        * Argo — the workflow is still running in Kubernetes, entirely unaffected
+          by the orchestrator pod that submitted it going away. Re-attach the
+          watch and let the run finish normally.
+        * local — the training ran in the dead pod's own process, so it is simply
+          gone. Fail the run, which is terminal (frees the tenant's concurrency
+          slot) and retryable, rather than leaving a lie in `running`.
+        """
+        scanner = self.d.orphan_scanner
+        if scanner is None:
+            return []
+        now = self.d.clock.now()
+        stale_before = now - timedelta(seconds=self.d.settings.run_lease_seconds)
+        recovered: list[str] = []
+        for run in await scanner.orphaned(now, stale_before, limit):
+            ctx = CallCtx(tenant_id=run.tenant_id,
+                          actor={"type": "service", "id": "pipeline-orchestrator"})
+            reattach = (self.d.settings.executor_backend == "argo"
+                        and self.d.workflow_backend is not None
+                        and run.argo_workflow_name)
+            try:
+                if reattach:
+                    logger.info("re-attaching orphaned run %s to argo workflow %s",
+                                run.id, run.argo_workflow_name)
+                    # Fire-and-forget: a re-attached run watches its workflow until
+                    # the workflow ends, which can be hours. Awaiting it here would
+                    # stall the sweep for that whole time and every other stranded
+                    # run would sit unrecovered behind it.
+                    task = asyncio.create_task(self.drive_run(
+                        run.tenant_id, run.id,
+                        resuming=run.status == int(RunStatus.running)))
+                    self._recovery_tasks.add(task)
+                    task.add_done_callback(self._recovery_tasks.discard)
+                else:
+                    await self._fail_orphan(ctx, run)
+                recovered.append(run.id)
+            except Exception:  # noqa: BLE001 — one bad run must not stop the sweep
+                logger.exception("failed to recover orphaned run %s", run.id)
+        return recovered
+
+    async def _fail_orphan(self, ctx, run) -> None:
+        """Terminate a run whose in-process work died with its pod. Claim the lease
+        first so two reapers cannot both fail (and both emit events for) one run."""
+        now = self.d.clock.now()
+        async with self.d.uow_factory(run.tenant_id) as uow:
+            ttl = timedelta(seconds=self.d.settings.run_lease_seconds)
+            if not await uow.runs.claim_lease(run.id, self.instance_id, now, now + ttl):
+                return
+        await self._finish_failure(ctx, run.id, RunOrphaned(
+            f"the orchestrator instance driving this run ({run.lease_owner or 'unknown'}) "
+            "stopped before it finished; the run's work did not survive. Retry the run."))
+        async with self.d.uow_factory(run.tenant_id) as uow:
+            await uow.runs.release_lease(run.id)
+        await self._dequeue_next(ctx)
 
     async def _drive_data_prep(self, ctx, run, template, version) -> None:
         """BRD 62 inc3: run a data-prep DAG locally over real dataset rows and persist
@@ -575,9 +797,12 @@ class RunService:
             written[alias] = res
             return res.ref
 
-        # Pure pandas over an in-memory frame — fast + non-blocking, so run inline
-        # (no thread hand-off; unlike the heavy sklearn/MLflow training path).
-        result = LocalPipelineExecutor(reader=_reader, writer=_writer).run(definition)
+        # Pandas over in-memory frames is CPU-bound and holds the GIL. Running it
+        # inline blocked the event loop for the whole DAG — every HTTP request in
+        # this process queued behind one tenant's data-prep run, and the lease
+        # heartbeat could not fire either. Hand it to a thread like training does.
+        result = await asyncio.to_thread(
+            LocalPipelineExecutor(reader=_reader, writer=_writer).run, definition)
         await self._finish_data_prep_success(ctx, run.id, result, written)
 
     async def _finish_data_prep_success(self, ctx, run_id, result, written) -> None:
@@ -738,7 +963,7 @@ class RunService:
                 return (node.get("parameters") or {}).get("dataset")
         return None
 
-    async def _finish_success(self, ctx, run_id, result):
+    async def _finish_success(self, ctx, run_id, result, *, components_status=None):
         async with self.d.uow_factory(ctx.tenant_id) as uow:
             run = await uow.runs.get(run_id)
             prev = run.status
@@ -749,9 +974,13 @@ class RunService:
             run.output_dataset_urns = [
                 f"wr:{ctx.tenant_id}:model:model/{result.registered_model_name}"
                 f"/{result.model_version}"]
-            run.components_status = {"train-1": {"alias": "train-1", "phase": "Succeeded",
-                                                 "finished_at": run.finished_at.isoformat(),
-                                                 "exit_code": 0}}
+            # The single synthetic row is the LOCAL executor's shape — it runs one
+            # in-process fit. A caller that has real per-component detail (Argo's
+            # per-node status) passes it instead of losing it here.
+            run.components_status = components_status or {
+                "train-1": {"alias": "train-1", "phase": "Succeeded",
+                            "finished_at": run.finished_at.isoformat(),
+                            "exit_code": 0}}
             await uow.runs.update(run)
             duration = (run.finished_at - (run.started_at or run.finished_at)).total_seconds()
             await self._emit_run(uow, ctx, "pipeline.run.succeeded", run, {

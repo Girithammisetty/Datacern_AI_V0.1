@@ -59,6 +59,22 @@ class TrainingDataExceedsBudget(AppError):
     code = "TRAINING_DATA_EXCEEDS_BUDGET"
 
 
+class RunOrphaned(AppError):
+    """The orchestrator instance driving this run stopped before it finished.
+
+    Only ever raised for work that lived INSIDE that process (the local executor).
+    An Argo run is not orphaned by a lost orchestrator — the workflow keeps running
+    in Kubernetes and another instance re-attaches to it.
+
+    Failing is the honest outcome, not a workaround: the run's work is genuinely
+    gone, and leaving it in `running` would misreport a dead run as live while
+    permanently consuming one of the tenant's concurrency slots.
+    """
+
+    status = 503
+    code = "RUN_ORPHANED"
+
+
 class CannotCompile(AppError):
     status = 422
     code = "CANNOT_COMPILE"

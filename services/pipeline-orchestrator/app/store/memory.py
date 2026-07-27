@@ -140,7 +140,15 @@ class _Runs:
         return copy.deepcopy(r) if r and r.tenant_id == self.tid else None
 
     async def update(self, r: PipelineRun):
-        self.s.runs[r.id] = copy.deepcopy(r)
+        # The lease belongs to claim/renew/release alone — carry the stored values
+        # over so a caller writing back a copy it read BEFORE claiming cannot erase
+        # the lease it is currently holding (mirrors SqlRunRepo.update).
+        stored = self.s.runs.get(r.id)
+        fresh = copy.deepcopy(r)
+        if stored is not None:
+            fresh.lease_owner = stored.lease_owner
+            fresh.lease_expires_at = stored.lease_expires_at
+        self.s.runs[r.id] = fresh
 
     async def get_by_workflow(self, argo_workflow_name):
         for r in self.s.runs.values():
@@ -167,6 +175,28 @@ class _Runs:
         times = [r.submitted_at or r.created_at for r in self.s.runs.values()
                  if r.tenant_id == tenant_id and r.submitted_by == submitted_by]
         return max(times) if times else None
+
+    async def claim_lease(self, run_id, owner: str, now, expires_at) -> bool:
+        r = self.s.runs.get(run_id)
+        if r is None:
+            return False
+        if r.lease_owner is not None and r.lease_expires_at is not None \
+                and r.lease_expires_at >= now:
+            return False  # someone else holds a live lease
+        r.lease_owner, r.lease_expires_at = owner, expires_at
+        return True
+
+    async def renew_lease(self, run_id, owner: str, expires_at) -> bool:
+        r = self.s.runs.get(run_id)
+        if r is None or r.lease_owner != owner:
+            return False
+        r.lease_expires_at = expires_at
+        return True
+
+    async def release_lease(self, run_id) -> None:
+        r = self.s.runs.get(run_id)
+        if r is not None:
+            r.lease_owner, r.lease_expires_at = None, None
 
 
 class _Quotas:
@@ -256,6 +286,28 @@ class MemoryScheduleScanner:
                 if sc.enabled and sc.next_fire_at is not None and sc.next_fire_at <= now]
         rows.sort(key=lambda x: x.next_fire_at)
         return [replace(sc) for sc in rows[:limit]]
+
+
+class MemoryOrphanScanner:
+    """Cross-tenant scan for runs nobody is driving (unit/dev tier). Mirrors
+    SqlOrphanScanner, including the null-lease-but-stale case."""
+
+    def __init__(self, state: MemoryState):
+        self.s = state
+
+    async def orphaned(self, now, stale_before, limit: int = 50) -> list[PipelineRun]:
+        drivable = {int(RunStatus.submitted), int(RunStatus.running)}
+        rows = []
+        for r in self.s.runs.values():
+            if r.status not in drivable:
+                continue
+            if r.lease_expires_at is not None:
+                if r.lease_expires_at < now:
+                    rows.append(r)
+            elif (r.submitted_at or r.created_at) < stale_before:
+                rows.append(r)
+        rows.sort(key=lambda x: x.lease_expires_at or x.submitted_at or x.created_at)
+        return [copy.deepcopy(r) for r in rows[:limit]]
 
 
 class _Outbox:

@@ -78,6 +78,13 @@ class PipelineRun:
     submitted_at: datetime | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    #: Which orchestrator instance is currently driving this run, and until when.
+    #: A run is only ever driven by the holder of an unexpired lease, so a pod that
+    #: is evicted mid-run (routine under autoscaling) releases it by simply
+    #: failing to heartbeat, and the reaper can recover the run elsewhere instead
+    #: of leaving it stuck in `running` forever.
+    lease_owner: str | None = None
+    lease_expires_at: datetime | None = None
 
 
 @dataclass

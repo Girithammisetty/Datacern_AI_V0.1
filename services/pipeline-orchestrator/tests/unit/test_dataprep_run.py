@@ -6,6 +6,8 @@ from training, with NO Argo.
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 import pytest
 
@@ -60,6 +62,27 @@ async def _container(tmp_path, clock):
     return c
 
 
+async def _await_terminal(c, run_id, tries: int = 200):
+    """Wait for the run the POST already kicked off (routes fire schedule_drive).
+
+    The data-prep DAG now runs in a thread rather than blocking the event loop, so
+    the background driver has a real suspension point and the run is no longer
+    finished by the time the POST returns. Calling drive_run again would just be
+    declined by the run's lease — one driver per run is the point — so wait for the
+    driver that already holds it.
+    """
+    from app.domain.enums import RunStatus
+
+    terminal = {int(RunStatus.succeeded), int(RunStatus.failed), int(RunStatus.cancelled)}
+    for _ in range(tries):
+        async with c.run_service.d.uow_factory(TENANT_A) as uow:
+            run = await uow.runs.get(run_id)
+        if run is not None and run.status in terminal:
+            return run
+        await asyncio.sleep(0.01)
+    raise AssertionError(f"run {run_id} never reached a terminal state")
+
+
 async def test_dataprep_run_executes_locally_and_persists_output(tmp_path, clock):
     c = await _container(tmp_path, clock)
     app = create_app(c)
@@ -76,8 +99,9 @@ async def test_dataprep_run_executes_locally_and_persists_output(tmp_path, clock
         assert run.status_code == 202, run.text
         run_id = run.json()["data"]["id"]
 
-        # Drive the run: real local operator DAG + sink persistence, NO Argo/executor.
-        await c.run_service.drive_run(TENANT_A, run_id)
+        # The run drives itself: real local operator DAG + sink persistence, NO
+        # Argo/executor. The POST already scheduled it; wait for it to finish.
+        await _await_terminal(c, run_id)
 
         got = (await cl.get(f"/api/v1/runs/{run_id}", headers=auth())).json()["data"]
         assert got["status"] == "succeeded", got
@@ -108,6 +132,6 @@ async def test_dataprep_run_fails_closed_on_bad_operator(tmp_path, clock):
         run = await cl.post(f"/api/v1/pipelines/{tid}/run", json={"run_parameters": {}},
                             headers=auth())
         run_id = run.json()["data"]["id"]
-        await c.run_service.drive_run(TENANT_A, run_id)
+        await _await_terminal(c, run_id)
         got = (await cl.get(f"/api/v1/runs/{run_id}", headers=auth())).json()["data"]
         assert got["status"] == "failed"  # surfaced, never a silent success

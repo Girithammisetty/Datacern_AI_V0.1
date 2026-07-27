@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 
 from app.domain.errors import DependencyUnavailable
+from app.domain.ports import TrainingResult
 
 
 class MlflowGateway:
@@ -57,6 +58,48 @@ class MlflowGateway:
             raise
         except Exception as exc:  # noqa: BLE001 — MLflow down → fail fast (BR-15)
             raise DependencyUnavailable(f"MLflow unavailable: {exc}") from exc
+
+    async def result_for_run(self, mlflow_run_id: str | None) -> TrainingResult | None:
+        """Read back what the TRAINING POD actually produced (Argo path).
+
+        On the local backend the executor returns its own TrainingResult in
+        process. On Argo the fit happens in a pod the orchestrator never sees, and
+        that pod is the one that logs metrics and registers the model — so the
+        outcome has to be read from MLflow. Reading it is the point: the run's
+        recorded metrics are then always the ones a real fit produced, never a
+        value the orchestrator assumed because the workflow exited zero.
+
+        Returns None when the workflow succeeded but registered nothing, which the
+        caller surfaces as a failure rather than a model-less success.
+        """
+        if not mlflow_run_id:
+            return None
+        return await asyncio.to_thread(self._result_sync, mlflow_run_id)
+
+    def _result_sync(self, mlflow_run_id: str) -> TrainingResult | None:
+        try:
+            from mlflow.tracking import MlflowClient
+
+            client = MlflowClient(tracking_uri=self.tracking_uri)
+            run = client.get_run(mlflow_run_id)
+            versions = client.search_model_versions(f"run_id='{mlflow_run_id}'")
+            if not versions:
+                return None
+            # Newest registered version for this run — a retry within the same
+            # MLflow run would otherwise resolve to the earlier model.
+            mv = max(versions, key=lambda v: int(v.version))
+            return TrainingResult(
+                mlflow_run_id=mlflow_run_id,
+                model_uri=f"models:/{mv.name}/{mv.version}",
+                registered_model_name=mv.name,
+                model_version=str(mv.version),
+                metrics=dict(run.data.metrics or {}),
+                params=dict(run.data.params or {}),
+                row_count=int(float(run.data.metrics.get("n_rows", 0) or 0)),
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise DependencyUnavailable(
+                f"could not read MLflow result for run {mlflow_run_id}: {exc}") from exc
 
     async def set_terminated(self, run_id: str, status: str) -> None:
         await asyncio.to_thread(self._terminate_sync, run_id, status)

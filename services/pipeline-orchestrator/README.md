@@ -25,6 +25,39 @@ Workflows server REST + Kubernetes watch API (informer, never polling), but is
 equivalent on the Mac), so `executor_backend` defaults to `local`. This is the single
 documented exception, analogous to the cloud warehouses in `CONVENTIONS.md`.
 
+`_drive_argo` submits the compiled workflow and then **watches it to a terminal
+phase**, projecting Argo's per-node status onto `components_status` and reading the
+outcome back from MLflow on success — the training pod, not the orchestrator, is what
+logged the metrics and registered the model, so the run's recorded metrics are always
+the ones a real fit produced. A stream that ends without a terminal phase fails the
+run rather than guessing at success.
+
+## Scaling on demand: run leases + orphan recovery
+
+A run is driven only by the holder of an **unexpired lease** (`pipeline_runs.lease_owner`
+/ `lease_expires_at`, migration 0004). `claim_lease` is one conditional `UPDATE`, so two
+orchestrator instances racing the same run cannot both win — which matters because
+double-driving would train the run twice and register two models for one four-eyes
+approval. The driver heartbeats at a third of the TTL; losing the pod simply stops the
+heartbeat.
+
+The **orphan reaper** (`recover_orphans`, swept every `orphan_reaper_poll_seconds`) then
+recovers what that pod was driving, and which of two outcomes applies is decided by where
+the work actually lives:
+
+- **Argo** — the workflow is still running in Kubernetes, entirely unaffected by the
+  orchestrator pod going away. Re-attach the watch (in the background, so one long
+  workflow cannot stall the sweep) and let the run finish normally.
+- **local** — the fit ran in the dead pod's own process and is genuinely gone. Fail the
+  run with `RUN_ORPHANED`: terminal, retryable, and it frees the tenant's concurrency
+  slot. Leaving it `running` would misreport a dead run as live and hold that slot
+  forever.
+
+Every instance sweeps; no leader election is needed because `claim_lease` decides the
+winner. Lease columns are written only by claim/renew/release — `SqlRunRepo.update`
+excludes them, so a caller writing back a row it read before claiming cannot erase the
+lease it is holding.
+
 ## The learning loop (corrections → real model)
 
 `case.disposition_applied` events (the human triage correction) are consumed from real
@@ -95,9 +128,11 @@ drives the equivalent status transitions + events directly.
 
 ## Remaining stubs / documented exceptions
 
-- **Argo Workflows backend** — real code, INFRA-GATED on a k8s cluster + Argo server
-  (`executor_backend=local` is the Mac default). No `NotImplementedError`; unreachable
-  infra raises `DependencyUnavailable`.
+- **Argo Workflows backend** — real code (submit + watch-to-terminal + terminate),
+  INFRA-GATED on a k8s cluster + Argo server (`executor_backend=local` is the Mac
+  default). No `NotImplementedError`; unreachable infra raises `DependencyUnavailable`.
+  The watch loop is covered by unit tests against a fake that speaks the adapter's
+  shape; end-to-end verification still needs a real cluster.
 - In-memory store / dedup / feature source are unit/dev-tier doubles selected only in
   `mode="memory"` with `use_real_adapters=False` — set only by tests, never reachable
   from the shipped `app.main` default.
