@@ -44,6 +44,10 @@ class TrainingSpec:
     registered_model_name: str
     mlflow_run_id: str | None = None
     tags: dict = field(default_factory=dict)
+    #: CPUs the run's resources resolved to — the same figure the compiler puts
+    #: in the pod's cpu request. The executor spends it on cross-validation
+    #: parallelism; without it a node declared with 7 CPUs fitted on one.
+    cpus: int = 1
 
 
 @dataclass

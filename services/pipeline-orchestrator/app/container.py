@@ -83,18 +83,29 @@ def build_container(
     if mode == "memory":
         memory_state = MemoryState()
         uow_factory = memory_uow_factory(memory_state)
-        from app.store.memory import MemoryScheduleScanner, _InMemoryDedup
+        from app.store.memory import (
+            MemoryOrphanScanner,
+            MemoryScheduleScanner,
+            _InMemoryDedup,
+        )
 
         dedup = _InMemoryDedup()
         schedule_scanner = MemoryScheduleScanner(memory_state)
+        orphan_scanner = MemoryOrphanScanner(memory_state)
     elif mode == "sql":
         if session_factory is None:
             raise ValueError("sql mode requires a session_factory")
-        from app.store.sql import SqlDedupStore, SqlScheduleScanner, sql_uow_factory
+        from app.store.sql import (
+            SqlDedupStore,
+            SqlOrphanScanner,
+            SqlScheduleScanner,
+            sql_uow_factory,
+        )
 
         uow_factory = sql_uow_factory(session_factory)
         dedup = SqlDedupStore(session_factory)
         schedule_scanner = SqlScheduleScanner(session_factory)
+        orphan_scanner = SqlOrphanScanner(session_factory)
     else:
         raise ValueError(f"unknown mode {mode!r}")
 
@@ -154,7 +165,8 @@ def build_container(
         settings=settings, clock=clock, uow_factory=uow_factory, components=components,
         algorithms=algorithms, manifest_store=manifest_store, executor=executor,
         mlflow=mlflow, feature_source=feature_source, dataset_reader=dataset_reader,
-        events_topic=settings.events_topic, workflow_backend=workflow_backend)
+        events_topic=settings.events_topic, workflow_backend=workflow_backend,
+        orphan_scanner=orphan_scanner)
 
     catalog_service = CatalogService(deps)
     template_service = TemplateService(deps)

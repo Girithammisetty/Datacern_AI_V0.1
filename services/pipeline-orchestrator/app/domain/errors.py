@@ -43,6 +43,38 @@ class ValidationFailed(AppError):
     code = "VALIDATION_FAILED"
 
 
+class TrainingDataExceedsBudget(AppError):
+    """The labeled set is larger than the run's resolved RAM budget allows.
+
+    Deliberately an ERROR rather than a silent truncation: training on the first
+    N rows of a much larger dataset and registering the result as "trained on
+    dataset X" is a fabricated provenance claim — the metrics, the model card and
+    the four-eyes promotion approval would all describe a model the reviewer
+    cannot see was fitted to a sliver. Refusing is recoverable (raise the node's
+    ram_gb, or sample deliberately upstream so the sampling is on the record);
+    silently truncating is not.
+    """
+
+    status = 422
+    code = "TRAINING_DATA_EXCEEDS_BUDGET"
+
+
+class RunOrphaned(AppError):
+    """The orchestrator instance driving this run stopped before it finished.
+
+    Only ever raised for work that lived INSIDE that process (the local executor).
+    An Argo run is not orphaned by a lost orchestrator — the workflow keeps running
+    in Kubernetes and another instance re-attaches to it.
+
+    Failing is the honest outcome, not a workaround: the run's work is genuinely
+    gone, and leaving it in `running` would misreport a dead run as live while
+    permanently consuming one of the tenant's concurrency slots.
+    """
+
+    status = 503
+    code = "RUN_ORPHANED"
+
+
 class CannotCompile(AppError):
     status = 422
     code = "CANNOT_COMPILE"

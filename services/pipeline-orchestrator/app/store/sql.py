@@ -10,7 +10,7 @@ import dataclasses
 import os
 from datetime import datetime
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -45,6 +45,10 @@ from app.utils import decode_cursor, encode_cursor, new_id, utcnow
 _T_FIELDS = [f.name for f in dataclasses.fields(PipelineTemplate)]
 _V_FIELDS = [f.name for f in dataclasses.fields(TemplateVersion)]
 _R_FIELDS = [f.name for f in dataclasses.fields(PipelineRun)]
+#: Lease columns are written ONLY by claim_lease/renew_lease/release_lease, never
+#: by a whole-row update — see SqlRunRepo.update.
+_LEASE_FIELDS = ("lease_owner", "lease_expires_at")
+_R_UPDATE_FIELDS = [f for f in _R_FIELDS if f not in _LEASE_FIELDS]
 _L_FIELDS = [f.name for f in dataclasses.fields(LabeledExample)]
 _S_FIELDS = [f.name for f in dataclasses.fields(PipelineSchedule)]
 
@@ -196,7 +200,12 @@ class SqlRunRepo:
     async def update(self, r):
         row = await self.s.get(RunRow, r.id)
         if row is not None:
-            _apply(row, r, _R_FIELDS)
+            # Never through here: the lease is owned by claim/renew/release alone.
+            # A caller holds a PipelineRun it read before claiming, so writing the
+            # whole row back would silently erase the lease it is holding — the
+            # heartbeat would then find nothing to renew and the reaper would
+            # eventually reclaim a run that is very much alive.
+            _apply(row, r, _R_UPDATE_FIELDS)
             await self.s.flush()
 
     async def get_by_workflow(self, argo_workflow_name):
@@ -226,6 +235,38 @@ class SqlRunRepo:
             select(func.max(func.coalesce(RunRow.submitted_at, RunRow.created_at)))
             .where(RunRow.submitted_by == submitted_by))
         return result.scalar_one_or_none()
+
+    async def claim_lease(self, run_id, owner: str, now, expires_at) -> bool:
+        """Take the driving lease for a run if it is free or expired as of ``now``.
+        Returns whether we got it.
+
+        One conditional UPDATE, so two orchestrator instances racing to drive the
+        same run cannot both win: the row lock serializes them and the loser's
+        WHERE no longer matches. A check-then-set would let two pods train the
+        same run and register two models for it.
+        """
+        result = await self.s.execute(
+            update(RunRow)
+            .where(RunRow.id == run_id,
+                   or_(RunRow.lease_owner.is_(None),
+                       RunRow.lease_expires_at.is_(None),
+                       RunRow.lease_expires_at < now))
+            .values(lease_owner=owner, lease_expires_at=expires_at))
+        return result.rowcount > 0
+
+    async def renew_lease(self, run_id, owner: str, expires_at) -> bool:
+        """Heartbeat. Returns False if we no longer hold it — someone reclaimed the
+        run while we were working, and we must stop rather than double-drive it."""
+        result = await self.s.execute(
+            update(RunRow)
+            .where(RunRow.id == run_id, RunRow.lease_owner == owner)
+            .values(lease_expires_at=expires_at))
+        return result.rowcount > 0
+
+    async def release_lease(self, run_id) -> None:
+        await self.s.execute(
+            update(RunRow).where(RunRow.id == run_id)
+            .values(lease_owner=None, lease_expires_at=None))
 
 
 class SqlQuotaRepo:
@@ -377,6 +418,39 @@ class SqlScheduleScanner:
                     .limit(limit))
             rows = (await session.execute(stmt)).scalars().all()
             return [_to(r, _S_FIELDS, PipelineSchedule) for r in rows]
+
+
+class SqlOrphanScanner:
+    """Cross-tenant scan for runs whose driver died (BR: on-demand compute).
+
+    Reads via a worker session (``app.worker=true``) so migration 0004's
+    permissive ``worker_pipeline_runs`` policy lets the reaper see stranded runs
+    across ALL tenants — the same shape as SqlScheduleScanner and OutboxDispatcher.
+    Recovery WRITES go back through the tenant-scoped SqlRunRepo, so
+    tenant_isolation's WITH CHECK still governs every mutation.
+    """
+
+    def __init__(self, session_factory: async_sessionmaker):
+        self._sf = session_factory
+
+    async def orphaned(self, now, stale_before, limit: int = 50) -> list[PipelineRun]:
+        """Runs nobody is driving: an expired lease, or — the case a lease alone
+        misses — a run left `submitted` with no lease at all because its pod died
+        in the window between returning 202 and claiming."""
+        drivable = [int(RunStatus.submitted), int(RunStatus.running)]
+        async with self._sf() as session:
+            await session.execute(text("SELECT set_config('app.worker', 'true', true)"))
+            stmt = (select(RunRow)
+                    .where(RunRow.status.in_(drivable),
+                           or_(RunRow.lease_expires_at < now,
+                               and_(RunRow.lease_expires_at.is_(None),
+                                    func.coalesce(RunRow.submitted_at,
+                                                  RunRow.created_at) < stale_before)))
+                    .order_by(func.coalesce(RunRow.lease_expires_at,
+                                            RunRow.submitted_at).asc())
+                    .limit(limit))
+            rows = (await session.execute(stmt)).scalars().all()
+            return [_to(r, _R_FIELDS, PipelineRun) for r in rows]
 
 
 class SqlOutboxRepo:

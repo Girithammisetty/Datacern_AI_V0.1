@@ -89,6 +89,24 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     scheduler_poll_seconds: float = 30.0
 
+    # Run leases + orphan recovery — what makes the compute plane safe to scale
+    # on demand. A run is driven only by the holder of an unexpired lease, so a
+    # pod evicted mid-run (the normal way an autoscaler returns capacity) strands
+    # nothing: the lease lapses and the reaper recovers the run elsewhere.
+    #
+    # run_lease_seconds must comfortably exceed the heartbeat interval
+    # (lease/3) AND any period the driving coroutine cannot yield, or a healthy
+    # run evicts itself. Training hands off to a thread and data-prep now does
+    # too, so the loop stays free to heartbeat; 300s leaves a wide margin anyway,
+    # because reclaiming a live run is far more costly than recovering a dead one
+    # a minute later.
+    run_lease_seconds: float = 300.0
+    orphan_reaper_enabled: bool = True
+    orphan_reaper_poll_seconds: float = 30.0
+    #: Identifies this orchestrator instance in `pipeline_runs.lease_owner`.
+    #: Defaults to the pod name under Kubernetes (downward API), else the host.
+    instance_id: str = ""
+
     events_topic: str = "pipeline.events.v1"
     case_topic: str = "case.events.v1"
     identity_topic: str = "identity.events.v1"

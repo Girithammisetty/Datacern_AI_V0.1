@@ -155,6 +155,33 @@ async def _start_workers(container, settings):
         tasks.append(asyncio.create_task(_run_retention_loop(sf, retention_specs)))
         logger.info("pipeline retention reaper started (outbox + processed_events)")
 
+    if settings.orphan_reaper_enabled:
+        # What makes the compute plane safe to autoscale. A run is driven only by
+        # the holder of an unexpired lease; when a pod goes away — an eviction, a
+        # scale-in, a node drain — its runs stop being heartbeated and this sweep
+        # recovers them: re-attaching to the Argo workflow still running in
+        # Kubernetes, or failing a local run whose work died with the process.
+        # Without it those runs sit in `running` forever, consuming the tenant's
+        # concurrency and reporting a dead run as live.
+        #
+        # Every instance sweeps; no leader election is needed because claim_lease
+        # is a single conditional UPDATE, so exactly one of them wins each run.
+        async def orphan_reaper_loop():
+            while True:
+                await asyncio.sleep(settings.orphan_reaper_poll_seconds)
+                try:
+                    recovered = await container.run_service.recover_orphans()
+                except Exception:  # noqa: BLE001
+                    logger.exception("orphan reaper tick error")
+                    continue
+                if recovered:
+                    logger.warning("recovered %d orphaned run(s): %s",
+                                   len(recovered), ", ".join(recovered))
+
+        tasks.append(asyncio.create_task(orphan_reaper_loop()))
+        logger.info("pipeline orphan reaper started (poll=%.0fs, lease=%.0fs)",
+                    settings.orphan_reaper_poll_seconds, settings.run_lease_seconds)
+
     if settings.scheduler_enabled:
         from app.domain.enums import RunStatus
 

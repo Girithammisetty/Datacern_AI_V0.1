@@ -6,6 +6,26 @@ DEFAULTS = {"cpus": 1, "ram_gb": 2, "timeout_minutes": 30}
 FLOOR = {"cpus": 1, "ram_gb": 2, "timeout_minutes": 5}
 PLATFORM_CEILING = {"cpus": 7, "ram_gb": 24, "timeout_minutes": 480}
 
+#: Training rows a node may materialize per GB of its resolved RAM budget.
+#: A row arrives as a dict of Python objects and is then copied into a pandas
+#: object-dtype frame, so both are live at peak, and the estimator needs further
+#: headroom for splits, copies and the fitted model. Deliberately conservative:
+#: this figure decides when a run is REFUSED, and refusing a job that would have
+#: fitted is recoverable, whereas accepting one that OOMs takes the whole
+#: in-process executor down with it (the local backend has no cgroup).
+TRAINING_ROWS_PER_GB = 25_000
+
+
+def training_row_budget(ram_gb: int) -> int:
+    """Max rows a training run may materialize for a node sized at ``ram_gb``.
+
+    The point of deriving this from the SAME resolved resources the compiler
+    turns into pod limits is that the local (in-process) backend cannot enforce
+    memory any other way — nothing gives it a cgroup, so the only lever it has
+    is refusing to materialize more than the declared budget can hold.
+    """
+    return max(1, int(ram_gb) * TRAINING_ROWS_PER_GB)
+
 
 def topo_order(aliases: list[str], edges: list[tuple[str, str]]) -> list[str]:
     """Kahn topological order of node aliases given (from_alias, to_alias) edges."""

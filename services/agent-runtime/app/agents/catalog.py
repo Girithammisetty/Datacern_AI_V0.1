@@ -115,6 +115,45 @@ async def _publish_agent_version(store, signing_key, key, version, display, desc
         principal_ref=f"spiffe://datacern/ns/ai/agent/{key}", status="published"))
 
 
+def _tool(tool_id: str) -> dict:
+    return {"tool_id": tool_id, "version_range": ">=1.0.0"}
+
+
+#: Declared write surface per fixed agent — the allow-list re-checked at the
+#: proposal chokepoint (proposals/service.py `_check_guardrails`). An agent
+#: absent from this table declares no allow-list at all, which means "no write
+#: surface declared" rather than "deny", so any agent that CAN emit a
+#: WriteIntent belongs here.
+AGENT_TOOLSETS: dict[str, list[dict]] = {
+    "case-triage": [_tool("case.apply_disposition")],
+    "governance": [_tool("mlops.open_retrain")],
+    "onboarding": [_tool("ingestion.create")],
+    "dashboard-designer": [_tool("chart.dashboard.create")],
+    "model-training": [_tool("pipeline.template.create_from_algorithm")],
+    "data-pipeline-builder": [_tool("pipeline.template.create")],
+    # ml-engineer promotes models AND (BRD 52 inc2) may initiate an ingestion
+    # from an existing connection to refresh training data.
+    "ml-engineer": [_tool("experiment.model.promote"), _tool("ingestion.create")],
+    "inference": [_tool("inference.submit")],
+    # meta-router forwards whichever delegate produced the write intent (§8.4),
+    # so its registration must stay a truthful SUPERSET of the write tools of
+    # every agent in meta_router._CANDIDATES — a routable delegate whose tool is
+    # missing here has its WriteIntent rejected as a guardrail violation.
+    # `test_meta_router_graph.py` enforces that invariant; ml-engineer's
+    # experiment.model.promote is absent because ml-engineer is deliberately not
+    # routable from free text (it executes training runs before proposing).
+    "meta-router": [_tool("ingestion.create"), _tool("chart.dashboard.create"),
+                    _tool("pipeline.template.create_from_algorithm"),
+                    _tool("pipeline.template.create"), _tool("inference.submit"),
+                    _tool("mlops.open_retrain")],
+}
+
+
+def toolset_for(agent_key: str) -> list[dict]:
+    """The declared write surface for a fixed agent (empty = none declared)."""
+    return list(AGENT_TOOLSETS.get(agent_key, []))
+
+
 async def seed_catalog(store, signing_key, *,
                        endpoint_base: str = "https://agent-runtime.internal") -> None:
     for key, (display, desc, wmode, graph_ref, skills) in CATALOG.items():
@@ -124,34 +163,7 @@ async def seed_catalog(store, signing_key, *,
             status="published" if graph_ref else "draft"))
         if graph_ref is None:
             continue
-        toolset = ([{"tool_id": "case.apply_disposition", "version_range": ">=1.0.0"}]
-                   if key == "case-triage" else
-                   [{"tool_id": "mlops.open_retrain", "version_range": ">=1.0.0"}]
-                   if key == "governance" else
-                   [{"tool_id": "ingestion.create", "version_range": ">=1.0.0"}]
-                   if key == "onboarding" else
-                   [{"tool_id": "chart.dashboard.create", "version_range": ">=1.0.0"}]
-                   if key == "dashboard-designer" else
-                   [{"tool_id": "pipeline.template.create_from_algorithm",
-                     "version_range": ">=1.0.0"}]
-                   if key == "model-training" else
-                   # ml-engineer promotes models AND (BRD 52 inc2) may initiate an
-                   # ingestion from an existing connection to refresh training data.
-                   [{"tool_id": "experiment.model.promote", "version_range": ">=1.0.0"},
-                    {"tool_id": "ingestion.create", "version_range": ">=1.0.0"}]
-                   if key == "ml-engineer" else
-                   [{"tool_id": "inference.submit", "version_range": ">=1.0.0"}]
-                   if key == "inference" else
-                   # meta-router forwards whichever delegate produced the write
-                   # intent (§8.4); it needs the union of delegate write tools so
-                   # its own agent_version registration stays a truthful superset.
-                   [{"tool_id": "ingestion.create", "version_range": ">=1.0.0"},
-                    {"tool_id": "chart.dashboard.create", "version_range": ">=1.0.0"},
-                    {"tool_id": "pipeline.template.create_from_algorithm",
-                     "version_range": ">=1.0.0"},
-                    {"tool_id": "inference.submit", "version_range": ">=1.0.0"},
-                    {"tool_id": "mlops.open_retrain", "version_range": ">=1.0.0"}]
-                   if key == "meta-router" else [])
+        toolset = toolset_for(key)
 
         # A published agent_version is IMMUTABLE (DB-enforced). To change a fixed
         # agent's enforced toolset (e.g. BRD 52 inc2 adds ingestion.create to

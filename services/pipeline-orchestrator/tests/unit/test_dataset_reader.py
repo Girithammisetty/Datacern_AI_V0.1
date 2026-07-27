@@ -158,3 +158,138 @@ def test_dataset_ref_rejects_empty():
     items = validate_params("read-1", {"dataset": ""}, _schema(),
                             model_type=None, require_present=True)
     assert items and items[0]["field"] == "parameters.dataset"
+
+
+# ---- row budget: refuse rather than silently truncate -----------------------
+
+def _read_node_version(ram_gb: int | None = None):
+    node = {"alias": "read-1", "component": "read-from-warehouse",
+            "parameters": {"dataset": URN}}
+    if ram_gb is not None:
+        node["resources"] = {"cpus": 1, "ram_gb": ram_gb, "timeout_minutes": 30}
+    return SimpleNamespace(definition={"nodes": [node], "edges": []})
+
+
+async def test_oversized_dataset_is_refused_not_silently_truncated(container):
+    """The defect this guards: read_rows' limit defaults to 10_000, so a dataset
+    larger than that used to train on its first 10_000 rows while MLflow recorded
+    n_rows=10000 and the promotion approval described a model nobody could tell
+    was fitted to a sliver of the data."""
+    from app.domain.errors import TrainingDataExceedsBudget
+    from app.domain.resources import training_row_budget
+
+    budget = training_row_budget(2)  # the 2 GB default
+    oversized = [{"amount": i, "label": "y"} for i in range(budget + 5)]
+    container.deps.dataset_reader = InMemoryDatasetReader({URN: oversized})
+    run = SimpleNamespace(run_parameters={})
+
+    with pytest.raises(TrainingDataExceedsBudget) as ei:
+        await container.run_service._assemble_rows(
+            TENANT_A, run, _read_node_version(), "label")
+
+    # The message has to be actionable: what it found, what it allows, and the
+    # two legitimate ways forward.
+    assert ei.value.details["row_budget"] == budget
+    assert ei.value.details["rows"] > budget
+    assert "ram_gb" in ei.value.message and "sample upstream" in ei.value.message
+
+
+async def test_dataset_exactly_at_budget_is_accepted(container):
+    """Off-by-one guard: the reader is asked for budget+1 rows precisely so
+    "exactly fits" can be told apart from "there is more we cannot see"."""
+    from app.domain.resources import training_row_budget
+
+    budget = training_row_budget(2)
+    exact = [{"amount": i, "label": "y"} for i in range(budget)]
+    container.deps.dataset_reader = InMemoryDatasetReader({URN: exact})
+    run = SimpleNamespace(run_parameters={})
+
+    rows, cols = await container.run_service._assemble_rows(
+        TENANT_A, run, _read_node_version(), "label")
+
+    assert len(rows) == budget
+    assert cols == ["amount"]
+
+
+async def test_a_bigger_node_buys_a_bigger_budget(container):
+    """The resource model finally does something on the local backend: the same
+    dataset that a 2 GB node refuses is accepted by a node declared larger."""
+    from app.domain.resources import training_row_budget
+
+    rows_n = training_row_budget(2) + 100
+    data = [{"amount": i, "label": "y"} for i in range(rows_n)]
+    container.deps.dataset_reader = InMemoryDatasetReader({URN: data})
+    run = SimpleNamespace(run_parameters={})
+
+    rows, _ = await container.run_service._assemble_rows(
+        TENANT_A, run, _read_node_version(ram_gb=4), "label")
+
+    assert len(rows) == rows_n
+
+
+async def test_oversized_inline_training_data_is_refused(container):
+    from app.domain.errors import TrainingDataExceedsBudget
+    from app.domain.resources import training_row_budget
+
+    budget = training_row_budget(2)
+    run = SimpleNamespace(run_parameters={
+        "training_data": [{"amount": i, "label": "y"} for i in range(budget + 1)]})
+
+    with pytest.raises(TrainingDataExceedsBudget) as ei:
+        await container.run_service._assemble_rows(
+            TENANT_A, run, _read_node_version(), "label")
+
+    assert ei.value.details["source"] == "training_data parameter"
+
+
+def test_row_budget_scales_with_declared_ram():
+    from app.domain.resources import PLATFORM_CEILING, training_row_budget
+
+    assert training_row_budget(4) == 2 * training_row_budget(2)
+    # Never zero: a node clamped to the floor still gets a usable budget.
+    assert training_row_budget(0) >= 1
+    assert training_row_budget(PLATFORM_CEILING["ram_gb"]) > training_row_budget(2)
+
+
+# ---- the same resolved resources also size the training spec's CPUs ---------
+
+def _cpu_version(cpus: int | None):
+    node = {"alias": "train-1", "component": "random_forest-train", "parameters": {}}
+    if cpus is not None:
+        node["resources"] = {"cpus": cpus, "ram_gb": 4, "timeout_minutes": 30}
+    return SimpleNamespace(definition={"nodes": [node], "edges": []})
+
+
+@pytest.mark.parametrize("declared,expected", [
+    (4, 4),
+    (None, 1),                      # DEFAULTS["cpus"]
+    (99, 7),                        # clamped to PLATFORM_CEILING["cpus"]
+])
+async def test_training_spec_carries_the_resolved_cpu_count(container, declared,
+                                                            expected):
+    """The compiler already turns resolve_resources' cpus into the pod's cpu
+    request; the spec has to carry the same figure or the executor cannot spend
+    it on cross-validation and the declared cores sit idle."""
+    run = SimpleNamespace(id="run-1", template_id="tpl-1", mlflow_run_id=None,
+                          run_parameters={"training_data": [{"amount": 1,
+                                                             "label": "y"}]})
+
+    spec = await container.run_service._build_training_spec(
+        TENANT_A, run, None, _cpu_version(declared))
+
+    assert spec.cpus == expected
+
+
+async def test_run_resources_are_the_max_across_nodes(container):
+    """A run is sized by its largest node — the same rule the row budget uses, so
+    cpus and ram_gb cannot disagree about which node set the envelope."""
+    version = SimpleNamespace(definition={"nodes": [
+        {"alias": "a", "component": "read-from-warehouse",
+         "resources": {"cpus": 2, "ram_gb": 2, "timeout_minutes": 30}},
+        {"alias": "b", "component": "random_forest-train",
+         "resources": {"cpus": 5, "ram_gb": 4, "timeout_minutes": 30}},
+    ], "edges": []})
+
+    res = container.run_service._run_resources(version)
+
+    assert res["cpus"] == 5 and res["ram_gb"] == 4

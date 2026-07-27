@@ -246,7 +246,7 @@ class LocalTrainingExecutor:
                 estimator = _build_estimator(spec.algorithm, spec.params)
                 metrics, fitted = self._fit_and_score(
                     estimator, X, y_raw, family, train_test_split,
-                    params=spec.params, algorithm=spec.algorithm)
+                    params=spec.params, algorithm=spec.algorithm, cpus=spec.cpus)
                 mlflow.log_metrics(metrics)
 
                 model_uri, registered_name, version = self._log_model(
@@ -261,7 +261,7 @@ class LocalTrainingExecutor:
         return result
 
     def _fit_and_score(self, estimator, X, y_raw, family, train_test_split, *,
-                       params=None, algorithm="") -> tuple[dict, object]:
+                       params=None, algorithm="", cpus=1) -> tuple[dict, object]:
         """Fit + score. BRD 63: optionally runs real HPO (grid/random + CV) and/or
         wrapper feature selection, and always computes the richer per-family metric
         set. Returns (metrics, fitted_estimator) — the fitted estimator may be the
@@ -294,7 +294,7 @@ class LocalTrainingExecutor:
                     est, kind=str(params.get("feature_selection", "sequential")).lower()
                     if str(params.get("feature_selection")).lower() not in ("true", "1")
                     else "sequential",
-                    n_features=params.get("n_features"))
+                    n_features=params.get("n_features"), n_jobs=cpus)
             return est
 
         def _fit(est, Xtr, ytr, fam):
@@ -304,7 +304,8 @@ class LocalTrainingExecutor:
                     est, algorithm, Xtr, ytr,
                     kind=str(params.get("search", "grid")).lower(),
                     n_trials=int(params.get("n_trials", 20) or 20),
-                    cv_folds=int(params.get("cv_folds", 5) or 5), family=fam)
+                    cv_folds=int(params.get("cv_folds", 5) or 5), family=fam,
+                    n_jobs=cpus)
                 if best_params:
                     extra["hpo_search"] = 1.0
                     if cv_score is not None:

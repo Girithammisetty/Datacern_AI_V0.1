@@ -80,7 +80,8 @@ class FakeExecutor:
         if self.fail:
             raise RuntimeError("scoring component failed")
         return ScoringResult(
-            output_storage_uri=f"mem://scores/{job.id}.parquet",
+            # a prefix, matching the real executor's part-NNNNN.parquet layout
+            output_storage_uri=f"mem://scores/{job.id}/",
             snapshot_id=uuid.uuid4().hex, row_count=dataset.row_count or 3,
             prediction_columns=["prediction"])
 

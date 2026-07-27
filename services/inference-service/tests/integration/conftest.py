@@ -184,12 +184,27 @@ def seed_input_parquet(key: str, *, rows: int = 5, missing_age: bool = False) ->
 
 
 def read_output_parquet(storage_uri: str):
+    """Read a scoring output back. The executor streams its input in batches, so
+    the URI is a prefix holding one or more ``part-NNNNN.parquet`` objects; read
+    them in key order and concatenate. A URI naming a single object still works."""
+    import pandas as pd
     import pyarrow.parquet as pq
 
     _, _, rest = storage_uri.partition("s3://")
-    bucket, _, obj_key = rest.partition("/")
-    body = _s3().get_object(Bucket=bucket, Key=obj_key)["Body"].read()
-    return pq.read_table(io.BytesIO(body)).to_pandas()
+    bucket, _, path = rest.partition("/")
+
+    def _read(key):
+        body = _s3().get_object(Bucket=bucket, Key=key)["Body"].read()
+        return pq.read_table(io.BytesIO(body)).to_pandas()
+
+    if not path.endswith("/"):
+        return _read(path)
+    listing = _s3().list_objects_v2(Bucket=bucket, Prefix=path)
+    keys = sorted(o["Key"] for o in listing.get("Contents", [])
+                  if o["Key"].endswith(".parquet"))
+    if not keys:
+        raise AssertionError(f"no output parts under s3://{bucket}/{path}")
+    return pd.concat([_read(k) for k in keys], ignore_index=True)
 
 
 def unique(prefix: str) -> str:
