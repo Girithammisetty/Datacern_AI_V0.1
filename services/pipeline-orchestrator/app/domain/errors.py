@@ -43,6 +43,22 @@ class ValidationFailed(AppError):
     code = "VALIDATION_FAILED"
 
 
+class TrainingDataExceedsBudget(AppError):
+    """The labeled set is larger than the run's resolved RAM budget allows.
+
+    Deliberately an ERROR rather than a silent truncation: training on the first
+    N rows of a much larger dataset and registering the result as "trained on
+    dataset X" is a fabricated provenance claim — the metrics, the model card and
+    the four-eyes promotion approval would all describe a model the reviewer
+    cannot see was fitted to a sliver. Refusing is recoverable (raise the node's
+    ram_gb, or sample deliberately upstream so the sampling is on the record);
+    silently truncating is not.
+    """
+
+    status = 422
+    code = "TRAINING_DATA_EXCEEDS_BUDGET"
+
+
 class CannotCompile(AppError):
     status = 422
     code = "CANNOT_COMPILE"

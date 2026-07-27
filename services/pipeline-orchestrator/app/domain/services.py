@@ -36,10 +36,16 @@ from app.domain.errors import (
     Conflict,
     NotFound,
     RateLimited,
+    TrainingDataExceedsBudget,
     ValidationFailed,
 )
 from app.domain.ports import RunFilters, TemplateFilters, TrainingSpec
-from app.domain.resources import PLATFORM_CEILING
+from app.domain.resources import (
+    DEFAULTS,
+    PLATFORM_CEILING,
+    resolve_resources,
+    training_row_budget,
+)
 from app.events.envelope import make_envelope, run_urn, template_urn
 from app.utils import new_id
 
@@ -636,14 +642,58 @@ class RunService:
                 return comp[:-len("-train")]
         return None
 
+    @staticmethod
+    def _edge_aliases(edge: dict) -> tuple[str, str]:
+        """(from_alias, to_alias) — mirrors compiler._edge_endpoints so the budget
+        is resolved over exactly the graph the compiler would size."""
+        fa, _, _ = edge.get("from", "").rpartition(".")
+        ta, _, _ = edge.get("to", "").rpartition(".")
+        return (fa or edge.get("from", ""), ta or edge.get("to", ""))
+
+    def _row_budget(self, version) -> int:
+        """Rows this run may materialize, from the SAME resolved resources the
+        compiler turns into pod limits — the run is sized by its largest node."""
+        # Tolerate a node with no alias: a definition can reach here before dag
+        # validation has run (and unit callers build minimal ones), and sizing is
+        # not worth a KeyError on the training path — an unaliased node still
+        # contributes its resources under a synthetic key.
+        nodes = {n.get("alias") or f"_node{i}": n
+                 for i, n in enumerate(version.definition.get("nodes", []))}
+        edges = [self._edge_aliases(e) for e in version.definition.get("edges", [])]
+        effective = resolve_resources(nodes, edges, dict(PLATFORM_CEILING))
+        ram_gb = max((r["ram_gb"] for r in effective.values()),
+                     default=DEFAULTS["ram_gb"])
+        return training_row_budget(ram_gb)
+
+    def _refuse_oversized(self, actual: int, budget: int, source: str) -> None:
+        raise TrainingDataExceedsBudget(
+            f"labeled set has {actual:,} rows but this run's resolved memory budget "
+            f"allows {budget:,} (source: {source}). Raise the training node's "
+            f"ram_gb (platform ceiling {PLATFORM_CEILING['ram_gb']} GB, i.e. up to "
+            f"{training_row_budget(PLATFORM_CEILING['ram_gb']):,} rows), or sample "
+            f"upstream so the sampling is recorded in the pipeline rather than "
+            f"applied silently here.",
+            details={"rows": actual, "row_budget": budget, "source": source})
+
     async def _assemble_rows(self, tenant_id, run, version, label_column):
         """Assemble the labeled training frame. The learning-loop retrain path reads
         the assembled labeled_examples for a dataset_urn (corrections → rows); an
         inline ``training_data`` param or an object-store feature CSV are also
-        supported."""
+        supported.
+
+        Every source is bounded by the run's resolved row budget and REFUSES when
+        the real data exceeds it. Previously the dataset read passed no ``limit``
+        and silently took ``read_rows``'s 10_000-row default, so a 5M-row dataset
+        trained on 0.2% of itself while MLflow recorded n_rows=10000 and the
+        promotion approval described a model nobody could tell was fitted to a
+        sliver. The labeled-examples read was unbounded outright.
+        """
         params = run.run_parameters or {}
+        budget = self._row_budget(version)
         if params.get("training_data"):
             rows = list(params["training_data"])
+            if len(rows) > budget:
+                self._refuse_oversized(len(rows), budget, "training_data parameter")
             cols = [c for c in (rows[0].keys() if rows else []) if c != label_column]
             return rows, cols
 
@@ -652,13 +702,24 @@ class RunService:
         rows: list[dict] = []
         if ds_urn:
             async with self.d.uow_factory(tenant_id) as uow:
+                # Count first: the store's list_for_dataset is unbounded, so asking
+                # for the size before the rows keeps an oversized corpus from being
+                # materialized just to be rejected.
+                available = await uow.labeled_examples.count_for_dataset(ds_urn)
+                if available > budget:
+                    self._refuse_oversized(available, budget, "labeled examples")
                 examples = await uow.labeled_examples.list_for_dataset(ds_urn)
             for ex in examples:
                 rows.append({**ex.features, label_column: ex.label})
         if not rows and ds_urn and self.d.dataset_reader is not None:
             # No corrections yet; read the uploaded dataset's rows from dataset-service
-            # (real dependency — raises on failure, never fabricates rows).
-            fetched = await self.d.dataset_reader.read_rows(tenant_id, ds_urn)
+            # (real dependency — raises on failure, never fabricates rows). Ask for
+            # one row MORE than the budget: that extra row is how we tell "exactly
+            # fits" apart from "there is more we are not seeing".
+            fetched = await self.d.dataset_reader.read_rows(tenant_id, ds_urn,
+                                                            limit=budget + 1)
+            if len(fetched) > budget:
+                self._refuse_oversized(len(fetched), budget, f"dataset {ds_urn}")
             rows = [dict(r) for r in fetched]
         cols = [c for c in (rows[0].keys() if rows else []) if c != label_column]
         return rows, cols
