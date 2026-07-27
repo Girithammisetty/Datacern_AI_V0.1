@@ -52,7 +52,7 @@ async def test_real_model_real_batch_inference_produces_real_predictions(real_co
 
     ctx = _ctx()
     job = await real_container.inference.submit(ctx, SubmitRequest(model_urn, ds_urn))
-    # real scoring: MLflow model load + predict + single-snapshot MinIO output
+    # real scoring: MLflow model load + streamed predict + MinIO output parts
     await real_container.inference.execute_job(TENANT, job.id)
 
     fetched = await real_container.inference.get(ctx, job.id)

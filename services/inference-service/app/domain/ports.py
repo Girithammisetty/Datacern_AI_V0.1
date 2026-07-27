@@ -46,6 +46,10 @@ class ResolvedDataset:
 
 @dataclass
 class ScoringResult:
+    #: s3://bucket/scores/<tenant>/<job>/ — a prefix holding one or more
+    #: ``part-NNNNN.parquet`` objects, because the executor streams the input in
+    #: batches so peak memory tracks the chunk size and not the dataset size.
+    #: Read it by listing the prefix and concatenating the parts.
     output_storage_uri: str
     snapshot_id: str
     row_count: int
@@ -77,8 +81,10 @@ class ModelRegistry(Protocol):
 
 @runtime_checkable
 class ScoringExecutor(Protocol):
-    """Runs the real scoring: loads the model from MLflow, predicts on the real
-    input data, writes a single-snapshot output parquet, returns its pointer.
+    """Runs the real scoring: loads the model from MLflow, streams the real input
+    data in batches, predicts on each, writes the output parts under a job-scoped
+    prefix and returns a pointer to it. Only the finalize step makes that prefix
+    referenceable, so a failed run leaves nothing anyone can read as a result.
     This is the local real substitute for the pipeline-orchestrator/Argo run."""
 
     async def run(

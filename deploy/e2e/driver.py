@@ -1499,23 +1499,36 @@ def step_k_inference(dataset_urn):
     ok("inference-service ran REAL batch scoring to succeeded",
        f"status={final.get('status')} row_count={final.get('row_count')} "
        f"output={final.get('output_dataset')}")
-    # read the REAL predictions parquet back from MinIO
-    out_key = f"scores/{TENANT}/{job_id}/part-0.parquet"
+    # read the REAL predictions back from MinIO. The executor streams its input in
+    # batches, so the output is one or more part-NNNNN.parquet objects under a
+    # job-scoped prefix — list it and concatenate rather than assuming one file.
+    import pandas as pd
+
+    out_prefix = f"scores/{TENANT}/{job_id}/"
     try:
-        obj = s3.get_object(Bucket="datacern-datasets", Key=out_key)
-        table = pq.read_table(_io.BytesIO(obj["Body"].read()))
-        pdf = table.to_pandas()
+        listing = s3.list_objects_v2(Bucket="datacern-datasets", Prefix=out_prefix)
+        part_keys = sorted(o["Key"] for o in listing.get("Contents", [])
+                           if o["Key"].endswith(".parquet"))
+        if not part_keys:
+            raise RuntimeError(f"no output parts under {out_prefix}")
+        frames = []
+        for k in part_keys:
+            obj = s3.get_object(Bucket="datacern-datasets", Key=k)
+            frames.append(pq.read_table(_io.BytesIO(obj["Body"].read())).to_pandas())
+        pdf = pd.concat(frames, ignore_index=True)
         if "prediction" in pdf.columns and len(pdf) == len(rows):
             sample = pdf["prediction"].astype(str).tolist()[:5]
             ok("REAL predictions read back from the output parquet in MinIO",
-               f"rows={len(pdf)} cols={list(pdf.columns)[:6]} predictions[:5]={sample}")
+               f"rows={len(pdf)} parts={len(part_keys)} cols={list(pdf.columns)[:6]} "
+               f"predictions[:5]={sample}")
             EVID["inference"] = {"job_id": job_id, "rows": len(pdf),
-                                 "predictions_sample": sample, "output_key": out_key}
+                                 "predictions_sample": sample, "output_prefix": out_prefix,
+                                 "parts": len(part_keys)}
         else:
             bad(f"output parquet missing predictions or row mismatch: cols={list(pdf.columns)} "
                 f"rows={len(pdf)}")
     except Exception as e:
-        bad(f"could not read output parquet {out_key}: {e}")
+        bad(f"could not read output parquet under {out_prefix}: {e}")
     return job_id
 
 
