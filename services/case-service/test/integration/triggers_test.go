@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -22,6 +23,10 @@ func (f *fakeRows) BrowseRows(_ context.Context, _ uuid.UUID, _ string,
 	_ []domain.TriggerCondition, _ int) (*triggers.RowsPage, error) {
 	f.calls++
 	return f.page, nil
+}
+
+func (f *fakeRows) CurrentSnapshotID(_ context.Context, _ uuid.UUID, _ string) (string, error) {
+	return "", nil
 }
 
 // TestCaseTriggers_CRUD_ApplyAndDedup exercises the full INC-1 core slice
@@ -100,4 +105,72 @@ func TestCaseTriggers_CRUD_ApplyAndDedup(t *testing.T) {
 	list, err = h.pg.ListTriggers(ctx, tenant, ws)
 	require.NoError(t, err)
 	require.Empty(t, list)
+}
+
+// snapRows simulates dataset-service around an APPEND fire: until the
+// registered current version "catches up" to the event's snapshot, browse
+// serves the pre-append page — exactly the race the slice-6 journey caught
+// live (second fire opened zero cases because every stale row deduped).
+type snapRows struct {
+	checks   int
+	catchAt  int    // CurrentSnapshotID calls before the new snapshot appears
+	snapshot string // what the event's iceberg_snapshot_id canonicalizes to
+	stale    *triggers.RowsPage
+	fresh    *triggers.RowsPage
+}
+
+func (s *snapRows) CurrentSnapshotID(_ context.Context, _ uuid.UUID, _ string) (string, error) {
+	s.checks++
+	if s.checks >= s.catchAt {
+		return s.snapshot, nil
+	}
+	return "1010101", nil
+}
+
+func (s *snapRows) BrowseRows(_ context.Context, _ uuid.UUID, _ string,
+	_ []domain.TriggerCondition, _ int) (*triggers.RowsPage, error) {
+	if s.checks >= s.catchAt {
+		return s.fresh, nil
+	}
+	return s.stale, nil
+}
+
+// TestCaseTriggers_AppendFireWaitsForSnapshotRegistration: an append
+// ingestion.completed must not browse until dataset-service has registered
+// the event's snapshot — otherwise the increment is invisible and dedup
+// swallows the whole event.
+func TestCaseTriggers_AppendFireWaitsForSnapshotRegistration(t *testing.T) {
+	requireHarness(t)
+	ctx := context.Background()
+	tenant, ws := uuid.New(), uuid.New()
+
+	tr := &domain.CaseTrigger{
+		ID: domain.NewID(), TenantID: tenant, WorkspaceID: ws,
+		Name: "orders-stream", Enabled: true, DatasetName: "orders",
+		RowPKField: "id",
+	}
+	tr.Normalize()
+	require.NoError(t, h.pg.CreateTrigger(ctx, tr))
+
+	datasetURN := "wr:" + tenant.String() + ":dataset:dataset/" + uuid.NewString()
+	stale := &triggers.RowsPage{Columns: []string{"id", "amount"}, Rows: [][]any{{"1", "5000"}}}
+	fresh := &triggers.RowsPage{Columns: []string{"id", "amount"}, Rows: [][]any{{"1", "5000"}, {"2", "9000"}}}
+
+	// The event's snapshot id arrives as float64 (plain json decode of an
+	// int64 beyond float64's exact range) — the wait must still match it
+	// against the detail API's exact decimal string form.
+	const snapID = int64(721389546218946213)
+	rows := &snapRows{catchAt: 3, snapshot: "721389546218946213", stale: stale, fresh: fresh}
+	applier := &triggers.Applier{Store: h.pg, Rows: rows, SnapshotPollInterval: 10 * time.Millisecond}
+
+	// First fire: dataset registered at the event snapshot after 2 stale polls.
+	require.NoError(t, applier.ApplyIngestionCompleted(ctx, tenant, map[string]any{
+		"dataset_urn": datasetURN, "dataset_id": uuid.NewString(),
+		"dataset_name": "orders", "workspace_id": ws.String(),
+		"iceberg_snapshot_id": float64(snapID),
+	}))
+	require.GreaterOrEqual(t, rows.checks, 3, "must poll until registration reaches the event snapshot")
+
+	created, _ := h.pg.OutboxEventsByType(ctx, tenant, "case.created")
+	require.Len(t, created, 2, "the browse must see the POST-append page (both rows), not the stale one")
 }

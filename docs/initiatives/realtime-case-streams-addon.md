@@ -326,8 +326,8 @@ snapshot's bytes contain the source row; department B gets `[]` and 404s on
 case/timeline/evidence; one new source row yields exactly one new case with
 the cursor advanced; removing the override re-gates resume but never pause.
 
-Writing it caught two real bugs no unit tier had seen — the reason journeys
-exist:
+Writing and RUNNING it caught three real bugs no unit tier had seen — the
+reason journeys exist:
 1. **Case-service workspace isolation did not exist on reads.** The list
    filtered by tenant only and `/cases/{id}` routes did no workspace check —
    any tenant user holding `case.case.read` could read another department's
@@ -345,13 +345,35 @@ exist:
    another department), and the bind PATCH now returns the live schedule so
    the composed create's response carries the cursor. Unit tests added for
    both (a hostile body naming another workspace is overridden).
+3. **Append fires could silently miss their increment.** Caught by the
+   journey's FIRST full-stack CI run (26/27 checks green; "second fire opened
+   exactly ONE new case — got 1"): case-service's trigger applier browses
+   rows via dataset-service, which serves the *registered current version's
+   pinned Iceberg snapshot* — and dataset-service bumps that version
+   asynchronously from the SAME `ingestion.completed` event the applier is
+   consuming. First fires were safe by accident (the dataset doesn't exist
+   yet, and the applier's 404-retry loop waits out registration); append
+   fires found the dataset with the PREVIOUS version current, browsed
+   pre-append rows, deduped every one of them and acked — the increment
+   vanished without an error anywhere. Fixed: the completed event already
+   names its `iceberg_snapshot_id`, so the applier now polls the dataset
+   detail until the registered current version IS the event's snapshot
+   before browsing (30s cap, then browse-anyway with a loud log — never
+   stricter than before). Snapshot ids are compared through a symmetric
+   float64 canonicalization because the Kafka payload decodes int64 ids
+   lossily while the detail API returns them exactly. Integration test
+   simulates the stale-then-registered sequence and asserts the browse is
+   deferred until catch-up.
 
 Verification, stated precisely: in the network-restricted dev container
 (no Docker registries; native PG16/Redis/Kafka-KRaft/MinIO/OPA/Vault stack,
 LLM plane absent via the new `OLLAMA_OPTIONAL=1` escape hatch), phases 1–3
 ran live end to end — 16 of 17 checks green through composed create, with
 `run_now` stopping at the one piece of infra the container cannot obtain
-(the Iceberg REST catalog, Docker-image-only). Phases 4–8 (fire → cases →
-evidence → isolation → increment → lapse) are exercised by the new CI step
-on the full dockerized stack — the merge gate for this PR. Ingestion suite
-619 passed + ruff clean; case-service 10/10 packages.
+(the Iceberg REST catalog, Docker-image-only). On the full dockerized CI
+stack the journey then went 26/27 — every phase held (gate, grant, composed
+create, first fire → case, evidence bytes, all four isolation checks, cursor
+advance, lapse) except the append increment, which exposed bug 3 above; the
+snapshot-catch-up fix makes that leg deterministic. The e2e-live run of THIS
+head is the merge gate. Ingestion suite 619 passed + ruff clean; case-service
+10/10 packages.
