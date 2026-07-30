@@ -13,6 +13,7 @@ from fastapi.responses import PlainTextResponse
 from app.api.context import new_trace_id
 from app.api.errors import register_error_handlers
 from app.api.routes import (
+    case_streams,
     connections,
     health,
     hooks,
@@ -192,6 +193,7 @@ def create_app(container: Container | None = None, settings: Settings | None = N
         ingestions.router,
         uploads.router,
         schedules.router,
+        case_streams.router,
         hooks.router,
         writebacks.router,
     ):
