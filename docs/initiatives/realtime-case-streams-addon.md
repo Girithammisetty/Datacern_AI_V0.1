@@ -163,7 +163,7 @@ commits land.
 | 0 | Verify the connector matrix is real; fix the stale "drivers are stubs" docstring | **done — this commit** |
 | 1 | `CaseTrigger.attach_evidence` → intake-snapshot `CaseEvidence` | **done — this commit** |
 | 2 | `realtime_case_streams` feature entitlement + fail-closed refusal at the attach-evidence surface | **done — this commit** |
-| 3 | Streams API in ingestion-service (compose connection+schedule+trigger; pause/resume) | pending |
+| 3 | Case Streams API in ingestion-service (compose connection + watermark schedule; gated create/resume; pause/patch/delete) | **done — this commit** |
 | 4 | bff-graphql resolvers + subscriptions | pending |
 | 5 | ui-web Streams tab (wizard + live tiles) | pending |
 | 6 | Live e2e journey: seeded source → stream → department worklist gains a case with evidence; cross-department user cannot see it | pending |
@@ -216,3 +216,33 @@ blobs), and the gate's error mapping (403 names both SKU spellings; 503
 states the refusal). The end-to-end HTTP path against real PG + Redis is
 integration-tier. Seeding the SKU into plans is a pricing decision, left to
 the commercial plane deliberately.
+
+**Slice 3 (this commit) — the Case Streams API.** The grounding surprise that
+shaped it: the `schedules` table already carries the watermark cursor
+(`watermark_column/operator/value_type/value`) with Temporal-backed timing and
+pause/resume — a watermark schedule IS the streaming engine. So slice 3
+composes rather than re-implements: `CaseStream` (migration 0011,
+tenant-RLS'd, partial-unique name per workspace so a soft-deleted stream frees
+its name) binds connection + a REQUIRED watermark schedule (+ optionally the
+case-service trigger id, patched on by the caller until the bff slice) into
+one named, department-scoped object with `POST/GET/PATCH/DELETE
+/api/v1/case-streams` and `/pause` `/resume`.
+
+The gate: create and resume require `feature: realtime_case_streams`
+(ingestion-service's own vendored `entitlements_flat` reader,
+`app/domain/entitlements.py`) — Blocked → 403 naming the SKU, Unavailable →
+503 `ENTITLEMENT_UNAVAILABLE` fail-closed. Pause and delete are never gated: a
+lapsed tenant can always turn things off. Authz reuses the
+`ingestion.schedule.*` action catalog deliberately — a stream is a governed
+wrapper over a schedule; the add-on boundary is the entitlement, not a new
+RBAC action. Ordinary schedules stay ungated base-platform functionality.
+
+Verification: 7 unit tests through the real HTTP app (in-proc scheduler
+tier) — 403-naming-the-SKU, three fail-closed paths (Redis error, missing
+projection, no client), entitled create composes a live watermark schedule
+queryable via the schedules API, duplicate-name 409, lapsed-tenant
+pause-allowed/resume-refused/restore-resumed, trigger-id patch,
+delete-frees-the-name, workspace-filtered list. Full ingestion suite 589
+passed, ruff clean. Migration 0011 against live Postgres and the Temporal
+tier are integration/CI; cross-service trigger auto-creation lands with the
+bff slice (4).

@@ -260,6 +260,41 @@ class Schedule(TimestampMixin, Base):
     __table_args__ = (sa.Index("ix_schedules_tenant_enabled", "tenant_id", "enabled"),)
 
 
+class CaseStream(TimestampMixin, Base):
+    """Realtime-case-streams add-on (slice 3): the named binding of a
+    connection + watermark schedule (+ optional case-service trigger) that the
+    Streams UX and the entitlement gate hold onto. The watermark cursor lives
+    on the underlying Schedule row — this is lifecycle + binding only."""
+
+    __tablename__ = "case_streams"
+
+    id: Mapped[str] = mapped_column(UUIDType, primary_key=True, default=uuid7)
+    tenant_id: Mapped[str] = mapped_column(UUIDType, nullable=False)
+    workspace_id: Mapped[str] = mapped_column(UUIDType, nullable=False)
+    name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    connection_id: Mapped[str] = mapped_column(UUIDType, nullable=False)
+    schedule_id: Mapped[str] = mapped_column(UUIDType, nullable=False)
+    case_trigger_id: Mapped[str | None] = mapped_column(UUIDType)
+    status: Mapped[str] = mapped_column(sa.Text, nullable=False, default="active")
+    created_by: Mapped[str | None] = mapped_column(sa.Text)
+    deleted_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+
+    __table_args__ = (
+        # Partial unique index, not a table constraint: a soft-deleted stream
+        # must free its name for reuse (delete-then-recreate is a normal flow).
+        sa.Index(
+            "uq_case_streams_live_name",
+            "tenant_id",
+            "workspace_id",
+            "name",
+            unique=True,
+            postgresql_where=sa.text("deleted_at IS NULL"),
+            sqlite_where=sa.text("deleted_at IS NULL"),
+        ),
+        sa.Index("ix_case_streams_tenant", "tenant_id", "status"),
+    )
+
+
 class IngestionTransition(Base):
     __tablename__ = "ingestion_transitions"
 

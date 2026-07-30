@@ -117,6 +117,28 @@ class ScheduleCreate(_Body):
     workspace_id: str = DEFAULT_WORKSPACE
 
 
+class CaseStreamCreate(_Body):
+    """Realtime-case-streams add-on: one call = connection + watermark
+    schedule + department binding. The watermark is REQUIRED — a stream without
+    an advancing cursor is just a repeated full pull, not streaming intake."""
+
+    name: str = Field(min_length=1, max_length=120)
+    connection_id: str
+    ingestion_template: dict[str, Any]
+    cron: str | None = None
+    interval_seconds: int | None = Field(default=None, ge=60)
+    timezone: str = "UTC"
+    watermark: WatermarkCreate
+    overlap_policy: Literal["skip", "buffer_one"] = "skip"
+    enabled: bool = True
+    workspace_id: str = DEFAULT_WORKSPACE
+    case_trigger_id: str | None = None
+
+
+class CaseStreamPatch(_Body):
+    case_trigger_id: str | None = None
+
+
 class ScheduleUpdate(_Body):
     cron: str | None = None
     interval_seconds: int | None = Field(default=None, ge=60)

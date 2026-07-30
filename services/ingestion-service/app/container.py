@@ -78,6 +78,10 @@ class Container:
     object_ingestors: ObjectIngestorRegistry = field(default_factory=ObjectIngestorRegistry)
     # cached JWKS provider (real JWKS refresh) when jwks_url is configured
     jwks: object | None = None
+    # commercial-plane entitlements_flat projection reader (realtime-case-streams
+    # add-on gate). None = cannot consult -> the gate fails CLOSED (503), so a
+    # deployment without Redis cannot silently hand out the add-on.
+    entitlements_redis: object | None = None
     # in-process scheduler bookkeeping (Temporal carries tenant context natively)
     schedule_tenants: dict[str, str] = field(default_factory=dict)
     scheduler_bound: bool = False
@@ -168,6 +172,7 @@ def _build_real(settings: Settings) -> Container:
         fetchers=fetchers,
         object_ingestors=object_ingestors,
         policy=OPAPolicyEngine(settings.opa_url, redis_url=settings.redis_url),
+        entitlements_redis=_entitlements_redis(settings.redis_url),
         publisher=KafkaEventPublisher(settings.kafka_bootstrap_servers),
         jwks=(
             JWKSKeyProvider(settings.jwks_url, settings.jwks_ttl_seconds)
@@ -175,3 +180,19 @@ def _build_real(settings: Settings) -> Container:
             else None
         ),
     )
+
+
+def _entitlements_redis(redis_url: str):
+    """Async Redis client for the entitlements_flat projection (add-on gate).
+
+    Import is local so the unit tier (which injects fakes onto
+    ``container.entitlements_redis``) never needs a live Redis; a failure to
+    construct the client returns None, which the gate treats as
+    fail-closed UNAVAILABLE rather than fail-open.
+    """
+    try:
+        import redis.asyncio as aioredis
+
+        return aioredis.from_url(redis_url, decode_responses=True)
+    except Exception:  # noqa: BLE001 — no client => gate fails closed
+        return None
