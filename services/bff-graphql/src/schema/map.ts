@@ -79,7 +79,7 @@ import type {
 } from "../clients/value.js";
 import type {
   ConnectorTypeDTO, ConnectionDTO, ConnectionTestDTO, IngestionDTO, UploadDTO,
-  ScheduleDTO, ScheduleFireDTO, ConnectionPreviewDTO, WritebackDTO,
+  ScheduleDTO, ScheduleFireDTO, ConnectionPreviewDTO, WritebackDTO, CaseStreamDTO,
 } from "../clients/ingestion.js";
 import type {
   ComponentDTO, AlgorithmDTO, TemplateDTO, PipelineRunDTO, ValidationReportDTO, StepParamDTO,
@@ -1325,6 +1325,24 @@ export function mapIngestionSchedule(ctx: GraphQLContext, d: ScheduleDTO) {
     workspaceId: d.workspace_id ?? null,
     lastFiredAt: d.last_fired_at ?? null,
     nextFireAt: d.next_fire_at ?? null,
+    createdAt: d.created_at ?? null,
+    updatedAt: d.updated_at ?? null,
+  };
+}
+
+export function mapCaseStream(ctx: GraphQLContext, d: CaseStreamDTO) {
+  return {
+    __typename: "CaseStream" as const,
+    id: d.id,
+    urn: urn(ctx, "ingestion", "case_stream", d.id),
+    name: d.name,
+    connectionId: d.connection_id,
+    scheduleId: d.schedule_id,
+    caseTriggerId: d.case_trigger_id ?? null,
+    status: d.status,
+    workspaceId: d.workspace_id ?? null,
+    createdBy: d.created_by ?? null,
+    schedule: d.schedule ?? null,
     createdAt: d.created_at ?? null,
     updatedAt: d.updated_at ?? null,
   };

@@ -164,7 +164,7 @@ commits land.
 | 1 | `CaseTrigger.attach_evidence` → intake-snapshot `CaseEvidence` | **done — this commit** |
 | 2 | `realtime_case_streams` feature entitlement + fail-closed refusal at the attach-evidence surface | **done — this commit** |
 | 3 | Case Streams API in ingestion-service (compose connection + watermark schedule; gated create/resume; pause/patch/delete) | **done — this commit** |
-| 4 | bff-graphql resolvers + subscriptions | pending |
+| 4 | bff-graphql: CaseStream schema/resolvers + composed create with compensation | **done — this commit** |
 | 5 | ui-web Streams tab (wizard + live tiles) | pending |
 | 6 | Live e2e journey: seeded source → stream → department worklist gains a case with evidence; cross-department user cannot see it | pending |
 
@@ -246,3 +246,35 @@ delete-frees-the-name, workspace-filtered list. Full ingestion suite 589
 passed, ruff clean. Migration 0011 against live Postgres and the Temporal
 tier are integration/CI; cross-service trigger auto-creation lands with the
 bff slice (4).
+
+**Slice 4 (this commit) — the bff layer, where the composition promise is
+kept.** `CaseStream` joins the GraphQL schema (queries `caseStreams(workspaceId)`
+/ `caseStream`; mutations create/pause/resume/bindCaseStreamTrigger/delete),
+mapped from the ingestion API with the live watermark cursor surfaced for the
+UX tiles. `createCaseStream(input.trigger)` is the one-call flow the design
+promised: the bff creates the stream, then registers the case-service
+CaseTrigger against the SAME dataset the stream writes (trigger name defaults
+to the stream name; `attachEvidence` passes through to slice 1's gate), then
+binds it — and if the trigger cannot be created it deletes the stream again
+before surfacing the error. A half-composed stream never survives.
+
+Two error-honesty rules enforced at this layer: entitlement refusals pass
+through untouched (the 403 still names the SKU), and `ENTITLEMENT_UNAVAILABLE`
+joins the bff's downstream-code passthrough list (alongside BUDGET_EXHAUSTED /
+RATE_LIMITED / CONNECTION_TEST_FAILED) so the UI can distinguish "buy the SKU"
+from "the commercial plane cannot be consulted right now" instead of both
+flattening to a generic SERVICE_UNAVAILABLE.
+
+The `caseStreamStatus` subscription from the original sketch is deliberately
+NOT added: the UI already consumes live case events directly from realtime-hub
+(`case.events.v1` WebSocket), and a bff proxy subscription would duplicate
+that path without adding governance. Recorded here so the omission reads as a
+decision, not a gap.
+
+Verification: 6 unit tests at the mocked-fetch boundary with real envelopes —
+camel→snake body mapping with the cursor surfaced, composed create (trigger
+watches the stream's dataset, binds, attach_evidence forwarded), compensation
+(trigger 500 → stream deleted → error surfaced), both entitlement refusals
+pass through verbatim, workspace-filtered list + pause reflecting the disabled
+schedule. Schema snapshot regenerated; full bff suite 345 passed, typecheck +
+lint clean.

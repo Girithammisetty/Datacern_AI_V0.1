@@ -21,6 +21,7 @@ export const ErrorCode = {
   CONNECTION_TEST_FAILED: "CONNECTION_TEST_FAILED",
   RATE_LIMITED: "RATE_LIMITED",
   SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
+  ENTITLEMENT_UNAVAILABLE: "ENTITLEMENT_UNAVAILABLE",
   PERSISTED_QUERY_REQUIRED: "PERSISTED_QUERY_REQUIRED",
   QUERY_TOO_COMPLEX: "QUERY_TOO_COMPLEX",
   INTERNAL: "INTERNAL",
@@ -82,6 +83,11 @@ export function statusToCode(
   // ingestion create/update aborts with 424 when the pre-persist probe fails;
   // preserve that verbatim so the UI can show the categorized cause (AUTH_FAILED…).
   if (downstreamCode === "CONNECTION_TEST_FAILED") return ErrorCode.CONNECTION_TEST_FAILED;
+  // Commercial-plane fail-closed refusal (realtime-case-streams add-on): the
+  // UI must distinguish "buy the SKU" (403) from "the entitlement projection
+  // cannot be consulted right now" — flattening this to SERVICE_UNAVAILABLE
+  // would hide WHICH dependency refused and why retrying later is the fix.
+  if (downstreamCode === "ENTITLEMENT_UNAVAILABLE") return ErrorCode.ENTITLEMENT_UNAVAILABLE;
 
   switch (httpStatus) {
     case 424:
