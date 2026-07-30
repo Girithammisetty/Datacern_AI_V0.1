@@ -49,6 +49,10 @@ import common as c  # noqa: E402
 import requests  # noqa: E402
 
 RUN = uuid.uuid4().hex[:8]
+# Case assignment requires uuid subjects (assigned_to_id/assignee_id are
+# parsed as uuids) — the FIRST full-stack run failed 0/24 because these were
+# readable strings and every assign 4xx'd silently.
+U_WORK, U_APPROVE = str(uuid.uuid4()), str(uuid.uuid4())
 DATASET_URN_TMPL = "wr:{tenant}:dataset:dataset/learn-src-" + RUN
 FEATURE_COLS = ["amount", "invoice_gap_days", "prior_claims"]
 N_LABELS = 24
@@ -121,7 +125,7 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
 
     # The seeder's own bootstrap recipe (same as the streams journey): durable
     # Admin + Use-case-Admin membership rows, then a projection rebuild.
-    for sub in ("u-work", "u-approve"):
+    for sub in (U_WORK, U_APPROVE):
         for gname in ("Admin", "Use case Admin"):
             psql(
                 f"SELECT set_config('app.tenant_id', '{tenant}', false); "
@@ -141,7 +145,7 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
     def tok(sub: str) -> str:
         return c.user_token(sub, tenant, ["*"], workspace_id=ws)
 
-    tok_w, tok_a = tok("u-work"), tok("u-approve")
+    tok_w, tok_a = tok(U_WORK), tok(U_APPROVE)
 
     warm = False
     for _ in range(45):
@@ -184,29 +188,38 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
 
     due = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 7 * 86400))
     applied = 0
+    first_err = ""  # the FIRST failing response, verbatim — a silent loop
+    # here cost a full CI roundtrip to diagnose ("0/24" with no reason).
     for i in range(1, N_LABELS + 1):
         fraud = (i % 2 == 0)
         fr = feature_row(i)
-        cr = api("POST", f"{c.CASE}/api/v1/cases", tok_w,
-                 {"dataset_urn": dataset_urn, "due_date": due,
-                  "severity": "high" if fraud else "low",
-                  "rows": [{"row_pk": f"CLM-{i}", "display_projection": {
-                      "amount": str(fr["amount"]), "claim": f"CLM-{i}"}}]})
-        if cr.status_code not in (200, 201):
-            continue
-        created = (cr.json().get("data") or {}).get("created") or []
-        if not created:
-            continue
-        cid = created[0]["id"]
-        api("POST", f"{c.CASE}/api/v1/cases/{cid}/assign", tok_w, {"assignee_id": "u-work"})
-        api("POST", f"{c.CASE}/api/v1/cases/{cid}/start", tok_w, {})
-        rr = api("POST", f"{c.CASE}/api/v1/cases/{cid}/resolve", tok_w,
-                 {"disposition_id": disp["true_positive" if fraud else "false_positive"],
-                  "resolution_note": f"triage decision CLM-{i}"})
-        if rr.status_code in (200, 201):
-            applied += 1
-    if not check(applied >= 20, f"drove {applied}/24 REAL governed resolutions (need ≥20)"):
-        return bail("resolutions")
+        steps = [("create", api("POST", f"{c.CASE}/api/v1/cases", tok_w,
+                                {"dataset_urn": dataset_urn, "due_date": due,
+                                 "severity": "high" if fraud else "low",
+                                 "rows": [{"row_pk": f"CLM-{i}", "display_projection": {
+                                     "amount": str(fr["amount"]), "claim": f"CLM-{i}"}}]}))]
+        cr = steps[0][1]
+        created = ((cr.json().get("data") or {}).get("created") or []) \
+            if cr.status_code in (200, 201) else []
+        if created:
+            cid = created[0]["id"]
+            steps.append(("assign", api("POST", f"{c.CASE}/api/v1/cases/{cid}/assign",
+                                        tok_w, {"assignee_id": U_WORK})))
+            steps.append(("start", api("POST", f"{c.CASE}/api/v1/cases/{cid}/start", tok_w, {})))
+            rr = api("POST", f"{c.CASE}/api/v1/cases/{cid}/resolve", tok_w,
+                     {"disposition_id": disp["true_positive" if fraud else "false_positive"],
+                      "resolution_note": f"triage decision CLM-{i}"})
+            steps.append(("resolve", rr))
+            if rr.status_code in (200, 201):
+                applied += 1
+        if not first_err:
+            for name, resp in steps:
+                if resp.status_code not in (200, 201):
+                    first_err = f"{name} -> {resp.status_code} {resp.text[:220]}"
+                    break
+    if not check(applied >= 20, f"drove {applied}/24 REAL governed resolutions (need ≥20)",
+                 first_err or "all steps returned 2xx"):
+        return bail("resolutions", first_err)
 
     n = 0
     for _ in range(45):
