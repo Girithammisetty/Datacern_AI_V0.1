@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 960" font-family="system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <defs>
+    <style>
+      .h1{font-size:25px;font-weight:700;fill:#0f172a}
+      .h2{font-size:12.5px;fill:#475569}
+      .zone{font-size:14px;font-weight:700;fill:#0b5cab}
+      .zonesub{font-size:11px;fill:#64748b}
+      .svc{font-size:12.5px;font-weight:600;fill:#0f172a}
+      .sub{font-size:10.5px;fill:#475569}
+      .tf{font-size:9.5px;fill:#0b5cab;font-style:italic}
+      .box{fill:#ffffff;stroke:#cbd5e1;stroke-width:1}
+      .foot{font-size:10.5px;fill:#94a3b8}
+      .arrow{stroke:#94a3b8;stroke-width:1.4;fill:none;marker-end:url(#arr)}
+    </style>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker>
+  </defs>
+  <rect width="1560" height="960" fill="#ffffff"/>
+
+  <text x="40" y="50" class="h1">Datacern on Microsoft Azure — Deployment Architecture</text>
+  <text x="40" y="73" class="h2">As provisioned by the shipped IaC: deploy/terraform/azure (VNet · AKS · PostgreSQL Flexible Server · Event Hubs · Azure Cache · Storage · Key Vault · ACR) + Helm umbrella chart (values-azure.yaml)</text>
+  <rect x="1320" y="30" width="200" height="34" rx="6" fill="#0b5cab"/>
+  <text x="1338" y="52" font-size="15" font-weight="700" fill="#ffffff">Azure · Terraform ✓</text>
+
+  <!-- VNet -->
+  <rect x="40" y="92" width="1480" height="774" rx="12" fill="#f7fbff" stroke="#0b5cab" stroke-width="1.4"/>
+  <text x="60" y="118" class="zone">Resource group + VNet — private subnets, Private Endpoints + Private DNS zones to every data service</text>
+  <text x="60" y="134" class="zonesub">resourcegroup.tf · network.tf · identity.tf (federated workload identity — no long-lived credentials in the cluster) · secrets_backend.tf</text>
+
+  <!-- AKS cluster -->
+  <rect x="64" y="150" width="770" height="588" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.4"/>
+  <text x="84" y="176" class="zone">Azure Kubernetes Service</text>
+  <text x="330" y="176" class="zonesub">aks.tf — system + user node pools · workload identity federation · images from ACR (acr.tf)</text>
+
+  <rect x="84" y="192" width="730" height="52" rx="8" class="box"/>
+  <text x="98" y="212" class="svc">Ingress — Application Gateway / LB → bff-graphql + ui-web</text>
+  <text x="98" y="228" class="sub">templates/ingress.yaml · NetworkPolicies between tiers (templates/networkpolicy.yaml)</text>
+
+  <rect x="84" y="256" width="358" height="216" rx="8" class="box"/>
+  <text x="98" y="278" class="svc">Services node pool — 23 microservices</text>
+  <text x="98" y="294" class="sub">Helm umbrella chart, one Deployment per service,</text>
+  <text x="98" y="308" class="sub">HPA autoscaling (templates/hpa.yaml)</text>
+  <text x="98" y="330" class="sub">• Experience: ui-web, bff-graphql</text>
+  <text x="98" y="346" class="sub">• AI plane: agent-runtime, ai-gateway, memory, eval, tool-plane</text>
+  <text x="98" y="362" class="sub">• ML plane: pipeline-orchestrator, experiment, inference</text>
+  <text x="98" y="378" class="sub">• Data plane: ingestion, dataset, semantic, query, chart</text>
+  <text x="98" y="394" class="sub">• Governance: case, rbac, audit, notification, realtime-hub</text>
+  <text x="98" y="410" class="sub">• Core: identity, usage, pack-service</text>
+  <text x="98" y="432" class="sub">Fail-closed boot: REQUIRE_REAL_ADAPTERS=true,</text>
+  <text x="98" y="446" class="sub">DB_REQUIRE_NONSUPERUSER=true (RLS cannot be bypassed)</text>
+  <text x="98" y="464" class="tf">migrations via templates/migrate-job.yaml · bootstrap-job.yaml</text>
+
+  <rect x="456" y="256" width="358" height="216" rx="8" class="box"/>
+  <text x="470" y="278" class="svc">In-cluster platform tier</text>
+  <text x="470" y="294" class="sub">deploy/k8s/data-tier + chart templates — open-source,</text>
+  <text x="470" y="308" class="sub">no managed-service lock-in for these:</text>
+  <text x="470" y="330" class="sub">• OPA (policy bundle from rbac-service/policy)</text>
+  <text x="470" y="346" class="sub">• Keycloak 26 (SSO / OIDC for identity-service)</text>
+  <text x="470" y="362" class="sub">• Temporal 1.25 (ingestion workflows)</text>
+  <text x="470" y="378" class="sub">• MLflow 3.x (tracking + model registry)</text>
+  <text x="470" y="394" class="sub">• Trino 482 + Iceberg REST catalog (lakehouse SQL)</text>
+  <text x="470" y="410" class="sub">• ClickHouse (HA StatefulSet + Keeper, optional)</text>
+  <text x="470" y="426" class="sub">• OpenSearch + OpenTelemetry collector → Tempo</text>
+  <text x="470" y="448" class="tf">Argo Workflows server: infra-gated add-on — orchestrator ships</text>
+  <text x="470" y="461" class="tf">the submit/watch client; server install is a deploy-time choice</text>
+
+  <rect x="84" y="484" width="358" height="112" rx="8" fill="#eaf3fb" stroke="#9cc3e5"/>
+  <text x="98" y="506" class="svc">GPU training pool — opt-in</text>
+  <text x="98" y="522" class="sub">gpu_training_pool.tf — dedicated AKS node pool</text>
+  <text x="98" y="538" class="sub">(azurerm_kubernetes_cluster_node_pool), tainted so</text>
+  <text x="98" y="552" class="sub">only training Jobs schedule here; scales to zero</text>
+  <text x="98" y="568" class="sub">templates/training-job.yaml runs fine-tuning / heavy</text>
+  <text x="98" y="582" class="sub">training without touching the services pool</text>
+
+  <rect x="456" y="484" width="358" height="112" rx="8" class="box"/>
+  <text x="470" y="506" class="svc">Scale-safe run execution</text>
+  <text x="470" y="522" class="sub">pipeline runs are lease-held; a pod lost to scale-in or</text>
+  <text x="470" y="538" class="sub">eviction stops heartbeating and the orphan reaper</text>
+  <text x="470" y="552" class="sub">recovers the run on another instance — no stranded</text>
+  <text x="470" y="566" class="sub">`running` states, no double-trained models</text>
+  <text x="470" y="584" class="tf">migration 0004 · every instance sweeps, claim is one conditional UPDATE</text>
+
+  <rect x="84" y="608" width="730" height="112" rx="8" class="box"/>
+  <text x="98" y="630" class="svc">Observability &amp; supply chain</text>
+  <text x="98" y="648" class="sub">Log Analytics workspace (terraform) · Prometheus rules + Grafana dashboards + ServiceMonitors (chart templates) · Tempo tracing</text>
+  <text x="98" y="664" class="sub">Azure Container Registry (acr.tf) — CI pushes images tagged by commit SHA; Helm pins global.imageTag at deploy</text>
+  <text x="98" y="680" class="sub">External Secrets Operator syncs Key Vault → k8s secrets (templates/externalsecret.yaml + secrets_backend.tf)</text>
+  <text x="98" y="700" class="tf">federated identity credentials (identity.tf) — pods assume Azure identities without stored secrets</text>
+
+  <!-- Managed services column -->
+  <g>
+    <rect x="858" y="150" width="640" height="52" rx="8" class="box"/>
+    <text x="872" y="170" class="svc">Azure Database for PostgreSQL — Flexible Server</text>
+    <text x="872" y="186" class="sub">system of record · FORCE ROW LEVEL SECURITY per tenant · private endpoint only · non-superuser app roles at boot</text>
+    <text x="1400" y="170" class="tf">postgres.tf</text>
+
+    <rect x="858" y="214" width="640" height="52" rx="8" class="box"/>
+    <text x="872" y="234" class="svc">Azure Event Hubs — Kafka protocol</text>
+    <text x="872" y="250" class="sub">event backbone consumed through the Kafka API — services are unchanged · transactional outbox relay semantics preserved</text>
+    <text x="1400" y="234" class="tf">eventhubs.tf</text>
+
+    <rect x="858" y="278" width="640" height="52" rx="8" class="box"/>
+    <text x="872" y="298" class="svc">Azure Cache for Redis</text>
+    <text x="872" y="314" class="sub">consumer dedup, semantic-cache index, rate limits, sandbox-reaper leader election</text>
+    <text x="1400" y="298" class="tf">redis.tf</text>
+
+    <rect x="858" y="342" width="640" height="64" rx="8" class="box"/>
+    <text x="872" y="362" class="svc">Azure Storage — Blob</text>
+    <text x="872" y="378" class="sub">datasets (parquet), model artifacts, scoring outputs, audit archive · private endpoint + private DNS</text>
+    <text x="872" y="392" class="sub">Iceberg lakehouse tables live here behind the in-cluster REST catalog + Trino</text>
+    <text x="1400" y="362" class="tf">storage.tf</text>
+
+    <rect x="858" y="418" width="640" height="52" rx="8" class="box"/>
+    <text x="872" y="438" class="svc">Azure Key Vault</text>
+    <text x="872" y="454" class="sub">runtime secrets + keys, synced into the cluster via External Secrets · access policies scoped per workload identity</text>
+    <text x="1400" y="438" class="tf">keyvault.tf</text>
+
+    <rect x="858" y="482" width="640" height="52" rx="8" class="box"/>
+    <text x="872" y="502" class="svc">Private Endpoints + Private DNS zones</text>
+    <text x="872" y="518" class="sub">Postgres, Storage, Key Vault, Event Hubs reachable only inside the VNet — no public data-plane surface</text>
+    <text x="1400" y="502" class="tf">network.tf</text>
+
+    <rect x="858" y="546" width="640" height="70" rx="8" fill="#eaf3fb" stroke="#9cc3e5"/>
+    <text x="872" y="568" class="svc">LLM providers — brokered by ai-gateway, never called directly by agents</text>
+    <text x="872" y="584" class="sub">Anthropic API (Claude) as configured per tenant; Azure-hosted model endpoints attach through the same gateway</text>
+    <text x="872" y="598" class="sub">seam · semantic cache, token budgets and cost metering sit in front of every call</text>
+
+    <rect x="858" y="628" width="640" height="92" rx="8" fill="#fef2f2" stroke="#fecaca"/>
+    <text x="872" y="650" class="svc">Trust boundary notes</text>
+    <text x="872" y="668" class="sub">• Tenant isolation is enforced in Postgres (FORCE RLS) — not in application code an attacker could skip</text>
+    <text x="872" y="684" class="sub">• Audit chain hashes are verifiable off-platform; archive storage is private-endpoint-only</text>
+    <text x="872" y="700" class="sub">• Agent writes require a four-eyes approval that mints an RS256-signed execution grant — cloud IAM</text>
+    <text x="872" y="714" class="sub">   compromise alone cannot make an agent's proposal execute</text>
+  </g>
+
+  <path class="arrow" d="M834 300 L858 240"/>
+  <path class="arrow" d="M834 340 L858 304"/>
+  <path class="arrow" d="M834 380 L858 372"/>
+  <path class="arrow" d="M834 420 L858 444"/>
+
+  <rect x="64" y="744" width="1434" height="104" rx="8" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="84" y="768" class="svc">Environment tiers</text>
+  <text x="84" y="786" class="sub">dev / CI: docker-compose parity stack (same open-source images) — the tier where the 3,029-test evidence run executed.</text>
+  <text x="84" y="802" class="sub">cloud: this page — terraform apply (deploy/terraform/azure) then helm upgrade -f values-azure.yaml. Sibling stacks shipped for AWS, GCP and Hetzner — portability comes from every stateful dependency being open-source.</text>
+  <text x="84" y="826" class="sub" fill="#0b5cab">Honesty note: the AWS/GCP/Azure paths are the shipped, reviewed IaC — they are infra-gated and have not been exercised from the evaluation sandbox (no cloud credentials there). The executed-verification tier to date is local/CI.</text>
+
+  <text x="40" y="890" class="foot">Source: deploy/terraform/azure/*.tf, deploy/helm/datacern (values-azure.yaml), deploy/k8s/data-tier at commit 54cfe2d · generated 2026-07-30</text>
+</svg>

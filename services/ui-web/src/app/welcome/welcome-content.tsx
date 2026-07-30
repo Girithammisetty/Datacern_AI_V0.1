@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { DatacernLogo } from "@/components/brand/DatacernLogo";
+import { ArchitectureDiagrams } from "@/components/marketing/ArchitectureDiagrams";
 import { DecisionLoopDiagram } from "@/components/marketing/DecisionLoopDiagram";
 import { Button } from "@/components/ui/button";
 
@@ -861,6 +862,7 @@ export default function WelcomeContent() {
             <a href="#capabilities" className="transition-colors hover:text-foreground">Platform</a>
             <a href="#difference" className="transition-colors hover:text-foreground">Why not BI</a>
             <a href="#how" className="transition-colors hover:text-foreground">How it works</a>
+            <a href="#architecture" className="transition-colors hover:text-foreground">Architecture</a>
             <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
           </nav>
           <div className="flex items-center gap-4">
@@ -1240,6 +1242,26 @@ export default function WelcomeContent() {
               </span>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* layered + per-cloud architecture (assets copied from docs/architecture/diagrams) */}
+      <section id="architecture" className="border-t border-border/60">
+        <div className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
+          <Reveal>
+            <h2 className="text-3xl font-bold tracking-tight">Under the hood, on your cloud</h2>
+            <p className="mt-3 max-w-2xl text-muted-foreground">
+              Twenty-three services in five planes over an all-open-source backbone — and one
+              Terraform + Helm path each for AWS, Google Cloud and Azure, shipped in the same
+              repository as the platform. The diagrams below are generated from that code, not
+              drawn from ambition.
+            </p>
+          </Reveal>
+          <Reveal delay={90}>
+            <div className="mt-10">
+              <ArchitectureDiagrams />
+            </div>
+          </Reveal>
         </div>
       </section>
 

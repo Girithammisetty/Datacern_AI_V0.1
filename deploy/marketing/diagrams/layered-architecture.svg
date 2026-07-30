@@ -1,0 +1,272 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 1010" font-family="system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <defs>
+    <style>
+      .h1{font-size:26px;font-weight:700;fill:#0f172a}
+      .h2{font-size:13px;fill:#475569}
+      .band{font-size:15px;font-weight:700;fill:#0f172a}
+      .bandsub{font-size:11px;fill:#64748b}
+      .svc{font-size:12.5px;font-weight:600;fill:#0f172a}
+      .sub{font-size:10.5px;fill:#475569}
+      .rail{font-size:14px;font-weight:700;fill:#ffffff}
+      .railsvc{font-size:12px;font-weight:600;fill:#f8fafc}
+      .railsub{font-size:10px;fill:#cbd5e1}
+      .inv{font-size:11.5px;fill:#334155}
+      .invh{font-size:12.5px;font-weight:700;fill:#0f172a}
+      .foot{font-size:10.5px;fill:#94a3b8}
+      .box{fill:#ffffff;stroke:#cbd5e1;stroke-width:1;rx:8}
+    </style>
+  </defs>
+  <rect width="1560" height="1010" fill="#ffffff"/>
+
+  <text x="40" y="52" class="h1">Datacern — Layered Technical Architecture</text>
+  <text x="40" y="76" class="h2">23 services (Go · Python · TypeScript) · 28 vertical solution packs · every layer below verified by executed tests (3,029 green, 2026-07-30)</text>
+
+  <!-- ================= LEFT RAIL: Governance & Trust ================= -->
+  <rect x="40" y="104" width="212" height="756" rx="10" fill="#9f1239"/>
+  <text x="60" y="132" class="rail">Governance &amp; Trust</text>
+  <text x="60" y="148" class="railsub">cross-cutting — every layer calls in</text>
+  <g>
+    <rect x="54" y="166" width="184" height="56" rx="6" fill="#be123c"/>
+    <text x="64" y="187" class="railsvc">case-service</text>
+    <text x="64" y="202" class="railsub">four-eyes proposal chokepoint</text>
+    <text x="64" y="215" class="railsub">HITL approve / reject / apply</text>
+
+    <rect x="54" y="232" width="184" height="56" rx="6" fill="#be123c"/>
+    <text x="64" y="253" class="railsvc">rbac-service + OPA</text>
+    <text x="64" y="268" class="railsub">roles, scopes, policy-as-code</text>
+    <text x="64" y="281" class="railsub">decision at every service edge</text>
+
+    <rect x="54" y="298" width="184" height="56" rx="6" fill="#be123c"/>
+    <text x="64" y="319" class="railsvc">audit-service</text>
+    <text x="64" y="334" class="railsub">tamper-evident hash chain</text>
+    <text x="64" y="347" class="railsub">Object-Lock WORM archive</text>
+
+    <rect x="54" y="364" width="184" height="44" rx="6" fill="#be123c"/>
+    <text x="64" y="385" class="railsvc">notification-service</text>
+    <text x="64" y="400" class="railsub">role/group audiences, email, webhook</text>
+
+    <rect x="54" y="418" width="184" height="44" rx="6" fill="#be123c"/>
+    <text x="64" y="439" class="railsvc">realtime-hub</text>
+    <text x="64" y="454" class="railsub">WebSocket fan-out, backpressure</text>
+
+    <rect x="54" y="472" width="184" height="70" rx="6" fill="#881337"/>
+    <text x="64" y="493" class="railsvc">Execution grants</text>
+    <text x="64" y="508" class="railsub">RS256-signed JWS; an approval</text>
+    <text x="64" y="521" class="railsub">mints a grant — execution without</text>
+    <text x="64" y="534" class="railsub">one is refused, not logged-and-run</text>
+
+    <rect x="54" y="552" width="184" height="70" rx="6" fill="#881337"/>
+    <text x="64" y="573" class="railsvc">Tenant isolation</text>
+    <text x="64" y="588" class="railsub">Postgres FORCE ROW LEVEL</text>
+    <text x="64" y="601" class="railsub">SECURITY on every tenant table;</text>
+    <text x="64" y="614" class="railsub">fail-closed non-superuser roles</text>
+
+    <rect x="54" y="632" width="184" height="70" rx="6" fill="#881337"/>
+    <text x="64" y="653" class="railsvc">AI honesty controls</text>
+    <text x="64" y="668" class="railsub">router fallbacks labelled, never</text>
+    <text x="64" y="681" class="railsub">silent; refuse-over-fabricate in</text>
+    <text x="64" y="694" class="railsub">training, scoring &amp; provenance</text>
+
+    <rect x="54" y="712" width="184" height="70" rx="6" fill="#881337"/>
+    <text x="64" y="733" class="railsvc">Compliance mappings</text>
+    <text x="64" y="748" class="railsub">pack controls mapped to EU AI Act,</text>
+    <text x="64" y="761" class="railsub">NIST AI RMF, ISO/IEC 42001</text>
+    <text x="64" y="774" class="railsub">(per-pack control matrices)</text>
+  </g>
+
+  <!-- ================= RIGHT RAIL: Platform Core & Commercial ================= -->
+  <rect x="1308" y="104" width="212" height="756" rx="10" fill="#1e3a8a"/>
+  <text x="1328" y="132" class="rail">Platform Core</text>
+  <text x="1328" y="148" class="railsub">identity, metering, monetization</text>
+  <g>
+    <rect x="1322" y="166" width="184" height="56" rx="6" fill="#1d4ed8"/>
+    <text x="1332" y="187" class="railsvc">identity-service</text>
+    <text x="1332" y="202" class="railsub">tenants, JWT (RS256), quotas,</text>
+    <text x="1332" y="215" class="railsub">Keycloak-backed SSO</text>
+
+    <rect x="1322" y="232" width="184" height="56" rx="6" fill="#1d4ed8"/>
+    <text x="1332" y="253" class="railsvc">usage-service</text>
+    <text x="1332" y="268" class="railsub">metering, budgets, provider-bill</text>
+    <text x="1332" y="281" class="railsub">reconciliation, ROI rollups</text>
+
+    <rect x="1322" y="298" width="184" height="56" rx="6" fill="#1d4ed8"/>
+    <text x="1332" y="319" class="railsvc">Commercial plane</text>
+    <text x="1332" y="334" class="railsub">plans, 5 entitlement kinds, trials</text>
+    <text x="1332" y="347" class="railsub">sweep, read-only degradation</text>
+
+    <rect x="1322" y="364" width="184" height="56" rx="6" fill="#1d4ed8"/>
+    <text x="1332" y="385" class="railsvc">pack-service</text>
+    <text x="1332" y="400" class="railsub">pack install gated on pack_sku</text>
+    <text x="1332" y="413" class="railsub">entitlement; fleet registry</text>
+
+    <rect x="1322" y="430" width="184" height="90" rx="6" fill="#172554"/>
+    <text x="1332" y="451" class="railsvc">Demo &amp; POC plane</text>
+    <text x="1332" y="466" class="railsub">self-service demo tenants,</text>
+    <text x="1332" y="479" class="railsub">sandbox reaper w/ leader election,</text>
+    <text x="1332" y="492" class="railsub">guided walkthrough UI,</text>
+    <text x="1332" y="505" class="railsub">POC success-tracking</text>
+
+    <rect x="1322" y="530" width="184" height="90" rx="6" fill="#172554"/>
+    <text x="1332" y="551" class="railsvc">Deployment surface</text>
+    <text x="1332" y="566" class="railsub">Helm umbrella chart +</text>
+    <text x="1332" y="579" class="railsub">values-{aws,gcp,azure,hetzner};</text>
+    <text x="1332" y="592" class="railsub">Terraform per cloud;</text>
+    <text x="1332" y="605" class="railsub">fail-closed boot guards</text>
+
+    <rect x="1322" y="630" width="184" height="90" rx="6" fill="#172554"/>
+    <text x="1332" y="651" class="railsvc">Observability</text>
+    <text x="1332" y="666" class="railsub">OpenTelemetry collector,</text>
+    <text x="1332" y="679" class="railsub">Grafana Tempo traces,</text>
+    <text x="1332" y="692" class="railsub">structured audit events on</text>
+    <text x="1332" y="705" class="railsub">every state change (outbox)</text>
+  </g>
+
+  <!-- ================= CENTER STACK ================= -->
+
+  <!-- Band 1: Experience -->
+  <rect x="272" y="104" width="1016" height="92" rx="10" fill="#eef2ff" stroke="#c7d2fe"/>
+  <text x="288" y="128" class="band">Experience &amp; Interop</text>
+  <g>
+    <rect x="288" y="140" width="300" height="44" class="box"/>
+    <text x="300" y="158" class="svc">ui-web — Next.js</text>
+    <text x="300" y="173" class="sub">copilots, dashboards, HITL queues, guided demo</text>
+    <rect x="600" y="140" width="300" height="44" class="box"/>
+    <text x="612" y="158" class="svc">bff-graphql</text>
+    <text x="612" y="173" class="sub">single governed API surface for the UI</text>
+    <rect x="912" y="140" width="360" height="44" class="box"/>
+    <text x="924" y="158" class="svc">MCP &amp; A2A interop — tool-plane / mcp-gateway</text>
+    <text x="924" y="173" class="sub">external agents call governed tools; same proposal chokepoint</text>
+  </g>
+
+  <!-- Band 2: Packs -->
+  <rect x="272" y="208" width="1016" height="74" rx="10" fill="#fdf4ff" stroke="#f0abfc"/>
+  <text x="288" y="232" class="band">28 Vertical Solution Packs</text>
+  <text x="288" y="250" class="bandsub">card-disputes · banking-aml · insurance-claims-payer · payer-fwa-siu · pharmacovigilance · healthcare-provider-rcm · mortgage-loss-mitigation · +21 more</text>
+  <text x="288" y="268" class="bandsub">each pack: ontology, agents, decisions, dashboards, labels, memories, demo bundle — fleet-linted offline (C1–C11 coherence, 0 errors across all 28)</text>
+
+  <!-- Band 3: AI / Agent plane -->
+  <rect x="272" y="294" width="1016" height="140" rx="10" fill="#eef2ff" stroke="#a5b4fc"/>
+  <text x="288" y="318" class="band">AI / Agent Plane</text>
+  <g>
+    <rect x="288" y="330" width="330" height="90" class="box"/>
+    <text x="300" y="349" class="svc">agent-runtime — LangGraph</text>
+    <text x="300" y="365" class="sub">meta-router: 7 routable intents, confidence-gated,</text>
+    <text x="300" y="379" class="sub">uncertainty labelled; fallback clamps to read-only.</text>
+    <text x="300" y="393" class="sub">Persona agents, security envelopes (scope/budget/PII),</text>
+    <text x="300" y="407" class="sub">every write becomes a four-eyes Proposal</text>
+    <rect x="630" y="330" width="220" height="90" class="box"/>
+    <text x="642" y="349" class="svc">ai-gateway</text>
+    <text x="642" y="365" class="sub">multi-provider LLM broker</text>
+    <text x="642" y="379" class="sub">(Anthropic API, Bedrock,</text>
+    <text x="642" y="393" class="sub">Vertex), semantic cache,</text>
+    <text x="642" y="407" class="sub">token budgets, cost meters</text>
+    <rect x="862" y="330" width="200" height="90" class="box"/>
+    <text x="874" y="349" class="svc">memory-service</text>
+    <text x="874" y="365" class="sub">RAG over pgvector +</text>
+    <text x="874" y="379" class="sub">OpenSearch; grounding</text>
+    <text x="874" y="393" class="sub">evidence returned with</text>
+    <text x="874" y="407" class="sub">every answer</text>
+    <rect x="1074" y="330" width="198" height="90" class="box"/>
+    <text x="1086" y="349" class="svc">eval-service</text>
+    <text x="1086" y="365" class="sub">groundedness judging,</text>
+    <text x="1086" y="379" class="sub">replay scoring, agent</text>
+    <text x="1086" y="393" class="sub">inventory export for</text>
+    <text x="1086" y="407" class="sub">AI-governance audits</text>
+  </g>
+
+  <!-- Band 4: ML plane -->
+  <rect x="272" y="446" width="1016" height="130" rx="10" fill="#fffbeb" stroke="#fcd34d"/>
+  <text x="288" y="470" class="band">ML Plane</text>
+  <g>
+    <rect x="288" y="482" width="330" height="80" class="box"/>
+    <text x="300" y="501" class="svc">pipeline-orchestrator</text>
+    <text x="300" y="517" class="sub">DAG validate/compile → Argo Workflows; run leases +</text>
+    <text x="300" y="531" class="sub">orphan recovery (scale-safe); resource-derived row</text>
+    <text x="300" y="545" class="sub">budgets — refuses oversize instead of silent truncation</text>
+    <rect x="630" y="482" width="220" height="80" class="box"/>
+    <text x="642" y="501" class="svc">experiment-service</text>
+    <text x="642" y="517" class="sub">experiment lifecycle,</text>
+    <text x="642" y="531" class="sub">MLflow mirror, four-eyes</text>
+    <text x="642" y="545" class="sub">model promotion</text>
+    <rect x="862" y="482" width="200" height="80" class="box"/>
+    <text x="874" y="501" class="svc">inference-service</text>
+    <text x="874" y="517" class="sub">batch scoring, streamed</text>
+    <text x="874" y="531" class="sub">in chunks — memory flat</text>
+    <text x="874" y="545" class="sub">at any dataset size</text>
+    <rect x="1074" y="482" width="198" height="80" class="box"/>
+    <text x="1086" y="501" class="svc">MLflow 3.x</text>
+    <text x="1086" y="517" class="sub">tracking + model registry;</text>
+    <text x="1086" y="531" class="sub">provenance read back,</text>
+    <text x="1086" y="545" class="sub">never assumed</text>
+  </g>
+
+  <!-- Band 5: Data plane -->
+  <rect x="272" y="588" width="1016" height="130" rx="10" fill="#f0fdfa" stroke="#5eead4"/>
+  <text x="288" y="612" class="band">Data &amp; Analytics Plane</text>
+  <g>
+    <rect x="288" y="624" width="240" height="80" class="box"/>
+    <text x="300" y="643" class="svc">ingestion-service</text>
+    <text x="300" y="659" class="sub">connectors, Temporal-backed</text>
+    <text x="300" y="673" class="sub">workflows, schema mapping,</text>
+    <text x="300" y="687" class="sub">Iceberg two-phase commit</text>
+    <rect x="540" y="624" width="200" height="80" class="box"/>
+    <text x="552" y="643" class="svc">dataset-service</text>
+    <text x="552" y="659" class="sub">versioned datasets,</text>
+    <text x="552" y="673" class="sub">DuckDB browse, object-</text>
+    <text x="552" y="687" class="sub">store parquet</text>
+    <rect x="752" y="624" width="200" height="80" class="box"/>
+    <text x="764" y="643" class="svc">semantic-service</text>
+    <text x="764" y="659" class="sub">governed metrics layer —</text>
+    <text x="764" y="673" class="sub">the only vocabulary the</text>
+    <text x="764" y="687" class="sub">analytics agent may use</text>
+    <rect x="964" y="624" width="150" height="80" class="box"/>
+    <text x="976" y="643" class="svc">query-service</text>
+    <text x="976" y="659" class="sub">Trino federation,</text>
+    <text x="976" y="673" class="sub">tenant-suspension</text>
+    <text x="976" y="687" class="sub">enforcement</text>
+    <rect x="1126" y="624" width="146" height="80" class="box"/>
+    <text x="1138" y="643" class="svc">chart-service</text>
+    <text x="1138" y="659" class="sub">validated chart</text>
+    <text x="1138" y="673" class="sub">specs, dashboard</text>
+    <text x="1138" y="687" class="sub">rendering</text>
+  </g>
+
+  <!-- Band 6: Infra backbone -->
+  <rect x="272" y="730" width="1016" height="130" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="288" y="754" class="band">Infrastructure Backbone</text>
+  <text x="288" y="770" class="bandsub">open-source, container-native — no proprietary lock-in; swap-per-cloud via Terraform + Helm values</text>
+  <g>
+    <rect x="288" y="782" width="170" height="64" class="box"/>
+    <text x="300" y="801" class="svc">PostgreSQL 16</text>
+    <text x="300" y="816" class="sub">+ pgvector · FORCE RLS</text>
+    <text x="300" y="830" class="sub">per-tenant isolation</text>
+    <rect x="470" y="782" width="170" height="64" class="box"/>
+    <text x="482" y="801" class="svc">Kafka (Redpanda)</text>
+    <text x="482" y="816" class="sub">transactional outbox —</text>
+    <text x="482" y="830" class="sub">nothing publishes pre-commit</text>
+    <rect x="652" y="782" width="150" height="64" class="box"/>
+    <text x="664" y="801" class="svc">S3 / MinIO</text>
+    <text x="664" y="816" class="sub">datasets, models,</text>
+    <text x="664" y="830" class="sub">WORM audit archive</text>
+    <rect x="814" y="782" width="160" height="64" class="box"/>
+    <text x="826" y="801" class="svc">Iceberg + Trino</text>
+    <text x="826" y="816" class="sub">lakehouse tables,</text>
+    <text x="826" y="830" class="sub">federated SQL</text>
+    <rect x="986" y="782" width="140" height="64" class="box"/>
+    <text x="998" y="801" class="svc">ClickHouse</text>
+    <text x="998" y="816" class="sub">usage &amp; analytics</text>
+    <text x="998" y="830" class="sub">aggregation</text>
+    <rect x="1138" y="782" width="134" height="64" class="box"/>
+    <text x="1150" y="801" class="svc">Redis · Vault</text>
+    <text x="1150" y="816" class="sub">cache/dedup ·</text>
+    <text x="1150" y="830" class="sub">secrets</text>
+  </g>
+
+  <!-- Bottom invariant strip -->
+  <rect x="40" y="876" width="1480" height="90" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="60" y="902" class="invh">Trust invariants (enforced in code, verified by executed tests — not policy documents)</text>
+  <text x="60" y="924" class="inv">① No agent writes directly — every write is a Proposal through the four-eyes chokepoint; self-approval is rejected.   ② Approval mints an RS256-signed execution grant; execution without one is refused.</text>
+  <text x="60" y="944" class="inv">③ Every state change lands in a tamper-evident audit hash chain with Object-Lock WORM archival.   ④ Tenant isolation is Postgres-enforced (FORCE RLS), not application-trusted.   ⑤ Uncertain AI output is labelled, clamped to read-only, and never silently promoted.</text>
+
+  <text x="40" y="992" class="foot">Source of truth: services/* and packs/* at commit 54cfe2d · counts and test results from docs/DATACERN_LOCAL_EVALUATION_EVIDENCE_2026-07-30.md · diagram generated 2026-07-30</text>
+</svg>
