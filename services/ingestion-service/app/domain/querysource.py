@@ -4,7 +4,11 @@ Streams query results in bounded batches; never materializes the full result.
 FakeQuerySource backs dev/tests — it records every (sql, params) call so tests
 can assert driver-level parameter binding (AC-8), honours watermark params by
 filtering its canned rows, and can simulate transient outages (AC-12).
-Real drivers are stubs (TODO wave-2).
+
+Real drivers live in app/domain/drivers/ (postgres/mysql/mssql/oracle/... —
+wired by wire_local_drivers); UnsupportedQuerySource below remains the
+registry default so any connector type WITHOUT a wired driver still fails
+honestly instead of pretending to ingest.
 """
 
 from __future__ import annotations

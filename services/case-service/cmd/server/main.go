@@ -268,6 +268,9 @@ func main() {
 			Rows: triggers.NewDatasetHTTP(os.Getenv("DATASET_URL"),
 				os.Getenv("JWT_ISSUER"), os.Getenv("JWT_AUDIENCE"),
 				os.Getenv("REGISTER_SIGNING_KID"), trigKey),
+			// Same object store as human evidence uploads: intake snapshots are
+			// governed evidence, not a side channel.
+			Blob: evidence,
 		}
 		inboundHandler := func(ctx context.Context, e gcevent.Envelope) error {
 			if err := events.InferenceHandler(creator)(ctx, e); err != nil {

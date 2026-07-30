@@ -24,6 +24,7 @@ type triggerReq struct {
 	DueHours         *int                       `json:"due_hours"`
 	ProjectionFields *[]string                  `json:"projection_fields"`
 	MaxCasesPerEvent *int                       `json:"max_cases_per_event"`
+	AttachEvidence   *bool                      `json:"attach_evidence"`
 }
 
 func (req *triggerReq) apply(t *domain.CaseTrigger) {
@@ -41,6 +42,9 @@ func (req *triggerReq) apply(t *domain.CaseTrigger) {
 	}
 	if req.Conditions != nil {
 		t.Conditions = *req.Conditions
+	}
+	if req.AttachEvidence != nil {
+		t.AttachEvidence = *req.AttachEvidence
 	}
 	if req.RowPKField != nil {
 		t.RowPKField = *req.RowPKField

@@ -17,14 +17,14 @@ import (
 
 const triggerCols = `id, workspace_id, name, enabled, dataset_urn, dataset_name,
 	conditions, row_pk_field, severity, due_hours, projection_fields, max_cases_per_event,
-	created_by, created_at, updated_at`
+	attach_evidence, created_by, created_at, updated_at`
 
 func scanTrigger(row pgx.Row, tenant uuid.UUID) (*domain.CaseTrigger, error) {
 	t := &domain.CaseTrigger{TenantID: tenant}
 	var conds, projFields []byte
 	if err := row.Scan(&t.ID, &t.WorkspaceID, &t.Name, &t.Enabled, &t.DatasetURN, &t.DatasetName,
 		&conds, &t.RowPKField, &t.Severity, &t.DueHours, &projFields, &t.MaxCasesPerEvent,
-		&t.CreatedByID, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		&t.AttachEvidence, &t.CreatedByID, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if len(conds) > 0 {
@@ -48,11 +48,11 @@ func (s *PG) CreateTrigger(ctx context.Context, t *domain.CaseTrigger) error {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO case_triggers (id, tenant_id, workspace_id, name, enabled,
 				dataset_urn, dataset_name, conditions, row_pk_field, severity, due_hours,
-				projection_fields, max_cases_per_event, created_by)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+				projection_fields, max_cases_per_event, attach_evidence, created_by)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
 			t.ID, t.TenantID, t.WorkspaceID, t.Name, t.Enabled,
 			t.DatasetURN, t.DatasetName, mustJSON(t.Conditions), t.RowPKField, t.Severity, t.DueHours,
-			mustJSON(t.ProjectionFields), t.MaxCasesPerEvent, t.CreatedByID)
+			mustJSON(t.ProjectionFields), t.MaxCasesPerEvent, t.AttachEvidence, t.CreatedByID)
 		return err
 	})
 	if isUniqueViolation(err) {
@@ -113,11 +113,11 @@ func (s *PG) UpdateTrigger(ctx context.Context, t *domain.CaseTrigger) error {
 		tag, err := tx.Exec(ctx, `
 			UPDATE case_triggers SET name=$3, enabled=$4, dataset_urn=$5, dataset_name=$6,
 				conditions=$7, row_pk_field=$8, severity=$9, due_hours=$10, projection_fields=$11,
-				max_cases_per_event=$12, updated_at=now()
+				max_cases_per_event=$12, attach_evidence=$13, updated_at=now()
 			WHERE id=$1 AND workspace_id=$2`,
 			t.ID, t.WorkspaceID, t.Name, t.Enabled, t.DatasetURN, t.DatasetName,
 			mustJSON(t.Conditions), t.RowPKField, t.Severity, t.DueHours, mustJSON(t.ProjectionFields),
-			t.MaxCasesPerEvent)
+			t.MaxCasesPerEvent, t.AttachEvidence)
 		if err != nil {
 			if isUniqueViolation(err) {
 				return ErrCodeConflict

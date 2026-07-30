@@ -131,6 +131,17 @@ func (d *DatasetHTTP) BrowseRows(ctx context.Context, tenant uuid.UUID, datasetI
 type Applier struct {
 	Store *store.PG
 	Rows  RowsClient
+	// Blob stores intake-snapshot evidence bytes (the same object store the
+	// evidence upload API writes to). Nil = snapshots disabled: a trigger with
+	// attach_evidence set logs loudly instead of silently skipping, so a
+	// misconfigured deployment is visible, not quiet.
+	Blob EvidenceBlob
+}
+
+// EvidenceBlob is the minimal surface the applier needs from the evidence
+// object store (satisfied by blob.MinioEvidence).
+type EvidenceBlob interface {
+	Put(ctx context.Context, key string, data []byte, contentType string) error
 }
 
 // ApplyIngestionCompleted matches enabled triggers against an
@@ -269,6 +280,100 @@ func (a *Applier) applyOne(ctx context.Context, tenant uuid.UUID, t *domain.Case
 		slog.Info("case trigger created cases", "trigger", t.ID, "name", t.Name,
 			"dataset_urn", datasetURN, "created", len(created))
 		_ = a.Store.TouchTriggerFired(ctx, tenant, t.ID, now)
+		if t.AttachEvidence {
+			a.attachIntakeSnapshots(ctx, tenant, t, datasetURN, page, colIdx, created, now)
+		}
 	}
 	return nil
+}
+
+// attachIntakeSnapshots freezes each created case's matched source row as a
+// governed CaseEvidence attachment (real-time case-streams add-on): the bytes
+// go to the SAME object store as human evidence uploads, the pointer row goes
+// through the SAME InsertEvidence path, and the workspace is inherited from
+// the trigger — department isolation carries to the snapshot automatically.
+//
+// Best-effort by design: the cases already exist (row_pk dedup means a Kafka
+// redelivery would NOT recreate them, so failing the event here could never
+// retry the snapshots into place — it would only re-log). A failed snapshot is
+// therefore a loud error, not a rolled-back case.
+func (a *Applier) attachIntakeSnapshots(ctx context.Context, tenant uuid.UUID,
+	t *domain.CaseTrigger, datasetURN string, page *RowsPage, colIdx map[string]int,
+	created []*domain.Case, now time.Time) {
+	if a.Blob == nil {
+		slog.Error("trigger has attach_evidence but no evidence blob store is wired; skipping snapshots",
+			"trigger", t.ID, "name", t.Name)
+		return
+	}
+	pkIdx := 0
+	if t.RowPKField != "" {
+		if i, ok := colIdx[t.RowPKField]; ok {
+			pkIdx = i
+		}
+	}
+	rowByPK := map[string][]any{}
+	for _, row := range page.Rows {
+		if pkIdx < len(row) {
+			if pk := fmt.Sprintf("%v", row[pkIdx]); pk != "" && row[pkIdx] != nil {
+				rowByPK[pk] = row
+			}
+		}
+	}
+	op := domain.Op{Tenant: tenant, Actor: domain.Actor{Type: "service", ID: "case-service"}}
+	for _, c := range created {
+		row, ok := rowByPK[c.RowPK]
+		if !ok {
+			continue // dedup-created earlier or pk mismatch; nothing to freeze
+		}
+		data, err := BuildIntakeSnapshot(t, datasetURN, page.Columns, row, now)
+		if err != nil {
+			slog.Error("intake snapshot marshal failed", "case", c.ID, "err", err)
+			continue
+		}
+		ev := &domain.CaseEvidence{
+			ID: domain.NewID(), TenantID: tenant, WorkspaceID: t.WorkspaceID,
+			CaseID: c.ID, Filename: "intake-snapshot.json",
+			ContentType: "application/json", SizeBytes: int64(len(data)),
+			StorageKey: fmt.Sprintf("evidence/%s/%s/%s.json", tenant, c.ID, ev0()),
+			UploadedBy: "trigger/" + t.Name, CreatedAt: now,
+		}
+		if err := a.Blob.Put(ctx, ev.StorageKey, data, ev.ContentType); err != nil {
+			slog.Error("intake snapshot blob write failed", "case", c.ID, "err", err)
+			continue
+		}
+		if err := a.Store.InsertEvidence(ctx, op, ev); err != nil {
+			slog.Error("intake snapshot evidence row insert failed", "case", c.ID, "err", err)
+		}
+	}
+}
+
+func ev0() string { return domain.NewID().String() }
+
+// BuildIntakeSnapshot serializes the matched source row exactly as seen at
+// intake: full row (NOT the truncated display projection), column names,
+// provenance of which trigger fired on which dataset, and when. Deterministic
+// field order via json.Marshal of a struct — byte-stable for a given input,
+// so the same intake produces the same snapshot bytes.
+func BuildIntakeSnapshot(t *domain.CaseTrigger, datasetURN string,
+	columns []string, row []any, capturedAt time.Time) ([]byte, error) {
+	type snapshot struct {
+		Kind        string         `json:"kind"`
+		TriggerID   string         `json:"trigger_id"`
+		TriggerName string         `json:"trigger_name"`
+		DatasetURN  string         `json:"dataset_urn"`
+		Columns     []string       `json:"columns"`
+		Row         map[string]any `json:"row"`
+		CapturedAt  string         `json:"captured_at"`
+	}
+	m := make(map[string]any, len(columns))
+	for i, col := range columns {
+		if i < len(row) {
+			m[col] = row[i]
+		}
+	}
+	return json.MarshalIndent(snapshot{
+		Kind: "intake_snapshot/v1", TriggerID: t.ID.String(), TriggerName: t.Name,
+		DatasetURN: datasetURN, Columns: columns, Row: m,
+		CapturedAt: capturedAt.UTC().Format(time.RFC3339),
+	}, "", "  ")
 }
