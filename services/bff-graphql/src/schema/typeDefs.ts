@@ -1037,6 +1037,63 @@ export const typeDefs = gql`
 
   type IngestionScheduleConnection { nodes: [IngestionSchedule!]! pageInfo: PageInfo! }
 
+  """
+  A Case Stream (realtime-case-streams add-on): one named, department-scoped
+  binding of connection + watermark schedule (+ the case-service trigger it
+  feeds). schedule carries the live cursor (watermark current_value, next/last
+  fire). Create/resume are entitlement-gated server-side (feature
+  'realtime_case_streams'); pause/delete never are.
+  """
+  type CaseStream implements Node {
+    id: ID!
+    urn: String!
+    name: String!
+    connectionId: ID!
+    scheduleId: ID!
+    caseTriggerId: ID
+    """active | paused."""
+    status: String!
+    workspaceId: String
+    createdBy: String
+    """Live schedule summary: cron/intervalSeconds, watermark (with
+    current_value — how far the stream has read), next/last fire, enabled."""
+    schedule: JSON
+    createdAt: DateTime
+    updatedAt: DateTime
+  }
+
+  """Optional trigger to compose with the stream in one call. The bff creates
+  the case-service trigger AFTER the stream and binds it; if the trigger
+  cannot be created the stream is deleted again (compensation) — never a
+  half-composed stream."""
+  input CaseStreamTriggerInput {
+    """Defaults to the stream name."""
+    name: String
+    """Row filter conditions [{col,op,value}] (dataset-service grammar)."""
+    conditions: JSON
+    rowPkField: String
+    severity: String
+    dueHours: Int
+    projectionFields: [String!]
+    maxCasesPerEvent: Int
+    """Freeze each matched row as intake-snapshot evidence (entitlement-gated)."""
+    attachEvidence: Boolean
+  }
+
+  input CreateCaseStreamInput {
+    name: String!
+    connectionId: ID!
+    ingestionTemplate: JSON!
+    cron: String
+    intervalSeconds: Int
+    timezone: String
+    watermark: ScheduleWatermarkInput!
+    overlapPolicy: String
+    enabled: Boolean
+    workspaceId: String
+    trigger: CaseStreamTriggerInput
+  }
+
   """Incremental-load watermark spec for a new schedule."""
   input ScheduleWatermarkInput {
     column: String!
@@ -4073,6 +4130,10 @@ export const typeDefs = gql`
     """Recurring ingestion schedules, cursor-paginated (ingestion-service GET
     /schedules). Needs ingestion.schedule.read."""
     ingestionSchedules(first: Int = 50, after: String): IngestionScheduleConnection!
+
+    """Case streams (realtime-case-streams add-on), optionally workspace-filtered."""
+    caseStreams(workspaceId: String): [CaseStream!]!
+    caseStream(id: ID!): CaseStream
     """A single schedule (ingestion-service GET /schedules/{id})."""
     ingestionSchedule(id: ID!): IngestionSchedule
 
@@ -5303,6 +5364,15 @@ export const typeDefs = gql`
     """Create a recurring ingestion schedule (ingestion-service POST /schedules).
     Exactly one of cron/intervalSeconds. Needs ingestion.schedule.create."""
     createIngestionSchedule(input: CreateIngestionScheduleInput!, idempotencyKey: String): IngestionSchedule!
+
+    """Create a case stream; with input.trigger the bff also creates the
+    case-service trigger and binds it (compensating on failure). Entitlement-
+    gated by ingestion-service (403 names the SKU; 503 fails closed)."""
+    createCaseStream(input: CreateCaseStreamInput!, idempotencyKey: String): CaseStream!
+    pauseCaseStream(id: ID!): CaseStream!
+    resumeCaseStream(id: ID!): CaseStream!
+    bindCaseStreamTrigger(id: ID!, caseTriggerId: ID): CaseStream!
+    deleteCaseStream(id: ID!): Boolean!
     """Edit a schedule (ingestion-service PATCH /schedules/{id}). Needs
     ingestion.schedule.update."""
     updateIngestionSchedule(id: ID!, input: UpdateIngestionScheduleInput!): IngestionSchedule!

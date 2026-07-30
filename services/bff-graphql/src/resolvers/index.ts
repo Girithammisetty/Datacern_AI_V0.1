@@ -28,7 +28,8 @@ import {
   mapIngestion, mapUpload, mapLineage, mapSavedQuery, mapQueryResult,
   // Tier 4a: data-plane secondary CRUD/lifecycle.
   mapSavedQueryVersion, mapQueryExecution, mapQueryStats,
-  mapIngestionSchedule, mapScheduleRunNow, mapConnectionPreview,
+  mapIngestionSchedule,
+  mapCaseStream, mapScheduleRunNow, mapConnectionPreview,
   mapDatasetConsumers, mapSimilarDataset, mapDatasetVersion, mapReprofile,
   mapVerifiedQuery, mapVerifiedQuerySearchHit, mapSemanticOperation,
   mapPipelineTemplateVersion, mapCompiledPipelineManifest, mapPipelineRunManifest,
@@ -954,6 +955,13 @@ export const resolvers = {
 
     ingestionSchedule: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.ingestion.schedule(a.id).then((d) => mapIngestionSchedule(ctx, d))),
+
+    // ---- case streams (realtime-case-streams add-on) --------------------------
+    caseStreams: async (_p: unknown, a: { workspaceId?: string }, ctx: GraphQLContext) =>
+      (await ctx.clients.ingestion.caseStreams(a.workspaceId)).map((d) => mapCaseStream(ctx, d)),
+
+    caseStream: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.ingestion.caseStream(a.id).then((d) => mapCaseStream(ctx, d))),
 
     connectionPreview: async (
       _p: unknown,
@@ -3578,6 +3586,85 @@ export const resolvers = {
     ) => {
       const d = await ctx.clients.ingestion.updateSchedule(a.id, scheduleUpdateBodyOf(a.input));
       return mapIngestionSchedule(ctx, d);
+    },
+
+    // ---- case streams (realtime-case-streams add-on) --------------------------
+    createCaseStream: async (
+      _p: unknown,
+      a: { input: {
+        name: string; connectionId: string; ingestionTemplate: Record<string, unknown>;
+        cron?: string; intervalSeconds?: number; timezone?: string;
+        watermark: { column: string; operator?: string; valueType?: string; initialValue: string };
+        overlapPolicy?: string; enabled?: boolean; workspaceId?: string;
+        trigger?: {
+          name?: string; conditions?: unknown; rowPkField?: string; severity?: string;
+          dueHours?: number; projectionFields?: string[]; maxCasesPerEvent?: number;
+          attachEvidence?: boolean;
+        };
+      }; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const i = a.input;
+      const stream = await ctx.clients.ingestion.createCaseStream(
+        {
+          name: i.name,
+          connection_id: i.connectionId,
+          ingestion_template: i.ingestionTemplate,
+          cron: i.cron ?? null,
+          interval_seconds: i.intervalSeconds ?? null,
+          timezone: i.timezone,
+          watermark: {
+            column: i.watermark.column,
+            operator: i.watermark.operator,
+            value_type: i.watermark.valueType,
+            initial_value: i.watermark.initialValue,
+          },
+          overlap_policy: i.overlapPolicy,
+          enabled: i.enabled,
+          workspace_id: i.workspaceId,
+        },
+        a.idempotencyKey,
+      );
+      if (!i.trigger) return mapCaseStream(ctx, stream);
+      // Composed create: the case-service trigger watches the SAME dataset the
+      // stream writes, in the caller's workspace (case-service takes workspace
+      // from the token). Compensate on failure — never a half-composed stream.
+      try {
+        const tmpl = i.ingestionTemplate as { new_dataset?: { name?: string }; dataset_urn?: string };
+        const trig = await ctx.clients.case.createCaseTrigger({
+          name: i.trigger.name ?? i.name,
+          enabled: true,
+          dataset_name: tmpl.new_dataset?.name,
+          dataset_urn: tmpl.dataset_urn,
+          conditions: (i.trigger.conditions ?? []) as never,
+          row_pk_field: i.trigger.rowPkField,
+          severity: i.trigger.severity ?? "medium",
+          due_hours: i.trigger.dueHours ?? 72,
+          projection_fields: i.trigger.projectionFields ?? [],
+          max_cases_per_event: i.trigger.maxCasesPerEvent ?? 100,
+          attach_evidence: i.trigger.attachEvidence ?? false,
+        });
+        const bound = await ctx.clients.ingestion.patchCaseStream(stream.id, trig.id);
+        return mapCaseStream(ctx, bound);
+      } catch (err) {
+        await ctx.clients.ingestion.deleteCaseStream(stream.id).catch(() => undefined);
+        throw err;
+      }
+    },
+
+    pauseCaseStream: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapCaseStream(ctx, await ctx.clients.ingestion.pauseCaseStream(a.id)),
+
+    resumeCaseStream: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapCaseStream(ctx, await ctx.clients.ingestion.resumeCaseStream(a.id)),
+
+    bindCaseStreamTrigger: async (
+      _p: unknown, a: { id: string; caseTriggerId?: string | null }, ctx: GraphQLContext,
+    ) => mapCaseStream(ctx, await ctx.clients.ingestion.patchCaseStream(a.id, a.caseTriggerId ?? null)),
+
+    deleteCaseStream: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      await ctx.clients.ingestion.deleteCaseStream(a.id);
+      return true;
     },
 
     deleteIngestionSchedule: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {

@@ -162,6 +162,45 @@ export interface ScheduleDTO {
   updated_at?: string;
 }
 
+/** A case stream (case_streams.py _serialize): the add-on's binding of
+ * connection + watermark schedule (+ optional case-service trigger). The
+ * embedded schedule summary carries the live watermark cursor. */
+export interface CaseStreamDTO {
+  id: string;
+  workspace_id: string;
+  name: string;
+  connection_id: string;
+  schedule_id: string;
+  case_trigger_id?: string | null;
+  status: "active" | "paused";
+  created_by?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  schedule?: {
+    cron?: string | null;
+    interval_seconds?: number | null;
+    next_fire_at?: string | null;
+    last_fired_at?: string | null;
+    watermark?: unknown;
+    enabled?: boolean;
+  } | null;
+}
+
+/** POST /case-streams body (schemas.CaseStreamCreate; watermark REQUIRED). */
+export interface CreateCaseStreamBody {
+  name: string;
+  connection_id: string;
+  ingestion_template: Record<string, unknown>;
+  cron?: string | null;
+  interval_seconds?: number | null;
+  timezone?: string;
+  watermark: { column: string; operator?: string; value_type?: string; initial_value: string };
+  overlap_policy?: string;
+  enabled?: boolean;
+  workspace_id?: string;
+  case_trigger_id?: string | null;
+}
+
 /** POST /schedules body (schemas.ScheduleCreate; exactly ONE of cron /
  * interval_seconds — the service 422s otherwise). */
 export interface CreateScheduleBody {
@@ -394,6 +433,64 @@ export class IngestionClient {
       `/api/v1/ingestions/${encodeURIComponent(id)}/reingest`,
     );
     return unwrap<IngestionDTO>(r);
+  }
+
+  // ---- case streams (realtime-case-streams add-on, slice 3/4) -------------------
+
+  /** GET /case-streams (?workspace_id=). */
+  async caseStreams(workspaceId?: string): Promise<CaseStreamDTO[]> {
+    const r = await this.http.get<{ data: CaseStreamDTO[] }>("/api/v1/case-streams", {
+      query: workspaceId ? { workspace_id: workspaceId } : undefined,
+    });
+    return (r as { data: CaseStreamDTO[] }).data ?? [];
+  }
+
+  /** GET /case-streams/{id}. */
+  async caseStream(id: string): Promise<CaseStreamDTO> {
+    const r = await this.http.get<{ data: CaseStreamDTO } | CaseStreamDTO>(
+      `/api/v1/case-streams/${encodeURIComponent(id)}`,
+    );
+    return unwrap<CaseStreamDTO>(r);
+  }
+
+  /** POST /case-streams (201). Entitlement-gated server-side: 403 names the
+   * realtime-case-streams SKU; 503 ENTITLEMENT_UNAVAILABLE fails closed. */
+  async createCaseStream(body: CreateCaseStreamBody, idempotencyKey?: string): Promise<CaseStreamDTO> {
+    const r = await this.http.post<{ data: CaseStreamDTO } | CaseStreamDTO>(
+      "/api/v1/case-streams",
+      { body, idempotencyKey },
+    );
+    return unwrap<CaseStreamDTO>(r);
+  }
+
+  /** PATCH /case-streams/{id} — bind/unbind the case-service trigger. */
+  async patchCaseStream(id: string, caseTriggerId: string | null): Promise<CaseStreamDTO> {
+    const r = await this.http.patch<{ data: CaseStreamDTO } | CaseStreamDTO>(
+      `/api/v1/case-streams/${encodeURIComponent(id)}`,
+      { body: { case_trigger_id: caseTriggerId } },
+    );
+    return unwrap<CaseStreamDTO>(r);
+  }
+
+  /** POST /case-streams/{id}/pause — never entitlement-gated. */
+  async pauseCaseStream(id: string): Promise<CaseStreamDTO> {
+    const r = await this.http.post<{ data: CaseStreamDTO } | CaseStreamDTO>(
+      `/api/v1/case-streams/${encodeURIComponent(id)}/pause`, {},
+    );
+    return unwrap<CaseStreamDTO>(r);
+  }
+
+  /** POST /case-streams/{id}/resume — entitlement-gated like create. */
+  async resumeCaseStream(id: string): Promise<CaseStreamDTO> {
+    const r = await this.http.post<{ data: CaseStreamDTO } | CaseStreamDTO>(
+      `/api/v1/case-streams/${encodeURIComponent(id)}/resume`, {},
+    );
+    return unwrap<CaseStreamDTO>(r);
+  }
+
+  /** DELETE /case-streams/{id} — 204; removes the underlying schedule too. */
+  async deleteCaseStream(id: string): Promise<void> {
+    await this.http.delete<void>(`/api/v1/case-streams/${encodeURIComponent(id)}`);
   }
 
   // ---- recurring schedules (ING-FR-060..062) -----------------------------------

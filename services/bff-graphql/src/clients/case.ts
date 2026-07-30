@@ -139,6 +139,9 @@ export interface CaseTriggerDTO {
   due_hours: number;
   projection_fields: string[];
   max_cases_per_event: number;
+  /** Realtime-case-streams add-on: freeze each matched row as intake-snapshot
+   * evidence. Entitlement-gated server-side when turning on. */
+  attach_evidence?: boolean;
   created_by_id?: string;
   created_at?: string;
   updated_at?: string;
