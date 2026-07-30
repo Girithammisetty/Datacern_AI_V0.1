@@ -1377,6 +1377,52 @@ export interface CaseTriggerCondition {
 /** An event-rule case trigger (realtime-decisioning INC-1): ingestion
  * completes into the matching dataset → rows passing the conditions become
  * cases (idempotent via dataset_urn+row_pk dedup). */
+/** Realtime-case-streams add-on: a named binding of connection + watermark
+ * schedule (+ the case trigger it feeds). `schedule` is the live summary from
+ * ingestion-service — watermark.current_value is how far the stream has read. */
+export interface CaseStream {
+  id: string;
+  name: string;
+  status: "active" | "paused";
+  connectionId: string;
+  scheduleId: string;
+  caseTriggerId: string | null;
+  workspaceId: string | null;
+  schedule: {
+    cron?: string | null;
+    interval_seconds?: number | null;
+    next_fire_at?: string | null;
+    last_fired_at?: string | null;
+    watermark?: { column?: string; current_value?: string | null } | null;
+    enabled?: boolean;
+  } | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CreateCaseStreamInput {
+  name: string;
+  connectionId: string;
+  ingestionTemplate: Record<string, unknown>;
+  cron?: string | null;
+  intervalSeconds?: number | null;
+  timezone?: string;
+  watermark: { column: string; operator?: string; valueType?: string; initialValue: string };
+  overlapPolicy?: string;
+  enabled?: boolean;
+  workspaceId?: string;
+  trigger?: {
+    name?: string;
+    conditions?: unknown;
+    rowPkField?: string;
+    severity?: string;
+    dueHours?: number;
+    projectionFields?: string[];
+    maxCasesPerEvent?: number;
+    attachEvidence?: boolean;
+  };
+}
+
 export interface CaseTrigger {
   id: string;
   workspaceId: string | null;

@@ -165,7 +165,7 @@ commits land.
 | 2 | `realtime_case_streams` feature entitlement + fail-closed refusal at the attach-evidence surface | **done — this commit** |
 | 3 | Case Streams API in ingestion-service (compose connection + watermark schedule; gated create/resume; pause/patch/delete) | **done — this commit** |
 | 4 | bff-graphql: CaseStream schema/resolvers + composed create with compensation | **done — this commit** |
-| 5 | ui-web Streams tab (wizard + live tiles) | pending |
+| 5 | ui-web Streams tab (wizard + live tiles) | **done — this commit** |
 | 6 | Live e2e journey: seeded source → stream → department worklist gains a case with evidence; cross-department user cannot see it | pending |
 
 **Slice 1 (this commit) — intake-snapshot evidence.** `CaseTrigger` gains
@@ -278,3 +278,31 @@ watches the stream's dataset, binds, attach_evidence forwarded), compensation
 pass through verbatim, workspace-filtered list + pause reflecting the disabled
 schedule. Schema snapshot regenerated; full bff suite 345 passed, typecheck +
 lint clean.
+
+**Slice 5 (this commit) — the Streams tab.** Case settings gains a Streams
+tab (`StreamsPanel`, between Triggers and SLA policy): the DataTable lists
+each stream with its status, the live watermark cursor (the proof it reads
+incrementally rather than re-scanning), next pull time, and whether a case
+trigger is bound; row actions pause/resume/delete. The inline create form is
+the one-call flow from slice 4 surfaced as UX: name + connection (picked from
+the tenant's real connections list) + source statement + target dataset +
+watermark (column/type/initial value) + pull interval, plus the case-trigger
+severity and the attach-evidence checkbox — one submit drives the composed
+`createCaseStream` mutation (with an idempotency key, per the panel
+convention).
+
+Error honesty carried to the last mile: a `PERMISSION_DENIED` or
+`ENTITLEMENT_UNAVAILABLE` refusal renders verbatim in a `role="alert"` banner
+— the 403 names the SKU and the 503 says the commercial plane could not be
+consulted — never softened into a generic toast. RBAC rides the existing
+`ingestion.schedule.*` `Can` gates (create/update/delete), mirroring the
+service's deliberate reuse of that action catalog; no new client-side gate
+invented.
+
+Verification: 4 unit tests in the settings harness (mocked `graphqlRequest`
+routed by operation) — list renders name/status/cursor/binding; create
+submits the full composed input (query template + new_dataset + watermark +
+trigger.attachEvidence) with an idempotency key; the SKU-naming refusal
+appears verbatim in the alert; pause fires against the right stream. Full
+ui-web suite 579 passed (90 files), typecheck clean, lint clean (only
+pre-existing warnings in unrelated files).
