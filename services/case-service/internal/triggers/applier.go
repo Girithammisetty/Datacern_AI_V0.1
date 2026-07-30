@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +37,13 @@ type RowsPage struct {
 type RowsClient interface {
 	BrowseRows(ctx context.Context, tenant uuid.UUID, datasetID string,
 		conditions []domain.TriggerCondition, limit int) (*RowsPage, error)
+	// CurrentSnapshotID returns the Iceberg snapshot id of the dataset's
+	// REGISTERED current version ("" if none yet). browse_rows serves that
+	// pinned snapshot, and dataset-service bumps it asynchronously from the
+	// same ingestion.completed event this applier consumes — so on appends the
+	// applier must wait for registration to catch up to the event's snapshot
+	// or it browses pre-append rows and silently misses the increment.
+	CurrentSnapshotID(ctx context.Context, tenant uuid.UUID, datasetID string) (string, error)
 }
 
 // DatasetHTTP is the real dataset-service rows client. A background consumer
@@ -125,6 +133,48 @@ func (d *DatasetHTTP) BrowseRows(ctx context.Context, tenant uuid.UUID, datasetI
 	return &RowsPage{Columns: body.Data.Columns, Rows: body.Data.Rows}, nil
 }
 
+// CurrentSnapshotID reads GET /datasets/{id} and returns
+// current_version.iceberg_snapshot_id as a canonical string ("" if the
+// dataset or its version is not registered yet).
+func (d *DatasetHTTP) CurrentSnapshotID(ctx context.Context, tenant uuid.UUID, datasetID string) (string, error) {
+	if d.BaseURL == "" {
+		return "", fmt.Errorf("dataset-service not configured (DATASET_URL)")
+	}
+	tok, err := d.mint(tenant)
+	if err != nil {
+		return "", err
+	}
+	u := fmt.Sprintf("%s/api/v1/datasets/%s", d.BaseURL, url.PathEscape(datasetID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := d.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("dataset get: status %d: %s", resp.StatusCode, string(raw))
+	}
+	var body struct {
+		Data struct {
+			CurrentVersion *struct {
+				IcebergSnapshotID json.Number `json:"iceberg_snapshot_id"`
+			} `json:"current_version"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return "", fmt.Errorf("dataset get: decode: %w", err)
+	}
+	if body.Data.CurrentVersion == nil {
+		return "", nil
+	}
+	return body.Data.CurrentVersion.IcebergSnapshotID.String(), nil
+}
+
 // Applier evaluates triggers for one event. Store is the concrete PG store —
 // the same instance the API layer uses, so RLS pinning and case-event outbox
 // behavior are identical to interactive case creation.
@@ -136,12 +186,45 @@ type Applier struct {
 	// attach_evidence set logs loudly instead of silently skipping, so a
 	// misconfigured deployment is visible, not quiet.
 	Blob EvidenceBlob
+	// SnapshotPollInterval paces the wait for dataset-service to register the
+	// event's snapshot before browsing (default 3s; tests shrink it).
+	SnapshotPollInterval time.Duration
 }
 
 // EvidenceBlob is the minimal surface the applier needs from the evidence
 // object store (satisfied by blob.MinioEvidence).
 type EvidenceBlob interface {
 	Put(ctx context.Context, key string, data []byte, contentType string) error
+}
+
+// snapshotKey canonicalizes an Iceberg snapshot id for equality checks. The
+// Kafka payload decodes numbers to float64 (plain json.Unmarshal) while the
+// dataset detail yields the exact json.Number string — Iceberg ids are random
+// int64s that exceed float64's exact range, so compare AFTER pushing both
+// sides through the same float64 representation. Precision loss is symmetric,
+// which is all equality needs.
+func snapshotKey(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case float64:
+		return strconv.FormatFloat(x, 'g', -1, 64)
+	case json.Number:
+		if f, err := x.Float64(); err == nil {
+			return strconv.FormatFloat(f, 'g', -1, 64)
+		}
+		return x.String()
+	case string:
+		if x == "" {
+			return ""
+		}
+		if f, err := strconv.ParseFloat(x, 64); err == nil {
+			return strconv.FormatFloat(f, 'g', -1, 64)
+		}
+		return x
+	default:
+		return snapshotKey(fmt.Sprintf("%v", x))
+	}
 }
 
 // ApplyIngestionCompleted matches enabled triggers against an
@@ -159,12 +242,13 @@ func (a *Applier) ApplyIngestionCompleted(ctx context.Context, tenant uuid.UUID,
 	if err != nil {
 		return err
 	}
+	eventSnapshot := snapshotKey(payload["iceberg_snapshot_id"])
 	var firstErr error
 	for _, t := range trigs {
 		if !t.MatchesSource(datasetURN, datasetName) {
 			continue
 		}
-		if err := a.applyOne(ctx, tenant, t, datasetURN, datasetID); err != nil {
+		if err := a.applyOne(ctx, tenant, t, datasetURN, datasetID, eventSnapshot); err != nil {
 			slog.Error("case trigger apply failed", "trigger", t.ID, "name", t.Name,
 				"dataset_urn", datasetURN, "err", err)
 			if firstErr == nil {
@@ -176,11 +260,41 @@ func (a *Applier) ApplyIngestionCompleted(ctx context.Context, tenant uuid.UUID,
 }
 
 func (a *Applier) applyOne(ctx context.Context, tenant uuid.UUID, t *domain.CaseTrigger,
-	datasetURN, datasetID string) error {
-	// dataset-service registers the dataset ASYNCHRONOUSLY from the same
-	// ingestion.completed event this consumer received, so the first fetch can
-	// race the registration and 404. Wait it out briefly in-handler (the lag is
-	// normally < 2s) instead of leaning on Kafka redelivery pacing.
+	datasetURN, datasetID, eventSnapshot string) error {
+	// dataset-service registers the dataset AND its new version ASYNCHRONOUSLY
+	// from the same ingestion.completed event this consumer received. Two races
+	// follow. (1) First fire: the dataset does not exist yet → browse 404s —
+	// handled by the retry loop below. (2) Append fires: the dataset EXISTS
+	// with the PREVIOUS version still current, so browse succeeds immediately
+	// but serves PRE-APPEND rows; every fetched row then dedups against
+	// existing cases and the increment is silently missed (caught live by the
+	// slice-6 journey: second fire opened zero cases). So when the event names
+	// its snapshot, wait until the registered current version IS that snapshot
+	// before browsing. On timeout, browse anyway with a loud log — never
+	// stricter than the pre-fix behavior.
+	interval := a.SnapshotPollInterval
+	if interval <= 0 {
+		interval = 3 * time.Second
+	}
+	if eventSnapshot != "" {
+		caughtUp := false
+		for attempt := 0; attempt < 10; attempt++ {
+			cur, serr := a.Rows.CurrentSnapshotID(ctx, tenant, datasetID)
+			if serr == nil && snapshotKey(cur) == eventSnapshot {
+				caughtUp = true
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(interval):
+			}
+		}
+		if !caughtUp {
+			slog.Warn("dataset registration did not reach the event's snapshot; browsing anyway (rows may be stale)",
+				"trigger", t.ID, "dataset_urn", datasetURN, "event_snapshot", eventSnapshot)
+		}
+	}
 	var page *RowsPage
 	var err error
 	for attempt := 0; attempt < 6; attempt++ {

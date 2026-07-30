@@ -86,25 +86,28 @@ func (s *Server) Router() http.Handler {
 			r.With(s.RequireAction(authz.ActionCaseExport)).Post("/export", s.handleExport)
 			r.With(s.RequireAction(authz.ActionCaseRead)).Get("/form", s.handleForm)
 
-			r.With(s.RequireAction(authz.ActionCaseRead)).Get("/{id}", s.handleGetCase)
-			r.With(s.RequireAction(authz.ActionCaseUpdate)).Patch("/{id}", s.handlePatchCase)
-			r.With(s.RequireAction(authz.ActionCaseRead)).Get("/{id}/timeline", s.handleTimeline)
-			r.With(s.RequireAction(authz.ActionCaseComment)).Post("/{id}/comments", s.handleAddComment)
+			// Every /{id} route also passes RequireCaseWorkspace: a workspace-
+			// bearing token cannot see or touch another department's case
+			// (realtime-case-streams initiative — department isolation).
+			r.With(s.RequireAction(authz.ActionCaseRead), s.RequireCaseWorkspace).Get("/{id}", s.handleGetCase)
+			r.With(s.RequireAction(authz.ActionCaseUpdate), s.RequireCaseWorkspace).Patch("/{id}", s.handlePatchCase)
+			r.With(s.RequireAction(authz.ActionCaseRead), s.RequireCaseWorkspace).Get("/{id}/timeline", s.handleTimeline)
+			r.With(s.RequireAction(authz.ActionCaseComment), s.RequireCaseWorkspace).Post("/{id}/comments", s.handleAddComment)
 
 			// Evidence attachments (task #77): list/upload/download files on a case.
-			r.With(s.RequireAction(authz.ActionEvidenceRead)).Get("/{id}/evidence", s.handleListEvidence)
-			r.With(s.RequireAction(authz.ActionEvidenceCreate)).Post("/{id}/evidence", s.handleAddEvidence)
-			r.With(s.RequireAction(authz.ActionEvidenceRead)).Get("/{id}/evidence/{eid}/download", s.handleDownloadEvidence)
+			r.With(s.RequireAction(authz.ActionEvidenceRead), s.RequireCaseWorkspace).Get("/{id}/evidence", s.handleListEvidence)
+			r.With(s.RequireAction(authz.ActionEvidenceCreate), s.RequireCaseWorkspace).Post("/{id}/evidence", s.handleAddEvidence)
+			r.With(s.RequireAction(authz.ActionEvidenceRead), s.RequireCaseWorkspace).Get("/{id}/evidence/{eid}/download", s.handleDownloadEvidence)
 
-			r.With(s.RequireAction(authz.ActionCaseAssign)).Post("/{id}/assign", s.handleAssign)
-			r.With(s.RequireAction(authz.ActionCaseAssign)).Post("/{id}/unassign", s.handleUnassign)
-			r.With(s.RequireAction(authz.ActionCaseWork)).Post("/{id}/start", s.handleStart)
-			r.With(s.RequireAction(authz.ActionCaseResolve)).Post("/{id}/resolve", s.handleResolve)
-			r.With(s.RequireAction(authz.ActionCaseManage)).Post("/{id}/reopen", s.handleReopen)
-			r.With(s.RequireAction(authz.ActionCaseManage)).Post("/{id}/close", s.handleClose)
-			r.With(s.RequireAction(authz.ActionCaseManage)).Post("/{id}/escalate", s.handleEscalate)
+			r.With(s.RequireAction(authz.ActionCaseAssign), s.RequireCaseWorkspace).Post("/{id}/assign", s.handleAssign)
+			r.With(s.RequireAction(authz.ActionCaseAssign), s.RequireCaseWorkspace).Post("/{id}/unassign", s.handleUnassign)
+			r.With(s.RequireAction(authz.ActionCaseWork), s.RequireCaseWorkspace).Post("/{id}/start", s.handleStart)
+			r.With(s.RequireAction(authz.ActionCaseResolve), s.RequireCaseWorkspace).Post("/{id}/resolve", s.handleResolve)
+			r.With(s.RequireAction(authz.ActionCaseManage), s.RequireCaseWorkspace).Post("/{id}/reopen", s.handleReopen)
+			r.With(s.RequireAction(authz.ActionCaseManage), s.RequireCaseWorkspace).Post("/{id}/close", s.handleClose)
+			r.With(s.RequireAction(authz.ActionCaseManage), s.RequireCaseWorkspace).Post("/{id}/escalate", s.handleEscalate)
 
-			r.With(s.RequireAction(authz.ActionProposalApply)).Post("/{id}/apply-proposal", s.handleApplyProposal)
+			r.With(s.RequireAction(authz.ActionProposalApply), s.RequireCaseWorkspace).Post("/{id}/apply-proposal", s.handleApplyProposal)
 		})
 
 		r.Route("/comments", func(r chi.Router) {

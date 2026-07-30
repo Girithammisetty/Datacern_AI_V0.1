@@ -14,8 +14,12 @@ import (
 
 // Params is a parsed list/search request (CASE-FR-042).
 type Params struct {
-	Q                   string
-	Statuses            []string // expanded from filter[status] incl. open/closed pseudo-filters
+	Q        string
+	Statuses []string // expanded from filter[status] incl. open/closed pseudo-filters
+	// WorkspaceID confines the list to the caller's department (set from the
+	// token's workspace claim, never from a query param — the caller does not
+	// get to choose whose worklist they see).
+	WorkspaceID         string
 	AssigneeID          string
 	Severity            string
 	DispositionCategory string
@@ -58,6 +62,9 @@ func (c *Client) Search(ctx context.Context, tenant uuid.UUID, p Params) (*Resul
 		p.Limit = 50
 	}
 	filters := []any{map[string]any{"term": map[string]any{"tenant_id": tenant.String()}}}
+	if p.WorkspaceID != "" {
+		filters = append(filters, map[string]any{"term": map[string]any{"workspace_id": p.WorkspaceID}})
+	}
 	if len(p.Statuses) > 0 {
 		filters = append(filters, map[string]any{"terms": map[string]any{"status": toAnySlice(p.Statuses)}})
 	}

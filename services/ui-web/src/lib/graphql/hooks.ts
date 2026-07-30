@@ -99,6 +99,7 @@ import type {
   UpdateDispositionInput,
   CreateCaseFieldInput,
   CaseTriggerInput,
+  CreateCaseStreamInput,
   UpdateCaseFieldInput,
   CaseSlaPolicyInput,
   // Tier 4b: ml ops (register/notes/cards + inference lifecycle/schedules).
@@ -1654,6 +1655,56 @@ export function useUpdateDisposition() {
 }
 
 // ---- event-rule case triggers (realtime-decisioning INC-1) ------------------
+export function useCaseStreams() {
+  return useQuery({
+    queryKey: qk.caseStreams(),
+    queryFn: () =>
+      graphqlRequest<ops.CaseStreamsResult>(ops.CASE_STREAMS).then((r) => r.caseStreams),
+  });
+}
+
+export function useCreateCaseStream() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateCaseStreamInput) =>
+      graphqlRequest<ops.CreateCaseStreamResult>(ops.CREATE_CASE_STREAM, {
+        input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createCaseStream),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.caseStreams() }),
+  });
+}
+
+export function usePauseCaseStream() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.PauseCaseStreamResult>(ops.PAUSE_CASE_STREAM, { id }).then(
+        (r) => r.pauseCaseStream,
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.caseStreams() }),
+  });
+}
+
+export function useResumeCaseStream() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ResumeCaseStreamResult>(ops.RESUME_CASE_STREAM, { id }).then(
+        (r) => r.resumeCaseStream,
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.caseStreams() }),
+  });
+}
+
+export function useDeleteCaseStream() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.DeleteCaseStreamResult>(ops.DELETE_CASE_STREAM, { id }),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.caseStreams() }),
+  });
+}
+
 export function useCaseTriggers() {
   return useQuery({
     queryKey: qk.caseTriggers(),

@@ -6,6 +6,7 @@ import { DataTable, type Column } from "@/components/primitives/DataTable";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
 import { Can } from "@/components/authz/Can";
+import { StreamsPanel } from "./StreamsPanel";
 import { FEATURE_GATES } from "@/lib/authz/registry";
 import { Badge, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ export default function CaseSettingsPage() {
             ["fields", "Case fields"],
             ["schemas", "Case types"],
             ["triggers", "Triggers"],
+            ["streams", "Streams"],
             ["sla", "SLA policy"],
           ].map(([v, label]) => (
             <Tabs.Trigger
@@ -72,6 +74,9 @@ export default function CaseSettingsPage() {
         </Tabs.Content>
         <Tabs.Content value="triggers">
           <TriggersPanel />
+        </Tabs.Content>
+        <Tabs.Content value="streams">
+          <StreamsPanel />
         </Tabs.Content>
         <Tabs.Content value="sla">
           <SlaPolicyPanel />

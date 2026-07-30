@@ -97,6 +97,13 @@ class CaseStreamService:
         # Compose the watermark schedule through the EXISTS path — connection
         # validation, template validation, timing validation, Temporal
         # registration and serialization all stay in one place.
+        # A stream is BORN in the caller's department: the workspace comes from
+        # the token claim first, never solely from a writable body field — a
+        # department user must not be able to plant a stream (and its cases)
+        # in another department. Body value is the fallback for workspace-less
+        # service callers only. (The journey caught the original body-first
+        # version creating every bff stream in the nil workspace.)
+        workspace_id = getattr(principal, "workspace_id", None) or body.workspace_id
         sched = await self.schedules.create(
             principal,
             ScheduleCreate(
@@ -108,13 +115,13 @@ class CaseStreamService:
                 watermark=body.watermark,
                 overlap_policy=body.overlap_policy,
                 enabled=body.enabled,
-                workspace_id=body.workspace_id,
+                workspace_id=workspace_id,
             ),
         )
         async with self.c.db.tenant_session(principal.tenant_id) as session:
             stream = CaseStream(
                 tenant_id=principal.tenant_id,
-                workspace_id=body.workspace_id,
+                workspace_id=workspace_id,
                 name=body.name,
                 connection_id=body.connection_id,
                 schedule_id=sched["id"],
@@ -191,7 +198,11 @@ class CaseStreamService:
             row.updated_at = utcnow()
             await session.commit()
             await session.refresh(row)
-            return _serialize(row, None)
+        # The bind PATCH is the LAST step of the bff's composed create, so its
+        # response is what the UI renders — serialize with the live schedule
+        # (cursor included), not a schedule-less stub.
+        sched = await self.schedules.get(principal, row.schedule_id)
+        return _serialize(row, sched)
 
     async def delete(self, principal: Principal, stream_id: str) -> None:
         # Never gated. The underlying schedule is deleted through the existing

@@ -108,14 +108,23 @@ command -v uv >/dev/null || die "uv not on PATH"
 command -v node >/dev/null || die "node not on PATH (need node@20 at /opt/homebrew/opt/node@20/bin)"
 corepack enable >/dev/null 2>&1; corepack prepare pnpm@9.15.9 --activate >/dev/null 2>&1
 command -v pnpm >/dev/null || die "pnpm not available (corepack)"
-# Ollama + models (pull if missing)
+# Ollama + models (pull if missing). OLLAMA_OPTIONAL=1 downgrades the gate to
+# a warning for environments with no local-LLM access (network-restricted
+# containers): the data/case/governance planes boot and work fully; the
+# agentic plane (agent-runtime chat, memory RAG, semantic NL) degrades loudly
+# at request time instead of blocking the whole platform at preflight.
 if ! curl -s -m3 "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
-  die "Ollama not reachable at $OLLAMA_URL — run 'ollama serve' (brew services start ollama)"
+  if [ "${OLLAMA_OPTIONAL:-0}" = 1 ]; then
+    warn "Ollama not reachable at $OLLAMA_URL — continuing WITHOUT the LLM plane (OLLAMA_OPTIONAL=1); agentic features will fail at request time"
+  else
+    die "Ollama not reachable at $OLLAMA_URL — run 'ollama serve' (brew services start ollama)"
+  fi
+else
+  for model in llama3.2:latest qwen2.5:0.5b nomic-embed-text; do
+    if curl -s -m3 "$OLLAMA_URL/api/tags" | grep -q "$model"; then ok "Ollama has $model"
+    else warn "Ollama missing $model — pulling"; ollama pull "$model" || die "ollama pull $model failed"; fi
+  done
 fi
-for model in llama3.2:latest qwen2.5:0.5b nomic-embed-text; do
-  if curl -s -m3 "$OLLAMA_URL/api/tags" | grep -q "$model"; then ok "Ollama has $model"
-  else warn "Ollama missing $model — pulling"; ollama pull "$model" || die "ollama pull $model failed"; fi
-done
 kill_stale
 
 # ============================================================ PHASE 1 infra

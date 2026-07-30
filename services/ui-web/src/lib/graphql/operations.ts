@@ -4,6 +4,7 @@
  * (UI-FR-046). Every document here is exercised against the REAL schema in e2e.
  */
 import type {
+  CaseStream,
   AgentRun,
   AgentFleetRow,
   AgentFleetSummary,
@@ -1633,6 +1634,55 @@ export const UPDATE_DISPOSITION = /* GraphQL */ `
 `;
 export interface UpdateDispositionResult {
   updateDisposition: Disposition;
+}
+
+const CASE_STREAM_FIELDS = /* GraphQL */ `
+  id name status connectionId scheduleId caseTriggerId workspaceId schedule createdAt updatedAt
+`;
+
+export const CASE_STREAMS = /* GraphQL */ `
+  query CaseStreams($workspaceId: String) {
+    caseStreams(workspaceId: $workspaceId) { ${CASE_STREAM_FIELDS} }
+  }
+`;
+export interface CaseStreamsResult {
+  caseStreams: CaseStream[];
+}
+
+export const CREATE_CASE_STREAM = /* GraphQL */ `
+  mutation CreateCaseStream($input: CreateCaseStreamInput!, $idempotencyKey: String) {
+    createCaseStream(input: $input, idempotencyKey: $idempotencyKey) { ${CASE_STREAM_FIELDS} }
+  }
+`;
+export interface CreateCaseStreamResult {
+  createCaseStream: CaseStream;
+}
+
+export const PAUSE_CASE_STREAM = /* GraphQL */ `
+  mutation PauseCaseStream($id: ID!) {
+    pauseCaseStream(id: $id) { ${CASE_STREAM_FIELDS} }
+  }
+`;
+export interface PauseCaseStreamResult {
+  pauseCaseStream: CaseStream;
+}
+
+export const RESUME_CASE_STREAM = /* GraphQL */ `
+  mutation ResumeCaseStream($id: ID!) {
+    resumeCaseStream(id: $id) { ${CASE_STREAM_FIELDS} }
+  }
+`;
+export interface ResumeCaseStreamResult {
+  resumeCaseStream: CaseStream;
+}
+
+export const DELETE_CASE_STREAM = /* GraphQL */ `
+  mutation DeleteCaseStream($id: ID!) {
+    deleteCaseStream(id: $id)
+  }
+`;
+export interface DeleteCaseStreamResult {
+  deleteCaseStream: boolean;
 }
 
 const CASE_TRIGGER_FIELDS = /* GraphQL */ `

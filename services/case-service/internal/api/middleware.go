@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/datacern-ai/case-service/internal/authz"
@@ -153,6 +154,56 @@ func (s *Server) auditDenial(r *http.Request, action string) {
 
 // notFound writes the 404 envelope and audits cross-tenant access
 // (MASTER-FR-003, AC-13).
+// RequireCaseWorkspace confines a workspace-bearing token to cases of its own
+// workspace — the department-isolation boundary of the realtime-case-streams
+// initiative. Tokens without a workspace claim (service-to-service writers,
+// platform operations) stay tenant-scoped, unchanged. A cross-workspace case
+// id gets a 404, not a 403: the cross-tenant-404 discipline (MASTER-FR-003)
+// applied one level down, so another department's case ids are not even
+// confirmed to exist. Runs after RequireAction on every /cases/{id} route;
+// the extra point read is the price of enforcing this in ONE place instead
+// of fifteen handlers.
+func (s *Server) RequireCaseWorkspace(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := ClaimsFrom(r.Context())
+		if claims == nil || claims.WorkspaceID == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		tenant, err := claims.Tenant()
+		if err != nil {
+			writeErr(w, r, domain.EUnauthenticated("bad tenant claim"))
+			return
+		}
+		id, err := uuid.Parse(chi.URLParam(r, "id"))
+		if err != nil {
+			// Malformed ids are the handler's concern, not this boundary's.
+			next.ServeHTTP(w, r)
+			return
+		}
+		c, err := s.Store.GetCase(r.Context(), tenant, id)
+		if err != nil {
+			// Missing rows (and store errors) produce the handler's own
+			// lookup response; the guard only rules on rows that exist.
+			next.ServeHTTP(w, r)
+			return
+		}
+		if c.WorkspaceID != uuid.Nil && c.WorkspaceID.String() != claims.WorkspaceID {
+			if op, ok := opFrom(r); ok {
+				env := events.NewEnvelope(events.EvCrossWorkspaceDenied, op, c.ID.String(),
+					map[string]any{"path": r.URL.Path, "method": r.Method,
+						"case_workspace": c.WorkspaceID.String(), "token_workspace": claims.WorkspaceID})
+				if aerr := s.Store.InsertAudit(r.Context(), env); aerr != nil {
+					slog.Warn("audit cross-workspace emit failed", "err", aerr)
+				}
+			}
+			writeErr(w, r, domain.ENotFound())
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 	op, ok := opFrom(r)
 	if ok {

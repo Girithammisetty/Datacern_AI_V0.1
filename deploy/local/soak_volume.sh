@@ -41,7 +41,9 @@ step "1/2  B5 volume: case-service full-tenant reindex at ${ROWS} rows"
 step "2/2  B1 volume: Iceberg commit at ${ROWS} rows stays memory-bounded"
 (
   cd "$ROOT/libs/py-common" &&
-  ICEBERG_VOLUME_ROWS="$ROWS" .venv/bin/python -m pytest tests/test_iceberg.py::test_commit_streams_large_volume_in_bounded_memory -v -s
+  # uv materializes the env from the lockfile on demand — a bare `.venv` is
+  # never provisioned in CI (the e2e-live job only syncs deploy/e2e's venv).
+  ICEBERG_VOLUME_ROWS="$ROWS" uv run --group dev python -m pytest tests/test_iceberg.py::test_commit_streams_large_volume_in_bounded_memory -v -s
 ) || die "Iceberg commit did not stay bounded at ${ROWS} rows"
 
 printf '\n%sSOAK-VOLUME PASS%s — B1 + B5 hold at %s rows.\n' "$G" "$N" "$ROWS"

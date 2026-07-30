@@ -165,8 +165,8 @@ commits land.
 | 2 | `realtime_case_streams` feature entitlement + fail-closed refusal at the attach-evidence surface | **done — this commit** |
 | 3 | Case Streams API in ingestion-service (compose connection + watermark schedule; gated create/resume; pause/patch/delete) | **done — this commit** |
 | 4 | bff-graphql: CaseStream schema/resolvers + composed create with compensation | **done — this commit** |
-| 5 | ui-web Streams tab (wizard + live tiles) | pending |
-| 6 | Live e2e journey: seeded source → stream → department worklist gains a case with evidence; cross-department user cannot see it | pending |
+| 5 | ui-web Streams tab (wizard + live tiles) | **done — this commit** |
+| 6 | Live e2e journey: seeded source → stream → department worklist gains a case with evidence; cross-department user cannot see it | **done — this commit** (CI-gated; see slice 6 notes for what ran where) |
 
 **Slice 1 (this commit) — intake-snapshot evidence.** `CaseTrigger` gains
 `attach_evidence` (migration `000008`, default false — existing triggers keep
@@ -278,3 +278,102 @@ watches the stream's dataset, binds, attach_evidence forwarded), compensation
 pass through verbatim, workspace-filtered list + pause reflecting the disabled
 schedule. Schema snapshot regenerated; full bff suite 345 passed, typecheck +
 lint clean.
+
+**Slice 5 (this commit) — the Streams tab.** Case settings gains a Streams
+tab (`StreamsPanel`, between Triggers and SLA policy): the DataTable lists
+each stream with its status, the live watermark cursor (the proof it reads
+incrementally rather than re-scanning), next pull time, and whether a case
+trigger is bound; row actions pause/resume/delete. The inline create form is
+the one-call flow from slice 4 surfaced as UX: name + connection (picked from
+the tenant's real connections list) + source statement + target dataset +
+watermark (column/type/initial value) + pull interval, plus the case-trigger
+severity and the attach-evidence checkbox — one submit drives the composed
+`createCaseStream` mutation (with an idempotency key, per the panel
+convention).
+
+Error honesty carried to the last mile: a `PERMISSION_DENIED` or
+`ENTITLEMENT_UNAVAILABLE` refusal renders verbatim in a `role="alert"` banner
+— the 403 names the SKU and the 503 says the commercial plane could not be
+consulted — never softened into a generic toast. RBAC rides the existing
+`ingestion.schedule.*` `Can` gates (create/update/delete), mirroring the
+service's deliberate reuse of that action catalog; no new client-side gate
+invented.
+
+Verification: 4 unit tests in the settings harness (mocked `graphqlRequest`
+routed by operation) — list renders name/status/cursor/binding; create
+submits the full composed input (query template + new_dataset + watermark +
+trigger.attachEvidence) with an idempotency key; the SKU-naming refusal
+appears verbatim in the alert; pause fires against the right stream. Full
+ui-web suite 579 passed (90 files), typecheck clean, lint clean (only
+pre-existing warnings in unrelated files).
+
+**Slice 6 (this commit) — the live journey, and the two platform bugs it
+caught.** `deploy/e2e/test_case_stream_journey.py` (`make journey-streams`,
+wired into the e2e-live CI job right after `make journey`) drives the add-on's
+full arc against the real stack and asserts on STATE — rows in Postgres,
+evidence bytes, boundary 404s — never on acknowledgements. Eight phases: the
+SKU gate refuses a fresh tenant (403 naming the SKU / 503 fail-closed) BEFORE
+any resource checks; a platform-operator entitlement override opens the
+projection (polled by watching the same refused call flip 403→404); two rbac
+workspaces become departments A and B with identical grants (workspace-owner,
+the verb-mapped path) — only the workspace claim differs; a real Postgres
+source is seeded and connected through the real asyncpg driver probe
+(`ssl_mode: "disable"` stated explicitly — secure-by-default config, lab
+source without TLS); ONE bff `createCaseStream` composes stream + watermark
+schedule + trigger, born in department A; `run_now` pulls only past-watermark
+rows and opens cases only for rows passing the trigger condition; the intake
+snapshot's bytes contain the source row; department B gets `[]` and 404s on
+case/timeline/evidence; one new source row yields exactly one new case with
+the cursor advanced; removing the override re-gates resume but never pause.
+
+Writing and RUNNING it caught three real bugs no unit tier had seen — the
+reason journeys exist:
+1. **Case-service workspace isolation did not exist on reads.** The list
+   filtered by tenant only and `/cases/{id}` routes did no workspace check —
+   any tenant user holding `case.case.read` could read another department's
+   case by id. Fixed: `RequireCaseWorkspace` middleware on every `/cases/{id}`
+   route (mismatch → 404, cross-tenant-404 discipline one level down, distinct
+   `security.cross_workspace_denied` audit event; workspace-less service
+   tokens stay tenant-scoped) + a workspace term filter on the worklist search
+   taken from the token claim, never a query param. Integration-tested against
+   real PG.
+2. **Streams were born in the nil workspace through the bff.**
+   `CaseStreamCreate.workspace_id` defaulted to the nil uuid and the service
+   trusted the body; the bff never sends workspace_id, so every UI-created
+   stream escaped its department. Fixed claims-first (the token's workspace
+   wins over any body value — a department user cannot plant a stream in
+   another department), and the bind PATCH now returns the live schedule so
+   the composed create's response carries the cursor. Unit tests added for
+   both (a hostile body naming another workspace is overridden).
+3. **Append fires could silently miss their increment.** Caught by the
+   journey's FIRST full-stack CI run (26/27 checks green; "second fire opened
+   exactly ONE new case — got 1"): case-service's trigger applier browses
+   rows via dataset-service, which serves the *registered current version's
+   pinned Iceberg snapshot* — and dataset-service bumps that version
+   asynchronously from the SAME `ingestion.completed` event the applier is
+   consuming. First fires were safe by accident (the dataset doesn't exist
+   yet, and the applier's 404-retry loop waits out registration); append
+   fires found the dataset with the PREVIOUS version current, browsed
+   pre-append rows, deduped every one of them and acked — the increment
+   vanished without an error anywhere. Fixed: the completed event already
+   names its `iceberg_snapshot_id`, so the applier now polls the dataset
+   detail until the registered current version IS the event's snapshot
+   before browsing (30s cap, then browse-anyway with a loud log — never
+   stricter than before). Snapshot ids are compared through a symmetric
+   float64 canonicalization because the Kafka payload decodes int64 ids
+   lossily while the detail API returns them exactly. Integration test
+   simulates the stale-then-registered sequence and asserts the browse is
+   deferred until catch-up.
+
+Verification, stated precisely: in the network-restricted dev container
+(no Docker registries; native PG16/Redis/Kafka-KRaft/MinIO/OPA/Vault stack,
+LLM plane absent via the new `OLLAMA_OPTIONAL=1` escape hatch), phases 1–3
+ran live end to end — 16 of 17 checks green through composed create, with
+`run_now` stopping at the one piece of infra the container cannot obtain
+(the Iceberg REST catalog, Docker-image-only). On the full dockerized CI
+stack the journey then went 26/27 — every phase held (gate, grant, composed
+create, first fire → case, evidence bytes, all four isolation checks, cursor
+advance, lapse) except the append increment, which exposed bug 3 above; the
+snapshot-catch-up fix makes that leg deterministic. The e2e-live run of THIS
+head is the merge gate. Ingestion suite 619 passed + ruff clean; case-service
+10/10 packages.

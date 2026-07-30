@@ -186,6 +186,48 @@ async def test_patch_binds_a_case_trigger_and_delete_frees_the_name(client, auth
     assert resp.status_code == 201, resp.text
 
 
+async def test_stream_is_born_in_the_callers_workspace_claim(
+    client, container, rsa_keys
+):
+    """The workspace comes from the TOKEN, not from a writable body field: a
+    department user cannot plant a stream in another department, and a bff
+    caller that sends no workspace_id (the composed create) still lands the
+    stream in its own department — the slice-6 journey caught the body-first
+    version creating every bff stream in the nil workspace."""
+    from tests.util import bearer, make_token
+
+    dept = "44444444-4444-7444-8444-444444444444"
+    auth = bearer(make_token(rsa_keys[0], TENANT_A, sub="dept-user", workspace_id=dept))
+    container.query_sources.set("postgres", FakeQuerySource(rows=ROWS))
+    entitle(container)
+    conn = await create_connection(client, auth)
+
+    # Body omits workspace_id entirely AND a hostile body naming another
+    # workspace is overridden by the claim alike.
+    for payload in (
+        stream_payload(conn["id"], name="claim-born"),
+        stream_payload(conn["id"], name="claim-wins",
+                       workspace_id="99999999-9999-7999-8999-999999999999"),
+    ):
+        resp = await client.post("/api/v1/case-streams", json=payload, headers=auth)
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["data"]["workspace_id"] == dept
+
+
+async def test_bind_patch_returns_the_live_schedule(client, auth_a, container):
+    """The bind PATCH is the composed create's LAST step — its response is what
+    the UI renders, so it must carry the schedule summary (cursor included)."""
+    _conn, stream = await make_stream(client, auth_a, container)
+    patched = await client.patch(
+        f"/api/v1/case-streams/{stream['id']}",
+        json={"case_trigger_id": "22222222-2222-7222-8222-222222222222"},
+        headers=auth_a,
+    )
+    assert patched.status_code == 200
+    data = patched.json()["data"]
+    assert data["schedule"]["watermark"]["current_value"] == "2026-07-01T00:00:00+00:00"
+
+
 async def test_list_scopes_to_workspace_filter(client, auth_a, container):
     _conn, stream = await make_stream(client, auth_a, container)
     listed = await client.get("/api/v1/case-streams", headers=auth_a)
