@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 960" font-family="system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <defs>
+    <style>
+      .h1{font-size:25px;font-weight:700;fill:#0f172a}
+      .h2{font-size:12.5px;fill:#475569}
+      .zone{font-size:14px;font-weight:700;fill:#1a73e8}
+      .zonesub{font-size:11px;fill:#64748b}
+      .svc{font-size:12.5px;font-weight:600;fill:#0f172a}
+      .sub{font-size:10.5px;fill:#475569}
+      .tf{font-size:9.5px;fill:#1a73e8;font-style:italic}
+      .box{fill:#ffffff;stroke:#cbd5e1;stroke-width:1}
+      .foot{font-size:10.5px;fill:#94a3b8}
+      .arrow{stroke:#94a3b8;stroke-width:1.4;fill:none;marker-end:url(#arr)}
+    </style>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker>
+  </defs>
+  <rect width="1560" height="960" fill="#ffffff"/>
+
+  <text x="40" y="50" class="h1">Datacern on Google Cloud — Deployment Architecture</text>
+  <text x="40" y="73" class="h2">As provisioned by the shipped IaC: deploy/terraform/gcp (VPC · GKE · Cloud SQL · Managed Kafka · Memorystore · GCS · Artifact Registry · KMS · Secret Manager) + Helm umbrella chart (values-gcp.yaml)</text>
+  <rect x="1330" y="30" width="190" height="34" rx="6" fill="#1a73e8"/>
+  <text x="1348" y="52" font-size="15" font-weight="700" fill="#ffffff">GCP · Terraform ✓</text>
+
+  <!-- VPC -->
+  <rect x="40" y="92" width="1480" height="774" rx="12" fill="#f8fbff" stroke="#1a73e8" stroke-width="1.4"/>
+  <text x="60" y="118" class="zone">VPC network — private subnets, Cloud Router + Cloud NAT for egress</text>
+  <text x="60" y="134" class="zonesub">network.tf · iam.tf (Workload Identity service accounts) · secretmanager.tf / secrets_backend.tf (External Secrets sync into the cluster)</text>
+
+  <!-- GKE cluster -->
+  <rect x="64" y="150" width="770" height="588" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.4"/>
+  <text x="84" y="176" class="zone">Google Kubernetes Engine</text>
+  <text x="330" y="176" class="zonesub">gke.tf — private cluster, node pools · Workload Identity · images from Artifact Registry</text>
+
+  <rect x="84" y="192" width="730" height="52" rx="8" class="box"/>
+  <text x="98" y="212" class="svc">Ingress — GCLB → bff-graphql + ui-web (global static IP reserved in terraform)</text>
+  <text x="98" y="228" class="sub">templates/ingress.yaml · NetworkPolicies between tiers (templates/networkpolicy.yaml)</text>
+
+  <rect x="84" y="256" width="358" height="216" rx="8" class="box"/>
+  <text x="98" y="278" class="svc">Services node pool — 23 microservices</text>
+  <text x="98" y="294" class="sub">Helm umbrella chart, one Deployment per service,</text>
+  <text x="98" y="308" class="sub">HPA autoscaling (templates/hpa.yaml)</text>
+  <text x="98" y="330" class="sub">• Experience: ui-web, bff-graphql</text>
+  <text x="98" y="346" class="sub">• AI plane: agent-runtime, ai-gateway, memory, eval, tool-plane</text>
+  <text x="98" y="362" class="sub">• ML plane: pipeline-orchestrator, experiment, inference</text>
+  <text x="98" y="378" class="sub">• Data plane: ingestion, dataset, semantic, query, chart</text>
+  <text x="98" y="394" class="sub">• Governance: case, rbac, audit, notification, realtime-hub</text>
+  <text x="98" y="410" class="sub">• Core: identity, usage, pack-service</text>
+  <text x="98" y="432" class="sub">Fail-closed boot: REQUIRE_REAL_ADAPTERS=true,</text>
+  <text x="98" y="446" class="sub">DB_REQUIRE_NONSUPERUSER=true (RLS cannot be bypassed)</text>
+  <text x="98" y="464" class="tf">migrations via templates/migrate-job.yaml · bootstrap-job.yaml</text>
+
+  <rect x="456" y="256" width="358" height="216" rx="8" class="box"/>
+  <text x="470" y="278" class="svc">In-cluster platform tier</text>
+  <text x="470" y="294" class="sub">deploy/k8s/data-tier + chart templates — open-source,</text>
+  <text x="470" y="308" class="sub">no managed-service lock-in for these:</text>
+  <text x="470" y="330" class="sub">• OPA (policy bundle from rbac-service/policy)</text>
+  <text x="470" y="346" class="sub">• Keycloak 26 (SSO / OIDC for identity-service)</text>
+  <text x="470" y="362" class="sub">• Temporal 1.25 (ingestion workflows)</text>
+  <text x="470" y="378" class="sub">• MLflow 3.x (tracking + model registry)</text>
+  <text x="470" y="394" class="sub">• Trino 482 + Iceberg REST catalog (lakehouse SQL)</text>
+  <text x="470" y="410" class="sub">• ClickHouse (HA StatefulSet + Keeper, optional)</text>
+  <text x="470" y="426" class="sub">• OpenSearch + OpenTelemetry collector → Tempo</text>
+  <text x="470" y="448" class="tf">Argo Workflows server: infra-gated add-on — orchestrator ships</text>
+  <text x="470" y="461" class="tf">the submit/watch client; server install is a deploy-time choice</text>
+
+  <rect x="84" y="484" width="358" height="112" rx="8" fill="#e8f0fe" stroke="#93b7f5"/>
+  <text x="98" y="506" class="svc">GPU training pool — opt-in</text>
+  <text x="98" y="522" class="sub">gpu_training_pool.tf — dedicated GKE node pool,</text>
+  <text x="98" y="538" class="sub">tainted so only training Jobs schedule here;</text>
+  <text x="98" y="552" class="sub">scales to zero when idle</text>
+  <text x="98" y="568" class="sub">templates/training-job.yaml runs fine-tuning / heavy</text>
+  <text x="98" y="582" class="sub">training without touching the services pool</text>
+
+  <rect x="456" y="484" width="358" height="112" rx="8" class="box"/>
+  <text x="470" y="506" class="svc">Scale-safe run execution</text>
+  <text x="470" y="522" class="sub">pipeline runs are lease-held; a pod lost to scale-in or</text>
+  <text x="470" y="538" class="sub">preemption stops heartbeating and the orphan reaper</text>
+  <text x="470" y="552" class="sub">recovers the run on another instance — no stranded</text>
+  <text x="470" y="566" class="sub">`running` states, no double-trained models</text>
+  <text x="470" y="584" class="tf">migration 0004 · every instance sweeps, claim is one conditional UPDATE</text>
+
+  <rect x="84" y="608" width="730" height="112" rx="8" class="box"/>
+  <text x="98" y="630" class="svc">Observability &amp; supply chain</text>
+  <text x="98" y="648" class="sub">Cloud Logging/Monitoring · Prometheus rules + Grafana dashboards + ServiceMonitors (chart templates) · Tempo tracing</text>
+  <text x="98" y="664" class="sub">Artifact Registry (artifactregistry.tf) — CI pushes images tagged by commit SHA; Helm pins global.imageTag at deploy</text>
+  <text x="98" y="680" class="sub">External Secrets Operator syncs Google Secret Manager → k8s secrets (templates/externalsecret.yaml + secrets_backend.tf)</text>
+  <text x="98" y="700" class="tf">KMS key ring (kms in network/iam tf) encrypts state at rest · Workload Identity replaces long-lived keys</text>
+
+  <!-- Managed services column -->
+  <g>
+    <rect x="858" y="150" width="640" height="52" rx="8" class="box"/>
+    <text x="872" y="170" class="svc">Cloud SQL — PostgreSQL 16</text>
+    <text x="872" y="186" class="sub">system of record for all services · FORCE ROW LEVEL SECURITY per tenant · non-superuser app roles enforced at boot</text>
+    <text x="1410" y="170" class="tf">cloudsql.tf</text>
+
+    <rect x="858" y="214" width="640" height="52" rx="8" class="box"/>
+    <text x="872" y="234" class="svc">Managed Service for Apache Kafka</text>
+    <text x="872" y="250" class="sub">event backbone (google_managed_kafka_cluster) · transactional outbox relay — nothing publishes before its DB commit</text>
+    <text x="1410" y="234" class="tf">kafka.tf</text>
+
+    <rect x="858" y="278" width="640" height="52" rx="8" class="box"/>
+    <text x="872" y="298" class="svc">Memorystore — Redis</text>
+    <text x="872" y="314" class="sub">consumer dedup, semantic-cache index, rate limits, sandbox-reaper leader election</text>
+    <text x="1410" y="298" class="tf">memorystore.tf</text>
+
+    <rect x="858" y="342" width="640" height="64" rx="8" class="box"/>
+    <text x="872" y="362" class="svc">Google Cloud Storage</text>
+    <text x="872" y="378" class="sub">datasets (parquet), model artifacts, scoring outputs, audit archive — uniform access, CMEK-encrypted</text>
+    <text x="872" y="392" class="sub">Iceberg lakehouse tables live here behind the in-cluster REST catalog + Trino</text>
+    <text x="1410" y="362" class="tf">gcs.tf</text>
+
+    <rect x="858" y="418" width="640" height="52" rx="8" class="box"/>
+    <text x="872" y="438" class="svc">Cloud KMS + Secret Manager</text>
+    <text x="872" y="454" class="sub">at-rest encryption keys · runtime secrets synced into the cluster via External Secrets · IAM-scoped per service account</text>
+    <text x="1410" y="438" class="tf">secretmanager.tf</text>
+
+    <rect x="858" y="482" width="640" height="52" rx="8" class="box"/>
+    <text x="872" y="502" class="svc">Pub/Sub topic (aux eventing)</text>
+    <text x="872" y="518" class="sub">provisioned alongside Kafka for cloud-native notification fan-out where configured</text>
+    <text x="1410" y="502" class="tf">kafka.tf</text>
+
+    <rect x="858" y="546" width="640" height="70" rx="8" fill="#e8f0fe" stroke="#93b7f5"/>
+    <text x="872" y="568" class="svc">LLM providers — brokered by ai-gateway, never called directly by agents</text>
+    <text x="872" y="584" class="sub">Anthropic API and/or Vertex AI (Claude on Vertex), configured per tenant · semantic cache, token budgets and</text>
+    <text x="872" y="598" class="sub">cost metering sit in front of every call · prompts leave the VPC only to the configured provider</text>
+
+    <rect x="858" y="628" width="640" height="92" rx="8" fill="#fef2f2" stroke="#fecaca"/>
+    <text x="872" y="650" class="svc">Trust boundary notes</text>
+    <text x="872" y="668" class="sub">• Tenant isolation is enforced in Postgres (FORCE RLS) — not in application code an attacker could skip</text>
+    <text x="872" y="684" class="sub">• Audit chain hashes are verifiable off-platform; archive bucket is CMEK-encrypted and IAM-scoped</text>
+    <text x="872" y="700" class="sub">• Agent writes require a four-eyes approval that mints an RS256-signed execution grant — cloud IAM</text>
+    <text x="872" y="714" class="sub">   compromise alone cannot make an agent's proposal execute</text>
+  </g>
+
+  <path class="arrow" d="M834 300 L858 240"/>
+  <path class="arrow" d="M834 340 L858 304"/>
+  <path class="arrow" d="M834 380 L858 372"/>
+  <path class="arrow" d="M834 420 L858 444"/>
+
+  <rect x="64" y="744" width="1434" height="104" rx="8" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="84" y="768" class="svc">Environment tiers</text>
+  <text x="84" y="786" class="sub">dev / CI: docker-compose parity stack (same open-source images) — the tier where the 3,029-test evidence run executed.</text>
+  <text x="84" y="802" class="sub">cloud: this page — terraform apply (deploy/terraform/gcp) then helm upgrade -f values-gcp.yaml. Sibling stacks shipped for AWS, Azure and Hetzner — portability comes from every stateful dependency being open-source.</text>
+  <text x="84" y="826" class="sub" fill="#1a73e8">Honesty note: the AWS/GCP/Azure paths are the shipped, reviewed IaC — they are infra-gated and have not been exercised from the evaluation sandbox (no cloud credentials there). The executed-verification tier to date is local/CI.</text>
+
+  <text x="40" y="890" class="foot">Source: deploy/terraform/gcp/*.tf, deploy/helm/datacern (values-gcp.yaml), deploy/k8s/data-tier at commit 54cfe2d · generated 2026-07-30</text>
+</svg>
