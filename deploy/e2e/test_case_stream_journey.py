@@ -111,14 +111,39 @@ def main() -> int:  # noqa: PLR0911, PLR0915
     r = api("POST", f"{c.RBAC}/api/v1/admin/tenants/{tenant}/seed", su, {})
     check(r.status_code == 200, "rbac tenant seed (system groups + default workspace)", r.text[:160])
 
-    # Department tokens use the SAME wildcard scopes: what separates A from B
-    # below is the workspace claim alone, never a scope difference — that IS
-    # the department boundary being tested.
+    # Department tokens use the SAME scopes and the SAME rbac grants (Admin
+    # group, the durable members-row path seed_platform.py uses): what
+    # separates A from B below is the workspace claim alone, never a scope or
+    # grant difference — that IS the department boundary being tested.
     def tok(sub: str, ws: str | None) -> str:
         return c.user_token(sub, tenant, ["*"], workspace_id=ws)
 
+    gid = psql("SELECT id FROM groups WHERE tenant_id = "
+               f"'{tenant}' AND group_type = 'permission' AND lower(name) = 'admin'", db="rbac")
+    if not check(bool(gid), "tenant Admin permission group exists"):
+        return bail("rbac groups")
+    for sub in ("u-admin", "u-dept-a", "u-dept-b"):
+        psql("INSERT INTO members (id, tenant_id, group_id, user_id) VALUES "
+             f"('{uuid.uuid4()}', '{tenant}', '{gid}', '{sub}') "
+             "ON CONFLICT (group_id, user_id) DO NOTHING", db="rbac")
+    r = api("POST", f"{c.RBAC}/api/v1/admin/projection/rebuild?tenant={tenant}", su, {})
+    check(r.status_code in (200, 202), "rbac projection rebuild enqueued", r.text[:120])
+
+    default_ws = psql("SELECT id FROM workspaces WHERE tenant_id = "
+                      f"'{tenant}' ORDER BY created_at LIMIT 1", db="rbac")
+    authz_live = False
+    for _ in range(30):
+        lr = api("GET", f"{c.INGESTION}/api/v1/case-streams", tok("u-dept-a", default_ws))
+        if lr.status_code == 200:
+            authz_live = True
+            break
+        time.sleep(2)
+    if not check(authz_live, "rbac perm:* projection materialized (list stops 403ing)"):
+        return bail("rbac projection")
+
     # ---- 1. the gate, before anything exists --------------------------------
-    probe = api("POST", f"{c.INGESTION}/api/v1/case-streams/{uuid.uuid4()}/resume", tok("u-a", None))
+    probe = api("POST", f"{c.INGESTION}/api/v1/case-streams/{uuid.uuid4()}/resume",
+                tok("u-dept-a", default_ws))
     refused = probe.status_code in (403, 503)
     body = probe.text.lower()
     check(refused and ("realtime_case_streams" in body or "entitlement" in body),
@@ -140,7 +165,8 @@ def main() -> int:  # noqa: PLR0911, PLR0915
     # us creating anything.
     opened = False
     for _ in range(30):
-        pr = api("POST", f"{c.INGESTION}/api/v1/case-streams/{uuid.uuid4()}/resume", tok("u-a", None))
+        pr = api("POST", f"{c.INGESTION}/api/v1/case-streams/{uuid.uuid4()}/resume",
+                 tok("u-dept-a", default_ws))
         if pr.status_code == 404:
             opened = True
             break
@@ -151,7 +177,7 @@ def main() -> int:  # noqa: PLR0911, PLR0915
     # ---- departments: two real rbac workspaces, same tenant ------------------
     wsa = wsb = None
     for name, holder in (("dept-a-claims", "wsa"), ("dept-b-fraud", "wsb")):
-        r = api("POST", f"{c.RBAC}/api/v1/workspaces", tok("u-admin", None), {"name": name})
+        r = api("POST", f"{c.RBAC}/api/v1/workspaces", tok("u-admin", default_ws), {"name": name})
         if r.status_code not in (200, 201):
             return bail(f"workspace {name}", f"{r.status_code} {r.text[:160]}")
         wid = (r.json().get("data") or r.json()).get("id")
@@ -161,6 +187,28 @@ def main() -> int:  # noqa: PLR0911, PLR0915
             wsb = wid
     check(bool(wsa and wsb), "two departments exist (workspaces dept-a-claims / dept-b-fraud)")
     tok_a, tok_b = tok("u-dept-a", wsa), tok("u-dept-b", wsb)
+
+    # Each department user OWNS its own workspace — the verb-mapped
+    # workspace-grant path (owner: read/update/execute/delete/admin) is how
+    # workspace-scoped actions like case.trigger.create authorize. SAME level
+    # in both departments; only the workspace differs.
+    for sub, ws in (("u-dept-a", wsa), ("u-dept-b", wsb)):
+        r = api("POST", f"{c.RBAC}/api/v1/grants", tok("u-admin", default_ws),
+                {"workspace_id": ws, "resource_urn": f"wr:{tenant}:rbac:workspace/{ws}",
+                 "subject": {"type": "user", "id": sub}, "level": "owner"})
+        if r.status_code not in (200, 201):
+            return bail(f"workspace grant for {sub}", f"{r.status_code} {r.text[:160]}")
+    r = api("POST", f"{c.RBAC}/api/v1/admin/projection/rebuild?tenant={tenant}", su, {})
+    check(r.status_code in (200, 202), "workspace owner grants + projection rebuild")
+    granted = False
+    for _ in range(30):
+        pr = api("GET", f"{c.CASE}/api/v1/case-triggers", tok_a)
+        if pr.status_code == 200:
+            granted = True
+            break
+        time.sleep(2)
+    if not check(granted, "workspace-owner grant materialized (case surface opens for dept A)"):
+        return bail("workspace grant projection")
 
     # ---- the enterprise source: a real Postgres db with real rows -----------
     psql(f'CREATE DATABASE "{SRC_DB}"')
@@ -174,7 +222,11 @@ def main() -> int:  # noqa: PLR0911, PLR0915
 
     r = api("POST", f"{c.INGESTION}/api/v1/connections", tok_a,
             {"name": f"journey-src-{RUN}", "connector_type": "postgres",
-             "config": {"host": "localhost", "port": 5432, "database": SRC_DB, "username": "datacern"},
+             # ssl_mode defaults to "require" (secure-by-default); the lab
+             # source has no TLS, so disable EXPLICITLY — the config choice a
+             # real customer makes, not a platform special case.
+             "config": {"host": "localhost", "port": 5432, "database": SRC_DB,
+                        "username": "datacern", "ssl_mode": "disable"},
              "secrets": {"password": "datacern_dev"}, "workspace_id": wsa})
     if not check(r.status_code == 201, "connection created (REAL asyncpg driver probe passed)",
                  f"{r.status_code} {r.text[:200]}"):

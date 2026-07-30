@@ -166,7 +166,7 @@ commits land.
 | 3 | Case Streams API in ingestion-service (compose connection + watermark schedule; gated create/resume; pause/patch/delete) | **done — this commit** |
 | 4 | bff-graphql: CaseStream schema/resolvers + composed create with compensation | **done — this commit** |
 | 5 | ui-web Streams tab (wizard + live tiles) | **done — this commit** |
-| 6 | Live e2e journey: seeded source → stream → department worklist gains a case with evidence; cross-department user cannot see it | pending |
+| 6 | Live e2e journey: seeded source → stream → department worklist gains a case with evidence; cross-department user cannot see it | **done — this commit** (CI-gated; see slice 6 notes for what ran where) |
 
 **Slice 1 (this commit) — intake-snapshot evidence.** `CaseTrigger` gains
 `attach_evidence` (migration `000008`, default false — existing triggers keep
@@ -306,3 +306,52 @@ trigger.attachEvidence) with an idempotency key; the SKU-naming refusal
 appears verbatim in the alert; pause fires against the right stream. Full
 ui-web suite 579 passed (90 files), typecheck clean, lint clean (only
 pre-existing warnings in unrelated files).
+
+**Slice 6 (this commit) — the live journey, and the two platform bugs it
+caught.** `deploy/e2e/test_case_stream_journey.py` (`make journey-streams`,
+wired into the e2e-live CI job right after `make journey`) drives the add-on's
+full arc against the real stack and asserts on STATE — rows in Postgres,
+evidence bytes, boundary 404s — never on acknowledgements. Eight phases: the
+SKU gate refuses a fresh tenant (403 naming the SKU / 503 fail-closed) BEFORE
+any resource checks; a platform-operator entitlement override opens the
+projection (polled by watching the same refused call flip 403→404); two rbac
+workspaces become departments A and B with identical grants (workspace-owner,
+the verb-mapped path) — only the workspace claim differs; a real Postgres
+source is seeded and connected through the real asyncpg driver probe
+(`ssl_mode: "disable"` stated explicitly — secure-by-default config, lab
+source without TLS); ONE bff `createCaseStream` composes stream + watermark
+schedule + trigger, born in department A; `run_now` pulls only past-watermark
+rows and opens cases only for rows passing the trigger condition; the intake
+snapshot's bytes contain the source row; department B gets `[]` and 404s on
+case/timeline/evidence; one new source row yields exactly one new case with
+the cursor advanced; removing the override re-gates resume but never pause.
+
+Writing it caught two real bugs no unit tier had seen — the reason journeys
+exist:
+1. **Case-service workspace isolation did not exist on reads.** The list
+   filtered by tenant only and `/cases/{id}` routes did no workspace check —
+   any tenant user holding `case.case.read` could read another department's
+   case by id. Fixed: `RequireCaseWorkspace` middleware on every `/cases/{id}`
+   route (mismatch → 404, cross-tenant-404 discipline one level down, distinct
+   `security.cross_workspace_denied` audit event; workspace-less service
+   tokens stay tenant-scoped) + a workspace term filter on the worklist search
+   taken from the token claim, never a query param. Integration-tested against
+   real PG.
+2. **Streams were born in the nil workspace through the bff.**
+   `CaseStreamCreate.workspace_id` defaulted to the nil uuid and the service
+   trusted the body; the bff never sends workspace_id, so every UI-created
+   stream escaped its department. Fixed claims-first (the token's workspace
+   wins over any body value — a department user cannot plant a stream in
+   another department), and the bind PATCH now returns the live schedule so
+   the composed create's response carries the cursor. Unit tests added for
+   both (a hostile body naming another workspace is overridden).
+
+Verification, stated precisely: in the network-restricted dev container
+(no Docker registries; native PG16/Redis/Kafka-KRaft/MinIO/OPA/Vault stack,
+LLM plane absent via the new `OLLAMA_OPTIONAL=1` escape hatch), phases 1–3
+ran live end to end — 16 of 17 checks green through composed create, with
+`run_now` stopping at the one piece of infra the container cannot obtain
+(the Iceberg REST catalog, Docker-image-only). Phases 4–8 (fire → cases →
+evidence → isolation → increment → lapse) are exercised by the new CI step
+on the full dockerized stack — the merge gate for this PR. Ingestion suite
+619 passed + ruff clean; case-service 10/10 packages.
