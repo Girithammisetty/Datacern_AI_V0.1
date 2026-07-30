@@ -73,6 +73,15 @@ journey:
 journey-streams:
 	deploy/e2e/.venv/bin/python deploy/e2e/test_case_stream_journey.py
 
+# Learn-flywheel journey (learning-loop slice 7): 24 governed resolutions ->
+# labeled_examples -> real random_forest training run -> four-eyes promotion
+# (self-approval rejected) -> the approved stage lands in the MLflow registry
+# with no harness bridging -> batch scoring with auto_case -> cases exist for
+# EXACTLY the model-flagged rows. Asserts on STATE (Postgres rows, registry
+# stages, output parquet bytes). Needs `make up`.
+journey-learn:
+	deploy/e2e/.venv/bin/python deploy/e2e/test_learn_journey.py
+
 # ---- Demo pack control -----------------------------------------------------
 # Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway
 # `wr-demo-<pack>` tenant for a demo, then tear it down cleanly afterwards. The

@@ -10,6 +10,7 @@ faithful and replay-safe (AC-12).
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
@@ -43,6 +44,8 @@ from app.domain.schema_compat import CompatibilityReport, validate_compatibility
 from app.domain.state import can_transition
 from app.domain.urn import job_urn, parse
 from app.utils import utcnow, uuid7
+
+logger = logging.getLogger(__name__)
 
 _NAME_RE = re.compile(r"^[a-zA-Z0-9_\- ]{3,120}$")
 EVENTS_TOPIC = "inference.events.v1"
@@ -322,6 +325,41 @@ class InferenceService(_ResolveMixin):
                 job.components_status = [{"alias": "inference", "phase": "Succeeded"}]
                 job.updated_at = self.deps.clock.now()
                 await uow.jobs.update(job)
+                # Score→case bridge (CASE-FR-003, learning-loop slice 7): with
+                # parameters["auto_case"] set, emit inference.completed carrying
+                # the over-threshold rows the executor collected during scoring.
+                # Emitted HERE — inside the run-once output-registration
+                # transaction — so the event rides the outbox exactly once with
+                # the result still in hand; case-service's InferenceHandler
+                # opens the cases. If lineage later fails the job surfaces
+                # failed(LINEAGE_REGISTRATION_FAILED), but the scored dataset is
+                # registered and the cases point at real rows — never retracted.
+                ac = (job.parameters or {}).get("auto_case")
+                if ac:
+                    rows = result.auto_case_rows or []
+                    if result.auto_case_total_over > len(rows):
+                        logger.warning(
+                            "auto_case: %d rows over threshold but event capped at %d "
+                            "(max_cases=%s) — job %s; raise the threshold or triage in batches",
+                            result.auto_case_total_over, len(rows), ac.get("max_cases"), job.id)
+                    if not rows:
+                        logger.warning(
+                            "auto_case configured but no rows collected (threshold=%s "
+                            "row_pk_field=%r score_field=%r) — job %s opens no cases",
+                            ac.get("threshold"), ac.get("row_pk_field"),
+                            ac.get("score_field", "prediction"), job.id)
+                    await self._emit(uow, ctx, "inference.completed", job, {
+                        "job_id": job.id, "auto_case": True,
+                        "workspace_id": str(job.workspace_id),
+                        "dataset_urn": out_urn, "dataset_version": out_version,
+                        # categorical mode pre-filters producer-side (matched
+                        # rows carry score 1.0), so 0.0 lets them all through
+                        # the consumer's numeric filter.
+                        "score_threshold": float(ac.get("threshold") or 0.0),
+                        "positive_label": ac.get("positive_label"),
+                        "rows": rows,
+                        "over_threshold_total": result.auto_case_total_over,
+                        "capped": result.auto_case_total_over > len(rows)})
         # ---- phase 2: lineage (bounded retries) + succeed / surfaced failure ----
         await self._finalize_lineage(tenant_id, job_id)
         await self._promote_from_queue(tenant_id)

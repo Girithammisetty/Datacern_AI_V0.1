@@ -166,7 +166,8 @@ commits land.
 | 3 | Case Streams API in ingestion-service (compose connection + watermark schedule; gated create/resume; pause/patch/delete) | **done — this commit** |
 | 4 | bff-graphql: CaseStream schema/resolvers + composed create with compensation | **done — this commit** |
 | 5 | ui-web Streams tab (wizard + live tiles) | **done — this commit** |
-| 6 | Live e2e journey: seeded source → stream → department worklist gains a case with evidence; cross-department user cannot see it | **done — this commit** (CI-gated; see slice 6 notes for what ran where) |
+| 6 | Live e2e journey: seeded source → stream → department worklist gains a case with evidence; cross-department user cannot see it | **done** (CI-gated; see slice 6 notes for what ran where) |
+| 7 | Learn-flywheel journey (`make journey-learn`): labels → training → four-eyes promotion → registry stage → auto_case scoring → cases — closes the score→case bridge | **done — this commit** |
 
 **Slice 1 (this commit) — intake-snapshot evidence.** `CaseTrigger` gains
 `attach_evidence` (migration `000008`, default false — existing triggers keep
@@ -377,3 +378,43 @@ advance, lapse) except the append increment, which exposed bug 3 above; the
 snapshot-catch-up fix makes that leg deterministic. The e2e-live run of THIS
 head is the merge gate. Ingestion suite 619 passed + ruff clean; case-service
 10/10 packages.
+
+**Slice 7 (this commit) — the Learn flywheel, CI-gated, and the half-built
+bridge it exposed.** The GTM narrative's Learn verb ("every signed decision
+becomes a training label … high scores open their own cases") was the one
+claim with no continuous journey behind it. Scoping `make journey-learn`
+immediately found why: **the score→case bridge was half-built.** Case-service
+ships a complete `InferenceHandler` — `inference.completed` with
+`auto_case=true` → `AutoCreateFromInference` opens cases, consumer already
+subscribed to `inference.events.v1` — but inference-service only ever emitted
+`inference.job.succeeded`. The consumer was dead code; no producer existed.
+
+Producer built (inference-service): `parameters["auto_case"]` — validated at
+the API boundary (`AutoCaseSpec`: exactly one of numeric `threshold` /
+categorical `positive_label` for classifier label outputs, `row_pk_field`,
+`score_field`, ≤12 `projection_fields`, `max_cases` ≤ 500 matching
+CreateCases' batch cap). The executor collects qualifying rows DURING the
+scoring stream (bounded; truncation counted, never silent) and the service
+emits `inference.completed` inside the run-once output-registration
+transaction — exactly-once via the outbox, with the precise payload contract
+the consumer parses. 14 unit tests (spec validation, both modes, cap
+visibility, no-spec emits nothing, pure collector); inference suite 85
+passed, ruff clean.
+
+One planned fix turned out already fixed: the driver's step-K note ("the
+harness bridges the approved stage into the MLflow registry; this belongs in
+experiment-service") is stale — `_sync_mlflow_stage` runs on promotion
+approval (BUG-2). The journey asserts the registry stage with NO harness
+bridging, so the claim is now gated rather than assumed.
+
+`deploy/e2e/test_learn_journey.py` (`make journey-learn`, in e2e-live after
+journey-streams): fresh tenant; 24 REAL governed resolutions → pipeline
+`labeled_examples` (both label categories); real random_forest training run →
+succeeded; register the mirrored run; four-eyes promotion with the
+requester's self-approval REJECTED (403 SELF_APPROVAL) and a different human
+approving staging → production; MLflow registry reads Production; batch
+scoring of 10 unseen rows with `auto_case(positive_label=true_positive)`;
+final assertion state-vs-state — cases created by `agent/inference` exist for
+EXACTLY the rows the output parquet says the model flagged, no more, no less.
+The e2e-live run of this head is the first full-stack execution — the merge
+gate, same discipline as slice 6.

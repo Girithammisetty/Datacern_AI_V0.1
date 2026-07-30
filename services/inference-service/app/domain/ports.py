@@ -54,6 +54,13 @@ class ScoringResult:
     snapshot_id: str
     row_count: int
     prediction_columns: list[str]
+    #: auto_case (score→case bridge): rows scoring ≥ threshold, collected
+    #: DURING scoring so the finalize step never re-reads the output —
+    #: [{row_pk, score, display_projection}], capped at the spec's max_cases.
+    auto_case_rows: list[dict] | None = None
+    #: total rows at/over threshold BEFORE the cap — when this exceeds
+    #: len(auto_case_rows), the event was truncated (emitter logs it loudly).
+    auto_case_total_over: int = 0
 
 
 @dataclass
