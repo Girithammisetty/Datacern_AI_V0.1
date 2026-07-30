@@ -588,6 +588,16 @@ jobs:
       - name: Governed write loop (make journey)
         run: make journey
 
+      # Realtime-case-streams add-on (slice 6): the priced add-on's full arc —
+      # SKU gate refused → commercial grant → composed stream → incremental
+      # pull → department-scoped case with frozen evidence → cross-department
+      # 404 → lapse re-gates resume. Runs right after the governed-write loop
+      # for the same reason that one runs early: it is a JOURNEY assertion on
+      # state, cheap (~3min) relative to the Playwright suite, and if the
+      # add-on's chain is broken the UI assertions add nothing.
+      - name: Realtime case streams journey (make journey-streams)
+        run: make journey-streams
+
       - name: Run live-stack E2E suite (pnpm e2e:live)
         working-directory: services/ui-web
         env:

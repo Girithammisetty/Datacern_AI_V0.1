@@ -73,6 +73,10 @@ const (
 	EvCorrectionRecorded  = "case.correction_recorded"
 
 	EvCrossTenantDenied = "security.cross_tenant_denied" // MASTER-FR-003
+	// A workspace-bearing token touched another department's case (realtime-
+	// case-streams initiative: department isolation). Deliberately distinct
+	// from cross_tenant_denied — different boundary, different severity.
+	EvCrossWorkspaceDenied = "security.cross_workspace_denied"
 	EvPermissionDenied  = "security.permission_denied"   // MASTER-FR-040
 )
 

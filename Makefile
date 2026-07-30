@@ -64,6 +64,15 @@ soak-volume:
 journey:
 	deploy/e2e/.venv/bin/python deploy/e2e/test_governed_write_loop.py
 
+# Realtime-case-streams add-on journey (docs/initiatives/realtime-case-streams-
+# addon.md, slice 6): entitlement gate -> commercial grant -> one-call composed
+# stream -> watermark-incremental pull -> department worklist gains a case with
+# intake-snapshot evidence -> the OTHER department 404s on all of it -> lapse
+# re-gates resume but never pause. Asserts on STATE (rows, evidence bytes,
+# boundary 404s), same rule as `make journey`. Needs `make up`.
+journey-streams:
+	deploy/e2e/.venv/bin/python deploy/e2e/test_case_stream_journey.py
+
 # ---- Demo pack control -----------------------------------------------------
 # Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway
 # `wr-demo-<pack>` tenant for a demo, then tear it down cleanly afterwards. The

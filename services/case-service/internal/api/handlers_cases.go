@@ -265,8 +265,11 @@ func (s *Server) handleSearchCases(w http.ResponseWriter, r *http.Request) {
 	tenant, _ := c.Tenant()
 	q := r.URL.Query()
 	p := search.Params{
-		Q:                   q.Get("q"),
-		Statuses:            search.ExpandStatus(q.Get("filter[status]")),
+		Q:        q.Get("q"),
+		Statuses: search.ExpandStatus(q.Get("filter[status]")),
+		// Department isolation: a workspace-bearing token lists only its own
+		// workspace's cases (realtime-case-streams initiative).
+		WorkspaceID:         c.WorkspaceID,
 		Severity:            q.Get("filter[severity]"),
 		DispositionCategory: q.Get("filter[disposition_category]"),
 		QueryURN:            q.Get("filter[query_urn]"),
