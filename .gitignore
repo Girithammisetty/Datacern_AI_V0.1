@@ -33,3 +33,4 @@ playwright-live-report/
 # step (services build from source); two copies landed in the initial commit
 # by accident and were untracked to stop the repo growing every rebuild.
 /services/*/server
+mlruns/
