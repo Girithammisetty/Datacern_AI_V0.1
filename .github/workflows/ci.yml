@@ -598,6 +598,16 @@ jobs:
       - name: Realtime case streams journey (make journey-streams)
         run: make journey-streams
 
+      # Learn flywheel (learning-loop slice 7): the compounding claim — signed
+      # decisions become labels, models train + promote under four-eyes, the
+      # approved stage reaches the MLflow registry mechanically, and scoring
+      # with auto_case opens cases for exactly the flagged rows. Runs after
+      # journey-streams for the same reason: a state-asserted journey, cheaper
+      # than the Playwright suite, and if the flywheel is broken the UI
+      # assertions add nothing.
+      - name: Learn flywheel journey (make journey-learn)
+        run: make journey-learn
+
       - name: Run live-stack E2E suite (pnpm e2e:live)
         working-directory: services/ui-web
         env:

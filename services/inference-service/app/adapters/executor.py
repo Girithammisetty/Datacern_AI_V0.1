@@ -92,6 +92,14 @@ class LocalScoringExecutor:
         available = list(pf.schema_arrow.names)
         input_cols = [c for c in (declared or available) if c in available]
 
+        # auto_case (score→case bridge): collect over-threshold rows WHILE
+        # streaming so the finalize step never has to re-read the output.
+        # Bounded by max_cases; total_over keeps counting so truncation is
+        # visible to the emitter (no silent caps).
+        ac = parameters.get("auto_case") or {}
+        ac_rows: list[dict] = []
+        ac_total_over = 0
+
         rows = 0
         parts = 0
         schema = None  # pinned from part 0 so every part reads back as one dataset
@@ -103,6 +111,8 @@ class LocalScoringExecutor:
             elif table.schema != schema:
                 table = _align(table, schema, parts)
             self._write_parquet(f"{prefix}part-{parts:05d}.parquet", table)
+            if ac:
+                ac_total_over += _collect_auto_case_rows(table, ac, ac_rows)
             rows += table.num_rows
             parts += 1
 
@@ -120,6 +130,8 @@ class LocalScoringExecutor:
             snapshot_id=uuid.uuid4().hex,
             row_count=int(rows),
             prediction_columns=["prediction"],
+            auto_case_rows=ac_rows if ac else None,
+            auto_case_total_over=ac_total_over,
         )
 
     def _score_batch(self, batch: pa.RecordBatch, loaded, model: ResolvedModel, job,
@@ -228,6 +240,55 @@ def _align(table: pa.Table, schema: pa.Schema, part: int) -> pa.Table:
             "model returned inconsistent prediction types across batches; scoring "
             "the whole dataset in one chunk (a larger chunk_rows) avoids the split."
         ) from exc
+
+
+def _collect_auto_case_rows(table: pa.Table, spec: dict, out: list[dict]) -> int:
+    """Collect this part's rows scoring at/over the auto_case threshold into
+    ``out`` (as {row_pk, score, display_projection}), stopping at max_cases.
+    Returns how many rows in this part were at/over threshold REGARDLESS of the
+    cap, so the caller can report truncation instead of hiding it. A missing
+    row_pk/score column contributes nothing — the emitter's empty-rows log is
+    the diagnosable signal (config error, not a crash)."""
+    score_field = spec.get("score_field") or "prediction"
+    pk_field = spec.get("row_pk_field") or ""
+    if score_field not in table.column_names or pk_field not in table.column_names:
+        return 0
+    positive_label = spec.get("positive_label")
+    threshold = float(spec.get("threshold") or 0.0)
+    max_cases = int(spec.get("max_cases", 500))
+    proj_fields = [c for c in (spec.get("projection_fields") or [])
+                   if c in table.column_names]
+    scores = table.column(score_field).to_pylist()
+    pks = table.column(pk_field).to_pylist()
+    proj_cols = {c: table.column(c).to_pylist() for c in proj_fields}
+    over = 0
+    for i, s in enumerate(scores):
+        if positive_label is not None:
+            # categorical (classifier labels): equality on the predicted class;
+            # a matched row reports score 1.0 so the consumer's numeric filter
+            # (score >= score_threshold) always passes it.
+            if s is None or str(s) != positive_label:
+                continue
+            score = 1.0
+            shown = str(s)
+        else:
+            try:
+                score = float(s)
+            except (TypeError, ValueError):
+                continue
+            if score < threshold:
+                continue
+            shown = f"{score:.6g}"
+        if pks[i] is None:
+            continue
+        over += 1
+        if len(out) >= max_cases:
+            continue
+        proj = {c: ("" if vals[i] is None else str(vals[i]))
+                for c, vals in proj_cols.items()}
+        proj["score"] = shown
+        out.append({"row_pk": str(pks[i]), "score": score, "display_projection": proj})
+    return over
 
 
 def _chunk_rows(parameters: dict) -> int:
