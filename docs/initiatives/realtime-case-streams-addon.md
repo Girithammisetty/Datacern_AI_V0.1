@@ -162,7 +162,7 @@ commits land.
 |---|---|---|
 | 0 | Verify the connector matrix is real; fix the stale "drivers are stubs" docstring | **done — this commit** |
 | 1 | `CaseTrigger.attach_evidence` → intake-snapshot `CaseEvidence` | **done — this commit** |
-| 2 | `realtime_case_streams` feature entitlement + refusal at stream/connection enable | pending |
+| 2 | `realtime_case_streams` feature entitlement + fail-closed refusal at the attach-evidence surface | **done — this commit** |
 | 3 | Streams API in ingestion-service (compose connection+schedule+trigger; pause/resume) | pending |
 | 4 | bff-graphql resolvers + subscriptions | pending |
 | 5 | ui-web Streams tab (wizard + live tiles) | pending |
@@ -187,3 +187,32 @@ builder (full-row-not-projection, byte-stability for identical input, ragged
 source rows); all case-service suites pass. The full blob+DB path and the
 cross-department invisibility assertion are integration/live-tier (slice 6) —
 not claimed as verified here.
+
+**Slice 2 (this commit) — the add-on gate.** case-service gains a vendored
+reader of the commercial plane's `entitlements_flat` Redis projection
+(`internal/entitlements`, the same read-side contract pack-service enforces
+pack_sku with, CPL-FR-030) — and unlike usage-service's surfacing-only reader,
+this one enforces. Turning `attach_evidence` ON (create, or a false→true
+update) requires the tenant to hold the `feature`-kind entitlement
+`realtime_case_streams`:
+
+- **Entitled** → proceeds.
+- **Blocked** → 403 naming the SKU and the exact entitlement key — a refusal
+  the buyer can act on, not a bare "forbidden".
+- **Unavailable** (projection missing/unreadable/Redis down) → 503
+  `ENTITLEMENT_UNAVAILABLE`, fail-closed (CPL-NFR-004): "could not check" is
+  never reported as "not entitled" and never becomes a silent grant.
+
+Turning the feature OFF, or editing a trigger that already has it, is never
+gated — an entitlement lapse is a commercial-plane pause concern (CPL-FR-022
+precedent), not a lockout from the tenant's own rule. Until the SKU is seeded
+in a tenant's plan, the surface is enabled-nowhere by construction — exactly
+right for an unreleased priced add-on.
+
+Verification: unit tests cover Entitled/Blocked distinctness, kind-mismatch
+(a `pack_sku` sharing the key string does not unlock the feature), every
+fail-closed path (nil client, Redis error, missing key, empty and corrupt
+blobs), and the gate's error mapping (403 names both SKU spellings; 503
+states the refusal). The end-to-end HTTP path against real PG + Redis is
+integration-tier. Seeding the SKU into plans is a pricing decision, left to
+the commercial plane deliberately.

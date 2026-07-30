@@ -198,6 +198,9 @@ func main() {
 		Snapshots:  snapshots,
 		Evidence:   evidence,
 		Redis:      redisx.NewFromEnv(env("REDIS_ADDR", "localhost:6379"), os.Getenv), // bulk concurrency gate (CASE-FR-032)
+		// Same Redis, different projection: the commercial plane's
+		// entitlements_flat blob gates the realtime-case-streams add-on.
+		Entitlements: redisx.NewFromEnv(env("REDIS_ADDR", "localhost:6379"), os.Getenv),
 	}
 
 	// Deploy-time action-catalog registration (RBC-FR-022): push case-service's

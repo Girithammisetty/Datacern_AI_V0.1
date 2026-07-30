@@ -10,6 +10,7 @@ import (
 	"github.com/datacern-ai/go-common/redisx"
 
 	"github.com/datacern-ai/case-service/internal/authz"
+	"github.com/datacern-ai/case-service/internal/entitlements"
 	"github.com/datacern-ai/case-service/internal/search"
 	"github.com/datacern-ai/case-service/internal/store"
 )
@@ -38,6 +39,18 @@ type Server struct {
 	// Redis backs the per-tenant bulk concurrency gate (CASE-FR-032). Nil
 	// disables the gate (unit tests); the runtime always wires it.
 	Redis *redisx.Client
+	// Entitlements reads the entitlements_flat projection for the
+	// realtime-case-streams add-on gate (slice 2). Nil = the projection cannot
+	// be consulted, which the gate treats as Unavailable → fail closed; the
+	// runtime always wires it.
+	Entitlements entitlements.Getter
+}
+
+// checkStreamsFeature consults the commercial-plane projection for the
+// realtime-case-streams feature entitlement (fail-closed on any read problem).
+func (s *Server) checkStreamsFeature(r *http.Request, tenant uuid.UUID) entitlements.Status {
+	return entitlements.CheckFeature(r.Context(), s.Entitlements, tenant.String(),
+		entitlements.FeatureRealtimeCaseStreams)
 }
 
 // Router builds the chi router (base path /api/v1, MASTER-FR-020).
