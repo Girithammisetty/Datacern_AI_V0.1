@@ -35,6 +35,11 @@ type CaseTrigger struct {
 	// empty = all columns (subject to TruncateProjection caps).
 	ProjectionFields []string  `json:"projection_fields"`
 	MaxCasesPerEvent int       `json:"max_cases_per_event"`
+	// AttachEvidence freezes each matched source row as a governed CaseEvidence
+	// attachment on the case it creates (an "intake snapshot": what the row
+	// looked like at the moment work was opened — the provenance an examiner
+	// asks for later). Part of the real-time case-streams add-on surface.
+	AttachEvidence bool `json:"attach_evidence"`
 	CreatedByID      string    `json:"created_by_id"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`

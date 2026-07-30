@@ -198,6 +198,9 @@ func main() {
 		Snapshots:  snapshots,
 		Evidence:   evidence,
 		Redis:      redisx.NewFromEnv(env("REDIS_ADDR", "localhost:6379"), os.Getenv), // bulk concurrency gate (CASE-FR-032)
+		// Same Redis, different projection: the commercial plane's
+		// entitlements_flat blob gates the realtime-case-streams add-on.
+		Entitlements: redisx.NewFromEnv(env("REDIS_ADDR", "localhost:6379"), os.Getenv),
 	}
 
 	// Deploy-time action-catalog registration (RBC-FR-022): push case-service's
@@ -268,6 +271,9 @@ func main() {
 			Rows: triggers.NewDatasetHTTP(os.Getenv("DATASET_URL"),
 				os.Getenv("JWT_ISSUER"), os.Getenv("JWT_AUDIENCE"),
 				os.Getenv("REGISTER_SIGNING_KID"), trigKey),
+			// Same object store as human evidence uploads: intake snapshots are
+			// governed evidence, not a side channel.
+			Blob: evidence,
 		}
 		inboundHandler := func(ctx context.Context, e gcevent.Envelope) error {
 			if err := events.InferenceHandler(creator)(ctx, e); err != nil {

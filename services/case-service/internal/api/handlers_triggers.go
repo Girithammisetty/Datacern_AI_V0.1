@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/datacern-ai/case-service/internal/domain"
+	"github.com/datacern-ai/case-service/internal/entitlements"
 )
 
 // Event-rule case-trigger CRUD (realtime-decisioning INC-1). Same handler
@@ -24,6 +25,7 @@ type triggerReq struct {
 	DueHours         *int                       `json:"due_hours"`
 	ProjectionFields *[]string                  `json:"projection_fields"`
 	MaxCasesPerEvent *int                       `json:"max_cases_per_event"`
+	AttachEvidence   *bool                      `json:"attach_evidence"`
 }
 
 func (req *triggerReq) apply(t *domain.CaseTrigger) {
@@ -42,6 +44,9 @@ func (req *triggerReq) apply(t *domain.CaseTrigger) {
 	if req.Conditions != nil {
 		t.Conditions = *req.Conditions
 	}
+	if req.AttachEvidence != nil {
+		t.AttachEvidence = *req.AttachEvidence
+	}
 	if req.RowPKField != nil {
 		t.RowPKField = *req.RowPKField
 	}
@@ -56,6 +61,29 @@ func (req *triggerReq) apply(t *domain.CaseTrigger) {
 	}
 	if req.MaxCasesPerEvent != nil {
 		t.MaxCasesPerEvent = *req.MaxCasesPerEvent
+	}
+}
+
+// attachEvidenceGate maps a realtime-case-streams entitlement check onto the
+// error a trigger write gets when it tries to turn intake-snapshot evidence on
+// (add-on slice 2). Only the false→true transition is gated: turning the
+// feature OFF, or editing a trigger that already has it, never requires a
+// round-trip — an entitlement lapse is a commercial-plane concern (pause with
+// a surfaced reason, CPL-FR-022 precedent), not a reason to lock a tenant out
+// of their own rule's edit screen.
+func attachEvidenceGate(st entitlements.Status) *domain.Error {
+	switch st {
+	case entitlements.Entitled:
+		return nil
+	case entitlements.Blocked:
+		return domain.EPermissionDenied(
+			"intake-snapshot evidence requires the realtime-case-streams add-on " +
+				"(feature entitlement 'realtime_case_streams'); contact your administrator " +
+				"to enable the SKU for this tenant")
+	default: // Unavailable — fail closed, and say why honestly (CPL-NFR-004)
+		return &domain.Error{Code: "ENTITLEMENT_UNAVAILABLE", HTTP: http.StatusServiceUnavailable,
+			Message: "cannot verify the realtime-case-streams entitlement right now; " +
+				"refusing to enable intake-snapshot evidence rather than granting it unchecked"}
 	}
 }
 
@@ -106,6 +134,12 @@ func (s *Server) handleCreateTrigger(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, domain.EValidation("invalid trigger", errs))
 		return
 	}
+	if t.AttachEvidence {
+		if gerr := attachEvidenceGate(s.checkStreamsFeature(r, op.Tenant)); gerr != nil {
+			writeErr(w, r, gerr)
+			return
+		}
+	}
 	if err := s.Store.CreateTrigger(r.Context(), t); err != nil {
 		writeErr(w, r, err)
 		return
@@ -138,11 +172,18 @@ func (s *Server) handleUpdateTrigger(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, err)
 		return
 	}
+	turningOn := req.AttachEvidence != nil && *req.AttachEvidence && !t.AttachEvidence
 	req.apply(t)
 	t.Normalize()
 	if errs := t.Validate(); errs != nil {
 		writeErr(w, r, domain.EValidation("invalid trigger", errs))
 		return
+	}
+	if turningOn {
+		if gerr := attachEvidenceGate(s.checkStreamsFeature(r, op.Tenant)); gerr != nil {
+			writeErr(w, r, gerr)
+			return
+		}
 	}
 	if err := s.Store.UpdateTrigger(r.Context(), t); err != nil {
 		writeErr(w, r, err)
