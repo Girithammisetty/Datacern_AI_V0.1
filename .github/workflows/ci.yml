@@ -673,9 +673,16 @@ jobs:
       - name: Volume/load soak (make soak-volume)
         run: make soak-volume
 
+      # 100 lines was too small to be useful on the failure it mattered for.
+      # A journey that polls a job every 4s writes one uvicorn access line per
+      # poll, so ~150 polls of "GET /api/v1/inferences/<id> 200 OK" flushed the
+      # traceback that explained the failure clean out of the window. The full
+      # logs go up as an artifact either way, but that artifact is not readable
+      # from every environment, so the inline tail has to carry enough to
+      # diagnose from.
       - name: Tail service boot logs on failure
         if: failure()
-        run: tail -n 100 deploy/e2e/logs/*.log 2>/dev/null || true
+        run: tail -n 400 deploy/e2e/logs/*.log 2>/dev/null || true
 
       - name: Upload Playwright live HTML report
         if: always()
@@ -815,5 +822,17 @@ jobs:
           push: ${{ env.PUSH == 'true' }}
           tags: ${{ steps.img.outputs.ref }}:${{ env.IMAGE_TAG }}
           cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          # ignore-error: the layer cache is an OPTIMIZATION, and a build must not
+          # go red because writing it failed. GitHub's Actions Cache backend has
+          # been returning `404 BlobNotFound` on the export step — twice in three
+          # runs here, on different services and different storage accounts
+          # (usage-service via ...sa3, chart-service via ...sa11). In both the
+          # image built fine: every layer reported CACHED and the failure came
+          # afterwards, in `exporting to GitHub Actions Cache`.
+          #
+          # Without this, a backend hiccup fails a build that succeeded, which
+          # trains everyone to re-run red checks without reading them — the exact
+          # habit that lets a real failure through. A cache write that fails now
+          # costs a slower build next time and nothing else.
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }},ignore-error=true
           provenance: false

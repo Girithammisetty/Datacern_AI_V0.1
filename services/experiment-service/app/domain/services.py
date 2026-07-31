@@ -76,6 +76,10 @@ METRIC_CHART_ARTIFACTS = ("confusion_matrix", "roc_curve", "decision_tree")
 # our stage code -> MLflow model-registry stage string (EXP-FR-032 sync)
 STAGE_TO_MLFLOW = {0: "None", 1: "Staging", 2: "Production", 3: "Archived"}
 
+#: Run tag written by pipeline-orchestrator carrying the loadable model uri.
+#: CROSS-SERVICE CONTRACT — must match executor/local.py::MODEL_URI_TAG.
+MODEL_URI_TAG = "datacern.model_uri"
+
 # cap for comma-separated IN-filter batches (bff dataloader N+1 batching)
 MAX_BATCH_IDS = 200
 
@@ -1276,6 +1280,44 @@ class PromotionService(_Base):
         return {"promotion_id": promotion.id, "status": "approved",
                 "decision": {"actor": ctx.actor_id, "decided_at": now.isoformat()}}
 
+    async def _model_source(self, sync: dict) -> str:
+        """The LOADABLE uri of the model being promoted.
+
+        Under MLflow 3 this cannot be built from the run id. `log_model` produces
+        a logged model (models:/m-<id>), and the strings that look right are not:
+        the run's `artifact_uri` is the artifact ROOT, and `runs:/<run>/model`
+        resolves but downloads a directory with the model nested one level in.
+        Both register without complaint and then fail at LOAD time, in another
+        service, with 'Could not find an "MLmodel" configuration file' — which is
+        how this reached CI and broke every batch scoring job.
+
+        So the trainer records the real uri on the run as a tag and we read it
+        back. The old hand-built strings remain only as a last resort for runs
+        predating the tag; they are known-bad under MLflow 3 and are logged as
+        such rather than used silently.
+        """
+        run_mlflow_id = sync.get("run_mlflow_id")
+        if run_mlflow_id:
+            try:
+                info = await self.deps.mlflow.get_run(run_mlflow_id)
+                tags = {t.get("key"): t.get("value")
+                        for t in (info.get("data", {}) or {}).get("tags", [])}
+                tagged = tags.get(MODEL_URI_TAG)
+                if tagged:
+                    return str(tagged)
+            except Exception:  # noqa: BLE001 — fall through to the legacy guess
+                logger.exception("could not read %s from run %s", MODEL_URI_TAG, run_mlflow_id)
+        legacy = sync.get("artifact_uri") or (
+            f"runs:/{run_mlflow_id}/model" if run_mlflow_id else "")
+        if not legacy:
+            raise ValueError(
+                f"cannot register model {sync.get('model_name')!r}: the run carries no "
+                f"{MODEL_URI_TAG} tag and no artifact uri, so the model location is unknown")
+        logger.warning(
+            "run %s has no %s tag; falling back to %r, which does not load under MLflow 3 "
+            "(retrain to get a loadable source)", run_mlflow_id, MODEL_URI_TAG, legacy)
+        return legacy
+
     async def _sync_mlflow_stage(self, tenant_id: str, sync: dict) -> None:
         name = sync["model_name"]
         mlflow_stage = STAGE_TO_MLFLOW[sync["target_stage"]]
@@ -1286,7 +1328,7 @@ class PromotionService(_Base):
                 mlflow_version = ref.rsplit("/", 1)[1]
                 new_ref = None
             else:
-                source = sync.get("artifact_uri") or f"runs:/{sync.get('run_mlflow_id')}/model"
+                source = await self._model_source(sync)
                 mlflow_version = await self.deps.mlflow.create_model_version(
                     name, source, sync.get("run_mlflow_id"))
                 new_ref = f"models:/{name}/{mlflow_version}"

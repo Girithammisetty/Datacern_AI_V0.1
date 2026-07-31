@@ -20,6 +20,13 @@ from app.domain.ports import TrainingResult, TrainingSpec
 
 logger = logging.getLogger(__name__)
 
+#: Run tag carrying the loadable URI of the model this run produced.
+#: CROSS-SERVICE CONTRACT — experiment-service reads this when it registers a
+#: promoted version, because under MLflow 3 the URI cannot be reconstructed from
+#: the run id (see the comment at the set_tag call site). Renaming it silently
+#: sends promotions back to hand-built sources that resolve but will not load.
+MODEL_URI_TAG = "datacern.model_uri"
+
 # Classification / regression / anomaly / clustering families (matches ModelType).
 _CLASSIFIERS = {
     "xgboost", "random_forest", "decision_tree", "logistic_regression", "knn", "svm",
@@ -251,6 +258,19 @@ class LocalTrainingExecutor:
 
                 model_uri, registered_name, version = self._log_model(
                     mlflow, fitted, X, spec)
+                # Record WHERE the model actually is, on the run itself.
+                #
+                # Under MLflow 3 `log_model` returns a LOGGED MODEL uri
+                # (models:/m-<id>) and there is no reconstructing it from the run:
+                # `runs:/<run>/model` resolves but downloads a directory with the
+                # model nested one level inside, so loading it fails with
+                # 'Could not find an "MLmodel" configuration file'. Any consumer
+                # that builds a source string by hand gets that wrong — which is
+                # exactly what experiment-service was doing when it registered
+                # promoted versions, breaking every batch scoring job.
+                # A tag is the right carrier: the mirror already reads run tags,
+                # so this needs no new call and no schema change.
+                mlflow.set_tag(MODEL_URI_TAG, model_uri)
 
                 result = TrainingResult(
                     mlflow_run_id=run.info.run_id, model_uri=model_uri,
