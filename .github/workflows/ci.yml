@@ -21,8 +21,20 @@ env:
   REGISTRY: ${{ vars.REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
   IMAGE_TAG: ${{ vars.IMAGE_TAG || github.sha }}
 
+# One CI run per ref; a new push supersedes the one in flight.
+#
+# The `-v2-` token is a NAMESPACE ESCAPE HATCH, not decoration. `cancel-in-progress`
+# cannot evict a job that never got a runner: on run #161 the `e2e-live` job was
+# queued against a larger-runner label this repo cannot allocate, so it sat QUEUED
+# indefinitely, the run never finished cancelling, and every subsequent run on this
+# ref sat in status `pending` with zero jobs — CI silently stopped running. Two
+# cancel requests were accepted (202) and changed nothing; GitHub only reaps such a
+# job at its 24h queue expiry. Bumping this token moves new runs into a fresh group
+# that the wedged run does not occupy, which is the only way to recover without
+# waiting it out. Per-ref semantics below are unchanged. If it ever happens again,
+# bump to -v3-.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-v2-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
