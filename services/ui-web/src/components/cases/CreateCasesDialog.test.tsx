@@ -4,6 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/utils";
 
 let latest: any = null;
+/** What the drafting mutation returns, and what it was asked. */
+let draftVars: any = null;
+let draftReply: any = { fields: [], unfilled: [], model: null, evidenceUsed: [] };
+let draftError: Error | null = null;
 /** The workspace's custom intake fields, as case-service's form model returns
  * them. Mutable so a test can run with or without a configured catalog. */
 let customFields: any[] = [];
@@ -20,6 +24,10 @@ vi.mock("@/lib/graphql/client", async (importActual) => {
             deduplicated: [{ id: "c-0", rowPk: "CLM-2", caseNumber: 2 }],
           },
         });
+      }
+      if (doc.includes("mutation DraftCaseFields")) {
+        draftVars = vars;
+        return draftError ? Promise.reject(draftError) : Promise.resolve({ draftCaseFields: draftReply });
       }
       if (doc.includes("query CaseForm")) {
         return Promise.resolve({
@@ -64,7 +72,18 @@ const ROWS = [
 beforeEach(() => {
   latest = null;
   customFields = [];
+  draftVars = null;
+  draftError = null;
+  draftReply = { fields: [], unfilled: [], model: null, evidenceUsed: [] };
 });
+
+const AI_FIELDS = [
+  { name: "siu_referral", dataType: "enum", required: true, readonly: false,
+    custom: true, queryScoped: false,
+    fieldMeta: { label: "SIU referral", options: ["yes", "no"] } },
+  { name: "exposure", dataType: "integer", required: false, readonly: false,
+    custom: true, queryScoped: false, fieldMeta: { label: "Exposure" } },
+];
 
 describe("CreateCasesDialog", () => {
   it("submits the selected rows as a worklist with severity + a future due date", async () => {
@@ -209,5 +228,117 @@ describe("CreateCasesDialog", () => {
     await user.click(screen.getByRole("button", { name: /Create 2 cases/ }));
     await waitFor(() => expect(latest).not.toBeNull());
     expect(latest.input.customFields).toBeUndefined();
+  });
+
+  // ---- slice 3: AI autofill (suggests; never submits) ----------------------
+
+  it("fills drafted values into the form, marks them AI, and submits nothing on its own", async () => {
+    customFields = AI_FIELDS;
+    draftReply = {
+      fields: [
+        { name: "siu_referral", value: "yes", confidence: 0.82, sourceRef: "adjuster note" },
+        { name: "exposure", value: 9000, confidence: null, sourceRef: null },
+      ],
+      unfilled: [],
+      model: "llama3.2",
+      evidenceUsed: ["provided text"],
+    };
+    const user = userEvent.setup();
+    renderWithProviders(
+      <CreateCasesDialog open onOpenChange={() => {}}
+        datasetUrn="wr:t:dataset:dataset/ds-1" rows={ROWS} />,
+    );
+    await screen.findByLabelText(/SIU referral/);
+    await user.click(screen.getByRole("button", { name: "Draft with AI" }));
+    await user.click(screen.getByRole("button", { name: "Draft fields" }));
+
+    // The values land in the real widgets — editable, not a read-only preview.
+    await waitFor(() =>
+      expect((screen.getByLabelText(/SIU referral/) as HTMLSelectElement).value).toBe("yes"),
+    );
+    expect((screen.getByLabelText(/Exposure/) as HTMLInputElement).value).toBe("9000");
+    // ...and they are marked so the human knows what to check.
+    expect(screen.getAllByText("AI")).toHaveLength(2);
+    // The provenance the model gave is shown, not swallowed.
+    expect(screen.getByText(/from adjuster note/)).toBeInTheDocument();
+    // Nothing was created — drafting is a suggestion, the human still submits.
+    expect(latest).toBeNull();
+
+    // Only the form's own field names were offered to the model.
+    expect(draftVars.input.fieldNames).toEqual(["siu_referral", "exposure"]);
+    expect(draftVars.input.caseId).toBeUndefined();
+
+    await user.click(screen.getByRole("button", { name: /Create 2 cases/ }));
+    await waitFor(() => expect(latest).not.toBeNull());
+    expect(latest.input.customFields).toEqual({ siu_referral: "yes", exposure: 9000 });
+  });
+
+  it("sends the visible material — the selected row is seeded into the box, not attached invisibly", async () => {
+    customFields = AI_FIELDS;
+    const user = userEvent.setup();
+    renderWithProviders(
+      <CreateCasesDialog open onOpenChange={() => {}}
+        datasetUrn="wr:t:dataset:dataset/ds-1" rows={ROWS} />,
+    );
+    await screen.findByLabelText(/SIU referral/);
+    await user.click(screen.getByRole("button", { name: "Draft with AI" }));
+
+    const box = screen.getByLabelText("Material to draft from") as HTMLTextAreaElement;
+    expect(box.value).toContain("claim_id: CLM-1");
+    await user.clear(box);
+    await user.type(box, "Vendor resubmitted the same invoice.");
+    await user.click(screen.getByRole("button", { name: "Draft fields" }));
+
+    await waitFor(() => expect(draftVars).not.toBeNull());
+    // exactly what the user could see in the box
+    expect(draftVars.input.evidenceText).toBe("Vendor resubmitted the same invoice.");
+  });
+
+  it("drops the AI mark once the human edits the value", async () => {
+    customFields = AI_FIELDS;
+    draftReply = {
+      fields: [{ name: "exposure", value: 9000, confidence: null, sourceRef: null }],
+      unfilled: ["siu_referral"],
+      model: "llama3.2",
+      evidenceUsed: ["provided text"],
+    };
+    const user = userEvent.setup();
+    renderWithProviders(
+      <CreateCasesDialog open onOpenChange={() => {}}
+        datasetUrn="wr:t:dataset:dataset/ds-1" rows={ROWS} />,
+    );
+    await screen.findByLabelText(/SIU referral/);
+    await user.click(screen.getByRole("button", { name: "Draft with AI" }));
+    await user.click(screen.getByRole("button", { name: "Draft fields" }));
+
+    await waitFor(() => expect(screen.getAllByText("AI")).toHaveLength(1));
+    // The field the model declined is named back, not silently blank.
+    expect(screen.getByText(/Left blank: siu_referral/)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/Exposure/), "5");
+    await waitFor(() => expect(screen.queryByText("AI")).not.toBeInTheDocument());
+  });
+
+  it("surfaces the server's refusal verbatim instead of an empty draft", async () => {
+    customFields = AI_FIELDS;
+    const { GraphQLRequestError } = await import("@/lib/graphql/client");
+    draftError = new GraphQLRequestError([
+      {
+        message: "AI drafting is not configured on this deployment (AI_GATEWAY_VIRTUAL_KEY unset)",
+        extensions: { code: "INTERNAL_ERROR" },
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithProviders(
+      <CreateCasesDialog open onOpenChange={() => {}}
+        datasetUrn="wr:t:dataset:dataset/ds-1" rows={ROWS} />,
+    );
+    await screen.findByLabelText(/SIU referral/);
+    await user.click(screen.getByRole("button", { name: "Draft with AI" }));
+    await user.click(screen.getByRole("button", { name: "Draft fields" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "AI drafting is not configured on this deployment",
+    );
   });
 });

@@ -78,6 +78,13 @@ export interface Config {
   introspection: boolean;
   /** Per-downstream request timeout in ms (BFF-FR-032 / BR-4). */
   downstreamTimeoutMs: number;
+  /** ai-gateway DATA-plane virtual key (same pattern eval-service uses for its
+   * judge: Authorization = virtual key, X-Datacern-JWT = the caller's token).
+   * Unset disables AI drafting — the mutation then refuses with a clear
+   * message rather than silently returning empty suggestions. */
+  aiVirtualKey?: string;
+  /** Model alias sent to ai-gateway for drafting (its ladder resolves it). */
+  aiDraftModel: string;
   /** Origins allowed to call /graphql cross-origin (BRD 58 SEC-3). Always
    * includes ui-web's own dev origin as a floor; prod deployments add their
    * real ui-web origin(s) via CORS_ALLOWED_ORIGINS. Never '*' -- the BFF holds
@@ -160,6 +167,8 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     persistedQueriesOnly: bool("PERSISTED_QUERIES_ONLY", isProd),
     introspection: bool("INTROSPECTION", !isProd),
     downstreamTimeoutMs: Number(env("DOWNSTREAM_TIMEOUT_MS", "10000")),
+    aiVirtualKey: env("AI_GATEWAY_VIRTUAL_KEY", ""),
+    aiDraftModel: env("AI_DRAFT_MODEL", "datacern-auto")!,
     corsAllowedOrigins: (env("CORS_ALLOWED_ORIGINS", "http://localhost:3000") ?? "")
       .split(",")
       .map((o) => o.trim())

@@ -98,6 +98,7 @@ import type {
   CreateDispositionInput,
   UpdateDispositionInput,
   CreateCaseFieldInput,
+  DraftCaseFieldsInput,
   CaseTriggerInput,
   CreateCaseStreamInput,
   UpdateCaseFieldInput,
@@ -1814,6 +1815,25 @@ export function useCaseForm(mode: "create" | "update" = "create", queryUrn?: str
     queryFn: () =>
       graphqlRequest<ops.CaseFormResult>(ops.CASE_FORM, { mode, queryUrn }).then(
         (r) => r.caseForm,
+      ),
+  });
+}
+
+/**
+ * Ask the AI to draft values for the workspace's own intake fields.
+ *
+ * A SUGGESTION call, deliberately NOT a query: it is an explicit user action
+ * ("Draft with AI"), it spends model budget on the caller's tenant through
+ * ai-gateway, and it must never run on render or be replayed from cache. It
+ * writes nothing — the drafted values land in the form AI-marked and editable,
+ * and the human's submit remains the signed action. So: no cache
+ * invalidation, no optimistic state.
+ */
+export function useDraftCaseFields() {
+  return useMutation({
+    mutationFn: (input: DraftCaseFieldsInput) =>
+      graphqlRequest<ops.DraftCaseFieldsResult>(ops.DRAFT_CASE_FIELDS, { input }).then(
+        (r) => r.draftCaseFields,
       ),
   });
 }

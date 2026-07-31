@@ -2020,6 +2020,30 @@ export const typeDefs = gql`
 
   "One embedded field def on a typed case schema (case-service inc10)."
   type CaseSchemaField { name: String! dataType: String label: String required: Boolean }
+  """One AI-drafted field value. 'value' is a SUGGESTION — it lands in the form
+  as editable, AI-marked text and is never auto-submitted; the human's submit is
+  the signed action. 'sourceRef' names the evidence the value came from so a
+  reviewer (and an auditor) can trace it."""
+  type DraftedField {
+    name: String!
+    value: JSON
+    confidence: Float
+    """Which evidence this was drawn from (evidence id / label), or null when
+    the model did not attribute it."""
+    sourceRef: String
+  }
+  """Result of draftCaseFields: per-field suggestions plus what they were drawn
+  from. 'unfilled' names fields the model declined to guess — an empty draft is
+  reported honestly rather than padded with invented values."""
+  type CaseFieldDraft {
+    fields: [DraftedField!]!
+    unfilled: [String!]!
+    """Model alias that produced the draft (from the gateway's response)."""
+    model: String
+    """Evidence ids actually sent to the model."""
+    evidenceUsed: [String!]!
+  }
+
   """One field of the case FORM MODEL (case-service GET /cases/form). Platform
   defaults and workspace custom fields are shaped identically so a schema-driven
   renderer treats them uniformly; 'custom' distinguishes their origin and
@@ -2154,6 +2178,18 @@ export const typeDefs = gql`
     undeclared fields onto a case."""
     customFields: JSON
     rows: [CaseRowInput!]!
+  }
+
+  """Ask the model to fill a form's fields from evidence. Either 'caseId' (use
+  the case's attached evidence) or 'evidenceText' (unsaved intake text, e.g. a
+  pasted document) must be given; fields come from the workspace's form model."""
+  input DraftCaseFieldsInput {
+    caseId: ID
+    evidenceText: String
+    queryUrn: String
+    """Restrict drafting to these field names; empty = every custom field in
+    the workspace's create-mode form model."""
+    fieldNames: [String!]
   }
 
   type CreatedCase { id: ID! caseNumber: Int status: String dedupKey: String recurrenceOf: ID }
@@ -5246,6 +5282,12 @@ export const typeDefs = gql`
     the created cases plus the rows that deduplicated to an existing case.
     Needs case.case.create."""
     createCases(input: CreateCasesInput!, idempotencyKey: String): CreateCasesResult!
+    """Draft values for a case's custom fields from its attached evidence
+    (schema-driven forms). Returns SUGGESTIONS only — nothing is written; the
+    human reviews the AI-marked values and submits, and that submit is the
+    signed action. Runs through ai-gateway on the caller's tenant, so the draft
+    is budgeted, guardrailed and metered like any other model call."""
+    draftCaseFields(input: DraftCaseFieldsInput!): CaseFieldDraft!
 
     """Update a case (case-service PATCH /cases/{id}). Returns the full resource."""
     updateCase(id: ID!, patch: CasePatchInput!, idempotencyKey: String!): Case!

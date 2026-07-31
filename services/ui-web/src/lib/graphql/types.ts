@@ -1513,6 +1513,33 @@ export interface CaseForm {
   customFields: CaseFormField[];
 }
 
+/** One AI-drafted field value. A SUGGESTION: it lands in the form AI-marked and
+ * editable, and is never submitted without a human. `sourceRef` is the model's
+ * own attribution (which part of the material it drew from), null when it did
+ * not attribute. */
+export interface DraftedField {
+  name: string;
+  value: unknown;
+  confidence?: number | null;
+  sourceRef?: string | null;
+}
+
+/** The draft result. `unfilled` names fields the model declined — an honest
+ * empty answer, not a padded one. */
+export interface CaseFieldDraft {
+  fields: DraftedField[];
+  unfilled: string[];
+  model?: string | null;
+  evidenceUsed: string[];
+}
+
+export interface DraftCaseFieldsInput {
+  caseId?: ID;
+  evidenceText?: string;
+  queryUrn?: string;
+  fieldNames?: string[];
+}
+
 /** A governed typed case SCHEMA — a named case TYPE binding a field set. */
 export interface CaseSchema {
   id: ID;

@@ -25,8 +25,21 @@ Endpoints: `POST/GET /graphql`, `GET /healthz`, `GET /readyz`, `GET /metrics`.
 
 ### Configuration (env)
 
-The BFF holds **no credentials**. It is configured only with downstream base
-URLs, the identity-service JWKS URL, and the realtime-hub URL.
+The BFF holds **one** credential and no others: the optional ai-gateway virtual
+key used by `draftCaseFields` (AI form autofill). Everything else is downstream
+base URLs, the identity-service JWKS URL, and the realtime-hub URL — the BFF
+mints no tokens and forwards the caller's JWT verbatim.
+
+Why that one exists: ai-gateway's DATA plane requires a virtual key as the
+bearer **and** the caller's JWT in `X-Datacern-JWT`, and it rejects the call
+unless the key's tenant equals the JWT's tenant
+(`services/ai-gateway/app/api/middleware.py`). So drafting is budgeted,
+guardrailed and metered on the CALLER's tenant — and a single configured key
+serves exactly one tenant. Same wiring as eval-service's LLM judge
+(`EVAL_AI_GATEWAY_VIRTUAL_KEY`). Multi-tenant SaaS needs per-tenant key
+brokering (the SPIFFE mint path, AIG-FR-032); until then a caller from another
+tenant gets a named refusal, and an unset key disables drafting with an explicit
+error rather than an empty draft.
 
 | Var | Default | Purpose |
 |---|---|---|
@@ -37,6 +50,9 @@ URLs, the identity-service JWKS URL, and the realtime-hub URL.
 | `JWT_ISSUER` / `JWT_AUDIENCE` | — | optional `iss`/`aud` checks |
 | `REALTIME_HUB_URL` | `http://localhost:9020` | surfaced inside `StreamHandle` fields |
 | `IDENTITY_URL`, `DATASET_URL`, `CASE_URL`, `CHART_URL`, `USAGE_URL`, `EXPERIMENT_URL`, `AGENT_RUNTIME_URL` | localhost defaults | downstream service roots |
+| `AI_GATEWAY_URL` | `http://localhost:8312` | ai-gateway root (used by AI admin reads and by form drafting) |
+| `AI_GATEWAY_VIRTUAL_KEY` | — | ai-gateway DATA-plane virtual key for `draftCaseFields`. Unset = AI form autofill is off (the mutation says so). Single-tenant: the key's tenant must match the caller's |
+| `AI_DRAFT_MODEL` | `datacern-auto` | model alias used for form drafting |
 | `DOWNSTREAM_TIMEOUT_MS` | `10000` | per-downstream timeout (BR-4) |
 | `MAX_DEPTH` / `MAX_ALIASES` / `MAX_ROOT_FIELDS` / `MAX_COST` | `10` / `20` / `5` / `5000` | static query limits (BFF-FR-041) |
 

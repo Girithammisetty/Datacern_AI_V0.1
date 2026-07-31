@@ -19,6 +19,7 @@ import type {
   CaseTrigger,
   CaseSchema,
   CaseForm,
+  CaseFieldDraft,
   LabelOverride,
   CaseSlaPolicy,
   Chart,
@@ -1793,6 +1794,22 @@ export const CASE_FORM = /* GraphQL */ `
 `;
 export interface CaseFormResult {
   caseForm: CaseForm;
+}
+
+/** AI drafting (schema-driven forms, slice 3). SUGGESTS only — the mutation
+ * writes nothing; the human's create/update is still the signed action. */
+export const DRAFT_CASE_FIELDS = /* GraphQL */ `
+  mutation DraftCaseFields($input: DraftCaseFieldsInput!) {
+    draftCaseFields(input: $input) {
+      fields { name value confidence sourceRef }
+      unfilled
+      model
+      evidenceUsed
+    }
+  }
+`;
+export interface DraftCaseFieldsResult {
+  draftCaseFields: CaseFieldDraft;
 }
 
 export const CASE_SCHEMAS = /* GraphQL */ `

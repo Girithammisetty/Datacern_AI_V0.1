@@ -8,6 +8,7 @@ import type { GraphQLContext } from "../context.js";
 import { DownstreamError, ErrorCode, gqlError } from "../errors/errors.js";
 import { toConnection, toLimitCursor, type ConnectionArgs } from "../pagination.js";
 import { JSONScalar, DateTimeScalar, DateScalar } from "../schema/scalars.js";
+import { draftCaseFields, type DraftCaseFieldsArgs } from "./draftFields.js";
 import type { ChartDataDTO, ChartDTO } from "../clients/chart.js";
 import type { ChartSourceInputBody } from "../clients/chart.js";
 import { budgetScopeString } from "../clients/usage.js";
@@ -2696,6 +2697,12 @@ export const resolvers = {
       );
       return mapCase(ctx, d);
     },
+
+    draftCaseFields: async (
+      _p: unknown,
+      a: { input: DraftCaseFieldsArgs },
+      ctx: GraphQLContext,
+    ) => draftCaseFields(a.input, ctx),
 
     createCases: async (
       _p: unknown,

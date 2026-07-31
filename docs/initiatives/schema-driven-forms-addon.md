@@ -106,13 +106,13 @@ one bff form query, and one drafting route.
 
 | # | Slice | State |
 |---|---|---|
-| 1 | `SchemaForm` renderer — pure, typed widgets from a field set + `field_meta` layout hints + required-validation; unit-tested | **this commit** |
-| 2 | Wire `SchemaForm` into a typed **New case** flow (pick a case type → render its fields → submit through the existing create path) + bff `caseForm` query | designed |
-| 3 | **AI autofill** — `draftCaseFields` route (evidence + schema → per-field suggestions w/ provenance) + `AiFillPanel`; suggestions are editable, AI-marked, never auto-submitted | designed |
+| 1 | `SchemaForm` renderer — pure, typed widgets from a field set + `field_meta` layout hints + required-validation; unit-tested | **shipped** |
+| 2 | Wire `SchemaForm` into a typed **New case** flow (pick a case type → render its fields → submit through the existing create path) + bff `caseForm` query | **shipped** |
+| 3 | **AI autofill** — `draftCaseFields` route (evidence + schema → per-field suggestions w/ provenance) + `AiFillPanel`; suggestions are editable, AI-marked, never auto-submitted | **shipped** |
 | 4 | `field_meta` layout hints end-to-end (group/order/widget/help) + a pack shipping a custom case-type form as its template | designed |
 | 5 | Live journey (`make journey-forms`): define a case type with custom fields → render → AI-draft from a seeded evidence doc → human edits one field → submit → the case row carries exactly the submitted custom_fields, and the audit trail shows a human actor | designed |
 
-## Slice 1 (this commit) — the schema-driven form renderer
+## Slice 1 — the schema-driven form renderer
 
 `SchemaForm` (ui-web) is a **pure** component: given a normalized field set it
 renders one typed widget per field — string→Input, text→Textarea,
@@ -128,3 +128,70 @@ values, and the human edits from there.
 Verification: unit tests cover every data type's widget + value round-trip,
 enum options from `field_meta`, required-field validation (empty vs filled),
 numeric coercion/rejection, and the layout-hint label/help rendering.
+
+## Slice 2 — the typed create flow (shipped)
+
+`GET /cases/form` already existed in case-service and was reachable by nothing.
+Slice 2 exposes it as `caseForm(mode, queryUrn)` on the bff and renders its
+`custom_fields` through `SchemaForm` inside **Create cases**. A tenant adds a
+field in Case settings and it appears on the intake form with no code change.
+
+One gap had to be closed for any of it to be usable: `CreateCasesInput` had no
+way to carry custom-field values, so the field catalog was decorative — you
+could declare a field and never fill it. `customFields: JSON` now threads
+through the bff to case-service's `custom_fields`, which validates every key
+against the catalog and 422s an undeclared one (surfaced verbatim in the UI).
+Numeric fields are coerced client-side before submit, so a typed catalog never
+receives a formatted string.
+
+## Slice 3 — AI autofill (shipped)
+
+`draftCaseFields(input)` returns per-field **suggestions** and writes nothing.
+The governed shape:
+
+- the call goes through **ai-gateway on the caller's tenant** — virtual key as
+  the bearer, the caller's JWT as `X-Datacern-JWT` — so a draft is budgeted,
+  guardrailed and metered like any other model call. There is no side-door LLM
+  path in the bff;
+- the model is given only the field catalog and told to **omit** anything the
+  material does not support. A name outside the catalog is discarded server-side,
+  and a value that cannot be coerced to the declared type is **dropped** and the
+  field reported in `unfilled` — an empty draft is reported honestly rather than
+  padded;
+- drafted values land in `SchemaForm` **AI-marked and editable**. The panel never
+  submits; editing a value drops its AI mark. The human's create is still the
+  signed action.
+
+### What it reads — and what it does not
+
+Drafting reads the case's STRUCTURED context (description + display projection),
+the **filenames** of attached evidence, and any text the user pastes into the
+panel (shown in an editable box, so the material sent is exactly what they can
+see — nothing is attached invisibly). It does **not** download and parse evidence
+blobs: the bff has no evidence-byte route, and inventing values for a human about
+to sign them is worse than a blank box. Reading evidence bytes is follow-on work,
+not a claim made here.
+
+### Deployment limit (real, and enforced)
+
+ai-gateway's data plane requires the virtual key's tenant to equal the caller
+JWT's tenant (`app/api/middleware.py::_data_plane`). A single configured
+`AI_GATEWAY_VIRTUAL_KEY` therefore serves exactly **one** tenant — the same
+wiring eval-service's LLM judge uses today. So:
+
+- key unset → the mutation says *"AI drafting is not configured on this
+  deployment"*, not an empty draft that reads as "the AI found nothing";
+- key belongs to another tenant → a named refusal naming that cause, not a bare
+  401.
+
+Multi-tenant SaaS needs per-tenant key brokering via the SPIFFE mint path
+(AIG-FR-032, as agent-runtime does for per-run keys). That is **not** built;
+until it is, AI autofill is a single-tenant / POC-grade capability and should be
+sold as such.
+
+Verification: 9 bff unit tests at the fetch boundary (typed coercion, catalog
+enforcement, fence-tolerant parsing, prose → empty draft, pasted-text-only
+drafting, the data-plane auth headers, unconfigured and cross-tenant refusals)
+and 4 ui-web tests (values land in the real widgets, AI marks appear and drop on
+edit, the material sent equals the visible box, the server's refusal is shown
+verbatim).
