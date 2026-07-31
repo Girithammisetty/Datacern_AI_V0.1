@@ -22,10 +22,13 @@ LOOKS real:
     configuration nobody re-checked.
 
 The arc:
+  0. LAND      the tenant's own data arrives first — the pack ships ZERO seed
+               rows, so its dataset components are BINDING CONTRACTS and a
+               tenant with nothing to bind to cannot install it (by design)
   1. GATE      a fresh tenant without the pack SKU is REFUSED (403 naming the
                pack, or 503 fail-closed) and nothing lands in Core
-  2. PLAN      with the SKU granted, dry_run returns a real plan and STILL
-               materializes nothing
+  2. PLAN      unbound, the plan says requires_binding; bound, it says bind —
+               and with the SKU granted, dry_run STILL materializes nothing
   3. INSTALL   execute → the pack's declared case fields, dispositions and
                roles exist as rows in case-service / rbac
   4. LAYOUT    the installed case fields carry the pack's field_meta layout
@@ -43,6 +46,7 @@ Exit 0 = every claim held. Non-zero = at least one did not.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -102,6 +106,133 @@ def pack_component(rel: str):
     return yaml.safe_load((PACK_DIR / rel).read_text())
 
 
+# ---- step 0: the tenant's own data --------------------------------------
+# payer-fwa-siu ships no seed rows (the no-dummy-data rule), so every entry in
+# data/datasets.yaml is a BINDING CONTRACT: a dataset name plus the exact
+# landing-shape columns the SIU workflow needs. At install the tenant either
+# names a real dataset per declaration (`dataset_bindings`) or lets pack-service
+# match one by name; either way pack-service validates the required columns and
+# fails closed with the missing list. A tenant holding no data therefore CANNOT
+# install this pack — that is the contract working, not a defect, and the first
+# CI run of this journey on main proved it by failing exactly that way.
+#
+# So the journey does what a customer does before installing a vertical: lands
+# its data. Two deliberate choices:
+#   * the datasets are named for the TENANT (`siu-<identity>-<run>`), not for
+#     the pack, so same-name reuse cannot silently do the work and the explicit
+#     dataset_bindings parameter is what actually gets exercised;
+#   * the VALUES below carry no assertion in this file — only the column NAMES
+#     are contractual. This is tenant data the test creates, not seed data the
+#     pack ships, so the no-dummy-data rule is untouched.
+
+# Value domains documented in the pack's own datasets.yaml, so a landed row is
+# a shape the pack's queries could actually match rather than noise.
+_DOMAINS = {
+    "fwa_flag": "unbundling", "fwa_typology": "upcoding",
+    "lead_source": "nightly_scan", "priority": "high", "outcome": "confirmed",
+    "status": "open_investigation", "leie_status": "clear",
+    "recovery_method": "offset", "flagged": "true", "outlier_flag": "true",
+}
+
+
+def sample_value(col: str) -> str:
+    if col in _DOMAINS:
+        return _DOMAINS[col]
+    if col.endswith("_date"):
+        return "2026-01-15"
+    if col.endswith("_month"):
+        return "2026-01"
+    if (col.endswith(("_amount", "_count", "_score", "_days", "_share", "_sigma"))
+            or col.startswith(("total_", "avg_", "max_")) or col == "units"):
+        return "1"
+    return f"{col}-1"
+
+
+def land_dataset(tok: str, tenant: str, ws: str, name: str, columns: list[str]) -> str | None:
+    """Ingest a one-row CSV under `name` and wait until it is readable THE WAY
+    pack-service will read it — a 1-row browse that returns column names, which
+    is what bind_dataset validates required_columns against. Returns the dataset
+    URN in pack-service's own form, or None with the reason printed."""
+    blob = (",".join(columns) + "\n"
+            + ",".join(sample_value(col) for col in columns) + "\n").encode()
+
+    r = api("POST", f"{c.INGESTION}/api/v1/ingestions", tok,
+            {"ingestion_mode": "file_upload", "file_format": "csv",
+             "workspace_id": ws, "new_dataset": {"name": name},
+             "skip_profiling": True})
+    if r.status_code not in (200, 201, 202):
+        print(f"       ingestion create {r.status_code}: {r.text[:160]}")
+        return None
+    ing_id = (r.json().get("data") or r.json()).get("id")
+
+    r = api("POST", f"{c.INGESTION}/api/v1/uploads", tok,
+            {"ingestion_id": ing_id, "bytes_total": len(blob)})
+    if r.status_code not in (200, 201):
+        print(f"       open upload {r.status_code}: {r.text[:160]}")
+        return None
+    up = r.json().get("data") or {}
+    upload_id = up.get("id") or up.get("upload_id")
+
+    sha = hashlib.sha256(blob).hexdigest()
+    r = requests.put(f"{c.INGESTION}/api/v1/uploads/{upload_id}/parts/1", data=blob,
+                     timeout=300, headers={"Authorization": f"Bearer {tok}",
+                                           "Content-SHA256": sha})
+    if r.status_code not in (200, 201):
+        print(f"       put part {r.status_code}: {r.text[:160]}")
+        return None
+    etag = (r.json().get("data") or {}).get("etag")
+
+    r = api("POST", f"{c.INGESTION}/api/v1/uploads/{upload_id}/complete", tok,
+            {"parts": [{"n": 1, "etag": etag, "size": len(blob)}], "sha256": sha})
+    if r.status_code not in (200, 201, 202):
+        print(f"       complete {r.status_code}: {r.text[:160]}")
+        return None
+
+    for _ in range(60):
+        g = api("GET", f"{c.INGESTION}/api/v1/ingestions/{ing_id}", tok)
+        st = ((g.json().get("data") or {}) if g.status_code == 200 else {}).get("status")
+        if st in ("completed", "succeeded"):
+            break
+        if st in ("failed", "error"):
+            print(f"       ingestion {name!r} failed: {g.text[:160]}")
+            return None
+        time.sleep(2)
+    else:
+        print(f"       ingestion {name!r} never completed")
+        return None
+
+    # dataset-service registers the dataset from the ingestion.completed Kafka
+    # event — poll for the row the CONSUMER created, not an API create.
+    ds_id = None
+    for _ in range(60):
+        g = api("GET", f"{c.DATASET}/api/v1/datasets?workspace_id={ws}", tok)
+        if g.status_code == 200:
+            ds_id = next((d.get("id") for d in g.json().get("data", [])
+                          if d.get("name") == name), None)
+        if ds_id:
+            break
+        time.sleep(2)
+    if not ds_id:
+        print(f"       dataset {name!r} never registered in dataset-service")
+        return None
+
+    # The browse is the real gate: bind_dataset treats unreadable columns as
+    # unverifiable and fails the component, so waiting on the dataset ROW alone
+    # would just move the failure into the install.
+    for _ in range(60):
+        g = api("GET", f"{c.DATASET}/api/v1/datasets/{ds_id}/rows?limit=1", tok)
+        if g.status_code == 200 and isinstance(
+                (g.json().get("data") or g.json()).get("columns"), list):
+            return f"wr:{tenant}:dataset:dataset/{ds_id}"
+        time.sleep(2)
+    print(f"       dataset {name!r} has no readable version (columns unverifiable)")
+    return None
+
+
+def dataset_actions(plan: list[dict]) -> set[str]:
+    return {op.get("action") for op in plan if op.get("kind") == "datasets"}
+
+
 def field_count(tenant: str, ws: str) -> int:
     return int(psql("SELECT count(*) FROM case_fields WHERE tenant_id = "
                     f"'{tenant}' AND workspace_id = '{ws}' AND deleted_at IS NULL",
@@ -157,6 +288,20 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
     if not check(warm, "rbac projection materialized (installs list stops 403ing)"):
         return bail("rbac projection")
 
+    # ---- 0. LAND: the tenant's data, under the tenant's own names -----------
+    declared_datasets = pack_component("data/datasets.yaml")
+    bindings: dict[str, str] = {}
+    for ds in declared_datasets:
+        urn = land_dataset(tok, tenant, ws, f"siu-{ds['identity']}-{RUN}",
+                           ds["required_columns"])
+        if urn:
+            bindings[ds["identity"]] = urn
+    if not check(len(bindings) == len(declared_datasets),
+                 f"the tenant landed all {len(declared_datasets)} datasets the pack requires",
+                 f"bound={sorted(bindings)} declared="
+                 f"{sorted(d['identity'] for d in declared_datasets)}"):
+        return bail("tenant data not landed")
+
     # ---- 1. GATE: refused, and nothing lands --------------------------------
     before_fields = field_count(tenant, ws)
     r = api("POST", f"{c.PACK}/api/v1/installs", tok, {"pack": PACK, "workspace_id": ws})
@@ -196,6 +341,22 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
     kinds = {op.get("kind") for op in plan}
     check("case_fields" in kinds and "dispositions" in kinds,
           "the plan names the pack's real components", f"kinds={sorted(kinds)}")
+
+    # That plan was computed WITHOUT bindings, and the tenant's datasets are
+    # named for the tenant — so nothing resolves by name and the plan must say
+    # so up front rather than discovering it mid-apply.
+    check(dataset_actions(plan) == {"requires_binding"},
+          "unbound, the plan says requires_binding (the contract is stated, not discovered)",
+          f"dataset actions={sorted(dataset_actions(plan))}")
+
+    r = api("POST", f"{c.PACK}/api/v1/installs", tok,
+            {"pack": PACK, "workspace_id": ws, "dry_run": True,
+             "dataset_bindings": bindings})
+    bound_plan = (r.json().get("data") or {}).get("plan") or [] if r.status_code == 200 else []
+    check(bool(bound_plan) and dataset_actions(bound_plan) == {"bind"},
+          "bound, the same plan says bind (dataset_bindings is honoured, not ignored)",
+          f"{r.status_code} dataset actions={sorted(dataset_actions(bound_plan))}")
+
     if not check(field_count(tenant, ws) == before_fields,
                  "the DRY RUN materialized nothing (a plan is not a soft install)"):
         return bail("dry run materialized")
@@ -206,7 +367,8 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
     # EXECUTE (unlike the dry run above) is the call that actually checks it.
     r = None
     for _ in range(30):
-        r = api("POST", f"{c.PACK}/api/v1/installs", tok, {"pack": PACK, "workspace_id": ws})
+        r = api("POST", f"{c.PACK}/api/v1/installs", tok,
+                {"pack": PACK, "workspace_id": ws, "dataset_bindings": bindings})
         if r.status_code != 403:
             break
         time.sleep(2)
