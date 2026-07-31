@@ -136,7 +136,21 @@ print(seed if all(v in ("succeeded","failed") for v in steps.values()) or seed i
 ' 2>/dev/null || echo '?')"
       case "$STATE" in
         succeeded) ok "SeedDemoContent succeeded"; break ;;
-        failed)    printf '%s' "$STEPS" | head -c 600; die "SeedDemoContent FAILED — see identity-service logs (deploy/e2e/logs/identity.log)" ;;
+        failed)
+          # Print the FAILING step's own error, not the first 600 bytes of the
+          # steps array — that truncates mid-token and tells you nothing.
+          printf '%s' "$STEPS" | "$PY" -c '
+import json, sys
+for st in (json.load(sys.stdin).get("steps") or []):
+    if st.get("status") == "failed":
+        print(f"  step   : {st.get(\"step_name\")}")
+        print(f"  attempt: {st.get(\"attempt\")}")
+        print(f"  error  : {st.get(\"error\") or st.get(\"detail\") or \"(none recorded)\"}")
+' 2>/dev/null || printf '%s\n' "$STEPS"
+          die "SeedDemoContent FAILED. The seeding subprocess output is in deploy/e2e/logs/identity.log:
+    grep -A20 demo_seed_runner deploy/e2e/logs/identity.log | tail -40
+  A ModuleNotFoundError there means DEMO_SEED_PYTHON is not pointing at the
+  harness venv (boot_services.sh sets it; an older boot did not)." ;;
       esac
       sleep 2
     done
