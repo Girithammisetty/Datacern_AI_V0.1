@@ -10,6 +10,7 @@ from app.api.auth import principal_of
 from app.api.schemas import run_view, session_view
 from app.domain.entities import now
 from app.domain.errors import NotFound, ValidationFailed
+from app.graphs.meta_router import ROUTABLE_AGENT_KEYS
 from app.runtime.orchestrator import Orchestrator
 
 router = APIRouter(prefix="/api/v1")
@@ -27,6 +28,15 @@ def _inputs_from_body(body: dict, tenant_id: str) -> dict:
     ctx = meta.get("context_urn")
     if ctx and ":case/" in ctx:
         inputs["case_id"] = ctx.split(":case/")[-1]
+    # Non-binding routing prior from the caller's current screen (meta-router
+    # only; every other graph ignores it). Clamped to the routable candidate set
+    # HERE rather than trusted, because it is interpolated into the classifier
+    # prompt: an arbitrary caller string would be a prompt-injection vector, and
+    # a hint naming a non-routable agent (case-triage, ml-engineer) would invite
+    # the router past the deliberate exclusions in its own allow-list.
+    hint = meta.get("route_hint")
+    if isinstance(hint, str) and hint in ROUTABLE_AGENT_KEYS:
+        inputs["route_hint"] = hint
     inputs.update(meta.get("inputs") or {})
     return inputs
 

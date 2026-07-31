@@ -9,7 +9,7 @@ import { AiDisclosure, AiLabel } from "@/components/primitives/AiLabel";
 import { UrnLink } from "@/components/primitives/UrnLink";
 import { useCopilot } from "@/stores/ui";
 import { useCopilotThread } from "./useCopilotThread";
-import { agentKeyForPath } from "@/lib/agentic/agentKeys";
+import { COPILOT_ROUTER_AGENT_KEY, routeHintForPath } from "@/lib/agentic/agentKeys";
 import { routeUrnFor } from "@/lib/urn";
 import { t } from "@/lib/i18n/messages";
 import { useSession } from "@/lib/session/SessionContext";
@@ -27,10 +27,11 @@ export function CopilotDrawer({
   agentKey: agentKeyProp,
 }: {
   budgetExhausted?: boolean;
-  /** Explicit specialist override (Tier 2b). Defaults to the current route's
-   * module specialist (agentKeyForPath): /data → onboarding, /ml →
-   * model-training (/ml/inference → inference), /dashboards →
-   * dashboard-designer; elsewhere the default copilot agent. */
+  /** Explicit specialist override (Tier 2b) — pins the drawer to one agent and
+   * skips intent routing. Defaults to `meta-router`, which classifies every
+   * turn and delegates, so the agent follows what the user ASKS rather than
+   * which screen they happen to be on. The route's specialist still rides along
+   * as a non-binding hint (routeHintForPath). */
   agentKey?: string | null;
 }) {
   const { open, width, setOpen, setWidth } = useCopilot();
@@ -39,9 +40,12 @@ export function CopilotDrawer({
   const [input, setInput] = useState("");
   // Context URN derived from the current route, defaulting to the workspace.
   const contextUrn = routeUrnFor(pathname, session.tenantId) ?? `wr:${session.tenantId}:workspace:${session.workspaceId}`;
-  // Module specialist for the current route (real agent-runtime agent key).
-  const agentKey = agentKeyProp !== undefined ? agentKeyProp : agentKeyForPath(pathname);
-  const { messages, streaming, send } = useCopilotThread(contextUrn, agentKey);
+  // Intent decides the specialist, not the screen: talk to the router unless a
+  // caller pinned an agent explicitly. The route's specialist goes along as a
+  // hint the router may use to break ties.
+  const agentKey = agentKeyProp !== undefined ? agentKeyProp : COPILOT_ROUTER_AGENT_KEY;
+  const routeHint = routeHintForPath(pathname);
+  const { messages, streaming, send } = useCopilotThread(contextUrn, agentKey, routeHint);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

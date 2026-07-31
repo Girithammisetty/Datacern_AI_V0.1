@@ -180,3 +180,98 @@ def test_meta_router_toolset_covers_every_routable_delegate():
             assert tool["tool_id"] in router_tools, (
                 f"{key} is routable and can emit {tool['tool_id']}, which is not in "
                 f"meta-router's declared toolset — its proposals would be rejected")
+
+
+# ---- route hint: the screen breaks ties, never overrides a clear request -----
+#
+# Routing used to be decided ENTIRELY by the UI route: the copilot drawer bound
+# its agent to the pathname, so a dashboard question asked from a case page kept
+# answering as the case page's agent and nothing ever re-routed mid-thread. The
+# drawer now talks to this router every turn and passes the screen as a hint.
+# A hint that could override the text would just reintroduce the original bug in
+# a new place, so these tests pin that it stays subordinate to intent.
+
+async def test_route_hint_reaches_the_classifier_prompt():
+    llm = _SequencedLlm([
+        '{"agent_key":"inference","confidence":0.9,"rationale":"scoring"}',
+        "Scoring job proposed.",
+    ])
+    deps = GraphDeps(llm=llm, memory=FakeMemory(), prompt_params={}, obo_token="tok")
+
+    await run_meta_router(deps, {
+        "tenant_id": TENANT_A, "query": "run it again", "route_hint": "inference"})
+
+    classify_prompt = llm.calls[0]["messages"][-1]["content"]
+    assert "run it again" in classify_prompt
+    assert "inference" in classify_prompt
+    # It must be presented as a tie-breaker, not as the answer.
+    assert "ONLY to break a tie" in classify_prompt
+
+
+async def test_a_clear_request_routes_against_the_hint():
+    """The bug this whole change exists to fix: being on the dashboards screen
+    must not stop a data question from reaching analytics."""
+    llm = _SequencedLlm([
+        '{"agent_key":"analytics","confidence":0.95,"rationale":"data question"}',
+        "Approvals rose 12% last week.",
+    ])
+    deps = GraphDeps(llm=llm, memory=FakeMemory(), prompt_params={}, obo_token="tok")
+
+    outcome = await run_meta_router(deps, {
+        "tenant_id": TENANT_A,
+        "query": "why did approvals spike last week?",
+        "route_hint": "dashboard-designer",
+    })
+
+    assert outcome.structured["routed_to"] == "analytics"
+
+
+async def test_hint_is_not_forwarded_to_the_delegate():
+    """The delegate IS the routing decision; passing the prior on invites it to
+    re-litigate a choice already made."""
+    seen: dict = {}
+
+    async def _spy_runner(deps, inputs):  # noqa: ANN001
+        seen.update(inputs)
+        from app.graphs.base import GraphOutcome
+        return GraphOutcome(final_text="ok", write_intent=None, usage={}, trace=[],
+                            structured={}, evidence=[])
+
+    import app.graphs as graphs_pkg
+    original = graphs_pkg.RUNNERS["analytics"]
+    graphs_pkg.RUNNERS["analytics"] = ("analytics.v1", _spy_runner)
+    try:
+        llm = _SequencedLlm(['{"agent_key":"analytics","confidence":0.9,"rationale":"q"}'])
+        deps = GraphDeps(llm=llm, memory=FakeMemory(), prompt_params={}, obo_token="tok")
+        await run_meta_router(deps, {
+            "tenant_id": TENANT_A, "query": "how many cases?", "route_hint": "onboarding"})
+    finally:
+        graphs_pkg.RUNNERS["analytics"] = original
+
+    assert "route_hint" not in seen
+    assert seen.get("query") == "how many cases?"  # everything else still forwarded
+
+
+async def test_routing_trace_records_whether_a_hint_was_in_play():
+    llm = _SequencedLlm([
+        '{"agent_key":"analytics","confidence":0.9,"rationale":"q"}', "answer"])
+    deps = GraphDeps(llm=llm, memory=FakeMemory(), prompt_params={}, obo_token="tok")
+
+    outcome = await run_meta_router(deps, {
+        "tenant_id": TENANT_A, "query": "how many cases?", "route_hint": "onboarding"})
+
+    routed = [e for e in outcome.trace if e.get("event") in ("routed", "routed_by_fallback")]
+    assert routed and routed[0]["route_hint"] == "onboarding"
+
+
+async def test_unroutable_hint_is_ignored_not_interpolated():
+    """case-triage/ml-engineer are excluded from free-text routing on purpose;
+    a hint naming one must not smuggle it into the classifier prompt."""
+    llm = _SequencedLlm([
+        '{"agent_key":"analytics","confidence":0.9,"rationale":"q"}', "answer"])
+    deps = GraphDeps(llm=llm, memory=FakeMemory(), prompt_params={}, obo_token="tok")
+
+    await run_meta_router(deps, {
+        "tenant_id": TENANT_A, "query": "check this", "route_hint": "ml-engineer"})
+
+    assert "ml-engineer" not in llm.calls[0]["messages"][-1]["content"]
