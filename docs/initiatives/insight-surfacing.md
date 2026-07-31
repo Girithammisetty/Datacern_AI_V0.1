@@ -1,6 +1,6 @@
 # Insight surfacing — telling the user what changed, not just where to click
 
-**Status:** slice 1 in progress
+**Status:** slices 1–2 shipped
 **Problem owner:** every persona in every vertical pack
 
 ## 1. The gap, stated precisely
@@ -66,7 +66,7 @@ ask-your-data), not this one.
 | # | Slice | State |
 |---|---|---|
 | 1 | `computeInsights()` — a pure, unit-tested function over the live-case window + an `InsightsCard` on home, capability-gated, honest about bounds | **this commit** |
-| 2 | Rank + route: severity-weighted ordering, each insight deep-links to the filtered worklist that proves it | designed |
+| 2 | Rank + route: severity-weighted ordering, each insight deep-links to the filtered worklist that proves it | **this commit** |
 | 3 | A real aggregate (`/cases/stats` facets) so counts become exact and the window disappears | designed |
 | 4 | Non-case signals on the same surface: model drift (experiment-service), failed ingestions, auto-cases opened since last visit | designed |
 | 5 | `make journey-insight`: seed a tenant with known-shape cases → assert the home API returns exactly the expected insights (no UI screenshot assertions) | designed |
@@ -92,3 +92,45 @@ Design rules, all enforced by tests:
   insights at all rather than an empty card implying zero work.
 - **Never blocks the page.** Insight failure degrades to silence with the
   existing decision-queue and approvals cards intact; it is additive.
+
+## Slice 2 (this commit) — ranking, and links that are evidence
+
+**One predicate, two consumers.** `INSIGHT_DEFS` now holds each insight's
+`match(case, now)` and nothing else defines it. The home card counts with it;
+`/cases?insight=<slug>` filters with it. A second copy of "what overdue means"
+would drift, and the first symptom would be a count that disagrees with the page
+it links to — which is worse than no link, because it looks like evidence.
+`filterByInsight` returning exactly `count` cases is asserted for every insight
+in the registry, so adding one cannot quietly break the contract.
+
+**Ranking is urgency-weighted, not size-weighted.** Order is level → how many
+matches are HIGH/CRITICAL → raw count. Two critical overdue cases outrank five
+low ones; sorting by count alone buries exactly the work that matters. The card
+shows "· N high or critical" so the ordering is legible rather than arbitrary.
+
+### What the deep link can and cannot do
+
+`CaseFilter` is `{status, severity, assignee}` — case-service can filter on
+none of `dueDate`, `createdAt` or `reassignCount`. Three of the five insights
+are therefore **impossible to push server-side today**, so the worklist narrows
+the pages it has already loaded, client-side, and the banner says so:
+
+> Showing: open case whose due date has passed — (2 of the 4 loaded — load more
+> to widen the search)
+
+That sentence is the honest version of a filter chip. Without it the page would
+imply it had searched the tenant. Server-side predicates for these three fields
+are the natural companion to slice 3's aggregate — the same case-service work
+unlocks both.
+
+An unknown slug (stale bookmark, hand-edited URL) narrows nothing rather than
+showing an empty list, because "you have no work" is the most damaging thing
+this surface could say incorrectly.
+
+### A note on the tests
+
+Row-level assertions are deliberately absent: `DataTable` is virtualized and
+jsdom has no viewport height, so it renders zero rows regardless of data — a row
+assertion would test the virtualizer. The banner's "N of the M loaded" is
+computed from the same two arrays the table receives, so a broken predicate
+surfaces there immediately. 6 wiring tests + 14 predicate tests.

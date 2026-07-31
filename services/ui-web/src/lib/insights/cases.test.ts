@@ -8,7 +8,7 @@
  * exactly on the threshold.
  */
 import { describe, it, expect } from "vitest";
-import { computeCaseInsights } from "./cases";
+import { computeCaseInsights, filterByInsight, insightBySlug, INSIGHT_DEFS } from "./cases";
 import type { Case } from "@/lib/graphql/types";
 
 const NOW = Date.parse("2026-07-31T12:00:00Z");
@@ -146,5 +146,76 @@ describe("computeCaseInsights", () => {
   it("uses singular wording for a count of one", () => {
     const out = computeCaseInsights([mkCase({ status: "UNASSIGNED" })], NOW);
     expect(by(out, "cases.unassigned")?.label).toBe("case has no owner");
+  });
+
+  // ---- slice 2: ranking + the deep link that proves the number -------------
+
+  it("ranks by severity within a level, not by raw count", () => {
+    // 1 CRITICAL overdue must outrank 4 LOW overdue-adjacent warnings, and
+    // within warnings the one carrying severe cases comes first. Sorting by
+    // count alone buries the cases that actually matter.
+    const out = computeCaseInsights(
+      [
+        mkCase({ status: "UNASSIGNED", severity: "LOW" }),
+        mkCase({ status: "UNASSIGNED", severity: "LOW" }),
+        mkCase({ status: "UNASSIGNED", severity: "LOW" }),
+        mkCase({ severity: "CRITICAL", dueDate: new Date(NOW + 2 * HOUR).toISOString() }),
+      ],
+      NOW,
+    );
+    expect(out.map((i) => i.key)).toEqual(["cases.dueSoon", "cases.unassigned"]);
+    expect(by(out, "cases.dueSoon")?.severeCount).toBe(1);
+    expect(by(out, "cases.unassigned")?.severeCount).toBe(0);
+  });
+
+  it("counts HIGH and CRITICAL as severe, nothing else", () => {
+    const out = computeCaseInsights(
+      [
+        mkCase({ status: "UNASSIGNED", severity: "CRITICAL" }),
+        mkCase({ status: "UNASSIGNED", severity: "HIGH" }),
+        mkCase({ status: "UNASSIGNED", severity: "MEDIUM" }),
+        mkCase({ status: "UNASSIGNED", severity: null }),
+      ],
+      NOW,
+    );
+    const u = by(out, "cases.unassigned");
+    expect(u?.count).toBe(4);
+    expect(u?.severeCount).toBe(2);
+  });
+
+  it("every insight's href resolves back to its own definition", () => {
+    // A link whose slug nothing recognises would silently show the unfiltered
+    // list — the number would then link to 'evidence' that is not evidence.
+    for (const def of INSIGHT_DEFS) {
+      expect(insightBySlug(def.slug)).toBe(def);
+    }
+    const out = computeCaseInsights([mkCase({ status: "UNASSIGNED" })], NOW);
+    for (const i of out) {
+      expect(i.href).toBe(`/cases?insight=${i.slug}`);
+      expect(insightBySlug(i.slug)).toBeDefined();
+    }
+  });
+
+  it("filterByInsight returns EXACTLY the cases the count counted", () => {
+    // The whole point of slice 2: one predicate, so the list and the number
+    // cannot disagree.
+    const cases = [
+      mkCase({ dueDate: new Date(NOW - HOUR).toISOString() }),
+      mkCase({ dueDate: new Date(NOW - 3 * DAY).toISOString() }),
+      mkCase({ dueDate: new Date(NOW + DAY).toISOString() }),
+      mkCase({ status: "CLOSED", dueDate: new Date(NOW - 9 * DAY).toISOString() }),
+    ];
+    const out = computeCaseInsights(cases, NOW);
+    for (const i of out) {
+      expect(filterByInsight(cases, i.slug, NOW)).toHaveLength(i.count);
+    }
+  });
+
+  it("an unknown slug narrows nothing rather than hiding everything", () => {
+    // A stale bookmark or hand-edited URL must degrade to the full list, not
+    // to an empty page that reads as "you have no work".
+    const cases = [mkCase({ status: "UNASSIGNED" }), mkCase()];
+    expect(insightBySlug("not-a-real-insight")).toBeUndefined();
+    expect(filterByInsight(cases, "not-a-real-insight", NOW)).toHaveLength(2);
   });
 });

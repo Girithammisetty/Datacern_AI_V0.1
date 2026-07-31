@@ -49,6 +49,13 @@ function InsightRow({ insight, bounded }: { insight: Insight; bounded: boolean }
             {bounded ? `at least ${insight.count}` : insight.count}
           </span>{" "}
           {insight.label}
+          {/* Severity is WHY this outranks a bigger insight below it — showing
+              the count without it makes the ordering look arbitrary. */}
+          {insight.severeCount > 0 && (
+            <span className="text-muted-foreground">
+              {" "}· {insight.severeCount} high or critical
+            </span>
+          )}
         </span>
         <span className="block text-xs text-muted-foreground">{insight.rule}</span>
       </span>

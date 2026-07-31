@@ -27,6 +27,8 @@ export type InsightLevel = "critical" | "warning" | "info";
 export interface Insight {
   /** Stable id — used as a React key and as the analytics/telemetry name. */
   key: string;
+  /** URL token: /cases?insight=<slug> shows exactly these cases. */
+  slug: string;
   level: InsightLevel;
   /** How many cases in the window matched. See the honesty contract above. */
   count: number;
@@ -35,8 +37,29 @@ export interface Insight {
   /** The RULE that produced this, shown to the user so they can disagree with
    * it. An insight whose basis is invisible is just an assertion. */
   rule: string;
-  /** Worklist link that shows exactly these cases (refined in slice 2). */
+  /** How many of the matches are HIGH or CRITICAL severity. Ranking uses this
+   * so "2 overdue, both critical" outranks "5 overdue, all low" — the count
+   * alone is a poor proxy for urgency. */
+  severeCount: number;
+  /** Worklist link that shows exactly these cases. */
   href: string;
+}
+
+/**
+ * One insight's definition. The PREDICATE lives here and nowhere else: the
+ * home card counts with it and the worklist filters with it, so the list a
+ * user lands on provably contains the cases the number counted. Two copies of
+ * "what overdue means" would drift, and the first symptom would be a count
+ * that does not match the page it links to.
+ */
+export interface InsightDef {
+  key: string;
+  slug: string;
+  level: InsightLevel;
+  rule: string;
+  /** Wording for a given count — singular and plural read differently. */
+  label: (n: number) => string;
+  match: (c: Case, now: number) => boolean;
 }
 
 export interface InsightWindow {
@@ -74,6 +97,81 @@ function at(value: string | null | undefined): number | null {
 
 const RANK: Record<InsightLevel, number> = { critical: 0, warning: 1, info: 2 };
 
+const SEVERE: ReadonlySet<string> = new Set(["HIGH", "CRITICAL"]);
+
+/**
+ * The insight registry — the single source of truth for what each insight
+ * MEANS. Adding one here makes it appear on home AND makes /cases?insight=<slug>
+ * filter by it, with no second definition to keep in step.
+ */
+export const INSIGHT_DEFS: readonly InsightDef[] = [
+  {
+    key: "cases.overdue",
+    slug: "overdue",
+    level: "critical",
+    rule: "open case whose due date has passed",
+    label: (n) => (n === 1 ? "case is past its due date" : "cases are past their due date"),
+    match: (c, now) => {
+      const due = at(c.dueDate);
+      return isLive(c) && due !== null && due < now;
+    },
+  },
+  {
+    key: "cases.dueSoon",
+    slug: "due-soon",
+    level: "warning",
+    rule: `open case due in the next ${DUE_SOON_HOURS} hours`,
+    label: (n) => (n === 1 ? "case is due within 24 hours" : "cases are due within 24 hours"),
+    match: (c, now) => {
+      const due = at(c.dueDate);
+      return isLive(c) && due !== null && due >= now && due <= now + DUE_SOON_HOURS * HOUR;
+    },
+  },
+  {
+    key: "cases.unassigned",
+    slug: "unassigned",
+    level: "warning",
+    rule: "case still in the unassigned queue",
+    label: (n) => (n === 1 ? "case has no owner" : "cases have no owner"),
+    match: (c) => isLive(c) && String(c.status) === "UNASSIGNED",
+  },
+  {
+    key: "cases.stalled",
+    slug: "stalled",
+    level: "info",
+    rule: `open case created more than ${STALLED_DAYS} days ago`,
+    label: (n) =>
+      n === 1 ? "case has been open over 2 weeks" : "cases have been open over 2 weeks",
+    match: (c, now) => {
+      const created = at(c.createdAt);
+      return isLive(c) && created !== null && created < now - STALLED_DAYS * DAY;
+    },
+  },
+  {
+    key: "cases.churn",
+    slug: "churn",
+    level: "info",
+    rule: `case reassigned ${CHURN_REASSIGNMENTS} or more times — check routing rules`,
+    label: (n) =>
+      n === 1 ? "case has been reassigned repeatedly" : "cases have been reassigned repeatedly",
+    match: (c) => isLive(c) && (c.reassignCount ?? 0) >= CHURN_REASSIGNMENTS,
+  },
+];
+
+/** Look up an insight by its URL token. Unknown slugs return undefined so the
+ * worklist can ignore a stale or hand-edited link rather than showing nothing. */
+export function insightBySlug(slug: string | null | undefined): InsightDef | undefined {
+  if (!slug) return undefined;
+  return INSIGHT_DEFS.find((d) => d.slug === slug);
+}
+
+/** The cases behind an insight, using the SAME predicate that produced its
+ * count. This is what makes the deep link evidence rather than a guess. */
+export function filterByInsight(cases: Case[], slug: string, now: number): Case[] {
+  const def = insightBySlug(slug);
+  return def ? cases.filter((c) => def.match(c, now)) : cases;
+}
+
 /**
  * Compute the insights for a window of cases.
  *
@@ -81,73 +179,30 @@ const RANK: Record<InsightLevel, number> = { critical: 0, warning: 1, info: 2 };
  * deterministic under test. Insights with a zero count are omitted entirely —
  * "0 cases overdue" is noise, and an empty result is a real answer the UI
  * renders as "nothing needs attention".
+ *
+ * Ordering is urgency-weighted, not size-weighted: level first, then how many
+ * matches are HIGH/CRITICAL severity, then raw count. Two critical overdue
+ * cases matter more than five low ones, and sorting by count alone buries them.
  */
 export function computeCaseInsights(cases: Case[], now: number): Insight[] {
-  const live = cases.filter(isLive);
-
-  const overdue = live.filter((c) => {
-    const due = at(c.dueDate);
-    return due !== null && due < now;
-  });
-
-  const dueSoon = live.filter((c) => {
-    const due = at(c.dueDate);
-    return due !== null && due >= now && due <= now + DUE_SOON_HOURS * HOUR;
-  });
-
-  const unassigned = live.filter((c) => String(c.status) === "UNASSIGNED");
-
-  const stalled = live.filter((c) => {
-    const created = at(c.createdAt);
-    return created !== null && created < now - STALLED_DAYS * DAY;
-  });
-
-  const churning = live.filter((c) => (c.reassignCount ?? 0) >= CHURN_REASSIGNMENTS);
-
-  const all: Insight[] = [
-    {
-      key: "cases.overdue",
-      level: "critical",
-      count: overdue.length,
-      label: overdue.length === 1 ? "case is past its due date" : "cases are past their due date",
-      rule: "open case whose due date has passed",
-      href: "/cases?insight=overdue",
-    },
-    {
-      key: "cases.dueSoon",
-      level: "warning",
-      count: dueSoon.length,
-      label: dueSoon.length === 1 ? "case is due within 24 hours" : "cases are due within 24 hours",
-      rule: `open case due in the next ${DUE_SOON_HOURS} hours`,
-      href: "/cases?insight=due-soon",
-    },
-    {
-      key: "cases.unassigned",
-      level: "warning",
-      count: unassigned.length,
-      label: unassigned.length === 1 ? "case has no owner" : "cases have no owner",
-      rule: "case still in the unassigned queue",
-      href: "/cases?insight=unassigned",
-    },
-    {
-      key: "cases.stalled",
-      level: "info",
-      count: stalled.length,
-      label: stalled.length === 1 ? "case has been open over 2 weeks" : "cases have been open over 2 weeks",
-      rule: `open case created more than ${STALLED_DAYS} days ago`,
-      href: "/cases?insight=stalled",
-    },
-    {
-      key: "cases.churn",
-      level: "info",
-      count: churning.length,
-      label: churning.length === 1 ? "case has been reassigned repeatedly" : "cases have been reassigned repeatedly",
-      rule: `case reassigned ${CHURN_REASSIGNMENTS} or more times — check routing rules`,
-      href: "/cases?insight=churn",
-    },
-  ];
-
-  return all
+  return INSIGHT_DEFS.map((def) => {
+    const hits = cases.filter((c) => def.match(c, now));
+    return {
+      key: def.key,
+      slug: def.slug,
+      level: def.level,
+      count: hits.length,
+      severeCount: hits.filter((c) => SEVERE.has(String(c.severity ?? ""))).length,
+      label: def.label(hits.length),
+      rule: def.rule,
+      href: `/cases?insight=${def.slug}`,
+    };
+  })
     .filter((i) => i.count > 0)
-    .sort((a, b) => (RANK[a.level] - RANK[b.level]) || (b.count - a.count));
+    .sort(
+      (a, b) =>
+        RANK[a.level] - RANK[b.level] ||
+        b.severeCount - a.severeCount ||
+        b.count - a.count,
+    );
 }
