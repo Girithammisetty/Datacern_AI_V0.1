@@ -295,6 +295,13 @@ export class AiGatewayClient {
     system: string;
     user: string;
     maxTokens?: number;
+    /** Budget for THIS call. Required in practice: model inference does not fit
+     * the client's default CRUD timeout, and without it the bff aborts a healthy
+     * generation and reports it as a downstream outage. Passed per-call rather
+     * than raised on the whole client so ai-gateway's ADMIN plane (providers,
+     * ladders, budgets, keys) keeps failing fast — the slow thing is inference,
+     * not the service. */
+    timeoutMs?: number;
   }): Promise<{ content: string; model?: string; usage?: Record<string, number> }> {
     const jwt = (this.http.ctx.authorization ?? "").replace(/^Bearer\s+/i, "");
     const r = await this.http.post<{
@@ -317,6 +324,7 @@ export class AiGatewayClient {
         "x-datacern-jwt": jwt,
         "x-datacern-request-class": "chat",
       },
+      timeoutMs: args.timeoutMs,
     });
     return {
       content: (r.choices?.[0]?.message?.content ?? "").trim(),

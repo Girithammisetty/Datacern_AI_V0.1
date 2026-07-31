@@ -53,7 +53,8 @@ error rather than an empty draft.
 | `AI_GATEWAY_URL` | `http://localhost:8312` | ai-gateway root (used by AI admin reads and by form drafting) |
 | `AI_GATEWAY_VIRTUAL_KEY` | — | ai-gateway DATA-plane virtual key for `draftCaseFields`. Unset = AI form autofill is off (the mutation says so). Single-tenant: the key's tenant must match the caller's |
 | `AI_DRAFT_MODEL` | `datacern-auto` | model alias used for form drafting |
-| `DOWNSTREAM_TIMEOUT_MS` | `10000` | per-downstream timeout (BR-4) |
+| `DOWNSTREAM_TIMEOUT_MS` | `10000` | per-downstream timeout for ordinary CRUD (BR-4) |
+| `AI_INFERENCE_TIMEOUT_MS` | `130000` | budget for downstream calls that run MODEL INFERENCE (`draftCaseFields`). Keep it **above** ai-gateway's provider timeout (120s) so the gateway owns the deadline and returns a structured, metered error — if the bff aborts first the caller gets an opaque `httpStatus 0` |
 | `MAX_DEPTH` / `MAX_ALIASES` / `MAX_ROOT_FIELDS` / `MAX_COST` | `10` / `20` / `5` / `5000` | static query limits (BFF-FR-041) |
 
 ## Schema module map — which service backs each area

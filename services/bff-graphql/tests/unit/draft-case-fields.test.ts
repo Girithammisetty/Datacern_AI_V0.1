@@ -11,7 +11,9 @@
  * reads like "the AI found nothing".
  * Mocking is at the fetch boundary; real master envelopes on both sides.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { ServiceClient } from "../../src/clients/base.js";
+import { AiGatewayClient } from "../../src/clients/aigateway.js";
 import { makeApolloServer } from "../../src/server.js";
 import { makeTestContext, testConfig } from "../helpers/context.js";
 import { mockFetch, type CapturedRequest } from "../helpers/mockFetch.js";
@@ -212,5 +214,89 @@ describe("draftCaseFields", () => {
     const res = await server.executeOperation(
       { query: DRAFT, variables: { input: {} } }, { contextValue: ctx });
     expect(single(res)?.errors?.[0]?.message).toContain("caseId or evidenceText");
+  });
+});
+
+/**
+ * Timeout budget: inference does not get the CRUD budget.
+ *
+ * The bug this pins, observed in e2e-live on two separate runs: draftCaseFields
+ * failed with `{"message":"ai-gateway timed out","code":"SERVICE_UNAVAILABLE",
+ * "httpStatus":0}`. httpStatus 0 is a CLIENT abort — the bff killed a healthy
+ * generation at the 10s DOWNSTREAM_TIMEOUT_MS meant for CRUD, then reported it
+ * as if the downstream had failed. The same Ollama served agent-runtime twice in
+ * the same run; agent-runtime just does not borrow the bff's budget.
+ *
+ * Asserting on the ABORT SIGNAL's deadline rather than by sleeping: a test that
+ * actually waits 10s to prove a 10s timeout is one nobody will keep.
+ */
+describe("draftCaseFields timeout budget", () => {
+  const hangingFetch = (flag: { aborted: boolean }): typeof fetch =>
+    ((_i: any, init: any = {}) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener?.("abort", () => {
+          flag.aborted = true;
+          const e = new Error("aborted");
+          e.name = "AbortError";
+          reject(e);
+        });
+      })) as any;
+
+  const svc = (fetchImpl: typeof fetch) =>
+    new ServiceClient({
+      service: "ai-gateway",
+      baseUrl: "http://ai-gateway",
+      ctx: { authorization: "Bearer jwt", traceId: "t" } as any,
+      fetchImpl,
+      timeoutMs: 10_000, // the CRUD budget that used to kill drafting
+    });
+
+  it("does NOT abort the model call at the CRUD budget, and does abort at the inference budget", async () => {
+    vi.useFakeTimers();
+    try {
+      const flag = { aborted: false };
+      const client = new AiGatewayClient(svc(hangingFetch(flag)));
+      const p = client
+        .draftJson({ virtualKey: "vk", model: "m", system: "s", user: "u", timeoutMs: 130_000 })
+        .catch((e) => e);
+
+      // Past the CRUD budget: a healthy generation must still be running.
+      await vi.advanceTimersByTimeAsync(11_000);
+      expect(flag.aborted).toBe(false);
+
+      // Past the inference budget: now it is allowed to give up.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(flag.aborted).toBe(true);
+      const err = await p;
+      expect(String(err?.message ?? err)).toContain("timed out");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still applies the short CRUD budget to ai-gateway's admin plane", async () => {
+    vi.useFakeTimers();
+    try {
+      const flag = { aborted: false };
+      // The slow thing is inference, not the service — raising the whole
+      // client would make provider/ladder/budget reads hang for two minutes.
+      const p = svc(hangingFetch(flag)).get("/api/v1/providers").catch((e) => e);
+      await vi.advanceTimersByTimeAsync(11_000);
+      expect(flag.aborted).toBe(true);
+      await p;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the inference budget above the platform's 120s provider timeout", () => {
+    // Ordering invariant, not a style preference: ai-gateway and agent-runtime
+    // both use timeout_s=120.0 for a provider call. If the bff's budget drops
+    // to or below that, the bff aborts FIRST and the caller gets an opaque
+    // httpStatus 0 instead of ai-gateway's structured, metered, budget-aware
+    // error — which is exactly the failure this change exists to remove.
+    const c = testConfig();
+    expect(c.aiInferenceTimeoutMs).toBeGreaterThan(120_000);
+    expect(c.aiInferenceTimeoutMs).toBeGreaterThan(c.downstreamTimeoutMs);
   });
 });

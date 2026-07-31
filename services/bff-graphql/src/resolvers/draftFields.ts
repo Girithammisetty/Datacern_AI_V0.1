@@ -194,6 +194,9 @@ export async function draftCaseFields(
       model: ctx.config.aiDraftModel,
       system,
       user,
+      // Inference budget, not the CRUD one. The default 10s aborted real
+      // generations and surfaced them as "ai-gateway timed out" / httpStatus 0.
+      timeoutMs: ctx.config.aiInferenceTimeoutMs,
     });
   } catch (e) {
     // ai-gateway rejects a key whose tenant is not the caller's tenant with the
