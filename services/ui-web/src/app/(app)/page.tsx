@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, ScrollText, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { InsightsCard } from "@/components/home/InsightsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/primitives";
 import { CostPanel } from "@/components/usage/CostPanel";
 import { useMe, useProposalsInbox, useCaseSearch, useLearningLoop } from "@/lib/graphql/hooks";
@@ -38,6 +39,7 @@ export default function HomePage() {
   const canSeeInbox = can(cap("ai.proposal.read"));
   const canSeeCost = can(cap("usage.report.read"));
   const canWorkCases = can(cap("case.disposition.create"));
+  const canReadCases = can(cap("case.case.read"));
   const isApprover = can(cap("case.disposition.approve")) || can(cap("case.bulk.approve"));
   const isAuditor = can(cap("audit.log.read")) && !can(cap("case.case.update"));
 
@@ -61,6 +63,12 @@ export default function HomePage() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
+          {/* "What changed" before "what is assigned to me" — the insight
+              card leads because it is the question the user actually arrives
+              with. Gated on case.case.read: a persona who cannot read cases
+              must see NO case card rather than an empty one implying zero
+              work. */}
+          {canReadCases && <InsightsCard />}
           {leadWithQueue && <DecisionQueueCard />}
           {isAuditor && <AuditorCard />}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

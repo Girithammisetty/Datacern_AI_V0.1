@@ -1389,6 +1389,7 @@ export const CASE_SEARCH = /* GraphQL */ `
     caseSearch(q: $q, filter: $filter, first: $first, after: $after) {
       nodes {
         id urn caseNumber title status severity dueDate createdAt displayProjection
+        reassignCount
         assignee { id email fullName }
         sourceDataset { id name }
       }
