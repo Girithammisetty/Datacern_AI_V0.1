@@ -280,21 +280,26 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
     mlflow_run_id = final.get("mlflow_run_id")
 
     # ---- 4. PROMOTE: register + four-eyes ------------------------------------
-    repaired = False
-    for _ in range(30):
-        rr = requests.post(f"{c.EXPERIMENT}/internal/reconcile",
-                           headers={"x-client-spiffe-id":
-                                    "spiffe://datacern/ns/platform/sa/operator",
-                                    "Content-Type": "application/json"},
-                           json={"tenant_id": tenant}, timeout=60)
-        if rr.status_code == 200 and (rr.json().get("data") or {}).get("repaired_count", 0) >= 1:
-            repaired = True
-            break
-        time.sleep(2)
-    check(repaired, "experiment-service mirrored the run from REAL MLflow")
-
+    # The claim is "the run reaches experiment-service from REAL MLflow", so
+    # that is what is asserted — the OUTCOME, not who produced it.
+    #
+    # This used to require `repaired_count >= 1` from /internal/reconcile, which
+    # is an implementation artifact: when experiment-service's own background
+    # sync had already mirrored the run, reconcile correctly found nothing to
+    # repair, returned 0, and the check went red on a working system. It passed
+    # the first time by luck of ordering and failed here. Reconcile is still
+    # called each round (it is the repair path being exercised); the assertion
+    # is now that the run is mirrored and registrable.
     exp_run_id = None
-    for _ in range(20):
+    for _ in range(30):
+        try:
+            requests.post(f"{c.EXPERIMENT}/internal/reconcile",
+                          headers={"x-client-spiffe-id":
+                                   "spiffe://datacern/ns/platform/sa/operator",
+                                   "Content-Type": "application/json"},
+                          json={"tenant_id": tenant}, timeout=60)
+        except requests.RequestException:
+            pass  # a reconcile hiccup is not the claim; the poll below is
         g = api("GET", f"{c.EXPERIMENT}/api/v1/experiments/{experiment_id}/runs", tok_w)
         if g.status_code == 200:
             for run in g.json().get("data", []):
@@ -304,7 +309,9 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
         if exp_run_id:
             break
         time.sleep(2)
-    if not check(bool(exp_run_id), "training run mirrored (registrable)"):
+    if not check(bool(exp_run_id),
+                 "the REAL MLflow run is mirrored into experiment-service (registrable)",
+                 f"mlflow_run_id={mlflow_run_id} never appeared within 60s"):
         return bail("mirror")
 
     reg_name = f"learn-model-{RUN}"
@@ -390,12 +397,27 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
     check(True, "NEW scoring input registered (10 unseen rows, 5 fraud-profile)")
 
     mv_urn = f"wr:{tenant}:experiment:model_version/{reg_name}@{mlflow_version}"
-    sub = api("POST", f"{c.INFERENCE}/api/v1/inferences", tok_w,
-              {"model_version_urn": mv_urn, "input_dataset_urn": input_urn,
-               "output": {"dataset_name": f"learn-scores-{RUN}"},
-               "parameters": {"auto_case": {
-                   "positive_label": "true_positive", "row_pk_field": "claim_id",
-                   "projection_fields": ["claim_id", "amount"]}}})
+    # POST /inferences answers 202 and the poll below waits for the terminal
+    # status — but the handler is NOT purely async: submit() resolves the model
+    # version through experiment-service -> MLflow before it writes the job row
+    # (services.py::submit -> _resolve_model). Under CI load that resolve is the
+    # slow part, so this call gets its own longer budget, and a timeout is
+    # reported as the named dependency failure it is rather than dying in a
+    # requests traceback that says nothing about which service stalled.
+    try:
+        sub = api("POST", f"{c.INFERENCE}/api/v1/inferences", tok_w,
+                  {"model_version_urn": mv_urn, "input_dataset_urn": input_urn,
+                   "output": {"dataset_name": f"learn-scores-{RUN}"},
+                   "parameters": {"auto_case": {
+                       "positive_label": "true_positive", "row_pk_field": "claim_id",
+                       "projection_fields": ["claim_id", "amount"]}}},
+                  timeout=420)
+    except requests.RequestException as exc:
+        return bail(
+            "scoring job submitted (auto_case)",
+            "inference-service did not answer POST /api/v1/inferences within 420s -- its "
+            "submit resolves the model version through experiment-service/MLflow, so the "
+            f"stall is almost certainly there. ({type(exc).__name__})")
     if sub.status_code != 202:
         return bail("scoring job submitted (auto_case)", f"{sub.status_code} {sub.text[:250]}")
     job_id = (sub.json().get("data") or {}).get("job_id")
