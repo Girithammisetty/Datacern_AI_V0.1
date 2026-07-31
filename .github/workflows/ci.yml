@@ -812,5 +812,17 @@ jobs:
           push: ${{ env.PUSH == 'true' }}
           tags: ${{ steps.img.outputs.ref }}:${{ env.IMAGE_TAG }}
           cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          # ignore-error: the layer cache is an OPTIMIZATION, and a build must not
+          # go red because writing it failed. GitHub's Actions Cache backend has
+          # been returning `404 BlobNotFound` on the export step — twice in three
+          # runs here, on different services and different storage accounts
+          # (usage-service via ...sa3, chart-service via ...sa11). In both the
+          # image built fine: every layer reported CACHED and the failure came
+          # afterwards, in `exporting to GitHub Actions Cache`.
+          #
+          # Without this, a backend hiccup fails a build that succeeded, which
+          # trains everyone to re-run red checks without reading them — the exact
+          # habit that lets a real failure through. A cache write that fails now
+          # costs a slower build next time and nothing else.
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }},ignore-error=true
           provenance: false
