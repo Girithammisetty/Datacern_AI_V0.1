@@ -225,8 +225,30 @@ export const datasetPatcher: Patcher = {
   },
 };
 
+/**
+ * Queue-intelligence is an AGGREGATE, so it cannot be patched the way
+ * casePatcher patches a visible row: there is no row to update, and a case.*
+ * event changes counts this client cannot recompute (it does not know the
+ * workspace-wide totals, which is the entire reason the aggregate exists).
+ *
+ * So this patcher INVALIDATES rather than patches. That is the honest move for
+ * derived server-side state — refetching the aggregate asks the only component
+ * that can actually compute it, instead of guessing a delta client-side and
+ * showing a number no server ever produced.
+ *
+ * It shares casePatcher's topic prefix on purpose: the same events that move a
+ * row also move the totals over it.
+ */
+const queueIntelPatcher: Patcher = {
+  match: "list:case",
+  apply: (client) => {
+    void client.invalidateQueries({ queryKey: ["cases", "queueIntelligence"] });
+  },
+};
+
 export const REGISTRY: Patcher[] = [
   casePatcher,
+  queueIntelPatcher,
   runPatcher,
   proposalPatcher,
   usagePatcher,

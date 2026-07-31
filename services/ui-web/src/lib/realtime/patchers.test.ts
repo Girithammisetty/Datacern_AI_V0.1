@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import { dispatchEvent, casePatcher, datasetPatcher, proposalPatcher, runPatcher } from "./patchers";
 import type { Case, Connection, Dataset, Proposal, Run } from "@/lib/graphql/types";
@@ -132,5 +132,47 @@ describe("EventBridge patchers (UI-FR-044) — pure cache mutations, no refetch"
   it("dispatch routes only to matching patchers", () => {
     const handled = dispatchEvent(client, { topic: "case.status", data: { id: "x" } }, [casePatcher, runPatcher, proposalPatcher]);
     expect(handled).toBe(1);
+  });
+});
+
+/**
+ * Queue-intelligence: an aggregate invalidates, it does not patch.
+ *
+ * The distinction matters. casePatcher can patch a visible row because the
+ * event carries that row's new state. An aggregate has no row, and this client
+ * cannot recompute a workspace-wide count from one case event — guessing a
+ * delta would put a number on screen that no server ever produced. So the
+ * patcher's whole job is to ask again.
+ */
+describe("queueIntelPatcher", () => {
+  it("invalidates the aggregate when a case event arrives", () => {
+    const client = new QueryClient();
+    const spy = vi.spyOn(client, "invalidateQueries");
+    const n = dispatchEvent(client, {
+      topic: "list:case",
+      type: "case.updated",
+      data: { id: "c-1", status: "RESOLVED" },
+    } as never);
+    expect(n).toBeGreaterThan(0);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ["cases", "queueIntelligence"] }),
+    );
+  });
+
+  it("does not touch the aggregate for unrelated topics", () => {
+    const client = new QueryClient();
+    const spy = vi.spyOn(client, "invalidateQueries");
+    dispatchEvent(client, {
+      topic: "list:dataset",
+      type: "dataset.updated",
+      data: { id: "d-1" },
+    } as never);
+    const aggregateCalls = spy.mock.calls.filter(
+      ([arg]) =>
+        JSON.stringify((arg as { queryKey?: unknown })?.queryKey ?? "").includes(
+          "queueIntelligence",
+        ),
+    );
+    expect(aggregateCalls).toHaveLength(0);
   });
 });

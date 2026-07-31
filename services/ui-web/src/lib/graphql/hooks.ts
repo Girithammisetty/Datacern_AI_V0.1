@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { graphqlRequest } from "./client";
 import { qk } from "./keys";
+import { useLiveFallbackInterval } from "@/lib/realtime/useLiveFallback";
 import * as ops from "./operations";
 import type { CrossFilterVar } from "@/lib/charts/crossfilter";
 import type {
@@ -712,6 +713,7 @@ export function useConnectionPreview() {
 
 /* ------- ingestion runs ------- */
 export function useIngestions(vars: { status?: string; mode?: string } = {}) {
+  const ingestionsFallback = useLiveFallbackInterval(5_000);
   return useInfiniteQuery({
     queryKey: qk.ingestions(vars),
     initialPageParam: null as string | null,
@@ -723,9 +725,14 @@ export function useIngestions(vars: { status?: string; mode?: string } = {}) {
         mode: vars.mode,
       }).then((r) => r.ingestions),
     getNextPageParam: (last) => (last.pageInfo.hasMore ? last.pageInfo.nextCursor : undefined),
-    // Ingestion runs advance server-side; a short refetch keeps the list fresh
-    // as a fallback to the ingestion.* realtime topics.
-    refetchInterval: 5_000,
+    // Ingestion runs advance server-side. This IS the fallback to the
+    // ingestion.* realtime topics — so it now runs only when those topics are
+    // not arriving. While the stream is healthy the list is patched in place by
+    // the hub and this poll is off entirely; when the stream degrades it
+    // resumes at the same 5s it always used. Previously it ran unconditionally,
+    // which meant every viewer paid a request every 5s while ALSO receiving the
+    // same data by push.
+    refetchInterval: ingestionsFallback,
   });
 }
 
@@ -1822,20 +1829,30 @@ export function useCaseForm(mode: "create" | "update" = "create", queryUrn?: str
 /** Approver queue intelligence (roadmap item 4): aging, SLA risk, throughput
  * and time-to-decision for the caller's own workspace.
  *
- * Polled rather than pushed, and honestly so: this is composed from live case
- * state that changes as people work the queue, so a figure cached for the
- * session would quietly go stale while an approver reads it. 60s is slower than
- * the SLA timers it reports on but fast enough that "breached" is never
- * badly wrong; the panel stamps generatedAt so the reader can see the age.
- * (If the live activity spine lands, this is a natural first subscriber.) */
+ * Now a SPINE SUBSCRIBER, which is what its previous comment said it should
+ * become. It is an AGGREGATE, so the hub cannot patch it the way the case
+ * patcher patches a visible row — there is no "row" to update, and a case.*
+ * event changes counts it cannot recompute client-side. So the rule is:
+ * invalidate on a case event, and poll only while the stream is degraded.
+ * That gives a fresher figure than the old fixed 60s (it reacts to the event
+ * that changed it) while dropping the request-per-minute-forever that ran even
+ * when nothing in the queue had moved.
+ *
+ * The panel still stamps generatedAt, because "recomputed on the last case
+ * event" is not the same as "live", and the reader should be able to see how
+ * old the number is. */
 export function useQueueIntelligence(days = 7) {
+  // Refresh is driven by queueIntelPatcher (lib/realtime/patchers.ts), which
+  // invalidates this key on any list:case event — so no subscription is needed
+  // here. This hook only decides what to do when the stream is NOT delivering.
+  const fallback = useLiveFallbackInterval(60_000);
   return useQuery({
     queryKey: qk.queueIntelligence(days),
     queryFn: () =>
       graphqlRequest<ops.QueueIntelligenceResult>(ops.QUEUE_INTELLIGENCE, { days }).then(
         (r) => r.queueIntelligence,
       ),
-    refetchInterval: 60_000,
+    refetchInterval: fallback,
   });
 }
 
