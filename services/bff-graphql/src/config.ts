@@ -77,7 +77,24 @@ export interface Config {
   /** Introspection is disabled in production (BFF-FR-041). */
   introspection: boolean;
   /** Per-downstream request timeout in ms (BFF-FR-032 / BR-4). */
+  /** Budget for ordinary downstream CRUD. Generous for a service call, far too
+   * short for model inference — see aiInferenceTimeoutMs. */
   downstreamTimeoutMs: number;
+  /** Budget for downstream calls that run MODEL INFERENCE rather than CRUD.
+   *
+   * A single downstream budget silently broke AI drafting: draftCaseFields is an
+   * LLM generation call, the 10s CRUD budget aborted it, and the caller got
+   * SERVICE_UNAVAILABLE with httpStatus 0 — a client-side abort dressed as a
+   * downstream outage. The same Ollama answered agent-runtime fine in the same
+   * run, because agent-runtime does not borrow the bff's budget.
+   *
+   * 130s is DELIBERATELY LONGER than the 120s the platform already gives a
+   * provider call (ai-gateway/adapters/anthropic_provider.py, agent-runtime/
+   * adapters/llm.py). The downstream should own the deadline: when ai-gateway
+   * times out it returns a structured, metered, budget-aware error, whereas the
+   * bff aborting first produces an opaque httpStatus 0. Keep this above whatever
+   * ai-gateway's provider timeout is; dropping below it reintroduces the bug. */
+  aiInferenceTimeoutMs: number;
   /** ai-gateway DATA-plane virtual key (same pattern eval-service uses for its
    * judge: Authorization = virtual key, X-Datacern-JWT = the caller's token).
    * Unset disables AI drafting — the mutation then refuses with a clear
@@ -167,6 +184,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     persistedQueriesOnly: bool("PERSISTED_QUERIES_ONLY", isProd),
     introspection: bool("INTROSPECTION", !isProd),
     downstreamTimeoutMs: Number(env("DOWNSTREAM_TIMEOUT_MS", "10000")),
+    aiInferenceTimeoutMs: Number(env("AI_INFERENCE_TIMEOUT_MS", "130000")),
     aiVirtualKey: env("AI_GATEWAY_VIRTUAL_KEY", ""),
     aiDraftModel: env("AI_DRAFT_MODEL", "datacern-auto")!,
     corsAllowedOrigins: (env("CORS_ALLOWED_ORIGINS", "http://localhost:3000") ?? "")
