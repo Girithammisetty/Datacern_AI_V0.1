@@ -307,9 +307,30 @@ def main() -> int:  # noqa: PLR0911, PLR0915
           f"{dl.status_code} {dl.content[:120]!r}")
 
     # ---- 6. the department boundary ------------------------------------------
+    # The worklist is this journey's ONLY search-backed read — every other check
+    # here (the case, its timeline, its evidence) goes straight to Postgres. That
+    # asymmetry matters: case-service builds a tenant's OpenSearch index
+    # ASYNCHRONOUSLY off tenant.provisioned (events.TenantHandler), and until the
+    # consumer catches up, search answers 503 SEARCH_UNAVAILABLE. On a freshly
+    # provisioned tenant we can arrive here first, so poll for readiness.
+    #
+    # Waiting is only half the fix. `b_sees` was None on any non-200, which made a
+    # 503 fail the isolation assertion — a warm-up race reported as "department B
+    # CAN see the case", which is a security-shaped alarm for an infrastructure
+    # hiccup. Search readiness is now its own check, so the two cannot be confused.
     lb = api("GET", f"{c.CASE}/api/v1/cases?limit=50", tok_b)
-    b_sees = [x.get("id") for x in (lb.json().get("data") or [])] if lb.status_code == 200 else None
-    check(b_sees is not None and case_id not in b_sees,
+    for _ in range(30):
+        if lb.status_code != 503:
+            break
+        time.sleep(2)
+        lb = api("GET", f"{c.CASE}/api/v1/cases?limit=50", tok_b)
+    if not check(lb.status_code == 200,
+                 "department B's worklist is searchable (tenant index materialized)",
+                 f"{lb.status_code} {lb.text[:160]} — search never became available, so "
+                 "the isolation claim below could not be evaluated"):
+        return bail("search index for the tenant never materialized")
+    b_sees = [x.get("id") for x in (lb.json().get("data") or [])]
+    check(case_id not in b_sees,
           "department B's worklist does NOT contain the case", f"{lb.status_code} {b_sees}")
     for what, path in (("case", ""), ("timeline", "/timeline"), ("evidence", "/evidence")):
         rb = api("GET", f"{c.CASE}/api/v1/cases/{case_id}{path}", tok_b)
