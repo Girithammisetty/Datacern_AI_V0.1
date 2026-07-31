@@ -70,7 +70,10 @@ describe("queueIntelligence", () => {
     expect(q.aging.map((b: any) => b.label)).toEqual([
       "under_24h", "1_to_3d", "3_to_7d", "over_7d",
     ]);
-    expect(requests[0].search.get("days")).toBe("7");
+    // Optional chain, not requests[0]!: under strict TS an index read is
+    // possibly-undefined, and a non-null assertion would hide a genuine "no
+    // request was made" as a type-level lie. undefined simply fails the compare.
+    expect(requests[0]?.search.get("days")).toBe("7");
   });
 
   it("keeps null percentiles null instead of coercing them to zero", async () => {
