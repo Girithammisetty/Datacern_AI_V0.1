@@ -15,7 +15,9 @@ def _ctx(request, principal):
 
 @router.post("/suites", status_code=201)
 async def create_suite(
-    request: Request, body: SuiteCreate, principal: Principal = Depends(require("eval.suite.write"))
+    request: Request,
+    body: SuiteCreate,
+    principal: Principal = Depends(require("eval.suite.update")),
 ):
     svc = request.app.state.container.suite_service
     return data(dump(await svc.create(_ctx(request, principal), body.model_dump())))
@@ -26,7 +28,7 @@ async def get_suite(
     request: Request,
     suite_id: str,
     version: int | None = None,
-    principal: Principal = Depends(require("eval.suite.write")),
+    principal: Principal = Depends(require("eval.suite.update")),
 ):
     svc = request.app.state.container.suite_service
     return data(dump(await svc.get(_ctx(request, principal), suite_id, version)))
@@ -38,7 +40,7 @@ async def patch_suite(
     suite_id: str,
     body: SuitePatch,
     version: int | None = None,
-    principal: Principal = Depends(require("eval.suite.write")),
+    principal: Principal = Depends(require("eval.suite.update")),
 ):
     svc = request.app.state.container.suite_service
     patch = {k: v for k, v in body.model_dump().items() if v is not None}

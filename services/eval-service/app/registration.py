@@ -25,14 +25,14 @@ MANIFEST: list[str] = [
     "eval.case.create",
     "eval.case.update",
     "eval.scorer.admin",
-    "eval.suite.write",
+    "eval.suite.update",
     "eval.run.execute",
     "eval.run.read",
     "eval.gate.read",
-    "eval.canary.manage",
+    "eval.canary.update",
     "eval.trends.read",
     "eval.slo.read",
-    "eval.slo.operator",
+    "eval.slo.admin",
 ]
 
 

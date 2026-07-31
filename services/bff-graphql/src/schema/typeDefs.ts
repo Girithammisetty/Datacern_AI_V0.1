@@ -4601,7 +4601,7 @@ export const typeDefs = gql`
     memoryStats: JSON!
 
     # ---- Tier 2a: eval (eval-service) --------------------------------------
-    """A suite by id (+optional version; latest when omitted). Needs eval.suite.write
+    """A suite by id (+optional version; latest when omitted). Needs eval.suite.update
     (eval-service requires the write scope even to read a suite)."""
     evalSuite(suiteId: String!, version: Int): EvalSuite
     """Scoring runs, cursor-paginated (eval-service GET /runs). Needs eval.run.read."""
@@ -4632,7 +4632,7 @@ export const typeDefs = gql`
     """Gate verdicts for a candidate build, matched by agent+content-digest
     (eval-service GET /gates) — the CI/promotion dedup lookup. Needs eval.gate.read."""
     evalGatesByDigest(agentKey: String!, contentDigest: String!): [EvalGateResult!]!
-    """A canary A/B comparison by id (eval-service GET /canaries/{id}). Needs eval.canary.manage."""
+    """A canary A/B comparison by id (eval-service GET /canaries/{id}). Needs eval.canary.update."""
     evalCanary(comparisonId: String!): EvalCanary
     """Score-trend series for an agent (eval-service GET /trends) — the model-
     version scorecard's raw data. Needs eval.trends.read."""
@@ -5948,11 +5948,11 @@ export const typeDefs = gql`
 
     # ---- Tier 2a: eval (eval-service) --------------------------------------
     """Register a new eval suite version (eval-service POST /suites, 201).
-    BR-1: the gate rule must reference >=1 deterministic scorer. Needs eval.suite.write."""
+    BR-1: the gate rule must reference >=1 deterministic scorer. Needs eval.suite.update."""
     createEvalSuite(input: CreateEvalSuiteInput!): EvalSuite!
     """Edit an eval suite version (eval-service PATCH /suites/{suiteId}, optional
     ?version). suiteId/agentKey are immutable; only provided fields are patched.
-    BR-1: the gate rule must still reference >=1 deterministic scorer. Needs eval.suite.write."""
+    BR-1: the gate rule must still reference >=1 deterministic scorer. Needs eval.suite.update."""
     updateEvalSuite(input: UpdateEvalSuiteInput!): EvalSuite!
     """
     Start a real scoring run — this SYNCHRONOUSLY executes the suite against the
@@ -5991,48 +5991,48 @@ export const typeDefs = gql`
     """Activate a scorer version (eval-service POST .../activate) — llm_judge
     scorers are blocked below 0.8 judge-vs-human agreement (EVL-FR-014). Needs eval.scorer.admin."""
     activateEvalScorer(scorerKey: String!, version: Int!): EvalScorer!
-    """Start a canary A/B comparison (eval-service POST /canaries, 201). Needs eval.canary.manage."""
+    """Start a canary A/B comparison (eval-service POST /canaries, 201). Needs eval.canary.update."""
     createEvalCanary(input: CreateEvalCanaryInput!): EvalCanary!
     """Ingest paired candidate/baseline scores into a canary (eval-service POST
     .../samples) — recomputes the report; may flip status to ready/failed_early.
-    \`pairedScores\` is {scorer: [[candidate, baseline], ...]}. Needs eval.canary.manage."""
+    \`pairedScores\` is {scorer: [[candidate, baseline], ...]}. Needs eval.canary.update."""
     ingestEvalCanarySamples(comparisonId: String!, pairedScores: JSON!): EvalCanary!
-    """Stop a collecting canary early (eval-service POST .../stop). Needs eval.canary.manage."""
+    """Stop a collecting canary early (eval-service POST .../stop). Needs eval.canary.update."""
     stopEvalCanary(comparisonId: String!): EvalCanary!
     """Set SLO alert targets for an agent (eval-service POST /slos/targets). Needs eval.slo.read."""
     setEvalSloTargets(agentKey: String!, agentVersion: String, targets: JSON!): Boolean!
 
     # ---- Tier 2a: ai-gateway admin ------------------------------------------
     """Register a new provider/deployment (ai-gateway POST /admin/providers, 201).
-    Needs ai.provider.write + the platform-operator scope."""
+    Needs ai.provider.update + the platform-operator scope."""
     createAiProvider(input: CreateAiProviderInput!, idempotencyKey: String): AiProviderDeployment!
     """Patch a deployment's status/priority/limits (ai-gateway PATCH /admin/providers/{id}).
-    Needs ai.provider.write + the platform-operator scope."""
+    Needs ai.provider.update + the platform-operator scope."""
     patchAiProvider(deploymentId: ID!, input: PatchAiProviderInput!, force: Boolean): AiProviderDeployment!
     """Drain a deployment (stop routing new traffic to it; ai-gateway POST
-    .../drain). Needs ai.provider.write + the platform-operator scope."""
+    .../drain). Needs ai.provider.update + the platform-operator scope."""
     drainAiProvider(deploymentId: ID!, force: Boolean): AiProviderDeployment!
     """Replace a request class's routing ladder (ai-gateway PUT /admin/ladders/{class}).
-    \`scope\` platform requires the platform-operator scope; tenant needs only ai.ladder.write."""
+    \`scope\` platform requires the platform-operator scope; tenant needs only ai.ladder.update."""
     putAiLadder(requestClass: String!, rungs: JSON!, maxRung: Int, scope: String): AiModelLadder!
     """Create an ai-gateway LLM-spend budget (ai-gateway POST /admin/budgets, 201).
-    A platform-scoped budget additionally needs the platform-operator scope. Needs ai.budget.write."""
+    A platform-scoped budget additionally needs the platform-operator scope. Needs ai.budget.update."""
     createAiBudget(input: CreateAiBudgetInput!, idempotencyKey: String): AiBudget!
     """Patch an ai-gateway budget's limit/degrade-threshold/status (ai-gateway
-    PATCH /admin/budgets/{id}). Needs ai.budget.write."""
+    PATCH /admin/budgets/{id}). Needs ai.budget.update."""
     updateAiBudget(id: ID!, input: PatchAiBudgetInput!): AiBudget!
-    """Disable an ai-gateway budget (ai-gateway DELETE /admin/budgets/{id}, soft-delete). Needs ai.budget.write."""
+    """Disable an ai-gateway budget (ai-gateway DELETE /admin/budgets/{id}, soft-delete). Needs ai.budget.update."""
     deleteAiBudget(id: ID!): AiBudget!
     """Issue a new virtual API key (ai-gateway POST /admin/keys, 201) — the
-    returned \`secret\` is shown ONCE and never retrievable again. Needs ai.key.write."""
+    returned \`secret\` is shown ONCE and never retrievable again. Needs ai.key.update."""
     createAiVirtualKey(input: CreateAiVirtualKeyInput!, idempotencyKey: String): AiVirtualKey!
-    """Revoke a virtual key (ai-gateway POST .../revoke). Needs ai.key.write."""
+    """Revoke a virtual key (ai-gateway POST .../revoke). Needs ai.key.update."""
     revokeAiVirtualKey(id: ID!): AiVirtualKey!
     """Rotate a virtual key (ai-gateway POST .../rotate) — issues a new secret,
-    shown ONCE, and invalidates the old one. Needs ai.key.write."""
+    shown ONCE, and invalidates the old one. Needs ai.key.update."""
     rotateAiVirtualKey(id: ID!): AiVirtualKey!
     """Replace the tenant's guardrail policy (ai-gateway PUT /admin/guardrails).
-    Disabling PII redaction (pii.mode=off) requires the platform-operator scope. Needs ai.guardrail.write."""
+    Disabling PII redaction (pii.mode=off) requires the platform-operator scope. Needs ai.guardrail.update."""
     putAiGuardrailPolicy(policy: JSON!): AiGuardrailPolicy!
 
     # ---- Tier 2b: notification-service ---------------------------------------
