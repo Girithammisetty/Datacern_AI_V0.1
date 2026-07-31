@@ -96,6 +96,88 @@ PYEOF
     || echo "?"
 }
 
+# Merge a demo tenant's seeded personas into ui-web's dev-login map.
+#
+# WHY this is needed at all: demo_seed_runner.py invites REAL identity-service
+# users (one per bundle persona), but ui-web's dev login resolves against
+# DATACERN_PERSONAS — a JSON map read ONCE at ui-web boot from
+# deploy/local/run/personas.json (up.sh::start_ui). Its contract is
+# deliberately fail-closed: "when a personas map is present it is
+# AUTHORITATIVE; an email that does not resolve is rejected (unknown user)"
+# (services/ui-web/src/lib/auth/personas.ts). Nothing in the /demo-tenants path
+# writes that file, so a freshly seeded sandbox's personas cannot log in no
+# matter what you type. packs/demo.sh's own flow does the equivalent merge +
+# ui-web restart; this path had no counterpart.
+#
+# Entry shape mirrors seed_platform.py::write_personas_env exactly.
+merge_personas(){ # merge_personas <tenant-id> <pack>
+  local tid="$1" pk="$2" pfile="$REPO/deploy/local/run/personas.json"
+  "$PY" - "$REPO" "$tid" "$pk" "$pfile" "$IDENTITY" "$(su_token)" <<'PYEOF'
+import json, os, sys
+import urllib.request
+
+repo, tid, pack, pfile, identity, tok = sys.argv[1:7]
+sys.path.insert(0, os.path.join(repo, "deploy", "e2e", "lib"))
+
+bundle = os.path.join(repo, "deploy", "demo", pack, "personas.yaml")
+try:
+    import yaml
+    people = yaml.safe_load(open(bundle)) or []
+except Exception as e:                       # pyyaml absent -> say so, do not guess
+    print(f"SKIP {e}", file=sys.stderr); sys.exit(3)
+
+def get(url):
+    r = urllib.request.Request(url, headers={"Authorization": f"Bearer {tok}"})
+    with urllib.request.urlopen(r, timeout=15) as resp:
+        return json.load(resp)
+
+# the tenant's default workspace, from rbac via the same path the journeys use
+ws = ""
+try:
+    import subprocess
+    ws = subprocess.run(
+        ["psql", "-h", "localhost", "-U", "datacern", "-d", "rbac", "-tA", "-c",
+         f"SELECT id FROM workspaces WHERE tenant_id = '{tid}' ORDER BY created_at LIMIT 1"],
+        env={**os.environ, "PGPASSWORD": "datacern_dev"},
+        capture_output=True, text=True, check=True).stdout.strip()
+except Exception:
+    pass
+if not ws:
+    print("SKIP could not resolve the tenant's workspace", file=sys.stderr); sys.exit(3)
+
+existing = {}
+if os.path.exists(pfile):
+    try:
+        existing = json.load(open(pfile))
+    except Exception:
+        existing = {}
+
+added = []
+for p in people:
+    # demo_seed_runner.py:184 builds persona emails as
+    #   <local_part>@<tenant_id>.demo.datacern.ai
+    email = f"{p['email_local_part']}@{tid}.demo.datacern.ai"
+    sub = ""
+    try:
+        data = get(f"{identity}/api/v1/users?filter[email]={email}").get("data") or []
+        if data:
+            sub = data[0].get("id") or ""
+    except Exception:
+        pass
+    if not sub:
+        print(f"SKIP persona {email} has no identity user (did seeding run?)", file=sys.stderr)
+        continue
+    existing[email] = {"sub": sub, "tenantId": tid, "workspaceId": ws,
+                       "scopes": ["*"], "profile": "demo"}
+    added.append(email)
+
+os.makedirs(os.path.dirname(pfile), exist_ok=True)
+json.dump(existing, open(pfile, "w"))
+for e in added:
+    print(e)
+PYEOF
+}
+
 case "$CMD" in
   list)
     say "${BLD}Bundles that seed cases${NC} (deploy/demo/<pack>/cases.yaml):"
@@ -186,9 +268,25 @@ for st in (json.load(sys.stdin).get("steps") or []):
       ok "case worklist has $N case(s)"
     fi
 
+    # Seeding created real users; ui-web still cannot log them in until its
+    # dev-login map knows about them. Do that here rather than leaving a
+    # sandbox whose personas all fail with "unknown user".
+    say ""
+    say "  merging personas into ui-web's dev-login map …"
+    if LOGINS="$(merge_personas "$TID" "$PACK" 2>&1)" && [ -n "$LOGINS" ]; then
+      ok "logins registered:"
+      printf '%s\n' "$LOGINS" | sed 's/^/       /'
+      say ""
+      say "  ${YEL}ui-web reads that map ONCE at boot — restart it:${NC}"
+      say "    ${BLD}deploy/local/restart_ui.sh${NC}"
+    else
+      warn "could not merge personas into the dev-login map:"
+      printf '%s\n' "$LOGINS" | sed 's/^/       /'
+      warn "the seeded users exist in identity-service but ui-web will reject them"
+    fi
+
     say ""
     say "${GRN}ready${NC} — tenant ${BLD}$TID${NC}"
-    say "  UI:      ${BLD}http://localhost:3000/login${NC}  (personas: deploy/demo/$PACK/personas.yaml)"
     say "  re-seed: ${BLD}packs/demo_sandbox.sh reset $TID${NC}"
     ;;
 
