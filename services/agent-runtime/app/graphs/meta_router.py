@@ -58,6 +58,10 @@ _CANDIDATES = [
                    "questions."),
 ]
 _ALLOWED = {k for k, _ in _CANDIDATES}
+#: Public view of the routable set, for callers that must validate a proposed
+#: target before it reaches this graph (the chat route clamps `route_hint` to it).
+#: Deliberately excludes case-triage and ml-engineer — see the module docstring.
+ROUTABLE_AGENT_KEYS = frozenset(_ALLOWED)
 #: The fallback target MUST stay read-only. Every uncertain path lands here, so
 #: a target that could emit a WriteIntent would turn "I could not tell what you
 #: meant" into a proposal for an action nobody requested.
@@ -93,7 +97,10 @@ _SYS = system_prompt("meta_router.system")
 # forwarded to the delegate UNCHANGED — the router narrows only WHICH agent
 # runs, never WHAT it sees.
 _ROUTER_OWNED_KEYS = {"target_agent_key", "routing_rationale", "routing_confidence",
-                     "routing_fallback_reason", "usage", "trace", "delegate_outcome"}
+                     "routing_fallback_reason", "usage", "trace", "delegate_outcome",
+                     # Router-only: the delegate already IS the routing decision,
+                     # so passing the prior on would just be noise it might act on.
+                     "route_hint"}
 
 
 def _safe_delegate_target(target: str, runners) -> str:
@@ -108,9 +115,21 @@ def _safe_delegate_target(target: str, runners) -> str:
 def build_meta_router_graph(deps: GraphDeps):
     async def classify(state: dict) -> dict:
         query = state.get("query", "") or ""
+        # The caller's current screen, as a TIE-BREAKER only. "run it again" on
+        # the batch-scoring page means something different than the same words on
+        # the training page, and the text alone cannot tell them apart. Phrased so
+        # the model overrides it whenever the request is clear, because the whole
+        # point of routing on intent is that the screen must not get the last word.
+        hint = state.get("route_hint")
+        user_content = query
+        if hint in ROUTABLE_AGENT_KEYS:
+            user_content = (
+                f"{query}\n\n[The user is currently on the {hint} screen. Use this "
+                "ONLY to break a tie when the request itself is ambiguous; if the "
+                "request clearly names a different task, route to that task instead.]")
         result = await deps.llm.chat(
             messages=[{"role": "system", "content": _SYS},
-                      {"role": "user", "content": query}],
+                      {"role": "user", "content": user_content}],
             tenant_id=state["tenant_id"],
             # ai-gateway's semantic cache matches on embedding similarity of the
             # full prompt (AIG-FR-040/BR-15). The classify system prompt is long
@@ -161,6 +180,9 @@ def build_meta_router_graph(deps: GraphDeps):
              "target_agent_key": target,
              "confidence": confidence,
              "fallback_reason": fallback_reason,
+             # Recorded so a reviewer can tell a decision the text drove from one
+             # the screen nudged — otherwise a hint-shaped mis-route is invisible.
+             "route_hint": hint if hint in ROUTABLE_AGENT_KEYS else None,
              "rationale": state["routing_rationale"]})
         return state
 

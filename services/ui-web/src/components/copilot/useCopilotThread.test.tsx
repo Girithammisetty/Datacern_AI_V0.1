@@ -119,3 +119,39 @@ describe("useCopilotThread agentKey routing (Tier 2b)", () => {
     expect(streamCloses[0]).toHaveBeenCalled();
   });
 });
+
+/** The route hint rides along with every turn.
+ *
+ * The drawer now talks to the meta-router instead of binding its agent to the
+ * pathname, so the SCREEN has to travel as data — otherwise "run it again" on
+ * the scoring page is indistinguishable from the same words anywhere else. It
+ * must be sent per turn, not just on the first, because the router re-decides
+ * on each one. */
+describe("useCopilotThread route hint", () => {
+  it("posts the hint on every turn, alongside the router agentKey", async () => {
+    const { result } = renderHook(() =>
+      useCopilotThread("wr:t:dataset:dataset/d-1", "meta-router", "inference"));
+
+    await act(async () => {
+      await result.current.send("run it again");
+    });
+    await act(async () => {
+      await result.current.send("and once more");
+    });
+
+    expect(fetchCalls[0].body.agentKey).toBe("meta-router");
+    expect(fetchCalls[0].body.routeHint).toBe("inference");
+    // Re-routing is per-turn: the second turn must carry the hint too.
+    expect(fetchCalls[1].body.routeHint).toBe("inference");
+  });
+
+  it("sends routeHint null where the route carries no prior", async () => {
+    const { result } = renderHook(() =>
+      useCopilotThread("wr:t:case:case/c-1", "meta-router", null));
+
+    await act(async () => {
+      await result.current.send("why did approvals spike?");
+    });
+    expect(fetchCalls[0].body.routeHint).toBeNull();
+  });
+});

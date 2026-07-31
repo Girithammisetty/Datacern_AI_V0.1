@@ -48,7 +48,11 @@ export interface ChatMessage {
  * returned by the first turn is replayed on subsequent turns for thread
  * continuity, keyed per agent (each specialist runs its own session).
  */
-export function useCopilotThread(contextUrn: string | null, agentKey?: string | null) {
+export function useCopilotThread(
+  contextUrn: string | null,
+  agentKey?: string | null,
+  routeHint?: string | null,
+) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
   const threadRef = useRef<string | null>(null);
@@ -88,6 +92,7 @@ export function useCopilotThread(contextUrn: string | null, agentKey?: string | 
             text,
             contextUrn,
             agentKey: agentKey ?? null,
+            routeHint: routeHint ?? null,
             sessionId: sessionsRef.current.get(sessionKey) ?? null,
           }),
         });
@@ -175,7 +180,7 @@ export function useCopilotThread(contextUrn: string | null, agentKey?: string | 
         },
       });
     },
-    [contextUrn, agentKey],
+    [contextUrn, agentKey, routeHint],
   );
 
   function finishWithError(assistantId: string, text: string) {

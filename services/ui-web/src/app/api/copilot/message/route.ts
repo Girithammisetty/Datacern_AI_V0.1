@@ -55,10 +55,17 @@ export async function POST(req: NextRequest) {
     contextUrn?: string | null;
     sessionId?: string | null;
     agentKey?: string | null;
+    routeHint?: string | null;
   };
   if (!body.text) return NextResponse.json({ error: "text required" }, { status: 400 });
   const agentKey =
     body.agentKey && ALLOWED_AGENT_KEYS.has(body.agentKey) ? body.agentKey : COPILOT_AGENT_KEY;
+  // Non-binding routing prior from the caller's current screen. Allowlisted on
+  // the same set as agentKey: the hint reaches an LLM prompt, so an unvalidated
+  // value would be a free text injection point, and it must never be able to
+  // name an agent the caller could not have selected outright.
+  const routeHint =
+    body.routeHint && ALLOWED_AGENT_KEYS.has(body.routeHint) ? body.routeHint : null;
 
   const threadId = body.threadId || crypto.randomUUID();
   try {
@@ -71,6 +78,7 @@ export async function POST(req: NextRequest) {
           messages: [{ role: "user", content: body.text }],
           metadata: {
             context_urn: body.contextUrn ?? null,
+            ...(routeHint ? { route_hint: routeHint } : {}),
             // Thread continuity: reuse the agent-runtime session across turns when
             // the client has one (returned below as `sessionId`).
             ...(body.sessionId ? { session_id: body.sessionId } : {}),
