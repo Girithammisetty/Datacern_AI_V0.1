@@ -85,6 +85,11 @@ func (s *Server) Router() http.Handler {
 			r.With(s.RequireAction(authz.ActionCaseBulk)).Post("/bulk", s.handleBulk)
 			r.With(s.RequireAction(authz.ActionCaseExport)).Post("/export", s.handleExport)
 			r.With(s.RequireAction(authz.ActionCaseRead)).Get("/form", s.handleForm)
+			// Approver queue intelligence (roadmap item 4): aging, SLA risk,
+			// throughput, time-to-decision. Read-only aggregate over the
+			// caller's own workspace. Registered before /{id} so chi does not
+			// route "queue-intelligence" as a case id.
+			r.With(s.RequireAction(authz.ActionCaseRead)).Get("/queue-intelligence", s.handleQueueIntelligence)
 
 			// Every /{id} route also passes RequireCaseWorkspace: a workspace-
 			// bearing token cannot see or touch another department's case

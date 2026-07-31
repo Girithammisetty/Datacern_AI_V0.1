@@ -119,6 +119,22 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.setup.outputs.go) }}
     name: test-go (${{ matrix.name }})
+    # A real Postgres for tests whose whole subject is SQL semantics (FILTER
+    # clauses, interval arithmetic, percentile_cont, NULL handling) — none of
+    # which a fake can check. Tests that want it read CASE_TEST_DATABASE_URL and
+    # SKIP when it is unset, so this service is what stops them being a silent
+    # no-op; a service with no such tests just pays the container start.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: datacern
+          POSTGRES_PASSWORD: datacern_dev
+          POSTGRES_DB: datacern_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U datacern"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -127,6 +143,8 @@ jobs:
           cache-dependency-path: ${{ matrix.path }}/go.sum
       - name: go vet & test (unit)
         working-directory: ${{ matrix.path }}
+        env:
+          CASE_TEST_DATABASE_URL: postgres://datacern:datacern_dev@localhost:5432/datacern_test?sslmode=disable
         run: |
           go vet ./...
           go test ./... -coverprofile=coverage.out
