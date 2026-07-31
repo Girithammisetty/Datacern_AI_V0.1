@@ -1,7 +1,7 @@
 SERVICES := $(wildcard services/*)
 
 .PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up up-platform down reset doctor soak soak-volume \
-        journey demo-list demo-load demo-clean demo-clean-all security-probe
+        journey journey-forms demo-list demo-load demo-clean demo-clean-all security-probe
 
 # Capstone: provision the WHOLE platform locally and open it in a browser for
 # hands-on end-user testing. Preflight -> infra -> migrate+boot all 22 services
@@ -81,6 +81,17 @@ journey-streams:
 # stages, output parquet bytes). Needs `make up`.
 journey-learn:
 	deploy/e2e/.venv/bin/python deploy/e2e/test_learn_journey.py
+
+# Schema-driven forms journey (schema-driven-forms-addon slice 5): a customer
+# declares typed intake fields with layout hints -> the bff serves them to a
+# renderer unchanged (required hoisted, group/order/widget intact) -> a wrong
+# type / undeclared key / missing required are each REFUSED and write nothing ->
+# real ai-gateway drafting returns typed suggestions inside the catalog and
+# writes nothing -> the human's submit stores EXACTLY what was sent -> the draft
+# is metered on the caller's tenant. Asserts on STATE (catalog rows, the served
+# form model, custom_fields JSONB, request_log). Needs `make up`.
+journey-forms:
+	deploy/e2e/.venv/bin/python deploy/e2e/test_forms_journey.py
 
 # ---- Demo pack control -----------------------------------------------------
 # Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway

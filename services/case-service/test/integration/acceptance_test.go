@@ -404,6 +404,139 @@ func TestAC12_FormFieldsShadowing(t *testing.T) {
 	assert.Equal(t, "query-scoped", meta["label"])
 }
 
+// ---- CASE-FR-022/023: the typed catalog is enforced at the write boundary ----
+//
+// Name-only validation was the earlier behaviour: a field declared `float`
+// accepted the string "not a number", and a field authored `required: true` in
+// field_meta could be omitted. These prove the declaration now MEANS something,
+// and — the part a validation message alone never proves — that a refusal
+// leaves no row behind.
+
+func (h *harness) declareField(t *testing.T, a actorCtx, name, dataType string, meta map[string]any) {
+	t.Helper()
+	r := h.do(t, "POST", "/api/v1/case-fields", a.tok, map[string]any{
+		"name": name, "data_type": dataType, "purpose": "both", "field_meta": meta,
+	}, nil)
+	require.Equal(t, http.StatusCreated, r.status, "%v", r.body)
+}
+
+func (h *harness) createWithCustom(t *testing.T, a actorCtx, custom map[string]any) resp {
+	t.Helper()
+	return h.do(t, "POST", "/api/v1/cases", a.tok, map[string]any{
+		"dataset_urn": "wr:" + a.tenant.String() + ":dataset:dataset/txns",
+		"due_date":    time.Now().Add(48 * time.Hour).Format(time.RFC3339),
+		"custom_fields": custom,
+		"rows": []map[string]any{{"row_pk": "txn-" + uuid.NewString()[:8],
+			"display_projection": map[string]string{"merchant": "ACME"}}},
+	}, nil)
+}
+
+func (h *harness) openCaseCount(t *testing.T, a actorCtx) int {
+	t.Helper()
+	r := h.do(t, "GET", "/api/v1/cases?limit=200", a.tok, nil, nil)
+	require.Equal(t, http.StatusOK, r.status)
+	rows, _ := r.body["data"].([]any)
+	return len(rows)
+}
+
+func TestCustomFields_FormModelHoistsRequiredAndLayoutHints(t *testing.T) {
+	h := requireHarness(t)
+	a := h.newActor(t)
+	h.declareField(t, a, "siu_referral", "enum", map[string]any{
+		"label": "SIU referral", "options": []string{"yes", "no"},
+		"required": true, "group": "Lead", "order": 1, "widget": "radio",
+	})
+
+	r := h.do(t, "GET", "/api/v1/cases/form?mode=create", a.tok, nil, nil)
+	require.Equal(t, http.StatusOK, r.status, "%v", r.body)
+	custom := dataMap(r)["custom_fields"].([]any)
+	require.Len(t, custom, 1)
+	f := custom[0].(map[string]any)
+
+	// `required` is AUTHORED in field_meta (that is what a pack writes) and
+	// hoisted here — without the hoist a pack's required field renders optional.
+	assert.Equal(t, true, f["required"], "required must be hoisted out of field_meta")
+	meta := f["field_meta"].(map[string]any)
+	assert.Equal(t, "Lead", meta["group"])
+	assert.Equal(t, "radio", meta["widget"])
+	assert.EqualValues(t, 1, meta["order"])
+}
+
+func TestCustomFields_WrongTypeIsRefusedAndWritesNothing(t *testing.T) {
+	h := requireHarness(t)
+	a := h.newActor(t)
+	h.declareField(t, a, "exposure", "float", map[string]any{"label": "Exposure"})
+	before := h.openCaseCount(t, a)
+
+	r := h.createWithCustom(t, a, map[string]any{"exposure": "not a number"})
+	assert.Equal(t, http.StatusUnprocessableEntity, r.status, "%v", r.body)
+	assert.Equal(t, domain.CodeValidationFailed, errCode(r))
+	// The message is the cheap part; this is the part that matters.
+	assert.Equal(t, before, h.openCaseCount(t, a), "a refused create must leave no row")
+}
+
+func TestCustomFields_EnumOutsideDeclaredOptionsIsRefused(t *testing.T) {
+	h := requireHarness(t)
+	a := h.newActor(t)
+	h.declareField(t, a, "priority", "enum", map[string]any{
+		"options": []string{"high", "low"},
+	})
+	r := h.createWithCustom(t, a, map[string]any{"priority": "urgent"})
+	assert.Equal(t, http.StatusUnprocessableEntity, r.status, "%v", r.body)
+}
+
+func TestCustomFields_RequiredIsEnforcedOnCreateButNotOnUpdate(t *testing.T) {
+	h := requireHarness(t)
+	a := h.newActor(t)
+	h.declareField(t, a, "siu_referral", "enum", map[string]any{
+		"options": []string{"yes", "no"}, "required": true,
+	})
+
+	// create without it → refused
+	r := h.createWithCustom(t, a, map[string]any{})
+	assert.Equal(t, http.StatusUnprocessableEntity, r.status, "%v", r.body)
+
+	// create with it → accepted, and stored EXACTLY as sent
+	r = h.createWithCustom(t, a, map[string]any{"siu_referral": "yes"})
+	require.Equal(t, http.StatusCreated, r.status, "%v", r.body)
+	id := dataMap(r)["created"].([]any)[0].(map[string]any)["id"].(string)
+
+	got := h.do(t, "GET", "/api/v1/cases/"+id, a.tok, nil, nil)
+	require.Equal(t, http.StatusOK, got.status)
+	stored := dataMap(got)["custom_fields"].(map[string]any)
+	assert.Equal(t, map[string]any{"siu_referral": "yes"}, stored)
+
+	// A PATCH is a partial edit: re-enforcing required there would make every
+	// unrelated update impossible.
+	pr := h.do(t, "PATCH", "/api/v1/cases/"+id, a.tok,
+		map[string]any{"custom_fields": map[string]any{}}, nil)
+	assert.Equal(t, http.StatusOK, pr.status, "%v", pr.body)
+}
+
+func TestCustomFields_NumbersSurviveAsNumbers(t *testing.T) {
+	h := requireHarness(t)
+	a := h.newActor(t)
+	h.declareField(t, a, "exposure", "float", nil)
+	h.declareField(t, a, "prior_claims", "integer", nil)
+
+	r := h.createWithCustom(t, a, map[string]any{"exposure": 9000.5, "prior_claims": 4})
+	require.Equal(t, http.StatusCreated, r.status, "%v", r.body)
+	id := dataMap(r)["created"].([]any)[0].(map[string]any)["id"].(string)
+
+	got := h.do(t, "GET", "/api/v1/cases/"+id, a.tok, nil, nil)
+	stored := dataMap(got)["custom_fields"].(map[string]any)
+	// json.Unmarshal gives float64 for both — the point is they are NUMBERS,
+	// not the formatted strings a form would send if nothing coerced them.
+	assert.IsType(t, float64(0), stored["exposure"])
+	assert.IsType(t, float64(0), stored["prior_claims"])
+	assert.EqualValues(t, 9000.5, stored["exposure"])
+	assert.EqualValues(t, 4, stored["prior_claims"])
+
+	// An integer field must reject a fraction — the declaration says whole.
+	bad := h.createWithCustom(t, a, map[string]any{"prior_claims": 2.5})
+	assert.Equal(t, http.StatusUnprocessableEntity, bad.status, "%v", bad.body)
+}
+
 // ---- AC-13: cross-tenant access returns 404 + RLS proven --------------------
 
 func TestAC13_CrossTenantIsolation(t *testing.T) {

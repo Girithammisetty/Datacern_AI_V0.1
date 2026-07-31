@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useState } from "react";
 import {
-  SchemaForm, validateSchemaForm,
+  SchemaForm, validateSchemaForm, layoutSections,
   type SchemaFormField, type SchemaFormValues,
 } from "./SchemaForm";
 
@@ -110,5 +110,85 @@ describe("validateSchemaForm", () => {
     const off = validateSchemaForm(FIELDS,
       { claimant: "A", amount: "1", category: "fraud" });
     expect(off.values.confirmed).toBe(false);
+  });
+
+  // ---- slice 4: field_meta LAYOUT hints (group / order / widget) -----------
+
+  it("keeps catalog order when no layout hints are authored", () => {
+    // The default must be "renders exactly as before" — a pack that sets no
+    // hints must not have its form silently rearranged.
+    const secs = layoutSections(FIELDS);
+    expect(secs).toHaveLength(1);
+    expect(secs[0].group).toBeNull();
+    expect(secs[0].fields.map((f) => f.name)).toEqual(FIELDS.map((f) => f.name));
+  });
+
+  it("groups and orders fields from field_meta, ungrouped first", () => {
+    // Authoring convention: give each group its own order BAND (Lead 1-9,
+    // Recovery 10+). A group sorts by its lowest order, so bands keep the
+    // sections apart no matter what order the catalog lists fields in.
+    const fields: SchemaFormField[] = [
+      { name: "recovered", dataType: "float", fieldMeta: { group: "Recovery", order: 11 } },
+      { name: "typology", dataType: "string", fieldMeta: { group: "Lead", order: 2 } },
+      { name: "note", dataType: "text" },                       // ungrouped → leads
+      { name: "method", dataType: "string", fieldMeta: { group: "Recovery", order: 10 } },
+      { name: "npi", dataType: "string", fieldMeta: { group: "Lead", order: 1 } },
+    ];
+    const secs = layoutSections(fields);
+    expect(secs.map((s) => s.group)).toEqual([null, "Lead", "Recovery"]);
+    expect(secs[1].fields.map((f) => f.name)).toEqual(["npi", "typology"]);
+    expect(secs[2].fields.map((f) => f.name)).toEqual(["method", "recovered"]);
+  });
+
+  it("breaks a group-weight tie by first appearance, not by name", () => {
+    // Two groups sharing a lowest order is an authoring accident; the catalog's
+    // own order decides, so the layout stays stable instead of alphabetising.
+    const fields: SchemaFormField[] = [
+      { name: "b1", dataType: "string", fieldMeta: { group: "Zebra", order: 1 } },
+      { name: "a1", dataType: "string", fieldMeta: { group: "Alpha", order: 1 } },
+    ];
+    expect(layoutSections(fields).map((s) => s.group)).toEqual(["Zebra", "Alpha"]);
+  });
+
+  it("renders group headings and puts each field under its own", () => {
+    const fields: SchemaFormField[] = [
+      { name: "npi", dataType: "string", fieldMeta: { group: "Lead", label: "Provider NPI" } },
+      { name: "method", dataType: "string", fieldMeta: { group: "Recovery", label: "Method" } },
+    ];
+    render(<Harness fields={fields} />);
+    expect(screen.getByText("Lead")).toBeInTheDocument();
+    expect(screen.getByText("Recovery")).toBeInTheDocument();
+    expect(screen.getByLabelText("Provider NPI")).toBeInTheDocument();
+  });
+
+  it("honors widget: radio for a short enum and still reports the picked value", () => {
+    const fields: SchemaFormField[] = [
+      { name: "priority", dataType: "enum",
+        fieldMeta: { label: "Priority", widget: "radio", options: ["high", "low"] } },
+    ];
+    render(<Harness fields={fields} />);
+    const group = screen.getByRole("radiogroup", { name: "Priority" });
+    expect(group).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "high" }));
+    expect((screen.getByRole("radio", { name: "high" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("honors widget: textarea for a long string", () => {
+    const fields: SchemaFormField[] = [
+      { name: "rationale", dataType: "string",
+        fieldMeta: { label: "Rationale", widget: "textarea" } },
+    ];
+    render(<Harness fields={fields} />);
+    expect(screen.getByLabelText("Rationale").tagName).toBe("TEXTAREA");
+  });
+
+  it("falls back to the type's own widget when the hint is unrecognised", () => {
+    // An author typo must not blank the field out.
+    const fields: SchemaFormField[] = [
+      { name: "code", dataType: "string",
+        fieldMeta: { label: "Code", widget: "slider" as unknown as "radio" } },
+    ];
+    render(<Harness fields={fields} />);
+    expect(screen.getByLabelText("Code").tagName).toBe("INPUT");
   });
 });

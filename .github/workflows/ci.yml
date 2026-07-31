@@ -608,6 +608,18 @@ jobs:
       - name: Learn flywheel journey (make journey-learn)
         run: make journey-learn
 
+      # Schema-driven forms (slice 5): the customization claim — a customer
+      # declares typed intake fields with layout hints and the form follows,
+      # with no deploy. Asserts the parts a demo can fake: a wrong type and a
+      # missing required field are REFUSED and write nothing, AI drafting
+      # returns typed suggestions inside the declared catalog and writes
+      # nothing, the human's submit stores exactly what was sent, and the draft
+      # is metered on the caller's tenant. Same placement rationale as the
+      # journeys above: state-asserted, cheap, and a broken chain here makes the
+      # UI assertions meaningless.
+      - name: Schema-driven forms journey (make journey-forms)
+        run: make journey-forms
+
       - name: Run live-stack E2E suite (pnpm e2e:live)
         working-directory: services/ui-web
         env:

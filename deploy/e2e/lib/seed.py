@@ -7,6 +7,8 @@ Subcommands:
            tenant-scoped virtual key for agent-runtime; print the vkey secret.
   evalkey  mint a tenant-scoped, JUDGE-capable virtual key for eval-service's
            LLM-judge calls (reuses the deployment aigw seeded); print the secret.
+  bffkey   mint a tenant-scoped, CHAT-capable virtual key for bff-graphql's AI
+           form drafting (draftCaseFields); print the secret.
   inference_tool <tenant_id>
            idempotently register+publish+enable the inference.submit write-
            proposal tool and point tool-plane's mcp_backends at inference-
@@ -802,6 +804,40 @@ def seed_evalkey(tenant_id: str) -> str:
     return vkey
 
 
+def seed_bffkey(tenant_id: str) -> str:
+    """Mint a tenant-scoped, CHAT-capable virtual key for bff-graphql's AI form
+    drafting (`draftCaseFields`, schema-driven-forms slice 3).
+
+    Why a key at all: ai-gateway's data plane takes the virtual key as the bearer
+    AND the caller's JWT in X-Datacern-JWT, and rejects the call unless the key's
+    tenant equals the JWT's tenant (app/api/middleware.py::_data_plane). So the
+    key must belong to THIS tenant — the same single-tenant shape eval-service's
+    judge key has. It routes to the fast-small -> llama3.2 deployment `aigw`
+    already seeded under the platform tenant.
+    key_hash = sha256_hex("nk-<token>")."""
+    import datetime as _dt
+    import hashlib
+    import secrets
+    import uuid as _uuid
+
+    import psycopg
+
+    now = _dt.datetime.now(_dt.timezone.utc)
+    vkey = f"nk-{secrets.token_urlsafe(32)}"
+    key_hash = hashlib.sha256(vkey.encode()).hexdigest()
+    dsn = "postgresql://datacern:datacern_dev@localhost:5432/ai_gateway"
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute(
+            """INSERT INTO virtual_keys
+               (id, tenant_id, key_hash, principal_type, principal_id,
+                allowed_request_classes, max_rung, status, created_at, updated_at)
+               VALUES (%s,%s,%s,'service','bff-graphql', %s, 3, 'active', %s, %s)
+               ON CONFLICT (key_hash) DO NOTHING""",
+            (str(_uuid.uuid4()), tenant_id, key_hash, ["chat"], now, now))
+    print(vkey)
+    return vkey
+
+
 def _register_tool(tenant_id: str, *, tool_id: str, version: str, display: str,
                    owner_service: str, backend_url: str, semantic_description: str,
                    input_schema: dict, tags: list[str]) -> str:
@@ -947,6 +983,8 @@ if __name__ == "__main__":
         seed_aigw(sys.argv[2])
     elif cmd == "evalkey":
         seed_evalkey(sys.argv[2])
+    elif cmd == "bffkey":
+        seed_bffkey(sys.argv[2])
     elif cmd == "inference_tool":
         register_inference_tool(sys.argv[2])
     elif cmd == "case_apply_tool":
@@ -960,7 +998,7 @@ if __name__ == "__main__":
     elif cmd == "ml_lifecycle_tools":
         register_ml_lifecycle_tools(sys.argv[2])
     else:
-        print("usage: seed.py {tenant|aigw <tenant_id>|evalkey <tenant_id>|"
+        print("usage: seed.py {tenant|aigw <tenant_id>|evalkey <tenant_id>|bffkey <tenant_id>|"
              "inference_tool <tenant_id>|case_apply_tool <tenant_id>|"
              "ingestion_tool <tenant_id>|"
              "chart_dashboard_tool <tenant_id>|entity_merge_tool <tenant_id>|"

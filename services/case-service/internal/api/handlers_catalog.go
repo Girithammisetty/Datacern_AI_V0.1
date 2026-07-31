@@ -261,8 +261,14 @@ func (s *Server) handleForm(w http.ResponseWriter, r *http.Request) {
 	defaults := defaultFormFields(mode)
 	customOut := make([]any, 0, len(custom))
 	for _, f := range custom {
+		// `required` / `readonly` are AUTHORED inside field_meta (that is what a
+		// pack's cases/fields.yaml writes) but are HOISTED here so a renderer
+		// reads one shape for defaults and custom fields alike. Without this a
+		// pack declaring `required: true` renders as optional — the flag was
+		// reaching the catalog and dying in the form model.
 		customOut = append(customOut, map[string]any{
 			"name": f.Name, "data_type": f.DataType, "field_meta": f.FieldMeta, "custom": true, "query_scoped": f.QueryURN != "",
+			"required": domain.MetaBool(f.FieldMeta, "required"), "readonly": domain.MetaBool(f.FieldMeta, "readonly"),
 		})
 	}
 	writeData(w, http.StatusOK, map[string]any{"mode": mode, "defaults": defaults, "custom_fields": customOut})

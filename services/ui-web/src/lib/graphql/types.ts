@@ -1491,6 +1491,12 @@ export interface CaseFieldMeta {
   min?: number;
   max?: number;
   rows?: number;
+  /** Layout hints authored in a pack's `cases/fields.yaml` (or Case settings):
+   * section heading, sort weight, and a widget override. The renderer honors
+   * them; unknown keys are ignored. */
+  group?: string;
+  order?: number;
+  widget?: "textarea" | "radio";
 }
 
 /** One field of the case form model. Platform defaults and tenant custom

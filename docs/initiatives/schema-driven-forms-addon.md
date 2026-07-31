@@ -109,8 +109,8 @@ one bff form query, and one drafting route.
 | 1 | `SchemaForm` renderer — pure, typed widgets from a field set + `field_meta` layout hints + required-validation; unit-tested | **shipped** |
 | 2 | Wire `SchemaForm` into a typed **New case** flow (pick a case type → render its fields → submit through the existing create path) + bff `caseForm` query | **shipped** |
 | 3 | **AI autofill** — `draftCaseFields` route (evidence + schema → per-field suggestions w/ provenance) + `AiFillPanel`; suggestions are editable, AI-marked, never auto-submitted | **shipped** |
-| 4 | `field_meta` layout hints end-to-end (group/order/widget/help) + a pack shipping a custom case-type form as its template | designed |
-| 5 | Live journey (`make journey-forms`): define a case type with custom fields → render → AI-draft from a seeded evidence doc → human edits one field → submit → the case row carries exactly the submitted custom_fields, and the audit trail shows a human actor | designed |
+| 4 | `field_meta` layout hints end-to-end (group/order/widget/help) + a pack shipping a custom case-type form as its template | **shipped** |
+| 5 | Live journey (`make journey-forms`): define a case type with custom fields → render → AI-draft from a seeded evidence doc → human edits one field → submit → the case row carries exactly the submitted custom_fields, and the audit trail shows a human actor | **shipped** |
 
 ## Slice 1 — the schema-driven form renderer
 
@@ -195,3 +195,84 @@ drafting, the data-plane auth headers, unconfigured and cross-tenant refusals)
 and 4 ui-web tests (values land in the real widgets, AI marks appear and drop on
 edit, the material sent equals the visible box, the server's refusal is shown
 verbatim).
+
+## Slice 4 — layout hints end to end, and the typed catalog made real (shipped)
+
+The layout half is what the slice promised: `field_meta` now carries `group`,
+`order` and `widget` alongside `label`/`help`/`placeholder`/`options`, and
+`SchemaForm` renders sections in order with a widget override
+(`radio` for a short enum, `textarea` for a long string). An unrecognised widget
+falls back to the type's own control — an author's typo must not blank a field.
+Authoring convention: give each group its own order BAND (Lead 1–9, Recovery
+10–19), since a group sorts by its lowest order. No hints authored → the form
+renders in catalog order, exactly as before.
+
+`packs/payer-fwa-siu/cases/fields.yaml` is the worked example: eight typed
+fields laid out in two sections with a radio priority and help text. Installing
+the pack rearranges the intake form; nothing is code.
+
+### The two gaps this slice had to close first
+
+Building the layout half surfaced that the catalog was weaker than it read:
+
+1. **`required` never reached a renderer.** Packs author it inside `field_meta`
+   (all 28 packs do), but `GET /cases/form` emitted no `required` key for custom
+   fields at all — so a pack declaring a required field rendered as optional.
+   The form model now HOISTS `required`/`readonly` out of `field_meta`, giving
+   defaults and custom fields one shape.
+
+2. **The typed catalog did not check types.** `validateCustomFields` checked
+   NAMES only (CASE-FR-023): a field declared `float` stored the string
+   `"not a number"`, and a required field could be omitted. A typed catalog that
+   never checks types is a naming convention — every downstream reader
+   (decision surfaces, exports, ML feature builds) then re-parses and re-guesses
+   exactly what the declaration promised. `domain.ValidateCustomValues` now
+   enforces the declared type and the enum's declared options on write, and
+   `required` on create. `required` is deliberately NOT re-checked on PATCH:
+   a partial edit must stay partial.
+
+No pack currently authors `required: true`, so nothing existing changes
+behaviour — the enforcement starts mattering the moment someone uses it.
+
+## Slice 5 — `make journey-forms` (shipped)
+
+A live gate in `e2e-live`, next to `journey`, `journey-streams` and
+`journey-learn`, asserting on STATE rather than acknowledgements:
+
+1. **DECLARE** four typed fields with layout hints → rows in the catalog
+2. **SERVE** the bff's `caseForm` returns them with `required` hoisted and
+   `group`/`order`/`widget`/`options` intact — the declaration reaches a
+   renderer unchanged
+3. **REFUSE** a wrong type, an undeclared key, an out-of-options enum and a
+   missing required field are each 422 **and the case count does not move** —
+   a validation message with a row written anyway is worse than no validation
+4. **DRAFT** real ai-gateway → real Ollama: every drafted name is inside the
+   workspace's catalog, every value is typed to its declaration (coerced or
+   dropped), every requested field is drafted or reported `unfilled`, and
+   **nothing is written**
+5. **SUBMIT** the human's create stores EXACTLY the submitted map — a float
+   stays a number — attributed to the human's own sub
+6. **METER** the draft left a `request_log` row on the CALLER's tenant under the
+   human's sub with `request_class=chat`: drafting is budgeted and metered like
+   any other model call, not a side-door LLM path
+
+The journey runs in the BOOT tenant rather than minting a fresh one (as the
+streams and learn journeys do) because ai-gateway binds a virtual key to one
+tenant and the bff holds the key for that one — the single-tenant limit from
+slice 3, showing up in the test design. `deploy/local/up.sh` mints that key at
+boot (`seed.py bffkey`); without it the journey fails loudly on
+"AI drafting is configured on this stack" rather than skipping a claim.
+
+### What is verified where
+
+| Claim | Tier | Runs |
+|---|---|---|
+| type/required/enum rules | Go unit (`internal/domain`) | every push |
+| the rules over a real Postgres + real 422 + no row written | Go integration | CI integration tier (needs Docker) |
+| drafting contract, coercion, refusals | bff unit (fetch boundary) | every push |
+| layout hints, AI marks, refusal display | ui-web unit | every push |
+| the whole arc against the live stack | `make journey-forms` | CI `e2e-live` |
+
+The integration and journey tiers could not be executed in the authoring
+container (no Docker registry access, no OpenSearch); they compile and are wired
+into CI, which is where they first execute.
