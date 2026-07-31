@@ -1797,6 +1797,35 @@ export interface CaseFormResult {
   caseForm: CaseForm;
 }
 
+/** Approver queue intelligence (roadmap item 4). Read-only aggregate over the
+ * caller's OWN workspace — note there is deliberately no workspace argument. */
+export const QUEUE_INTELLIGENCE = /* GraphQL */ `
+  query QueueIntelligence($days: Int) {
+    queueIntelligence(days: $days) {
+      generatedAt
+      windowDays
+      open { total unassigned inProgress }
+      aging { label count }
+      sla { breached dueWithin24h }
+      throughput { opened resolved closed }
+      latency { p50Seconds p90Seconds sample }
+    }
+  }
+`;
+export interface QueueIntelligence {
+  generatedAt: string;
+  windowDays: number;
+  open: { total: number; unassigned: number; inProgress: number };
+  aging: { label: string; count: number }[];
+  sla: { breached: number; dueWithin24h: number };
+  throughput: { opened: number; resolved: number; closed: number };
+  /** p50/p90 are null when nothing resolved in the window — NOT zero. */
+  latency: { p50Seconds: number | null; p90Seconds: number | null; sample: number };
+}
+export interface QueueIntelligenceResult {
+  queueIntelligence: QueueIntelligence;
+}
+
 /** AI drafting (schema-driven forms, slice 3). SUGGESTS only — the mutation
  * writes nothing; the human's create/update is still the signed action. */
 export const DRAFT_CASE_FIELDS = /* GraphQL */ `

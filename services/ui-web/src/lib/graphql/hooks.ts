@@ -1819,6 +1819,26 @@ export function useCaseForm(mode: "create" | "update" = "create", queryUrn?: str
   });
 }
 
+/** Approver queue intelligence (roadmap item 4): aging, SLA risk, throughput
+ * and time-to-decision for the caller's own workspace.
+ *
+ * Polled rather than pushed, and honestly so: this is composed from live case
+ * state that changes as people work the queue, so a figure cached for the
+ * session would quietly go stale while an approver reads it. 60s is slower than
+ * the SLA timers it reports on but fast enough that "breached" is never
+ * badly wrong; the panel stamps generatedAt so the reader can see the age.
+ * (If the live activity spine lands, this is a natural first subscriber.) */
+export function useQueueIntelligence(days = 7) {
+  return useQuery({
+    queryKey: qk.queueIntelligence(days),
+    queryFn: () =>
+      graphqlRequest<ops.QueueIntelligenceResult>(ops.QUEUE_INTELLIGENCE, { days }).then(
+        (r) => r.queueIntelligence,
+      ),
+    refetchInterval: 60_000,
+  });
+}
+
 /**
  * Ask the AI to draft values for the workspace's own intake fields.
  *

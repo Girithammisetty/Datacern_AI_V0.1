@@ -13,7 +13,7 @@ import type {
   CaseDTO,
   // Tier 4b: case ops (lifecycle, comments/timeline, export, catalog, SLA).
   CaseCommentDTO, CaseActivityDTO, CaseOperationDTO, DispositionDTO, CaseFieldDTO, CaseSlaPolicyDTO,
-  CaseSchemaDTO, CaseFormDTO, CaseFormFieldDTO,
+  CaseSchemaDTO, CaseFormDTO, CaseFormFieldDTO, QueueIntelligenceDTO,
 } from "../clients/case.js";
 import type { DashboardDTO, ChartDTO, ChartTypeDTO, ChartShapedDataDTO } from "../clients/chart.js";
 import type {
@@ -849,6 +849,48 @@ export function mapCaseForm(d: CaseFormDTO) {
     mode: d.mode ?? "create",
     defaults: (d.defaults ?? []).map(field),
     customFields: (d.custom_fields ?? []).map(field),
+  };
+}
+
+/** Approver queue intelligence (roadmap item 4).
+ *
+ * `?? null` on the percentiles, NOT `?? 0`. case-service returns null when
+ * nothing resolved in the window, and defaulting to 0 would tell an approver
+ * decisions are instant — the one number here that would actively mislead. The
+ * counts default to 0 because a missing count genuinely is none. */
+export function mapQueueIntelligence(d: QueueIntelligenceDTO) {
+  return {
+    __typename: "QueueIntelligence" as const,
+    generatedAt: d.generated_at,
+    windowDays: d.window_days ?? 0,
+    open: {
+      __typename: "QueueOpenCounts" as const,
+      total: d.open?.total ?? 0,
+      unassigned: d.open?.unassigned ?? 0,
+      inProgress: d.open?.in_progress ?? 0,
+    },
+    aging: (d.aging ?? []).map((b) => ({
+      __typename: "QueueAgingBucket" as const,
+      label: b.label,
+      count: b.count ?? 0,
+    })),
+    sla: {
+      __typename: "QueueSla" as const,
+      breached: d.sla?.breached ?? 0,
+      dueWithin24h: d.sla?.due_within_24h ?? 0,
+    },
+    throughput: {
+      __typename: "QueueThroughput" as const,
+      opened: d.throughput?.opened ?? 0,
+      resolved: d.throughput?.resolved ?? 0,
+      closed: d.throughput?.closed ?? 0,
+    },
+    latency: {
+      __typename: "QueueLatency" as const,
+      p50Seconds: d.latency?.p50_seconds ?? null,
+      p90Seconds: d.latency?.p90_seconds ?? null,
+      sample: d.latency?.sample ?? 0,
+    },
   };
 }
 

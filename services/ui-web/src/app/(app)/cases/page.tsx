@@ -16,6 +16,7 @@ import { useSelection } from "@/stores/ui";
 import { BulkAssignBar } from "@/components/cases/BulkAssignBar";
 import { CaseTitleCell } from "@/components/cases/projection";
 import { CaseExportButton } from "@/components/cases/CaseExportButton";
+import { QueueIntelligencePanel } from "@/components/cases/QueueIntelligencePanel";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { FEATURE_GATES } from "@/lib/authz/registry";
 import type { Case } from "@/lib/graphql/types";
@@ -107,6 +108,14 @@ export default function CasesPage() {
           </div>
         }
       />
+
+      {/* Queue health above the list: an approver's first question is "what is
+          about to breach", not "which case is row 1". Gated on the same
+          case.case.read the list already requires, so it needs no extra check —
+          a caller who can see this page can see the aggregate over it. */}
+      <div className="mb-4">
+        <QueueIntelligencePanel />
+      </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Input
