@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
 import uuid
 from urllib.parse import urlparse
 
@@ -72,6 +73,31 @@ class LocalScoringExecutor:
                   parameters: dict) -> ScoringResult:
         return await asyncio.to_thread(self._run_sync, model, dataset, job, parameters or {})
 
+    def _describe_model_source(self, model: ResolvedModel) -> str:
+        """Where the registry says this model's artifacts live, and what is
+        actually there. Diagnostic only — must never raise, because it runs on a
+        path that is already failing and its own error would replace the real one.
+        """
+        parts: list[str] = []
+        try:
+            from mlflow.tracking import MlflowClient
+            mv = MlflowClient(tracking_uri=self._mlflow_uri).get_model_version(
+                model.name, str(model.version))
+            parts.append(f"registry source={mv.source!r} run_id={mv.run_id!r}")
+        except Exception as exc:  # noqa: BLE001
+            parts.append(f"registry source unavailable: {type(exc).__name__}: {exc}")
+        try:
+            import tempfile
+
+            from mlflow.artifacts import download_artifacts
+            with tempfile.TemporaryDirectory() as tmp:
+                got = download_artifacts(artifact_uri=model.model_uri, dst_path=tmp)
+                listing = sorted(os.listdir(got))[:25]
+            parts.append(f"downloaded {got!r} contains {listing}")
+        except Exception as exc:  # noqa: BLE001
+            parts.append(f"download failed: {type(exc).__name__}: {exc}")
+        return "; ".join(parts)
+
     def _run_sync(self, model: ResolvedModel, dataset: ResolvedDataset, job,
                   parameters: dict) -> ScoringResult:
         import mlflow
@@ -80,7 +106,24 @@ class LocalScoringExecutor:
 
         # ``models:/`` load uses MLflow's GLOBAL uri (BUG-2) — set tracking+registry.
         set_global_mlflow_uri(self._mlflow_uri)
-        loaded = mlflow.pyfunc.load_model(model.model_uri)
+        try:
+            loaded = mlflow.pyfunc.load_model(model.model_uri)
+        except Exception as exc:  # noqa: BLE001 — re-raised below, enriched
+            # A load failure here reports only the TEMP DIRECTORY MLflow happened
+            # to download into ("Could not find an MLmodel configuration file at
+            # /tmp/tmpXXXX/MLmodel"), which names nothing an operator can act on:
+            # not the model, not where its artifacts were supposed to come from,
+            # not what actually arrived. That message cost two CI rounds and two
+            # wrong hypotheses.
+            #
+            # Resolution and load disagree here — `get_model_info(model_uri)`
+            # succeeds during resolve (a job cannot be submitted otherwise) while
+            # this load fails on the same URI — so the registry's SOURCE and the
+            # downloaded contents are exactly the two facts needed to tell those
+            # apart. Report both, then re-raise unchanged.
+            raise RuntimeError(
+                f"could not load {model.model_uri}: {exc} "
+                f"[{self._describe_model_source(model)}]") from exc
 
         chunk_rows = _chunk_rows(parameters)
         scored_at = _now_iso()  # one timestamp for the whole snapshot, not per part
