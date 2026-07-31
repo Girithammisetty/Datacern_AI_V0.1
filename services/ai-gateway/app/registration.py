@@ -17,17 +17,17 @@ logger = logging.getLogger(__name__)
 
 MANIFEST: list[str] = [
     "ai.provider.read",
-    "ai.provider.write",
+    "ai.provider.update",
     "ai.ladder.read",
-    "ai.ladder.write",
+    "ai.ladder.update",
     "ai.budget.read",
-    "ai.budget.write",
+    "ai.budget.update",
     "ai.spend.read",
     "ai.key.read",
-    "ai.key.write",
+    "ai.key.update",
     "ai.guardrail.read",
-    "ai.guardrail.write",
-    "ai.cache.invalidate",
+    "ai.guardrail.update",
+    "ai.cache.delete",
     "ai.platform.admin",
 ]
 

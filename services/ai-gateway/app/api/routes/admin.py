@@ -86,7 +86,7 @@ async def list_providers(request: Request, limit: int = Query(50, le=200),
 
 @router.post("/providers", status_code=201)
 async def create_provider(request: Request, body: ProviderCreate, response: Response):
-    principal = await require_operator("ai.provider.write")(request)
+    principal = await require_operator("ai.provider.update")(request)
     container = request.app.state.container
 
     async def work():
@@ -100,7 +100,7 @@ async def create_provider(request: Request, body: ProviderCreate, response: Resp
 @router.patch("/providers/{deployment_id}")
 async def patch_provider(request: Request, deployment_id: str, body: ProviderPatch,
                          force: bool = False):
-    await require_operator("ai.provider.write")(request)
+    await require_operator("ai.provider.update")(request)
     container = request.app.state.container
     d = await container.provider_admin.patch(
         deployment_id, body.model_dump(exclude_none=True), force=force
@@ -110,7 +110,7 @@ async def patch_provider(request: Request, deployment_id: str, body: ProviderPat
 
 @router.post("/providers/{deployment_id}/drain")
 async def drain_provider(request: Request, deployment_id: str, force: bool = False):
-    await require_operator("ai.provider.write")(request)
+    await require_operator("ai.provider.update")(request)
     container = request.app.state.container
     d = await container.provider_admin.drain(deployment_id, force=force)
     return {"data": _provider_dict(d)}
@@ -149,9 +149,9 @@ async def put_ladder(request: Request, request_class: str, body: LadderPut):
     if request_class not in ("chat", "sql-gen", "judge", "embed"):
         raise ValidationFailed(f"unknown request class {request_class!r}")
     if body.scope == "platform":
-        principal = await require_operator("ai.ladder.write")(request)
+        principal = await require_operator("ai.ladder.update")(request)
     else:
-        principal = await require("ai.ladder.write")(request)
+        principal = await require("ai.ladder.update")(request)
     ladder = await container.ladder_service.put(
         principal.tenant_id, request_class, body.scope, body.rungs,
         max_rung=body.max_rung,
@@ -235,7 +235,7 @@ async def list_spend_freezes(request: Request):
 
 @router.post("/spend-freezes", status_code=201)
 async def create_spend_freeze(request: Request, body: SpendFreezeCreate):
-    principal = await require("ai.budget.write")(request)
+    principal = await require("ai.budget.update")(request)
     container = request.app.state.container
     scope = await _freeze_scope(request, principal, body.scope, body.tenant_id)
     fz = await container.spend_guard.freeze(
@@ -247,7 +247,7 @@ async def create_spend_freeze(request: Request, body: SpendFreezeCreate):
 @router.delete("/spend-freezes")
 async def clear_spend_freeze(request: Request, scope: str = Query(...),
                              tenant_id: str | None = Query(None)):
-    principal = await require("ai.budget.write")(request)
+    principal = await require("ai.budget.update")(request)
     container = request.app.state.container
     resolved = await _freeze_scope(request, principal, scope, tenant_id)
     cleared = await container.spend_guard.clear(resolved)
@@ -279,7 +279,7 @@ async def get_budget(request: Request, budget_id: str):
 
 @router.post("/budgets", status_code=201)
 async def create_budget(request: Request, body: BudgetCreate, response: Response):
-    principal = await require("ai.budget.write")(request)
+    principal = await require("ai.budget.update")(request)
     container = request.app.state.container
     if body.scope_type not in SCOPE_TYPES:
         raise ValidationFailed(f"scope_type must be one of {SCOPE_TYPES}")
@@ -321,7 +321,7 @@ async def create_budget(request: Request, body: BudgetCreate, response: Response
 
 @router.patch("/budgets/{budget_id}")
 async def patch_budget(request: Request, budget_id: str, body: BudgetPatch):
-    principal = await require("ai.budget.write")(request)
+    principal = await require("ai.budget.update")(request)
     container = request.app.state.container
     async with container.uow_factory(principal.tenant_id) as uow:
         budget = await uow.budgets.get(budget_id)
@@ -344,7 +344,7 @@ async def patch_budget(request: Request, budget_id: str, body: BudgetPatch):
 
 @router.delete("/budgets/{budget_id}", status_code=200)
 async def delete_budget(request: Request, budget_id: str):
-    principal = await require("ai.budget.write")(request)
+    principal = await require("ai.budget.update")(request)
     container = request.app.state.container
     async with container.uow_factory(principal.tenant_id) as uow:
         budget = await uow.budgets.get(budget_id)
@@ -493,7 +493,7 @@ def _key_tenant(request: Request, body_tenant: str | None) -> str:
 async def create_key(request: Request, body: KeyCreate, response: Response):
     container = request.app.state.container
     if getattr(request.state, "principal", None) is not None:
-        await require("ai.key.write")(request)
+        await require("ai.key.update")(request)
     tenant_id = _key_tenant(request, body.tenant_id)
 
     async def work():
@@ -524,7 +524,7 @@ async def list_keys(request: Request, limit: int = Query(50, le=200),
 
 @router.post("/keys/{key_id}/revoke")
 async def revoke_key(request: Request, key_id: str):
-    principal = await require("ai.key.write")(request)
+    principal = await require("ai.key.update")(request)
     container = request.app.state.container
     key = await container.key_service.revoke(principal.tenant_id, key_id)
     return {"data": _key_dict(key)}
@@ -532,7 +532,7 @@ async def revoke_key(request: Request, key_id: str):
 
 @router.post("/keys/{key_id}/rotate")
 async def rotate_key(request: Request, key_id: str):
-    principal = await require("ai.key.write")(request)
+    principal = await require("ai.key.update")(request)
     container = request.app.state.container
     key, secret = await container.key_service.rotate(principal.tenant_id, key_id)
     out = _key_dict(key)
@@ -557,7 +557,7 @@ async def get_guardrails(request: Request):
 
 @router.put("/guardrails")
 async def put_guardrails(request: Request, body: GuardrailPut):
-    principal = await require("ai.guardrail.write")(request)
+    principal = await require("ai.guardrail.update")(request)
     container = request.app.state.container
     authz = request.app.state.authz
     operator_approved = await authz.allow(principal, "ai.platform.admin", None)
@@ -585,7 +585,7 @@ async def put_guardrails(request: Request, body: GuardrailPut):
 @router.delete("/cache")
 async def invalidate_cache(request: Request, scope: str = "tenant",
                            workspace_id: str | None = None):
-    principal = await require("ai.cache.invalidate")(request)
+    principal = await require("ai.cache.delete")(request)
     container = request.app.state.container
     if scope not in ("tenant", "workspace"):
         raise ValidationFailed("scope must be tenant|workspace")

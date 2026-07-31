@@ -72,7 +72,7 @@ async def test_last_deployment_guard_409(client, container):
 
 async def test_provider_requires_operator_scope(client, container):
     r = await client.post("/api/v1/admin/providers", json=PROVIDER_BODY,
-                          headers=admin_auth(scopes=["ai.provider.write"]))
+                          headers=admin_auth(scopes=["ai.provider.update"]))
     assert r.status_code == 403  # ai.platform.admin missing
 
 
@@ -163,7 +163,7 @@ async def test_platform_budget_requires_operator(client, container):
     r = await client.post("/api/v1/admin/budgets", json={
         "scope_type": "platform", "scope_ref": "platform", "window": "monthly",
         "limit_usd": 100000.0,
-    }, headers=admin_auth(scopes=["ai.budget.write"]))
+    }, headers=admin_auth(scopes=["ai.budget.update"]))
     assert r.status_code == 403
 
 
@@ -256,7 +256,7 @@ async def test_guardrails_put_pii_off_requires_operator(client, container):
         "schema_validation": "on",
     }}
     r = await client.put("/api/v1/admin/guardrails", json=off_policy,
-                         headers=admin_auth(scopes=["ai.guardrail.write"]))
+                         headers=admin_auth(scopes=["ai.guardrail.update"]))
     assert r.status_code == 422  # operator approval flag required
     r = await client.put("/api/v1/admin/guardrails", json=off_policy,
                          headers=admin_auth())  # "*" includes ai.platform.admin

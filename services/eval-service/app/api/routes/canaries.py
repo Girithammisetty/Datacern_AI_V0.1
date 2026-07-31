@@ -17,7 +17,7 @@ def _ctx(request, principal):
 async def create_canary(
     request: Request,
     body: CanaryCreate,
-    principal: Principal = Depends(require("eval.canary.manage")),
+    principal: Principal = Depends(require("eval.canary.update")),
 ):
     svc = request.app.state.container.canary_service
     return data(dump(await svc.create(_ctx(request, principal), body.model_dump())))
@@ -28,7 +28,7 @@ async def ingest_samples(
     request: Request,
     comparison_id: str,
     body: CanarySamples,
-    principal: Principal = Depends(require("eval.canary.manage")),
+    principal: Principal = Depends(require("eval.canary.update")),
 ):
     svc = request.app.state.container.canary_service
     c = await svc.ingest_samples(_ctx(request, principal), comparison_id, body.paired_scores)
@@ -39,7 +39,7 @@ async def ingest_samples(
 async def get_canary(
     request: Request,
     comparison_id: str,
-    principal: Principal = Depends(require("eval.canary.manage")),
+    principal: Principal = Depends(require("eval.canary.update")),
 ):
     svc = request.app.state.container.canary_service
     return data(dump(await svc.get(_ctx(request, principal), comparison_id)))
@@ -49,7 +49,7 @@ async def get_canary(
 async def stop_canary(
     request: Request,
     comparison_id: str,
-    principal: Principal = Depends(require("eval.canary.manage")),
+    principal: Principal = Depends(require("eval.canary.update")),
 ):
     svc = request.app.state.container.canary_service
     return data(dump(await svc.stop(_ctx(request, principal), comparison_id)))

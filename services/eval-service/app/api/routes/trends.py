@@ -13,7 +13,7 @@ def _ctx(request, principal):
 
 
 def _is_operator(principal: Principal) -> bool:
-    return "*" in principal.scopes or "eval.slo.operator" in principal.scopes
+    return "*" in principal.scopes or "eval.slo.admin" in principal.scopes
 
 
 @router.get("/trends")
