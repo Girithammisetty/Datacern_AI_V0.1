@@ -579,6 +579,13 @@ jobs:
               - 'deploy/e2e/**'
               - 'deploy/docker-compose.dev.yml'
               - 'deploy/services.yaml'
+              # This workflow OWNS the e2e-live job — its runner, its timeout,
+              # its concurrency group, the order of the journey steps. Leaving
+              # it out meant a change to that job could not be verified by that
+              # job: commit 839d9fa touched only ci.yml, e2e-live was correctly
+              # skipped, and the edit shipped untested. Rare enough that the
+              # extra runs cost little; the blind spot cost a red main.
+              - '.github/workflows/ci.yml'
 
   # ---------------------------------------------------------------------------
   # e2e-live — boots the REAL platform (docker infra + all ~22 services + BFF
@@ -618,8 +625,22 @@ jobs:
     if: ${{ always() && needs.live-e2e-paths.result == 'success' && (needs.live-e2e-paths.outputs.run == 'true' || github.event_name == 'workflow_dispatch') && !contains(fromJSON('["failure","cancelled"]'), needs.test-go.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-python.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-node.result) && !contains(fromJSON('["failure","cancelled"]'), needs.no-stub-gate.result) }}
     runs-on: ${{ vars.E2E_LIVE_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
+    # Same per-commit rule as the workflow-level group above, and for the same
+    # reason. Making the WORKFLOW group per-commit was not enough: this job
+    # carries its own group, so a per-ref group here kept doing exactly what
+    # the workflow-level fix was meant to stop. Measured on main:
+    #   #32's e2e-live cancelled 23:10:42; #33's created 23:10:29 — 13s earlier.
+    #   #35's e2e-live cancelled 23:32:28; #36's created 23:32:48.
+    # Five merges, one complete e2e-live — and that one only because nothing
+    # merged behind it for 15 minutes. This job is the ONLY thing that runs the
+    # journeys, so a cancelled one means the commit shipped unverified.
+    #
+    # On a PR ref, superseding is still right (only the tip matters, and this
+    # job is expensive). On main every commit gets its own group and runs to
+    # completion. That costs concurrent runners during a merge train; the
+    # alternative is main not being able to verify itself, which is worse.
     concurrency:
-      group: e2e-live-${{ github.ref }}
+      group: e2e-live-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
