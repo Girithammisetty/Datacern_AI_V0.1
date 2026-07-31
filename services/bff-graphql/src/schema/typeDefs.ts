@@ -2085,6 +2085,10 @@ export const typeDefs = gql`
     opened: Int!
     resolved: Int!
     closed: Int!
+    """Of opened, how many a TRIGGER raised rather than a person. A SUBSET of
+    opened, never a parallel total: 12 new, and 12 new with 11 raised by a rule,
+    are different facts — the second is a statement about the rule."""
+    autoOpened: Int!
   }
   """Time-to-decision (created -> resolved) over cases resolved in the window.
 

@@ -52,6 +52,13 @@ type Throughput struct {
 	Opened   int `json:"opened"`
 	Resolved int `json:"resolved"`
 	Closed   int `json:"closed"`
+	// AutoOpened: of Opened, how many a TRIGGER raised rather than a person.
+	// The triggers applier stamps created_by_id as "trigger/<name>"
+	// (internal/triggers/applier.go), which is the only durable record that a
+	// case arrived automatically. Worth separating because "12 new cases" reads
+	// very differently from "12 new cases, 11 of them opened by a rule" — the
+	// second is a statement about the rule, not the workload.
+	AutoOpened int `json:"auto_opened"`
 }
 
 // Latency is time-to-decision over cases RESOLVED in the window, in seconds.
@@ -128,10 +135,13 @@ func (s *PG) QueueIntelligence(ctx context.Context, tenant, workspace uuid.UUID,
 		if err := tx.QueryRow(ctx, `SELECT
 			count(*) FILTER (WHERE created_at  >= $2::timestamptz),
 			count(*) FILTER (WHERE resolved_at >= $2::timestamptz),
-			count(*) FILTER (WHERE closed_at   >= $2::timestamptz)
+			count(*) FILTER (WHERE closed_at   >= $2::timestamptz),
+			count(*) FILTER (WHERE created_at  >= $2::timestamptz
+			                   AND created_by_id LIKE 'trigger/%')
 			FROM cases WHERE workspace_id=$1 AND deleted_at IS NULL`,
 			workspace, since).Scan(
-			&out.Throughput.Opened, &out.Throughput.Resolved, &out.Throughput.Closed); err != nil {
+			&out.Throughput.Opened, &out.Throughput.Resolved, &out.Throughput.Closed,
+			&out.Throughput.AutoOpened); err != nil {
 			return err
 		}
 

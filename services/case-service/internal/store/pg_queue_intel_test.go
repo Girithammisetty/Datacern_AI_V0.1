@@ -45,7 +45,8 @@ func testPool(t *testing.T) (*pgxpool.Pool, func()) {
 // seedCase inserts one case directly, so each test states its own timeline
 // (created/resolved/due) instead of depending on the API's clock.
 func seedCase(t *testing.T, pool *pgxpool.Pool, tenant, ws uuid.UUID, n int64,
-	status int16, createdAgo, dueIn time.Duration, resolvedAgo, closedAgo *time.Duration) uuid.UUID {
+	status int16, createdAgo, dueIn time.Duration, resolvedAgo, closedAgo *time.Duration,
+	createdBy ...string) uuid.UUID {
 	t.Helper()
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -73,6 +74,10 @@ func seedCase(t *testing.T, pool *pgxpool.Pool, tenant, ws uuid.UUID, n int64,
 	// The schema enforces (assigned_to_id IS NULL) = (status = 3): "unassigned"
 	// IS the no-assignee state, it is not an independent flag. Honour it here so
 	// the fixture is a shape the service could actually produce.
+	by := "u-seed"
+	if len(createdBy) > 0 && createdBy[0] != "" {
+		by = createdBy[0]
+	}
 	var assignee *uuid.UUID
 	var assignedAt *time.Time
 	if status != 3 {
@@ -85,10 +90,10 @@ func seedCase(t *testing.T, pool *pgxpool.Pool, tenant, ws uuid.UUID, n int64,
 		 dataset_urn, row_pk, display_projection, source_query_urns, due_date,
 		 custom_fields, created_at, updated_at, resolved_at, closed_at,
 		 assigned_to_id, assigned_to_at)
-		VALUES ($1,$2,$3,$4,$5,'high','u-seed','wr:t:dataset:dataset/d',$6,'{}','{}',
+		VALUES ($1,$2,$3,$4,$5,'high',$13,'wr:t:dataset:dataset/d',$6,'{}','{}',
 		        $7,'{}',$8,$8,$9,$10,$11,$12)`,
 		id, tenant, ws, n, status, fmt.Sprintf("ROW-%d", n),
-		now.Add(dueIn), now.Add(-createdAgo), resolved, closed, assignee, assignedAt)
+		now.Add(dueIn), now.Add(-createdAgo), resolved, closed, assignee, assignedAt, by)
 	if err != nil {
 		t.Fatalf("seed case: %v", err)
 	}
@@ -242,4 +247,40 @@ func abs64(v int64) int64 {
 		return -v
 	}
 	return v
+}
+
+
+// A case raised by a TRIGGER is counted separately from one a person opened.
+// "12 new cases" and "12 new cases, 11 raised by a rule" are different facts,
+// and only the second tells an approver to go look at the rule.
+func TestQueueIntelligenceSeparatesAutoOpenedCases(t *testing.T) {
+	pool, done := testPool(t)
+	defer done()
+	st := store.NewPG(pool)
+	tenant, ws := uuid.New(), uuid.New()
+	hour := time.Hour
+
+	seedCase(t, pool, tenant, ws, 1, 3, 2*hour, 24*hour, nil, nil)                        // human
+	seedCase(t, pool, tenant, ws, 2, 3, 2*hour, 24*hour, nil, nil, "trigger/high-amount") // rule
+	seedCase(t, pool, tenant, ws, 3, 3, 2*hour, 24*hour, nil, nil, "trigger/high-amount") // rule
+	// Outside the window: opened long ago, so neither count includes it.
+	seedCase(t, pool, tenant, ws, 4, 3, 30*24*hour, 24*hour, nil, nil, "trigger/old-rule")
+
+	got, err := st.QueueIntelligence(context.Background(), tenant, ws, 7)
+	if err != nil {
+		t.Fatalf("QueueIntelligence: %v", err)
+	}
+	if got.Throughput.Opened != 3 {
+		t.Errorf("opened = %d, want 3 (the 30-day-old case is outside the window)",
+			got.Throughput.Opened)
+	}
+	if got.Throughput.AutoOpened != 2 {
+		t.Errorf("auto_opened = %d, want 2", got.Throughput.AutoOpened)
+	}
+	// AutoOpened is a SUBSET of Opened, never a parallel total — a UI showing
+	// "3 new, 5 automatic" would be nonsense.
+	if got.Throughput.AutoOpened > got.Throughput.Opened {
+		t.Errorf("auto_opened (%d) exceeds opened (%d) — it must be a subset",
+			got.Throughput.AutoOpened, got.Throughput.Opened)
+	}
 }

@@ -172,7 +172,7 @@ export interface QueueIntelligenceDTO {
   open: { total: number; unassigned: number; in_progress: number };
   aging: { label: string; count: number }[];
   sla: { breached: number; due_within_24h: number };
-  throughput: { opened: number; resolved: number; closed: number };
+  throughput: { opened: number; resolved: number; closed: number; auto_opened: number };
   latency: { p50_seconds: number | null; p90_seconds: number | null; sample: number };
 }
 
