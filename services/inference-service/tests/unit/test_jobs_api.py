@@ -125,7 +125,7 @@ async def test_ac6_stage_denied_and_permission(clock, executor):
     with pytest.raises(ModelStageDenied):
         await container.inference.submit(_ctx(["inference.job.create"]),
                                          SubmitRequest(urn, DS))
-    # with the flag but without create_unpromoted permission -> 403
+    # with the flag but without the unpromoted-create capability -> 403
     with pytest.raises(PermissionDenied):
         await container.inference.submit(
             _ctx(["inference.job.submit"]),

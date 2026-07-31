@@ -46,8 +46,18 @@ def test_manifest_actions_are_canonical():
         assert len(parts) == 3, f"non-canonical action {action!r}"
         assert parts[0] == "inference"
         verb = parts[2]
-        # base verb (allow a fine-grained capability suffix like create_unpromoted)
-        assert verb.split("_")[0] in CANONICAL_VERBS, f"non-canonical verb in {action!r}"
+        # EXACT membership, not a prefix.
+        #
+        # This used to accept `verb.split("_")[0]`, which passed
+        # `inference.job.create_unpromoted` while rbac's ParseAction rejected it
+        # outright (AllVerbs is exact). Two sides each internally consistent and
+        # disagreeing with each other is why the mismatch survived: this suite
+        # was green while the action failed registration 400 in every live run
+        # and never reached the OPA catalog. A compound verb is not a verb —
+        # put the distinction in the resource.
+        assert verb in CANONICAL_VERBS, (
+            f"non-canonical verb in {action!r}: rbac's AllVerbs is an EXACT set, so this "
+            "action would fail registration and never reach the OPA catalog")
 
 
 def test_no_legacy_submit_action_registered():

@@ -131,10 +131,10 @@ class InferenceService(_ResolveMixin):
                 f"model stage {model.stage!r} not allowed (allowed: {sorted(allowed)})"
             )
         scopes = set(ctx.actor.get("scopes", []) if isinstance(ctx.actor, dict) else [])
-        # Agents can never obtain create_unpromoted (toolset exclusion, BR-2).
-        if ctx.actor.get("type") == "agent" or "inference.job.create_unpromoted" not in scopes:
+        # Agents can never obtain this capability (toolset exclusion, BR-2).
+        if ctx.actor.get("type") == "agent" or "inference.unpromoted_job.create" not in scopes:
             raise PermissionDenied(
-                "inference.job.create_unpromoted required for unpromoted models")
+                "inference.unpromoted_job.create required for unpromoted models")
 
     async def validate(self, ctx: CallCtx, req: SubmitRequest) -> dict:
         model = await self._resolve_model(ctx, req.model_version_urn)
