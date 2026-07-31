@@ -1,7 +1,7 @@
 SERVICES := $(wildcard services/*)
 
 .PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up up-platform down reset doctor soak soak-volume \
-        journey journey-forms demo-list demo-load demo-clean demo-clean-all security-probe
+        journey journey-forms journey-packs demo-list demo-load demo-clean demo-clean-all security-probe
 
 # Capstone: provision the WHOLE platform locally and open it in a browser for
 # hands-on end-user testing. Preflight -> infra -> migrate+boot all 22 services
@@ -92,6 +92,17 @@ journey-learn:
 # form model, custom_fields JSONB, request_log). Needs `make up`.
 journey-forms:
 	deploy/e2e/.venv/bin/python deploy/e2e/test_forms_journey.py
+
+# Pack conformance journey: does INSTALLING a vertical pack actually change the
+# platform? `packctl lint` and `packctl coherence` both check FILES — a pack
+# with a perfect manifest whose installer no-ops passes both. This installs
+# payer-fwa-siu into a fresh tenant and asserts on Core's rows: SKU gate refuses
+# and materializes nothing -> dry run materializes nothing -> install lands real
+# case_fields/dispositions/roles rows (incl. the pack's intake-form layout) ->
+# drift goes RED when a human edits one object -> uninstall really deletes what
+# Core can delete and honestly retains what it cannot. Needs `make up`.
+journey-packs:
+	deploy/e2e/.venv/bin/python deploy/e2e/test_packs_journey.py
 
 # ---- Demo pack control -----------------------------------------------------
 # Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway

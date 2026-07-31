@@ -14,6 +14,9 @@ dependencies = [
     "mlflow>=3.11,<4",
     "pyarrow>=23.0.1",
     "pandas>=2",
+    # journey-packs reads the pack's own YAML component files as the
+    # independent source of truth for what the install must materialize.
+    "pyyaml>=6",
 ]
 
 [tool.uv]
