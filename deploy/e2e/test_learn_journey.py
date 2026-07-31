@@ -422,18 +422,32 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
         return bail("scoring job submitted (auto_case)", f"{sub.status_code} {sub.text[:250]}")
     job_id = (sub.json().get("data") or {}).get("job_id")
 
+    # The window covers a real MLflow pyfunc load + scoring + parquet write on a
+    # shared CI runner, which is minutes, not seconds. 180s was too tight to
+    # distinguish "slow" from "wedged" — and on timeout the old code reported
+    # the bare word "timeout", discarding the one fact that tells those apart.
+    # Keep the LAST OBSERVED job state and report it, so a failure here names
+    # whether the job was still validating/running (too slow) or sat in a
+    # non-terminal state forever (a stuck executor, which is a product bug).
     jfinal = None
-    for _ in range(90):
+    last = None
+    polls = 0
+    for _ in range(150):
+        polls += 1
         g = api("GET", f"{c.INFERENCE}/api/v1/inferences/{job_id}", tok_w)
         if g.status_code == 200:
             jd = g.json().get("data", {})
+            last = jd
             if jd.get("status") in ("succeeded", "failed", "cancelled", "rejected"):
                 jfinal = jd
                 break
-        time.sleep(2)
+        time.sleep(4)
     if not check(bool(jfinal) and jfinal.get("status") == "succeeded",
                  "batch scoring succeeded with the PROMOTED model",
-                 json.dumps(jfinal)[:200] if jfinal else "timeout"):
+                 json.dumps(jfinal)[:300] if jfinal else
+                 f"never reached a terminal status in {polls * 4}s; last seen: "
+                 f"status={(last or {}).get('status')!r} error={(last or {}).get('error')!r} "
+                 f"job={json.dumps(last)[:300] if last else 'no successful GET'}"):
         return bail("scoring")
 
     # ground truth: what did the model actually predict? (output parquet bytes)
