@@ -642,6 +642,16 @@ jobs:
       - name: Schema-driven forms journey (make journey-forms)
         run: make journey-forms
 
+      # Pack conformance: the "28 production packs" claim, checked by INSTALLING
+      # one. test-packs lints manifests and checks cross-file coherence — both
+      # read FILES, so a pack whose installer silently no-ops passes them. This
+      # asserts on Core's rows instead: the SKU gate and the dry run each
+      # materialize nothing, the install lands real case_fields/dispositions/
+      # roles, drift goes red for a human edit, and uninstall deletes what Core
+      # can delete while honestly retaining what it cannot.
+      - name: Pack conformance journey (make journey-packs)
+        run: make journey-packs
+
       - name: Run live-stack E2E suite (pnpm e2e:live)
         working-directory: services/ui-web
         env:

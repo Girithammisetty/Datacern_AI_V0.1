@@ -257,3 +257,25 @@ unmodified Core, deferred ledgered), §9 Out of scope / future.
    style filtered measures non-zero where charted.
 3. Confirm every dashboard measure+dimension exists in the semantic model.
 DO NOT install the pack — the orchestrator installs centrally.
+
+## What CI actually proves about a pack
+
+Three tiers, and it is worth knowing which of them would catch a given mistake:
+
+| Gate | Runs on | Reads | Would catch |
+|---|---|---|---|
+| `packctl lint` | every push | your files | a malformed manifest, a dangling ref, an unevidenced control mapping |
+| `packctl coherence` (C1–C11) | every push | the whole fleet's files | cross-file drift between packs, plan/disposition mismatch |
+| `make journey-packs` | `e2e-live` | **Core's rows after a real install** | an installer that no-ops, a SKU gate that leaks, a drift detector that never goes red, an uninstall that drops what it promised to retain |
+
+The first two read FILES. A pack with a flawless manifest whose components never
+materialize passes both of them. `journey-packs` installs `payer-fwa-siu` into a
+fresh tenant and asserts on rows in case-service and rbac — including that the
+pack's `field_meta` layout (group/order/widget) arrives with the fields, so
+"install the pack and the intake form rearranges itself" is a checked fact.
+
+It also pins two things that are easy to fake and expensive to discover late:
+drift detection must go RED when a human edits a materialized object (an
+always-`in_sync` detector certifies configuration nobody re-checked), and
+uninstall must genuinely DELETE the kinds Core can delete while genuinely
+RETAINING the kinds it cannot (PKG-FR-025's gap, asserted as a gap).
