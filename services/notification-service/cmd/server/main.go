@@ -334,10 +334,15 @@ func setupReportScheduling(ctx context.Context, st *store.PG, emailSender *email
 	}
 
 	chartClient := reports.NewChartClient(env("CHART_URL", "http://localhost:8320"))
+	// Decisions section (roadmap item 3). Reads the SAME queue aggregate the
+	// approver panel does, so a report and the panel can never disagree about
+	// how many cases were resolved this period.
+	caseClient := reports.NewCaseClient(env("CASE_URL", "http://localhost:8301"))
 	tokens := reports.NewTokenMinter(
 		os.Getenv("REGISTER_SIGNING_KEY_PEM"), os.Getenv("REGISTER_SIGNING_KID"),
 		os.Getenv("JWT_ISSUER"), os.Getenv("JWT_AUDIENCE"))
-	activities := &reports.Activities{Store: st, Charts: chartClient, Tokens: tokens, Email: emailSender, Log: slog.Default()}
+	activities := &reports.Activities{Store: st, Charts: chartClient, Tokens: tokens,
+		Email: emailSender, Cases: caseClient, Log: slog.Default()}
 
 	w := temporalworker.New(tc, reports.TaskQueue, temporalworker.Options{})
 	w.RegisterWorkflow(reports.ReportWorkflow)
