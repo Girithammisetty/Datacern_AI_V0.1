@@ -30,6 +30,9 @@ type Activities struct {
 	Charts *ChartClient
 	Tokens *TokenMinter
 	Email  *email.Sender
+	// Cases sources the decisions section. Nil disables it — the report still
+	// sends with its dashboard snapshot, which is the contracted content.
+	Cases *CaseClient
 	Log    *slog.Logger
 	// now is overridable for deterministic tests.
 	now func() time.Time
@@ -69,7 +72,27 @@ func (a *Activities) SendReportEmail(ctx context.Context, in ReportRunInput) err
 		return err
 	}
 
-	rendered := Render(digest, a.clock())
+	// Decisions are BEST-EFFORT and deliberately so: the dashboard snapshot is
+	// the contracted content of this email, and a case-service blip must not
+	// stop it going out. A failure omits the section (see RenderWithDecisions)
+	// rather than rendering zeroes, and is logged so a persistently missing
+	// section is diagnosable instead of just quietly absent.
+	var decisions *DecisionsDigest
+	if a.Cases != nil {
+		window := 1
+		if sub.Cadence == domain.CadenceWeekly {
+			window = 7
+		}
+		d, derr := a.Cases.FetchDecisions(ctx, token, window)
+		if derr != nil {
+			a.log().Warn("report decisions section omitted",
+				"subscription_id", sub.ID, "err", derr)
+		} else {
+			decisions = d
+		}
+	}
+
+	rendered := RenderWithDecisions(digest, decisions, a.clock())
 	html, text := rendered.HTML, rendered.Text
 	if sub.Format == domain.ReportFormatText {
 		html = ""
