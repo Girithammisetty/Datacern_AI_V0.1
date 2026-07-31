@@ -336,10 +336,21 @@ class LocalTrainingExecutor:
             return est, extra
 
         if family == "classification":
-            from sklearn.preprocessing import LabelEncoder
-            y = LabelEncoder().fit_transform(y_raw.astype(str))
-            n_classes = len(set(y))
-            if len(X) >= 8 and n_classes > 1 and min(np.bincount(y)) >= 2:
+            # Fit on the ORIGINAL class labels, not encoded indices.
+            #
+            # This used to LabelEncoder().fit_transform(...) and throw the encoder
+            # away, so the logged model predicted 0/1 with nothing to map them
+            # back. Every consumer that compares a prediction to a business label
+            # then silently matched nothing: inference-service's auto_case
+            # `positive_label` opened zero cases, and the scored parquet carried
+            # opaque integers. sklearn classifiers take string targets natively
+            # and predict() returns them, so the round-trip needs no encoder.
+            # Class ordering is unchanged — LabelEncoder sorted, and classes_ is
+            # sorted too, so predict_proba[:, 1] is still the same positive class.
+            y = y_raw.astype(str)
+            counts = y.value_counts()
+            n_classes = len(counts)
+            if len(X) >= 8 and n_classes > 1 and counts.min() >= 2:
                 Xtr, Xte, ytr, yte = train_test_split(
                     X, y, test_size=0.25, random_state=42, stratify=y)
             else:
