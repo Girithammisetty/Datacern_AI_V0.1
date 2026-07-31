@@ -121,3 +121,56 @@ async def test_sweep_tenant_includes_mirrored_models(container):
     assert result["mirrored_models"] == [f"{name} v1"]
     models = await container.registry_service.list_models(ctx, None, None, 50, None)
     assert [m["name"] for m in models.items] == [name]
+
+
+# ---- the registry source must name the model directory, not the run root ----
+#
+# This is the assertion whose absence let a real outage ship. Every promoted
+# model version registered a source one level too high, so inference-service
+# resolved models:/<name>/<v>, downloaded the run's artifact ROOT, found no
+# MLmodel beside the `model/` directory it actually lives in, and failed EVERY
+# batch scoring job with 'Could not find an "MLmodel" configuration file'.
+# Caught by `make journey-learn` on the live stack, never by a unit test,
+# because nothing here had ever looked at the `source` argument.
+
+async def test_promotion_registers_the_model_directory_not_the_run_root(container):
+    mlflow = container.deps.mlflow
+    await container.promotion_service._sync_mlflow_stage(TENANT_A, {
+        "model_name": "wr_src_check", "version_id": "v-1", "target_stage": 2,
+        "existing_ref": None,
+        "run_mlflow_id": "mlrun-src",
+        "artifact_uri": "s3://mlflow/42/mlrun-src/artifacts",
+    })
+    source = mlflow._registry["wr_src_check"]["1"]["source"]
+    # runs:/<id>/model — canonical and storage-agnostic. The bug registered
+    # "s3://mlflow/42/mlrun-src/artifacts", which resolves and then cannot load.
+    assert source == "runs:/mlrun-src/model"
+    assert not source.endswith("/artifacts")
+
+
+async def test_promotion_falls_back_to_the_artifact_root_plus_model_subpath(container):
+    """No run id (an older mirrored row): still must not register the bare root."""
+    mlflow = container.deps.mlflow
+    await container.promotion_service._sync_mlflow_stage(TENANT_A, {
+        "model_name": "wr_src_fallback", "version_id": "v-2", "target_stage": 1,
+        "existing_ref": None,
+        "run_mlflow_id": None,
+        "artifact_uri": "s3://mlflow/42/mlrun-nb/artifacts/",   # trailing slash
+    })
+    assert (mlflow._registry["wr_src_fallback"]["1"]["source"]
+            == "s3://mlflow/42/mlrun-nb/artifacts/model")
+
+
+async def test_promotion_reuses_an_existing_models_ref_without_reregistering(container):
+    """An already-registered version is transitioned, never duplicated."""
+    mlflow = container.deps.mlflow
+    await mlflow.ensure_registered_model("wr_src_existing")
+    await mlflow.create_model_version("wr_src_existing", "runs:/mlrun-x/model", "mlrun-x")
+    await container.promotion_service._sync_mlflow_stage(TENANT_A, {
+        "model_name": "wr_src_existing", "version_id": "v-3", "target_stage": 2,
+        "existing_ref": "models:/wr_src_existing/1",
+        "run_mlflow_id": "mlrun-x",
+        "artifact_uri": "s3://mlflow/42/mlrun-x/artifacts",
+    })
+    assert list(mlflow._registry["wr_src_existing"]) == ["1"]
+    assert mlflow._registry["wr_src_existing"]["1"]["current_stage"] == "Production"

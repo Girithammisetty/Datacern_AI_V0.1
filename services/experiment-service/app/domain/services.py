@@ -76,6 +76,15 @@ METRIC_CHART_ARTIFACTS = ("confusion_matrix", "roc_curve", "decision_tree")
 # our stage code -> MLflow model-registry stage string (EXP-FR-032 sync)
 STAGE_TO_MLFLOW = {0: "None", 1: "Staging", 2: "Production", 3: "Archived"}
 
+# The artifact sub-path a training run writes its model under. This is a
+# CROSS-SERVICE CONTRACT: pipeline-orchestrator logs the estimator with
+# `artifact_path="model"` (executor/local.py::_log_model, both branches), so the
+# MLmodel descriptor lives at <run artifact root>/model/MLmodel — never at the
+# root itself. Registering a model version whose source is the root produces a
+# version that resolves, downloads, and then fails to load. Change this only
+# together with the trainer.
+MODEL_ARTIFACT_PATH = "model"
+
 # cap for comma-separated IN-filter batches (bff dataloader N+1 batching)
 MAX_BATCH_IDS = 200
 
@@ -1286,9 +1295,28 @@ class PromotionService(_Base):
                 mlflow_version = ref.rsplit("/", 1)[1]
                 new_ref = None
             else:
-                source = sync.get("artifact_uri") or f"runs:/{sync.get('run_mlflow_id')}/model"
+                # The source must name the MODEL DIRECTORY, not the run's
+                # artifact root. `artifact_uri` is the root
+                # (s3://mlflow/<exp>/<run>/artifacts) and used to win this
+                # `or`, so every promoted version pointed one level too high:
+                # inference-service resolved models:/<name>/<v>, downloaded the
+                # root into a temp dir, found no MLmodel beside the `model/`
+                # directory, and failed EVERY batch scoring job with
+                # 'Could not find an "MLmodel" configuration file at ...'.
+                # runs:/<id>/<path> is MLflow's canonical, storage-agnostic
+                # form, so it wins whenever the run id is known.
+                run_mlflow_id = sync.get("run_mlflow_id")
+                root = (sync.get("artifact_uri") or "").rstrip("/")
+                if run_mlflow_id:
+                    source = f"runs:/{run_mlflow_id}/{MODEL_ARTIFACT_PATH}"
+                elif root:
+                    source = f"{root}/{MODEL_ARTIFACT_PATH}"
+                else:
+                    raise ValueError(
+                        f"cannot register model {name}: promotion carries neither a "
+                        "run id nor an artifact uri, so the model directory is unknown")
                 mlflow_version = await self.deps.mlflow.create_model_version(
-                    name, source, sync.get("run_mlflow_id"))
+                    name, source, run_mlflow_id)
                 new_ref = f"models:/{name}/{mlflow_version}"
             await self.deps.mlflow.transition_model_version_stage(
                 name, mlflow_version, mlflow_stage,
