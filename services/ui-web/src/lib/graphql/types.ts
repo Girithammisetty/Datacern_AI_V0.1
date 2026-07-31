@@ -44,6 +44,9 @@ export interface CreateCasesInput {
   severity?: string;
   assignedToId?: string;
   description?: string;
+  /** Values for the workspace's custom case fields, keyed by field name.
+   * case-service 422s on any key its catalog does not declare. */
+  customFields?: Record<string, unknown>;
   rows: CaseRowInput[];
 }
 
@@ -1477,6 +1480,39 @@ export interface CaseSchemaField {
   label?: string | null;
   required?: boolean | null;
 }
+/** Layout/validation hints a tenant attaches to a custom field. Free-form on
+ * the wire (case-service stores field_meta as JSON); these are the keys the
+ * renderer honors — anything else is ignored, never rendered blindly. */
+export interface CaseFieldMeta {
+  label?: string;
+  help?: string;
+  placeholder?: string;
+  options?: string[];
+  min?: number;
+  max?: number;
+  rows?: number;
+}
+
+/** One field of the case form model. Platform defaults and tenant custom
+ * fields share this shape so the renderer treats them uniformly; `custom`
+ * distinguishes their origin. */
+export interface CaseFormField {
+  name: string;
+  dataType?: string | null;
+  required?: boolean | null;
+  readonly?: boolean | null;
+  custom?: boolean | null;
+  queryScoped?: boolean | null;
+  fieldMeta?: CaseFieldMeta | null;
+}
+
+/** The form model for a mode (create/update). */
+export interface CaseForm {
+  mode: string;
+  defaults: CaseFormField[];
+  customFields: CaseFormField[];
+}
+
 /** A governed typed case SCHEMA — a named case TYPE binding a field set. */
 export interface CaseSchema {
   id: ID;

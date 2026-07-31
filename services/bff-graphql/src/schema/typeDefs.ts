@@ -2020,6 +2020,27 @@ export const typeDefs = gql`
 
   "One embedded field def on a typed case schema (case-service inc10)."
   type CaseSchemaField { name: String! dataType: String label: String required: Boolean }
+  """One field of the case FORM MODEL (case-service GET /cases/form). Platform
+  defaults and workspace custom fields are shaped identically so a schema-driven
+  renderer treats them uniformly; 'custom' distinguishes their origin and
+  'fieldMeta' carries layout hints (label/help/placeholder/options)."""
+  type CaseFormField {
+    name: String!
+    dataType: String
+    required: Boolean
+    readonly: Boolean
+    custom: Boolean
+    queryScoped: Boolean
+    fieldMeta: JSON
+  }
+  """The form model for a mode: platform defaults + the workspace's applicable
+  custom-field definitions (purpose-filtered server-side)."""
+  type CaseForm {
+    mode: String!
+    defaults: [CaseFormField!]!
+    customFields: [CaseFormField!]!
+  }
+
   """A governed typed case SCHEMA: a named case TYPE (duplicate_review,
   banking_change_verification, …) binding a distinct set of embedded field defs.
   Capability packs install these; distinct from the flat CaseField catalog."""
@@ -2127,6 +2148,11 @@ export const typeDefs = gql`
     severity: String
     assignedToId: ID
     description: String
+    """Values for the workspace's custom case fields, keyed by field name.
+    case-service validates every key against the workspace's field catalog and
+    rejects unknown names (422), so a schema-driven form cannot smuggle
+    undeclared fields onto a case."""
+    customFields: JSON
     rows: [CaseRowInput!]!
   }
 
@@ -4308,6 +4334,10 @@ export const typeDefs = gql`
     (case-service GET /case-schemas, workspace from the JWT claim). Needs
     case.schema.read."""
     caseSchemas: [CaseSchema!]!
+    """The case FORM MODEL for a mode (case-service GET /cases/form): platform
+    default fields plus the workspace's applicable custom-field definitions.
+    Drives the schema-driven form renderer. Needs case.case.read."""
+    caseForm(mode: String = "create", queryUrn: String): CaseForm!
 
     proposalsInbox(status: ProposalStatus = PENDING, agentKey: String, first: Int = 50, after: String): ProposalConnection!
     proposal(id: ID!): Proposal

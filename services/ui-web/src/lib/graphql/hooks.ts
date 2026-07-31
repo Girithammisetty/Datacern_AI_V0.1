@@ -1759,7 +1759,12 @@ export function useCreateCaseField() {
         input,
         idempotencyKey: crypto.randomUUID(),
       }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["cases", "caseFields"] }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["cases", "caseFields"] });
+      // The form MODEL is derived from the field catalog — a stale form would
+      // render fields the server no longer accepts (or miss a new one).
+      client.invalidateQueries({ queryKey: ["cases", "caseForm"] });
+    },
   });
 }
 
@@ -1768,7 +1773,12 @@ export function useUpdateCaseField() {
   return useMutation({
     mutationFn: (input: UpdateCaseFieldInput) =>
       graphqlRequest<ops.UpdateCaseFieldResult>(ops.UPDATE_CASE_FIELD, { input }).then((r) => r.updateCaseField),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["cases", "caseFields"] }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["cases", "caseFields"] });
+      // The form MODEL is derived from the field catalog — a stale form would
+      // render fields the server no longer accepts (or miss a new one).
+      client.invalidateQueries({ queryKey: ["cases", "caseForm"] });
+    },
   });
 }
 
@@ -1777,7 +1787,12 @@ export function useDeleteCaseField() {
   return useMutation({
     mutationFn: (vars: { id: string; orphan?: boolean }) =>
       graphqlRequest<ops.DeleteCaseFieldResult>(ops.DELETE_CASE_FIELD, vars),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["cases", "caseFields"] }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["cases", "caseFields"] });
+      // The form MODEL is derived from the field catalog — a stale form would
+      // render fields the server no longer accepts (or miss a new one).
+      client.invalidateQueries({ queryKey: ["cases", "caseForm"] });
+    },
   });
 }
 
@@ -1786,6 +1801,20 @@ export function useCaseSchemas() {
   return useQuery({
     queryKey: qk.caseSchemas(),
     queryFn: () => graphqlRequest<ops.CaseSchemasResult>(ops.CASE_SCHEMAS, {}).then((r) => r.caseSchemas),
+  });
+}
+
+/** The case form model for a mode — what the schema-driven renderer draws.
+ * Cached per (mode, queryUrn): a tenant's field catalog changes rarely, and a
+ * stale form would render fields the server no longer accepts, so the cache is
+ * invalidated by the case-field mutations. */
+export function useCaseForm(mode: "create" | "update" = "create", queryUrn?: string) {
+  return useQuery({
+    queryKey: qk.caseForm(mode, queryUrn),
+    queryFn: () =>
+      graphqlRequest<ops.CaseFormResult>(ops.CASE_FORM, { mode, queryUrn }).then(
+        (r) => r.caseForm,
+      ),
   });
 }
 

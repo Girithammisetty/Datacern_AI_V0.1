@@ -18,6 +18,7 @@ import type {
   CaseField,
   CaseTrigger,
   CaseSchema,
+  CaseForm,
   LabelOverride,
   CaseSlaPolicy,
   Chart,
@@ -1774,6 +1775,26 @@ const CASE_SCHEMA_FIELDS = `
   fields { name dataType label required }
   createdAt updatedAt
 `;
+/** The case FORM MODEL (case-service GET /cases/form): platform defaults plus
+ * the workspace's applicable custom-field defs, already purpose-filtered
+ * server-side. Drives the schema-driven renderer — the UI never re-derives
+ * which fields apply to a mode. */
+const CASE_FORM_FIELD_FIELDS = /* GraphQL */ `
+  name dataType required readonly custom queryScoped fieldMeta
+`;
+export const CASE_FORM = /* GraphQL */ `
+  query CaseForm($mode: String, $queryUrn: String) {
+    caseForm(mode: $mode, queryUrn: $queryUrn) {
+      mode
+      defaults { ${CASE_FORM_FIELD_FIELDS} }
+      customFields { ${CASE_FORM_FIELD_FIELDS} }
+    }
+  }
+`;
+export interface CaseFormResult {
+  caseForm: CaseForm;
+}
+
 export const CASE_SCHEMAS = /* GraphQL */ `
   query CaseSchemas { caseSchemas { ${CASE_SCHEMA_FIELDS} } }
 `;

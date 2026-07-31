@@ -13,7 +13,7 @@ import type {
   CaseDTO,
   // Tier 4b: case ops (lifecycle, comments/timeline, export, catalog, SLA).
   CaseCommentDTO, CaseActivityDTO, CaseOperationDTO, DispositionDTO, CaseFieldDTO, CaseSlaPolicyDTO,
-  CaseSchemaDTO,
+  CaseSchemaDTO, CaseFormDTO, CaseFormFieldDTO,
 } from "../clients/case.js";
 import type { DashboardDTO, ChartDTO, ChartTypeDTO, ChartShapedDataDTO } from "../clients/chart.js";
 import type {
@@ -827,6 +827,28 @@ export function mapCaseField(ctx: GraphQLContext, d: CaseFieldDTO) {
     fieldMeta: d.field_meta ?? null,
     createdAt: d.created_at ?? null,
     updatedAt: d.updated_at ?? null,
+  };
+}
+
+/** GET /cases/form → CaseForm. Defaults and custom fields are shaped
+ * identically so the schema-driven renderer treats them uniformly; `custom`
+ * still distinguishes their origin for the UI. */
+export function mapCaseForm(d: CaseFormDTO) {
+  const field = (f: CaseFormFieldDTO) => ({
+    __typename: "CaseFormField" as const,
+    name: f.name ?? "",
+    dataType: f.data_type ?? null,
+    required: f.required ?? null,
+    readonly: f.readonly ?? null,
+    custom: f.custom ?? null,
+    queryScoped: f.query_scoped ?? null,
+    fieldMeta: f.field_meta ?? null,
+  });
+  return {
+    __typename: "CaseForm" as const,
+    mode: d.mode ?? "create",
+    defaults: (d.defaults ?? []).map(field),
+    customFields: (d.custom_fields ?? []).map(field),
   };
 }
 

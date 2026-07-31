@@ -147,6 +147,27 @@ export interface CaseTriggerDTO {
   updated_at?: string;
 }
 
+/** One field in the GET /cases/form model. Default fields carry `required`
+ * (and `readonly` in update mode); custom fields carry `field_meta` and
+ * `custom: true`. The renderer treats them uniformly. */
+export interface CaseFormFieldDTO {
+  name?: string;
+  data_type?: string;
+  required?: boolean;
+  readonly?: boolean;
+  custom?: boolean;
+  query_scoped?: boolean;
+  field_meta?: Record<string, unknown>;
+}
+
+/** GET /cases/form response: the platform defaults for the mode plus the
+ * workspace's applicable custom-field definitions. */
+export interface CaseFormDTO {
+  mode?: string;
+  defaults?: CaseFormFieldDTO[];
+  custom_fields?: CaseFormFieldDTO[];
+}
+
 export interface CaseFieldDTO {
   id: string;
   workspace_id?: string;
@@ -249,6 +270,10 @@ export class CaseClient {
       severity?: string;
       assigned_to_id?: string;
       description?: string;
+      /** Values for the workspace's custom case fields, keyed by field name.
+       * case-service validates every key against the workspace catalog and
+       * 422s on an unknown name. */
+      custom_fields?: Record<string, unknown>;
       rows: { row_pk: string; display_projection: Record<string, string> }[];
     },
     idempotencyKey?: string,
@@ -490,6 +515,18 @@ export class CaseClient {
   }
 
   // ---- Tier 4b: custom case-fields -------------------------------------------
+
+  /** GET /cases/form?mode=&query_urn= (case.case.read) — the FORM MODEL for a
+   * mode: the platform's default fields plus the workspace's custom-field defs
+   * (already purpose-filtered server-side: create-mode returns create/both
+   * fields). This is what drives the schema-driven renderer, so the UI never
+   * re-derives which fields apply. */
+  async caseForm(mode?: string, queryUrn?: string): Promise<CaseFormDTO> {
+    const r = await this.http.get<{ data: CaseFormDTO }>("/api/v1/cases/form", {
+      query: { mode, query_urn: queryUrn },
+    });
+    return r.data ?? { mode: mode ?? "create", defaults: [], custom_fields: [] };
+  }
 
   /** GET /case-fields?query_urn= (case.case.read). */
   async caseFields(queryUrn?: string): Promise<CaseFieldDTO[]> {
