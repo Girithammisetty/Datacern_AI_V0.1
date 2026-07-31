@@ -3,7 +3,7 @@
 Read tools resolve directly. Write tools (``inference.job.create``,
 ``inference.schedule.create/update``) return **proposals** carrying the
 compatibility report as ``predicted_effect`` — they never auto-execute (the tool
-plane requires human approval; MASTER §2). ``create_unpromoted`` is excluded from
+plane requires human approval; MASTER §2). ``inference.unpromoted_job.create`` is excluded from
 the agent toolset (BR-2).
 """
 

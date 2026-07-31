@@ -20,14 +20,22 @@ logger = logging.getLogger(__name__)
 # from the platform-canonical set (read/list/create/update/delete/execute/…): job
 # submission/retry/bulk are `create`, cancel is `update`. These names MUST equal
 # the actions the routes guard (see tests/unit/test_action_manifest.py) so rbac's
-# OPA catalog reports action_known=True. `inference.job.create_unpromoted` is a
-# fine-grained capability (BR-2) checked in-code, not a route guard.
+# OPA catalog reports action_known=True.
+#
+# `inference.unpromoted_job.create` is a fine-grained capability (BR-2) checked
+# in-code, not a route guard. It was `inference.job.create_unpromoted` until rbac
+# REJECTED it: ParseAction requires the verb to be one of the canonical set
+# (rbac-service/internal/domain/catalog.go::AllVerbs), so registration failed 400
+# "unknown verb" and the action never reached the OPA catalog — which meant it
+# could not be granted through the role/grant path, so nobody could legitimately
+# hold it. The fine-grained distinction belongs in the RESOURCE, not a compound
+# verb; `unpromoted_job` + `create` says the same thing and parses.
 MANIFEST: list[str] = [
     "inference.job.create",
     "inference.job.read",
     "inference.job.update",
     "inference.job.delete",
-    "inference.job.create_unpromoted",
+    "inference.unpromoted_job.create",
     "inference.schedule.create",
     "inference.schedule.read",
     "inference.schedule.update",
