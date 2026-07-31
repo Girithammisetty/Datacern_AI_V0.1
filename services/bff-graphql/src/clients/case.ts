@@ -160,6 +160,22 @@ export interface CaseFormFieldDTO {
   field_meta?: Record<string, unknown>;
 }
 
+/** GET /cases/queue-intelligence response (roadmap item 4).
+ *
+ * Nullable percentiles are load-bearing, not laziness: case-service returns null
+ * when nothing resolved in the window, and "no data" must not arrive as 0, which
+ * would read as instant decisions. They stay `number | null` all the way to the
+ * renderer for the same reason. */
+export interface QueueIntelligenceDTO {
+  generated_at: string;
+  window_days: number;
+  open: { total: number; unassigned: number; in_progress: number };
+  aging: { label: string; count: number }[];
+  sla: { breached: number; due_within_24h: number };
+  throughput: { opened: number; resolved: number; closed: number };
+  latency: { p50_seconds: number | null; p90_seconds: number | null; sample: number };
+}
+
 /** GET /cases/form response: the platform defaults for the mode plus the
  * workspace's applicable custom-field definitions. */
 export interface CaseFormDTO {
@@ -526,6 +542,20 @@ export class CaseClient {
       query: { mode, query_urn: queryUrn },
     });
     return r.data ?? { mode: mode ?? "create", defaults: [], custom_fields: [] };
+  }
+
+  /** GET /cases/queue-intelligence?days= (case.case.read).
+   *
+   * Workspace-scoped downstream — case-service derives the workspace from the
+   * caller's own claims, so the bff must NOT accept one as an argument. Letting
+   * a client name a workspace here would hand it a way to count another
+   * department's backlog, which is exactly what the case surface withholds. */
+  async queueIntelligence(days?: number): Promise<QueueIntelligenceDTO> {
+    const r = await this.http.get<{ data: QueueIntelligenceDTO }>(
+      "/api/v1/cases/queue-intelligence",
+      { query: { days } },
+    );
+    return r.data;
   }
 
   /** GET /case-fields?query_urn= (case.case.read). */

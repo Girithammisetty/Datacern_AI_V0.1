@@ -74,6 +74,7 @@ export const qk = {
   caseSchemas: () => ["cases", "caseSchemas"] as const,
   caseForm: (mode: string, queryUrn?: string) =>
     ["cases", "caseForm", mode, queryUrn ?? null] as const,
+  queueIntelligence: (days: number) => ["cases", "queueIntelligence", days] as const,
 
   proposals: (filters: unknown) => ["agentic", "proposals", filters] as const,
   proposal: (id: string) => ["agentic", "proposal", id] as const,

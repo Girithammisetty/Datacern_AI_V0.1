@@ -2473,6 +2473,62 @@ type CaseForm {
 }
 
 """
+Aging bucket over OPEN cases (closed cases have no age to worry about).
+"""
+type QueueAgingBucket {
+  label: String!
+  count: Int!
+}
+
+type QueueOpenCounts {
+  total: Int!
+  unassigned: Int!
+  inProgress: Int!
+}
+
+type QueueSla {
+  """Past due and still open — already a miss."""
+  breached: Int!
+  """Open, not yet breached, due inside a day: the set still savable."""
+  dueWithin24h: Int!
+}
+
+type QueueThroughput {
+  opened: Int!
+  resolved: Int!
+  closed: Int!
+}
+
+"""
+Time-to-decision (created -> resolved) over cases resolved in the window.
+
+p50/p90 are NULLABLE ON PURPOSE: null means nothing resolved in the window.
+They must never be coerced to 0, which would read as instant decisions.
+'sample' is the count they were computed from, so a p90 over three cases is
+visibly not a trend.
+"""
+type QueueLatency {
+  p50Seconds: Int
+  p90Seconds: Int
+  sample: Int!
+}
+
+"""
+The approver's view of the queue: how old the backlog is, what breaches
+next, how much is clearing, and how long a decision takes. Composed from data
+case-service already stores; scoped to the caller's own workspace.
+"""
+type QueueIntelligence {
+  generatedAt: String!
+  windowDays: Int!
+  open: QueueOpenCounts!
+  aging: [QueueAgingBucket!]!
+  sla: QueueSla!
+  throughput: QueueThroughput!
+  latency: QueueLatency!
+}
+
+"""
 A governed typed case SCHEMA: a named case TYPE (duplicate_review,
 banking_change_verification, …) binding a distinct set of embedded field defs.
 Capability packs install these; distinct from the flat CaseField catalog.
@@ -5261,6 +5317,14 @@ type Query {
   Drives the schema-driven form renderer. Needs case.case.read.
   """
   caseForm(mode: String = "create", queryUrn: String): CaseForm!
+  """
+  Approver queue intelligence (case-service GET /cases/queue-intelligence):
+  aging, SLA risk, throughput and time-to-decision for the caller's OWN
+  workspace. There is deliberately no workspace argument — the downstream
+  derives it from the caller's claims, and accepting one here would let a
+  client count another department's backlog. Needs case.case.read.
+  """
+  queueIntelligence(days: Int = 7): QueueIntelligence!
   proposalsInbox(status: ProposalStatus = PENDING, agentKey: String, first: Int = 50, after: String): ProposalConnection!
   proposal(id: ID!): Proposal
   agentRun(id: ID!): AgentRun

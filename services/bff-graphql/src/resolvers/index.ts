@@ -20,6 +20,7 @@ import {
   mapCaseComment, mapCaseActivity, mapCaseOperation, mapDisposition, mapCaseField, mapCaseTrigger, mapCaseSlaPolicy,
   mapCaseSchema,
   mapCaseForm,
+  mapQueueIntelligence,
   mapChartType, mapChartShapedData,
   mapProposal, mapAgentRun, mapAgentKillSwitch, mapToolKillSwitch, mapExperiment, mapRun, mapModel,
   mapRegistryModel, mapPromotion, mapInferenceJob,
@@ -1440,6 +1441,10 @@ export const resolvers = {
 
     caseForm: async (_p: unknown, a: { mode?: string; queryUrn?: string }, ctx: GraphQLContext) => {
       return mapCaseForm(await ctx.clients.case.caseForm(a.mode, a.queryUrn));
+    },
+
+    queueIntelligence: async (_p: unknown, a: { days?: number }, ctx: GraphQLContext) => {
+      return mapQueueIntelligence(await ctx.clients.case.queueIntelligence(a.days));
     },
 
     caseTriggers: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
