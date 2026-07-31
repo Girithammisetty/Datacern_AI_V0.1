@@ -120,13 +120,16 @@ ClickHouse), this does **not** reliably fit GitHub's standard hosted `ubuntu-lat
 runner (4 vCPU / 16GB RAM / ~14GB free disk) — expect OOM kills and disk-pressure
 flakes under real load; `up.sh`'s own preflight already warns to give Docker alone
 `>=10GB`. The job reads its runner label from the `E2E_LIVE_RUNNER` repo/org variable,
-defaulting to **`ubuntu-latest-8-cores`** (8 vCPU / 32GB) — one of GitHub's larger hosted
-runners, free for public repositories. That default was adopted after `journey-learn`
-failed twice consecutively on `ubuntu-latest` at the heaviest step (an MLflow pyfunc load
-plus batch scoring that never reached a terminal status inside its poll window) while
-every cheaper lane stayed green.
+defaulting to `ubuntu-latest`.
 
-If the larger-runner label is not available to this repository, the job does not fail —
-it sits **queued with no runner**, which reads as a hang. Set `E2E_LIVE_RUNNER` to a label
-that does exist (it takes precedence over the default), or revert the default in
-`.github/workflows/ci.yml` to `ubuntu-latest` and accept the flakes.
+A larger runner is the right answer and was tried. Defaulting to `ubuntu-latest-8-cores`
+left the job **queued for 20+ minutes with no runner ever allocated**, while all 24
+`build-push` jobs created in the same instant on plain `ubuntu-latest` completed — GitHub's
+larger hosted runners are not available to this repository. Note the failure mode: not a
+red X, just a job that never starts. The default was reverted.
+
+To fix it properly: enable larger runners for the account/org (GitHub settings → Actions →
+Runners), then set `E2E_LIVE_RUNNER` to that label — it takes precedence over the default,
+so no code change is needed. A self-hosted runner sized for this stack works the same way.
+Until then `journey-learn`'s heaviest step (an MLflow pyfunc load plus batch scoring) is
+what fails first under resource pressure.
