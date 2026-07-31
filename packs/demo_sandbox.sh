@@ -26,6 +26,7 @@
 # Usage:
 #   packs/demo_sandbox.sh load card-disputes          # provision + verify
 #   packs/demo_sandbox.sh load card-disputes my-name  # explicit tenant name
+#   packs/demo_sandbox.sh logins <tenant-id>          # register its logins with ui-web
 #   packs/demo_sandbox.sh status <tenant-id>          # provisioning + case count
 #   packs/demo_sandbox.sh reset  <tenant-id>          # re-seed to the baseline
 #   packs/demo_sandbox.sh -n load card-disputes       # dry run
@@ -110,6 +111,14 @@ PYEOF
 # ui-web restart; this path had no counterpart.
 #
 # Entry shape mirrors seed_platform.py::write_personas_env exactly.
+pack_of_tenant(){ # pack_of_tenant <tenant-id> -> the bundle it was provisioned from
+  # identity-service records it on the tenant (domain.Tenant.DemoPack), so a
+  # caller never has to remember which bundle a sandbox came from.
+  api GET "/api/v1/tenants/$1" \
+    | "$PY" -c 'import json,sys; d=json.load(sys.stdin); print((d.get("tenant") or d).get("demo_pack",""))' \
+      2>/dev/null || true
+}
+
 merge_personas(){ # merge_personas <tenant-id> <pack>
   local tid="$1" pk="$2" pfile="$REPO/deploy/local/run/personas.json"
   "$PY" - "$REPO" "$tid" "$pk" "$pfile" "$IDENTITY" "$(su_token)" <<'PYEOF'
@@ -288,6 +297,32 @@ for st in (json.load(sys.stdin).get("steps") or []):
     say ""
     say "${GRN}ready${NC} — tenant ${BLD}$TID${NC}"
     say "  re-seed: ${BLD}packs/demo_sandbox.sh reset $TID${NC}"
+    ;;
+
+  logins)
+    # Register an ALREADY-SEEDED sandbox's personas with ui-web's dev login.
+    # Separate from `load` because the two fail independently: seeding can
+    # succeed while the login map is stale (or vice versa), and re-running a
+    # whole load just to fix logins would mint a redundant tenant.
+    preflight
+    TID="$PACK"; [ -n "$TID" ] || die "usage: packs/demo_sandbox.sh logins <tenant-id> [pack]"
+    TOK="$(su_token)"
+    PK="${ARG3:-$(pack_of_tenant "$TID")}"
+    [ -n "$PK" ] || die "could not determine which bundle tenant $TID came from.
+  Pass it explicitly: ${BLD}packs/demo_sandbox.sh logins $TID <pack>${NC}"
+    [ -f "$REPO/deploy/demo/$PK/personas.yaml" ] \
+      || die "no personas.yaml in deploy/demo/$PK — nothing to register"
+    say "Registering ${BLD}$PK${NC} personas for tenant ${BLD}$TID${NC} …"
+    if LOGINS="$(merge_personas "$TID" "$PK" 2>&1)" && [ -n "$LOGINS" ]; then
+      ok "logins registered:"
+      printf '%s\n' "$LOGINS" | sed 's/^/       /'
+      say ""
+      say "  ${YEL}ui-web reads the map ONCE at boot — restart it before logging in:${NC}"
+      say "    ${BLD}deploy/local/restart_ui.sh${NC}"
+    else
+      printf '%s\n' "$LOGINS" | sed 's/^/  /'
+      die "no personas registered — the seeded users (if any) will still be rejected by ui-web"
+    fi
     ;;
 
   status)
