@@ -10,6 +10,7 @@ import { StatusChip } from "@/components/primitives/StatusChip";
 import { Input } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { useCaseSearch } from "@/lib/graphql/hooks";
+import { filterByInsight, insightBySlug } from "@/lib/insights/cases";
 import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import { useSelection } from "@/stores/ui";
 import { BulkAssignBar } from "@/components/cases/BulkAssignBar";
@@ -51,8 +52,21 @@ export default function CasesPage() {
   // row is inserted).
   useHubTopics(["list:case"]);
 
-  const rows = useMemo(() => query.data?.pages.flatMap((p) => p.nodes) ?? [], [query.data]);
-  const signature = `${q}|${status}|${severity}`;
+  const loaded = useMemo(() => query.data?.pages.flatMap((p) => p.nodes) ?? [], [query.data]);
+
+  // ?insight=<slug> narrows the list with the SAME predicate that produced the
+  // count on home (lib/insights/cases.ts), so the page a user lands on is the
+  // evidence for the number they clicked. It is applied CLIENT-SIDE because
+  // CaseFilter has only {status, severity, assignee} — case-service can neither
+  // filter on dueDate nor on reassignCount — and therefore narrows only the
+  // pages already loaded. The banner below says so rather than implying the
+  // whole tenant was searched.
+  const insight = insightBySlug(params.get("insight"));
+  const rows = useMemo(
+    () => (insight ? filterByInsight(loaded, insight.slug, Date.now()) : loaded),
+    [loaded, insight],
+  );
+  const signature = `${q}|${status}|${severity}|${insight?.slug ?? ""}`;
   const selection = useSelection();
   if (selection.signature !== signature) selection.setSignature(signature);
 
@@ -104,12 +118,37 @@ export default function CasesPage() {
         />
         <Facet label="Status" value={status} options={STATUSES} onChange={(v) => setParam("status", v)} />
         <Facet label="Severity" value={severity} options={SEVERITIES} onChange={(v) => setParam("severity", v)} />
-        {(q || status || severity) && (
+        {(q || status || severity || insight) && (
           <Button variant="ghost" size="sm" onClick={() => router.replace("/cases")}>
             Clear
           </Button>
         )}
       </div>
+
+      {insight && (
+        <div
+          role="status"
+          className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm"
+        >
+          <span className="font-medium text-foreground">Showing:</span>
+          <span className="text-muted-foreground">{insight.rule}</span>
+          {/* One text node on purpose: JSX interpolation would split this
+              across elements, which makes it unreadable to a screen reader as
+              a single phrase and unassertable as one string. */}
+          <span className="text-xs text-muted-foreground">
+            {`(${rows.length} of the ${loaded.length} loaded${
+              query.hasNextPage ? " — load more to widen the search" : ""
+            })`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setParam("insight", "")}
+            className="ml-auto text-xs text-primary hover:underline"
+          >
+            Show all cases
+          </button>
+        </div>
+      )}
 
       <BulkAssignBar caseCount={rows.length} />
 
@@ -118,7 +157,7 @@ export default function CasesPage() {
         isError={query.isError}
         error={query.error}
         isEmpty={rows.length === 0}
-        emptyTitle="No cases match these filters"
+        emptyTitle={insight ? "No loaded cases match this insight" : "No cases match these filters"}
         onRetry={() => query.refetch()}
       >
         <DataTable
