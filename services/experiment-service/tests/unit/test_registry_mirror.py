@@ -121,3 +121,65 @@ async def test_sweep_tenant_includes_mirrored_models(container):
     assert result["mirrored_models"] == [f"{name} v1"]
     models = await container.registry_service.list_models(ctx, None, None, 50, None)
     assert [m["name"] for m in models.items] == [name]
+
+
+# ---- the promoted version must point at a LOADABLE model uri ---------------
+#
+# The assertion whose absence let a real outage ship. experiment-service used to
+# hand-build the registry source from the run: `artifact_uri` (the artifact ROOT)
+# or `runs:/<run>/model`. Under MLflow 3 both REGISTER fine and then fail at LOAD
+# time in inference-service with 'Could not find an "MLmodel" configuration file',
+# because log_model produces a logged model (models:/m-<id>) whose location is not
+# reconstructible from the run id. Verified against mlflow 3.14 locally: the uri
+# MLflow itself registers is models:/m-<id>, and that one loads.
+#
+# So the trainer tags the run and we read it back. Nothing here may assert a
+# hand-built string is "correct" again.
+
+def _run_tagged(run_id: str, experiment_id: str, model_uri: str | None) -> dict:
+    run = _mlflow_run(run_id, experiment_id)
+    if model_uri:
+        run["data"]["tags"].append({"key": "datacern.model_uri", "value": model_uri})
+    return run
+
+
+async def test_promotion_registers_the_uri_the_trainer_recorded(container):
+    mlflow = container.deps.mlflow
+    mlflow.seed_run(_run_tagged("mlrun-tag", "90", "models:/m-abc123"))
+    await container.promotion_service._sync_mlflow_stage(TENANT_A, {
+        "model_name": "wr_src_tagged", "version_id": "v-1", "target_stage": 2,
+        "existing_ref": None, "run_mlflow_id": "mlrun-tag",
+        "artifact_uri": "s3://mlflow/90/mlrun-tag/artifacts",
+    })
+    source = mlflow._registry["wr_src_tagged"]["1"]["source"]
+    # the tag wins over the artifact root, which is what used to be registered
+    assert source == "models:/m-abc123"
+    assert not source.startswith("s3://")
+
+
+async def test_promotion_falls_back_loudly_for_runs_predating_the_tag(container):
+    """Legacy runs still register something rather than blocking a promotion —
+    but the value is known-bad, so it must not be mistaken for correct."""
+    mlflow = container.deps.mlflow
+    mlflow.seed_run(_run_tagged("mlrun-untagged", "91", None))
+    await container.promotion_service._sync_mlflow_stage(TENANT_A, {
+        "model_name": "wr_src_legacy", "version_id": "v-2", "target_stage": 1,
+        "existing_ref": None, "run_mlflow_id": "mlrun-untagged",
+        "artifact_uri": "s3://mlflow/91/mlrun-untagged/artifacts",
+    })
+    assert (mlflow._registry["wr_src_legacy"]["1"]["source"]
+            == "s3://mlflow/91/mlrun-untagged/artifacts")
+
+
+async def test_promotion_reuses_an_existing_models_ref_without_reregistering(container):
+    """An already-registered version is transitioned, never duplicated."""
+    mlflow = container.deps.mlflow
+    await mlflow.ensure_registered_model("wr_src_existing")
+    await mlflow.create_model_version("wr_src_existing", "models:/m-xyz", "mlrun-x")
+    await container.promotion_service._sync_mlflow_stage(TENANT_A, {
+        "model_name": "wr_src_existing", "version_id": "v-3", "target_stage": 2,
+        "existing_ref": "models:/wr_src_existing/1",
+        "run_mlflow_id": "mlrun-x", "artifact_uri": "s3://mlflow/42/mlrun-x/artifacts",
+    })
+    assert list(mlflow._registry["wr_src_existing"]) == ["1"]
+    assert mlflow._registry["wr_src_existing"]["1"]["current_stage"] == "Production"
