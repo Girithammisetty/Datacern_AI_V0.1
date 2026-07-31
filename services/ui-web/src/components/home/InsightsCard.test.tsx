@@ -12,6 +12,8 @@ import { renderWithProviders } from "@/test/utils";
 
 let pages: unknown[] = [];
 let fail = false;
+/** null = the aggregate is unavailable, so the card must fall back to floors. */
+let queueIntel: unknown = null;
 
 vi.mock("@/lib/graphql/client", async (importActual) => {
   const actual = await importActual<typeof import("@/lib/graphql/client")>();
@@ -21,6 +23,10 @@ vi.mock("@/lib/graphql/client", async (importActual) => {
       if (doc.includes("query CaseSearch")) {
         if (fail) return Promise.reject(new Error("case-service unreachable"));
         return Promise.resolve({ caseSearch: pages[0] });
+      }
+      if (doc.includes("query QueueIntelligence")) {
+        if (queueIntel === null) return Promise.reject(new Error("no aggregate"));
+        return Promise.resolve({ queueIntelligence: queueIntel });
       }
       return Promise.resolve({});
     },
@@ -79,5 +85,82 @@ describe("InsightsCard", () => {
     const { container } = renderWithProviders(<InsightsCard />);
     await waitFor(() => expect(container.textContent).not.toMatch(/Checking your worklist/));
     expect(container.textContent).not.toMatch(/Needs attention/);
+  });
+});
+
+
+/**
+ * The "at least N" floors were correct when case-service had no aggregate, and
+ * WRONG the moment it grew one. That is the failure mode of an honesty caveat
+ * nobody revisits: it keeps under-reporting long after the limitation is gone.
+ * These tests pin that the card prefers the real total, and still falls back.
+ */
+describe("InsightsCard exact vs bounded counts", () => {
+  const AGG = {
+    generatedAt: new Date().toISOString(),
+    windowDays: 7,
+    open: { total: 40, unassigned: 5, inProgress: 3 },
+    aging: [],
+    sla: { breached: 12, dueWithin24h: 4 },
+    throughput: { opened: 9, resolved: 6, closed: 2, autoOpened: 7 },
+    latency: { p50Seconds: 3600, p90Seconds: 7200, sample: 6 },
+  };
+
+  beforeEach(() => {
+    fail = false;
+    queueIntel = null;
+  });
+
+  it("uses the workspace total for SLA rows instead of the windowed floor", async () => {
+    const now = Date.now();
+    // One overdue case in the window; the aggregate knows there are 12.
+    pages = [{
+      nodes: [{
+        id: "c-1", status: "IN_PROGRESS", severity: "HIGH",
+        dueDate: new Date(now - DAY).toISOString(),
+        createdAt: new Date(now - 2 * DAY).toISOString(), reassignCount: 0,
+      }],
+      pageInfo: { hasMore: true },
+    }];
+    queueIntel = AGG;
+    renderWithProviders(<InsightsCard />);
+
+    // 12, not "at least 1" — the window saw one, the workspace has twelve.
+    await waitFor(() => expect(screen.getByText("12")).toBeInTheDocument());
+    expect(screen.queryByText(/at least 12/)).toBeNull();
+  });
+
+  it("still says 'at least' for insights with no server-side aggregate", async () => {
+    const now = Date.now();
+    pages = [{
+      nodes: [{
+        id: "c-2", status: "UNASSIGNED", severity: "LOW",
+        dueDate: new Date(now + 30 * DAY).toISOString(),
+        createdAt: new Date(now - 1 * DAY).toISOString(), reassignCount: 0,
+      }],
+      pageInfo: { hasMore: true },
+    }];
+    queueIntel = AGG;
+    renderWithProviders(<InsightsCard />);
+    // "unassigned" has no aggregate, so its count stays an honest floor even
+    // while the SLA rows beside it are exact.
+    await waitFor(() => expect(screen.getByText(/at least 1/)).toBeInTheDocument());
+  });
+
+  it("falls back to floors when the aggregate is unavailable", async () => {
+    const now = Date.now();
+    pages = [{
+      nodes: [{
+        id: "c-3", status: "IN_PROGRESS", severity: "HIGH",
+        dueDate: new Date(now - DAY).toISOString(),
+        createdAt: new Date(now - 2 * DAY).toISOString(), reassignCount: 0,
+      }],
+      pageInfo: { hasMore: true },
+    }];
+    queueIntel = null; // aggregate rejects
+    renderWithProviders(<InsightsCard />);
+    // The rows must NOT disappear: a missing aggregate degrades the precision,
+    // it does not remove the signal.
+    await waitFor(() => expect(screen.getByText(/at least 1/)).toBeInTheDocument());
   });
 });

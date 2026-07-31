@@ -884,6 +884,7 @@ export function mapQueueIntelligence(d: QueueIntelligenceDTO) {
       opened: d.throughput?.opened ?? 0,
       resolved: d.throughput?.resolved ?? 0,
       closed: d.throughput?.closed ?? 0,
+      autoOpened: d.throughput?.auto_opened ?? 0,
     },
     latency: {
       __typename: "QueueLatency" as const,

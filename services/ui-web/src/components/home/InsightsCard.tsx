@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { AlertTriangle, CircleAlert, Info, CheckCircle2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/primitives";
-import { useCaseSearch } from "@/lib/graphql/hooks";
+import { useCaseSearch, useQueueIntelligence } from "@/lib/graphql/hooks";
 import { computeCaseInsights, type Insight, type InsightLevel } from "@/lib/insights/cases";
 
 /**
@@ -14,11 +14,16 @@ import { computeCaseInsights, type Insight, type InsightLevel } from "@/lib/insi
  *  1. It is ADDITIVE. It fetches its own data and, on failure, renders nothing.
  *     The decision queue and approvals cards beside it must never be taken down
  *     by an insight query.
- *  2. Its counts are HONEST ABOUT THEIR BOUNDS. case-service has no aggregate
- *     (see lib/insights/cases.ts), so when more cases exist beyond the window
- *     the counts are floors and the card says "at least" and names the window.
- *     A confident total we cannot compute would be the worst thing this surface
- *     could show.
+ *  2. Its counts are HONEST ABOUT THEIR BOUNDS — but they are no longer bounded
+ *     where a real aggregate exists. case-service now serves
+ *     GET /cases/queue-intelligence, a workspace-wide count computed in SQL, so
+ *     the two SLA insights report EXACT totals instead of the "at least N"
+ *     floors this card shipped with. The floors were correct at the time and
+ *     stale afterwards, which is the failure mode of an honesty caveat nobody
+ *     revisits: it keeps under-reporting long after the limitation is gone.
+ *     Insights with no server-side aggregate (unassigned, stalled, churn) are
+ *     STILL floors and still say so — the card mixes exact and bounded counts,
+ *     and says which is which per row rather than picking one label for all.
  *  3. Every row states the RULE behind it, so a user can disagree with the
  *     platform rather than just trust it.
  */
@@ -68,11 +73,17 @@ export function InsightsCard() {
   // additive, and a red error box on the home page for a secondary signal is
   // worse than its absence.
   const q = useCaseSearch({});
+  // Exact SLA totals when the aggregate answers; the card degrades to the
+  // windowed floors if it does not, rather than dropping the rows.
+  const qi = useQueueIntelligence(7);
   if (q.isError) return null;
 
   const nodes = (q.data?.pages ?? []).flatMap((p) => p.nodes);
-  const bounded = Boolean(q.data?.pages?.[q.data.pages.length - 1]?.pageInfo?.hasMore);
+  const windowBounded = Boolean(q.data?.pages?.[q.data.pages.length - 1]?.pageInfo?.hasMore);
   const insights = computeCaseInsights(nodes, Date.now());
+  const exact = qi.data
+    ? { overdue: qi.data.sla.breached, "due-soon": qi.data.sla.dueWithin24h }
+    : undefined;
 
   if (q.isLoading) {
     return (
@@ -91,9 +102,15 @@ export function InsightsCard() {
         <CardTitle className="text-sm">Needs attention</CardTitle>
         {insights.length > 0 && (
           <CardDescription>
-            {bounded
-              ? `Across the ${nodes.length} most recent cases — more exist, so these are minimums.`
-              : `Across all ${nodes.length} of your cases.`}
+            {/* The card can now hold BOTH kinds of count, so the description
+                says so rather than claiming one bound for everything. */}
+            {exact
+              ? windowBounded
+                ? `SLA counts are workspace totals; the rest span the ${nodes.length} most recent cases, so those are minimums.`
+                : `SLA counts are workspace totals; the rest span all ${nodes.length} of your cases.`
+              : windowBounded
+                ? `Across the ${nodes.length} most recent cases — more exist, so these are minimums.`
+                : `Across all ${nodes.length} of your cases.`}
           </CardDescription>
         )}
       </CardHeader>
@@ -106,7 +123,19 @@ export function InsightsCard() {
             Nothing needs attention right now.
           </p>
         ) : (
-          insights.map((i) => <InsightRow key={i.key} insight={i} bounded={bounded} />)
+          insights.map((i) => {
+            // Per-row, not per-card: an exact SLA total and a floored churn
+            // count can sit next to each other, and labelling both the same way
+            // would be wrong about one of them.
+            const server = exact?.[i.slug as keyof typeof exact];
+            return (
+              <InsightRow
+                key={i.key}
+                insight={server === undefined ? i : { ...i, count: server }}
+                bounded={server === undefined && windowBounded}
+              />
+            );
+          })
         )}
       </CardContent>
     </Card>
