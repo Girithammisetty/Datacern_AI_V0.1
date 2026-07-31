@@ -119,7 +119,14 @@ Combined with booting all ~22 services + the full Docker infra stack
 ClickHouse), this does **not** reliably fit GitHub's standard hosted `ubuntu-latest`
 runner (4 vCPU / 16GB RAM / ~14GB free disk) — expect OOM kills and disk-pressure
 flakes under real load; `up.sh`'s own preflight already warns to give Docker alone
-`>=10GB`. The job reads its runner label from the `E2E_LIVE_RUNNER` repo/org variable
-(defaulting to `ubuntu-latest` so the workflow is valid out of the box) — point it at a
-larger GitHub-hosted runner (8+ vCPU / 32GB+ RAM) or a self-hosted runner sized for this
-stack once one is available. This is a real infra gap, not a silently-skipped test.
+`>=10GB`. The job reads its runner label from the `E2E_LIVE_RUNNER` repo/org variable,
+defaulting to **`ubuntu-latest-8-cores`** (8 vCPU / 32GB) — one of GitHub's larger hosted
+runners, free for public repositories. That default was adopted after `journey-learn`
+failed twice consecutively on `ubuntu-latest` at the heaviest step (an MLflow pyfunc load
+plus batch scoring that never reached a terminal status inside its poll window) while
+every cheaper lane stayed green.
+
+If the larger-runner label is not available to this repository, the job does not fail —
+it sits **queued with no runner**, which reads as a hang. Set `E2E_LIVE_RUNNER` to a label
+that does exist (it takes precedence over the default), or revert the default in
+`.github/workflows/ci.yml` to `ubuntu-latest` and accept the flakes.

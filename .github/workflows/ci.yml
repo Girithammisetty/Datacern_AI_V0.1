@@ -477,18 +477,27 @@ jobs:
   # llama3.2:latest + qwen2.5:0.5b + nomic-embed-text for genuine CPU
   # inference. That combination does not reliably fit GitHub's standard
   # hosted `ubuntu-latest` runner (4 vCPU / 16GB RAM / ~14GB free disk) —
-  # expect OOM kills and disk-pressure flakes under real load. Point the
-  # `E2E_LIVE_RUNNER` repo/org VARIABLE at a larger GitHub-hosted runner
-  # (8+ vCPU / 32GB+ RAM) or a self-hosted runner sized for this stack; see
+  # expect OOM kills and disk-pressure flakes under real load.
+  #
+  # The default is therefore `ubuntu-latest-8-cores` (8 vCPU / 32GB), one of
+  # GitHub's larger hosted runners, which are free for PUBLIC repositories.
+  # This was changed after journey-learn failed twice in a row on
+  # `ubuntu-latest` at the heaviest step (an MLflow pyfunc load + batch scoring
+  # that never reached a terminal status inside its poll window) while every
+  # cheaper lane stayed green.
+  #
+  # IF THIS LABEL IS NOT AVAILABLE to the repository (private repo without
+  # larger runners provisioned, or an org that has not enabled them) the job
+  # does not fail — it sits QUEUED with no runner, which looks like a hang.
+  # Two ways out: set the `E2E_LIVE_RUNNER` repo/org VARIABLE to a label that
+  # does exist (it still takes precedence below), or revert this default to
+  # `ubuntu-latest` and accept the flakes. See
   # services/ui-web/tests-live/README.md's "CI" section for the full writeup.
-  # Left defaulted to `ubuntu-latest` so the workflow is valid out of the box
-  # — that default WILL flake under real load, this is a known, called-out
-  # limitation, not a silent gap.
   # ---------------------------------------------------------------------------
   e2e-live:
     needs: [live-e2e-paths, test-go, test-python, test-node, no-stub-gate]
     if: ${{ always() && needs.live-e2e-paths.result == 'success' && (needs.live-e2e-paths.outputs.run == 'true' || github.event_name == 'workflow_dispatch') && !contains(fromJSON('["failure","cancelled"]'), needs.test-go.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-python.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-node.result) && !contains(fromJSON('["failure","cancelled"]'), needs.no-stub-gate.result) }}
-    runs-on: ${{ vars.E2E_LIVE_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.E2E_LIVE_RUNNER || 'ubuntu-latest-8-cores' }}
     timeout-minutes: 45
     concurrency:
       group: e2e-live-${{ github.ref }}
