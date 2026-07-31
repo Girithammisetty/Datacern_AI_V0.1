@@ -76,9 +76,20 @@ func portOpen(hostport string) bool {
 	return true
 }
 
+// requireHarness skips when the dev stack is absent — EXCEPT when the caller
+// declared it expected this tier to run.
+//
+// A skip that always passes is indistinguishable from a tier that verified
+// something, and this one has been passing green in CI without ever reaching
+// Postgres, Kafka or OpenSearch. Setting CASE_REQUIRE_INTEGRATION=1 turns the
+// skip into a failure, so any lane that CLAIMS to run the integration tier
+// cannot quietly report success when the infra never came up.
 func requireHarness(t *testing.T) *harness {
 	t.Helper()
 	if h == nil {
+		if os.Getenv("CASE_REQUIRE_INTEGRATION") == "1" {
+			t.Fatalf("CASE_REQUIRE_INTEGRATION=1 but the integration tier could not run: %s", skipReason)
+		}
 		t.Skip("integration tests skipped: " + skipReason)
 	}
 	return h

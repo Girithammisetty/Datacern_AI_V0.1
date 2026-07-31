@@ -33,8 +33,21 @@ env:
 # that the wedged run does not occupy, which is the only way to recover without
 # waiting it out. Per-ref semantics below are unchanged. If it ever happens again,
 # bump to -v3-.
+# MAIN IS GROUPED PER COMMIT; every other ref is grouped per ref.
+#
+# A single per-ref group meant every merge cancelled the previous merge's run,
+# and merges cluster. On 2026-07-31 three landed inside 20 minutes and two runs
+# were cancelled mid-flight (2e622ab, ab364e49); a fourth pair went the same way
+# an hour later. The effect is that a commit can reach main having been verified
+# by nothing at all, and the cancellation reads like an absent result rather
+# than a missing one — nobody goes looking for a run that never finished.
+#
+# On a PR ref, superseding is right: only the tip matters and cancelling saves
+# runners. On main every commit is a thing someone may ship or bisect, so each
+# gets its own group and runs to completion. This costs concurrent runners
+# during a merge train; that is the price of main being able to verify itself.
 concurrency:
-  group: ci-v2-${{ github.ref }}
+  group: ci-v2-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
   cancel-in-progress: true
 
 permissions:
@@ -173,13 +186,27 @@ jobs:
       # gated behind the `integration` build tag so unit runs above never pay
       # for it. Guarded on the dir existing (rbac-service ships none today).
       # Needs the runner's Docker daemon — present by default on ubuntu-latest.
+      # A skipped tier is reported as a WARNING, not a silent pass. This step
+      # was printing "skipping" into the log and exiting 0, which is
+      # indistinguishable from "the integration tier verified something" on the
+      # summary page — case-service has nine integration files that have been
+      # green in CI without ever reaching Postgres, Kafka or OpenSearch, because
+      # the harness skips itself when the dev stack is absent (and it is absent
+      # here). Surfacing it as a warning does not make the tier run; it stops the
+      # tier's absence from looking like coverage.
       - name: go test (integration)
         working-directory: ${{ matrix.path }}
         run: |
-          if [ -d test/integration ]; then
-            go test -tags integration -timeout 600s ./test/integration/...
-          else
-            echo "no test/integration dir — skipping integration tier for ${{ matrix.name }}"
+          if [ ! -d test/integration ]; then
+            echo "::warning title=No integration tier::${{ matrix.name }} ships no test/integration — Tier 2 NOT run"
+            exit 0
+          fi
+          out=$(go test -tags integration -timeout 600s ./test/integration/... 2>&1) || {
+            echo "$out"; exit 1;
+          }
+          echo "$out"
+          if echo "$out" | grep -q "integration tests skipped:"; then
+            echo "::warning title=Integration tier skipped::${{ matrix.name }} Tier 2 SKIPPED (dev stack not reachable) — this job proves nothing about integration behaviour"
           fi
 
   # ---------------------------------------------------------------------------
