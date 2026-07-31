@@ -73,7 +73,7 @@ func (s *Server) handleCreateCases(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Validate custom fields against the create-mode catalog (CASE-FR-023).
-	if err := s.validateCustomFields(r.Context(), op.Tenant, ws, req.QueryURN, req.CustomFields); err != nil {
+	if err := s.validateCustomFields(r.Context(), op.Tenant, ws, req.QueryURN, req.CustomFields, domain.PurposeCreate); err != nil {
 		writeErr(w, r, err)
 		return
 	}
@@ -224,7 +224,7 @@ func (s *Server) handlePatchCase(w http.ResponseWriter, r *http.Request) {
 			c.Description = *req.Description
 		}
 		if req.CustomFields != nil {
-			if err := s.validateCustomFields(r.Context(), op.Tenant, c.WorkspaceID, "", req.CustomFields); err != nil {
+			if err := s.validateCustomFields(r.Context(), op.Tenant, c.WorkspaceID, "", req.CustomFields, domain.PurposeUpdate); err != nil {
 				return store.Mutation{}, err
 			}
 			c.CustomFields = req.CustomFields

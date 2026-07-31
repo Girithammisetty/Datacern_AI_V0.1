@@ -59,26 +59,29 @@ func splitComma(s string) []string {
 	return out
 }
 
-// validateCustomFields rejects custom-field keys not defined in the workspace
-// catalog (CASE-FR-023). An empty catalog with no provided fields is fine.
-func (s *Server) validateCustomFields(ctx context.Context, tenant, ws uuid.UUID, queryURN string, fields map[string]any) error {
-	if len(fields) == 0 {
-		return nil
-	}
+// validateCustomFields is the write boundary for a case's custom_fields
+// (CASE-FR-022/023): unknown keys are rejected, provided values must fit the
+// field's DECLARED TYPE, and on create every field authored `required: true`
+// must be present. Name-only checking was the earlier behaviour — it let a
+// field declared `float` store "not a number", which every downstream reader
+// then had to re-parse and re-guess.
+//
+// `purpose` selects which fields the required check applies to: create-mode
+// fields on create, update-mode fields on update. The full catalog is still
+// used for the known-key and type checks, so an update carrying a create-purpose
+// value does not read as unknown.
+func (s *Server) validateCustomFields(ctx context.Context, tenant, ws uuid.UUID, queryURN string, fields map[string]any, purpose int16) error {
 	defs, err := s.Store.ListFields(ctx, tenant, ws, queryURN, nil)
 	if err != nil {
 		return err
 	}
-	known := map[string]bool{}
+	applicable := make([]*domain.CaseField, 0, len(defs))
 	for _, d := range defs {
-		known[d.Name] = true
-	}
-	for k := range fields {
-		if !known[k] {
-			return domain.EValidation("unknown custom field: "+k, nil)
+		if d.Purpose == purpose || d.Purpose == domain.PurposeBoth {
+			applicable = append(applicable, d)
 		}
 	}
-	return nil
+	return domain.ValidateCustomValues(defs, applicable, fields, purpose == domain.PurposeCreate)
 }
 
 var _ = events.Topic

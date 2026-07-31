@@ -44,6 +44,9 @@ export interface CreateCasesInput {
   severity?: string;
   assignedToId?: string;
   description?: string;
+  /** Values for the workspace's custom case fields, keyed by field name.
+   * case-service 422s on any key its catalog does not declare. */
+  customFields?: Record<string, unknown>;
   rows: CaseRowInput[];
 }
 
@@ -1477,6 +1480,72 @@ export interface CaseSchemaField {
   label?: string | null;
   required?: boolean | null;
 }
+/** Layout/validation hints a tenant attaches to a custom field. Free-form on
+ * the wire (case-service stores field_meta as JSON); these are the keys the
+ * renderer honors — anything else is ignored, never rendered blindly. */
+export interface CaseFieldMeta {
+  label?: string;
+  help?: string;
+  placeholder?: string;
+  options?: string[];
+  min?: number;
+  max?: number;
+  rows?: number;
+  /** Layout hints authored in a pack's `cases/fields.yaml` (or Case settings):
+   * section heading, sort weight, and a widget override. The renderer honors
+   * them; unknown keys are ignored. */
+  group?: string;
+  order?: number;
+  widget?: "textarea" | "radio";
+}
+
+/** One field of the case form model. Platform defaults and tenant custom
+ * fields share this shape so the renderer treats them uniformly; `custom`
+ * distinguishes their origin. */
+export interface CaseFormField {
+  name: string;
+  dataType?: string | null;
+  required?: boolean | null;
+  readonly?: boolean | null;
+  custom?: boolean | null;
+  queryScoped?: boolean | null;
+  fieldMeta?: CaseFieldMeta | null;
+}
+
+/** The form model for a mode (create/update). */
+export interface CaseForm {
+  mode: string;
+  defaults: CaseFormField[];
+  customFields: CaseFormField[];
+}
+
+/** One AI-drafted field value. A SUGGESTION: it lands in the form AI-marked and
+ * editable, and is never submitted without a human. `sourceRef` is the model's
+ * own attribution (which part of the material it drew from), null when it did
+ * not attribute. */
+export interface DraftedField {
+  name: string;
+  value: unknown;
+  confidence?: number | null;
+  sourceRef?: string | null;
+}
+
+/** The draft result. `unfilled` names fields the model declined — an honest
+ * empty answer, not a padded one. */
+export interface CaseFieldDraft {
+  fields: DraftedField[];
+  unfilled: string[];
+  model?: string | null;
+  evidenceUsed: string[];
+}
+
+export interface DraftCaseFieldsInput {
+  caseId?: ID;
+  evidenceText?: string;
+  queryUrn?: string;
+  fieldNames?: string[];
+}
+
 /** A governed typed case SCHEMA — a named case TYPE binding a field set. */
 export interface CaseSchema {
   id: ID;

@@ -93,7 +93,10 @@ export interface RequestOptions {
 export class ServiceClient {
   readonly service: string;
   private readonly baseUrl: string;
-  private readonly ctx: ClientRequestContext;
+  /** Readable by clients that must build a NON-passthrough auth header while
+   * still presenting the caller's identity — ai-gateway's data plane takes the
+   * virtual key as `Authorization` and the user JWT as `X-Datacern-JWT`. */
+  readonly ctx: ClientRequestContext;
   private readonly fetchImpl: FetchImpl;
   private readonly timeoutMs: number;
 

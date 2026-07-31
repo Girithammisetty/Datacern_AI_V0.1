@@ -2416,6 +2416,63 @@ type CaseSchemaField {
 }
 
 """
+One AI-drafted field value. 'value' is a SUGGESTION — it lands in the form
+as editable, AI-marked text and is never auto-submitted; the human's submit is
+the signed action. 'sourceRef' names the evidence the value came from so a
+reviewer (and an auditor) can trace it.
+"""
+type DraftedField {
+  name: String!
+  value: JSON
+  confidence: Float
+  """
+  Which evidence this was drawn from (evidence id / label), or null when
+  the model did not attribute it.
+  """
+  sourceRef: String
+}
+
+"""
+Result of draftCaseFields: per-field suggestions plus what they were drawn
+from. 'unfilled' names fields the model declined to guess — an empty draft is
+reported honestly rather than padded with invented values.
+"""
+type CaseFieldDraft {
+  fields: [DraftedField!]!
+  unfilled: [String!]!
+  """Model alias that produced the draft (from the gateway's response)."""
+  model: String
+  """Evidence ids actually sent to the model."""
+  evidenceUsed: [String!]!
+}
+
+"""
+One field of the case FORM MODEL (case-service GET /cases/form). Platform
+defaults and workspace custom fields are shaped identically so a schema-driven
+renderer treats them uniformly; 'custom' distinguishes their origin and
+'fieldMeta' carries layout hints (label/help/placeholder/options).
+"""
+type CaseFormField {
+  name: String!
+  dataType: String
+  required: Boolean
+  readonly: Boolean
+  custom: Boolean
+  queryScoped: Boolean
+  fieldMeta: JSON
+}
+
+"""
+The form model for a mode: platform defaults + the workspace's applicable
+custom-field definitions (purpose-filtered server-side).
+"""
+type CaseForm {
+  mode: String!
+  defaults: [CaseFormField!]!
+  customFields: [CaseFormField!]!
+}
+
+"""
 A governed typed case SCHEMA: a named case TYPE (duplicate_review,
 banking_change_verification, …) binding a distinct set of embedded field defs.
 Capability packs install these; distinct from the flat CaseField catalog.
@@ -2555,7 +2612,30 @@ input CreateCasesInput {
   severity: String
   assignedToId: ID
   description: String
+  """
+  Values for the workspace's custom case fields, keyed by field name.
+  case-service validates every key against the workspace's field catalog and
+  rejects unknown names (422), so a schema-driven form cannot smuggle
+  undeclared fields onto a case.
+  """
+  customFields: JSON
   rows: [CaseRowInput!]!
+}
+
+"""
+Ask the model to fill a form's fields from evidence. Either 'caseId' (use
+the case's attached evidence) or 'evidenceText' (unsaved intake text, e.g. a
+pasted document) must be given; fields come from the workspace's form model.
+"""
+input DraftCaseFieldsInput {
+  caseId: ID
+  evidenceText: String
+  queryUrn: String
+  """
+  Restrict drafting to these field names; empty = every custom field in
+  the workspace's create-mode form model.
+  """
+  fieldNames: [String!]
 }
 
 type CreatedCase {
@@ -5175,6 +5255,12 @@ type Query {
   case.schema.read.
   """
   caseSchemas: [CaseSchema!]!
+  """
+  The case FORM MODEL for a mode (case-service GET /cases/form): platform
+  default fields plus the workspace's applicable custom-field definitions.
+  Drives the schema-driven form renderer. Needs case.case.read.
+  """
+  caseForm(mode: String = "create", queryUrn: String): CaseForm!
   proposalsInbox(status: ProposalStatus = PENDING, agentKey: String, first: Int = 50, after: String): ProposalConnection!
   proposal(id: ID!): Proposal
   agentRun(id: ID!): AgentRun
@@ -6410,6 +6496,14 @@ type Mutation {
   Needs case.case.create.
   """
   createCases(input: CreateCasesInput!, idempotencyKey: String): CreateCasesResult!
+  """
+  Draft values for a case's custom fields from its attached evidence
+  (schema-driven forms). Returns SUGGESTIONS only — nothing is written; the
+  human reviews the AI-marked values and submits, and that submit is the
+  signed action. Runs through ai-gateway on the caller's tenant, so the draft
+  is budgeted, guardrailed and metered like any other model call.
+  """
+  draftCaseFields(input: DraftCaseFieldsInput!): CaseFieldDraft!
   """
   Update a case (case-service PATCH /cases/{id}). Returns the full resource.
   """

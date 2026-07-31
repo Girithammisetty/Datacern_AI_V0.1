@@ -3,11 +3,20 @@ import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Input, Label, Textarea } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
-import { useAssignableUsers, useCreateCases } from "@/lib/graphql/hooks";
+import { useAssignableUsers, useCaseForm, useCreateCases } from "@/lib/graphql/hooks";
 import { GraphQLRequestError } from "@/lib/graphql/client";
+import {
+  SchemaForm, validateSchemaForm,
+  type SchemaFieldType, type SchemaFormErrors,
+} from "@/components/cases/SchemaForm";
+import { AiFillPanel } from "@/components/cases/AiFillPanel";
 import type { CaseRowInput } from "@/lib/graphql/types";
 
 const SEVERITIES = ["low", "medium", "high", "critical"] as const;
+
+/** Field types SchemaForm can draw (and case-service validates). A field of any
+ * other type is omitted from the form rather than rendered as a guess. */
+const RENDERABLE = new Set(["string", "text", "integer", "float", "boolean", "date", "enum"]);
 
 /**
  * Create a worklist of cases from selected rows (case worklist model: each row
@@ -42,6 +51,38 @@ export function CreateCasesDialog({
   const [description, setDescription] = useState("");
   const [banner, setBanner] = useState<string | null>(null);
   const [result, setResult] = useState<{ created: number; deduplicated: number } | null>(null);
+  // The workspace's own intake fields, drawn from the server's form model —
+  // a tenant adds a field in Case settings and it appears here, no code change.
+  const [customValues, setCustomValues] = useState<Record<string, unknown>>({});
+  const [fieldErrors, setFieldErrors] = useState<SchemaFormErrors>({});
+  // Which values the AI drafted, so the renderer can mark them for review. A
+  // field the human then edits drops out of the set — it is their value now.
+  const [aiFilled, setAiFilled] = useState<Set<string>>(new Set());
+  const formQ = useCaseForm("create", queryUrn);
+  // Normalize the server's form model onto the renderer's field shape. Only
+  // types SchemaForm draws are kept; anything else is dropped here rather than
+  // rendered as a guess (case-service would reject values for it anyway).
+  const customFields = useMemo(
+    () =>
+      (formQ.data?.customFields ?? [])
+        .filter((f) => RENDERABLE.has(String(f.dataType)))
+        .map((f) => ({
+          name: f.name,
+          dataType: f.dataType as SchemaFieldType,
+          required: f.required ?? false,
+          fieldMeta: f.fieldMeta ?? null,
+        })),
+    [formQ.data],
+  );
+  // The material offered to the AI panel: the first selected row rendered as
+  // plain text. It is shown in an editable box before anything is sent, so the
+  // user sees exactly what the model reads — no hidden attachment.
+  const seedText = useMemo(() => {
+    const first = rows[0];
+    if (!first) return "";
+    const body = first.displayProjection.map((c) => `${c.key}: ${c.value}`).join("\n");
+    return body ? `Selected row (${first.rowPk}):\n${body}` : "";
+  }, [rows]);
   const createMutation = useCreateCases();
 
   // Member-safe assignable-analyst directory (needs case.case.assign, not admin
@@ -61,6 +102,9 @@ export function CreateCasesDialog({
       setDueDate(d.toISOString().slice(0, 10));
       setAssignedToId("");
       setDescription("");
+      setCustomValues({});
+      setFieldErrors({});
+      setAiFilled(new Set());
       setBanner(null);
       setResult(null);
     }
@@ -76,6 +120,15 @@ export function CreateCasesDialog({
       setBanner("A due date is required.");
       return;
     }
+    // Same gate the renderer shows inline: required + numeric coercion. The
+    // coerced `values` are what we send, so a numeric field never ships as a
+    // string. case-service re-validates every key regardless.
+    const { errors, values: cleaned } = validateSchemaForm(customFields, customValues);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setBanner("Fix the highlighted fields.");
+      return;
+    }
     createMutation.mutate(
       {
         input: {
@@ -88,6 +141,7 @@ export function CreateCasesDialog({
           severity,
           assignedToId: assignedToId.trim() || undefined,
           description: description.trim() || undefined,
+          customFields: Object.keys(cleaned).length > 0 ? cleaned : undefined,
           rows,
         },
       },
@@ -190,6 +244,45 @@ export function CreateCasesDialog({
                   </button>
                 )}
               </div>
+              {customFields.length > 0 && (
+                <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {formQ.data?.mode === "create" ? "Intake details" : "Case details"}
+                    </p>
+                  </div>
+                  <AiFillPanel
+                    fields={customFields}
+                    queryUrn={queryUrn}
+                    seedText={seedText}
+                    disabled={createMutation.isPending}
+                    onApply={(values, names) => {
+                      setCustomValues((prev) => ({ ...prev, ...values }));
+                      setAiFilled(new Set(names));
+                      // A drafted value can still be wrong for THIS form (e.g.
+                      // required-but-declined) — re-validate as the human sees it.
+                      setFieldErrors({});
+                    }}
+                  />
+                  <SchemaForm
+                    fields={customFields}
+                    values={customValues}
+                    errors={fieldErrors}
+                    aiFilled={aiFilled}
+                    disabled={createMutation.isPending}
+                    onChange={(name, value) => {
+                      setCustomValues((prev) => ({ ...prev, [name]: value }));
+                      // Edited by hand → no longer an AI suggestion.
+                      setAiFilled((prev) => {
+                        if (!prev.has(name)) return prev;
+                        const next = new Set(prev);
+                        next.delete(name);
+                        return next;
+                      });
+                    }}
+                  />
+                </div>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="cc-desc">Description (optional)</Label>
                 <Textarea

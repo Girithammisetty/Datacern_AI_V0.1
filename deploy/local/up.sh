@@ -235,7 +235,19 @@ start_bff() {
   say "install + boot bff-graphql (Apollo, verifies harness JWKS, forwards bearer)"
   ( cd "$REPO_DIR/services/bff-graphql" && pnpm install --prefer-offline ) >> "$LOG_DIR/bff.log" 2>&1 \
     || warn "bff pnpm install returned nonzero"
+  # AI form drafting (draftCaseFields): ai-gateway's DATA plane needs a virtual
+  # key AND the caller's JWT, and rejects the pair unless the key's tenant is the
+  # caller's. Mint one for THIS tenant; without it drafting refuses honestly
+  # ("not configured") rather than returning an empty draft.
+  local bff_vkey
+  bff_vkey="$( cd "$E2E" && "$PY" lib/seed.py bffkey "$TENANT_ID" 2>>"$LOG_DIR/seed.log" )" || bff_vkey=""
+  if [ -n "$bff_vkey" ]; then
+    say "  bff AI-drafting virtual key minted"
+  else
+    warn "bff AI-drafting virtual key not minted -- draftCaseFields will refuse as unconfigured"
+  fi
   boot bff env PATH="$PATH" \
+    AI_GATEWAY_URL="$AI_GATEWAY_URL" AI_GATEWAY_VIRTUAL_KEY="$bff_vkey" AI_DRAFT_MODEL="datacern-auto" \
     PORT="$PORT_BFF" NODE_ENV=development VERIFY_JWT=true \
     JWKS_URL="$WR_JWKS_URL" JWT_ISSUER="$WR_ISS" JWT_AUDIENCE="$WR_AUD" \
     IDENTITY_URL="$IDENTITY_URL" DATASET_URL="$DATASET_URL" CASE_URL="$CASE_URL" \

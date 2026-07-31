@@ -4,12 +4,32 @@
 # parsing notes. data_type is IMMUTABLE after creation (case-service) — chosen
 # deliberately. Names and enum options mirror the fwa_leads / fwa_recoveries
 # binding-contract columns so field data and dataset agree.
+#
+# This pack is also the worked example of a pack shipping its own INTAKE FORM
+# LAYOUT (schema-driven-forms-addon slice 4). `field_meta` carries the layout:
+#   label / help / placeholder  — the copy an analyst reads
+#   required                    — enforced by case-service on create, and
+#                                 hoisted into the form model so a renderer
+#                                 draws the asterisk without special-casing
+#   group / order               — sections and sort weight. Convention: give
+#                                 each group its own order BAND (Lead 1-9,
+#                                 Recovery 10-19) so a group sorts by its lowest
+#                                 order and the sections stay apart.
+#   widget                      — override the type's default control
+#                                 ('radio' for a short enum, 'textarea' for a
+#                                 long string). An unknown widget falls back to
+#                                 the type's own control, never to nothing.
+# Nothing here is code: install the pack and the form re-arranges itself.
 - name: provider_npi
   data_type: string
   purpose: both
   field_meta:
     label: "Provider NPI"
+    help: "10-digit NPI of the billing provider"
+    placeholder: "1234567890"
     required: false
+    group: "Lead"
+    order: 1
 - name: fwa_typology
   data_type: enum
   purpose: both
@@ -18,6 +38,8 @@
     options: [upcoding, unbundling, phantom_billing, impossible_day,
               kickback_referral_scheme, medical_necessity_abuse]
     required: false
+    group: "Lead"
+    order: 2
 - name: lead_source
   data_type: enum
   purpose: both
@@ -25,18 +47,25 @@
     label: "Lead source"
     options: [nightly_scan, data_mining, member_complaint, hotline, leie_refresh]
     required: false
+    group: "Lead"
+    order: 3
 - name: fwa_score
   data_type: float
   purpose: both
   field_meta:
     label: "FWA screening score (human-review decision support only)"
+    help: "Model output. Advisory: it never decides the referral on its own."
     required: false
+    group: "Lead"
+    order: 4
 - name: exposure_amount
   data_type: float
   purpose: both
   field_meta:
     label: "At-risk / overpayment exposure (USD)"
     required: false
+    group: "Lead"
+    order: 5
 - name: priority
   data_type: enum
   purpose: both
@@ -44,6 +73,9 @@
     label: "Lead priority"
     options: [critical, high, medium, low]
     required: false
+    widget: radio
+    group: "Lead"
+    order: 6
 - name: recovery_method
   data_type: enum
   purpose: both
@@ -51,9 +83,13 @@
     label: "Recovery method"
     options: [payback_demand, offset, settlement, education_letter, prosecution_restitution]
     required: false
+    group: "Recovery"
+    order: 10
 - name: recovered_amount
   data_type: float
   purpose: both
   field_meta:
     label: "Recovered to date (USD)"
     required: false
+    group: "Recovery"
+    order: 11

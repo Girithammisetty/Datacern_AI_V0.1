@@ -8,6 +8,7 @@ import type { GraphQLContext } from "../context.js";
 import { DownstreamError, ErrorCode, gqlError } from "../errors/errors.js";
 import { toConnection, toLimitCursor, type ConnectionArgs } from "../pagination.js";
 import { JSONScalar, DateTimeScalar, DateScalar } from "../schema/scalars.js";
+import { draftCaseFields, type DraftCaseFieldsArgs } from "./draftFields.js";
 import type { ChartDataDTO, ChartDTO } from "../clients/chart.js";
 import type { ChartSourceInputBody } from "../clients/chart.js";
 import { budgetScopeString } from "../clients/usage.js";
@@ -18,6 +19,7 @@ import {
   // Tier 4b: case ops (lifecycle, comments/timeline, export, catalog, SLA).
   mapCaseComment, mapCaseActivity, mapCaseOperation, mapDisposition, mapCaseField, mapCaseTrigger, mapCaseSlaPolicy,
   mapCaseSchema,
+  mapCaseForm,
   mapChartType, mapChartShapedData,
   mapProposal, mapAgentRun, mapAgentKillSwitch, mapToolKillSwitch, mapExperiment, mapRun, mapModel,
   mapRegistryModel, mapPromotion, mapInferenceJob,
@@ -1436,6 +1438,10 @@ export const resolvers = {
       return rows.map((d) => mapCaseField(ctx, d));
     },
 
+    caseForm: async (_p: unknown, a: { mode?: string; queryUrn?: string }, ctx: GraphQLContext) => {
+      return mapCaseForm(await ctx.clients.case.caseForm(a.mode, a.queryUrn));
+    },
+
     caseTriggers: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
       const rows = await ctx.clients.case.caseTriggers();
       return rows.map((d) => mapCaseTrigger(ctx, d));
@@ -2692,6 +2698,12 @@ export const resolvers = {
       return mapCase(ctx, d);
     },
 
+    draftCaseFields: async (
+      _p: unknown,
+      a: { input: DraftCaseFieldsArgs },
+      ctx: GraphQLContext,
+    ) => draftCaseFields(a.input, ctx),
+
     createCases: async (
       _p: unknown,
       a: {
@@ -2704,6 +2716,7 @@ export const resolvers = {
           severity?: string;
           assignedToId?: string;
           description?: string;
+          customFields?: Record<string, unknown>;
           rows: { rowPk: string; displayProjection: { key: string; value: string }[] }[];
         };
         idempotencyKey?: string;
@@ -2721,6 +2734,10 @@ export const resolvers = {
           severity: i.severity,
           assigned_to_id: i.assignedToId,
           description: i.description,
+          // case-service rejects any key not in the workspace's field catalog
+          // (422 unknown custom field) — a schema-driven form cannot smuggle
+          // undeclared fields onto a case.
+          custom_fields: i.customFields,
           rows: i.rows.map((r) => ({
             row_pk: r.rowPk,
             display_projection: Object.fromEntries(

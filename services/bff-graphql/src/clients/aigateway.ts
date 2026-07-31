@@ -278,4 +278,50 @@ export class AiGatewayClient {
     });
     return unwrap<AiGuardrailPolicyDTO>(r);
   }
+  // ---- data plane: structured field drafting (schema-driven forms slice 3) ---
+
+  /** POST /v1/chat/completions with a JSON-only instruction, returning the raw
+   * assistant content plus the gateway's own usage/cost headers.
+   *
+   * Auth is the ai-gateway DATA-plane contract (same shape eval-service's judge
+   * uses): the VIRTUAL KEY is the Authorization bearer and the caller's JWT
+   * rides X-Datacern-JWT — the gateway matches the two tenants and rejects a
+   * mismatch, so a draft is always metered and budgeted against the real
+   * caller's tenant, never the bff's.
+   */
+  async draftJson(args: {
+    virtualKey: string;
+    model: string;
+    system: string;
+    user: string;
+    maxTokens?: number;
+  }): Promise<{ content: string; model?: string; usage?: Record<string, number> }> {
+    const jwt = (this.http.ctx.authorization ?? "").replace(/^Bearer\s+/i, "");
+    const r = await this.http.post<{
+      choices?: { message?: { content?: string } }[];
+      model?: string;
+      usage?: Record<string, number>;
+    }>("/v1/chat/completions", {
+      body: {
+        model: args.model,
+        messages: [
+          { role: "system", content: args.system },
+          { role: "user", content: args.user },
+        ],
+        temperature: 0, // drafting is deterministic; the human edits, not the dice
+        max_tokens: args.maxTokens ?? 600,
+        stream: false,
+      },
+      headers: {
+        authorization: `Bearer ${args.virtualKey}`,
+        "x-datacern-jwt": jwt,
+        "x-datacern-request-class": "chat",
+      },
+    });
+    return {
+      content: (r.choices?.[0]?.message?.content ?? "").trim(),
+      model: r.model,
+      usage: r.usage,
+    };
+  }
 }
