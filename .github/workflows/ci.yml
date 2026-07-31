@@ -145,8 +145,20 @@ jobs:
           POSTGRES_PASSWORD: datacern_dev
           POSTGRES_DB: datacern_test
         ports: ["5432:5432"]
+        # psql, NOT pg_isready. pg_isready defaults the database name to the
+        # USERNAME, so `-U datacern` probed a `datacern` database this service
+        # never creates — the container log showed
+        # `FATAL: database "datacern" does not exist` on every health probe.
+        #
+        # Adding -d to pg_isready does NOT fix that, which is the part worth
+        # knowing: measured both ways against a real Postgres 16, pg_isready
+        # exits 0 whether or not the database exists, because it PINGS the
+        # server rather than connecting. It can only ever answer "is something
+        # listening". A `select 1` against the actual database is the cheapest
+        # check that answers the question the tests care about — measured: exit
+        # 0 on the real database, exit 2 on a missing one.
         options: >-
-          --health-cmd "pg_isready -U datacern"
+          --health-cmd "psql -U datacern -d datacern_test -c 'select 1'"
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
@@ -161,6 +173,41 @@ jobs:
         run: |
           go vet ./...
           go test ./... -coverprofile=coverage.out
+
+      # DB-BACKED TESTS ARE NEVER CACHED, and this is the whole reason the step
+      # exists separately. Go's test cache keys on inputs it can see — sources,
+      # flags, env read via os.Getenv — and CANNOT see "is a Postgres actually
+      # listening". Run 30670739594 proved the cost: the step above reported
+      #     ok  .../internal/store  (cached)
+      # so the postgres service started, sat idle, and was torn down without a
+      # single query, while the job reported green. A cached pass is a claim
+      # about a PREVIOUS environment; for a test whose entire subject is SQL
+      # semantics against a live server, that claim is worthless.
+      #
+      # -count=1 is Go's only supported way to bypass the cache. It applies to
+      # the DB-backed packages alone, so the fast cached run above still covers
+      # everything else. Services with no such package skip in one shell test.
+      - name: go test (DB-backed, uncached)
+        working-directory: ${{ matrix.path }}
+        env:
+          CASE_TEST_DATABASE_URL: postgres://datacern:datacern_dev@localhost:5432/datacern_test?sslmode=disable
+        run: |
+          if ! grep -rlq "CASE_TEST_DATABASE_URL" --include=*_test.go .; then
+            echo "${{ matrix.name }} has no DB-backed tests — nothing to re-run uncached"
+            exit 0
+          fi
+          pkgs=$(grep -rl "CASE_TEST_DATABASE_URL" --include=*_test.go . | xargs -n1 dirname | sort -u)
+          echo "re-running uncached: $pkgs"
+          # shellcheck disable=SC2086
+          out=$(go test -count=1 $pkgs 2>&1) || { echo "$out"; exit 1; }
+          echo "$out"
+          # The env var is set, so these tests MUST have run. If they still
+          # report skipped, the wiring is broken and reporting green would be
+          # exactly the silent no-op this step exists to prevent.
+          if echo "$out" | grep -q "CASE_TEST_DATABASE_URL unset"; then
+            echo "::error title=DB tests skipped despite a live Postgres::${{ matrix.name }} skipped its DB-backed tests while CASE_TEST_DATABASE_URL was set — the service or the env wiring is broken"
+            exit 1
+          fi
 
       # WS5 (BRD 58): a real, enforced coverage floor per language. 5% is a
       # deliberately low starting bar — measured against every Go service's
@@ -201,7 +248,12 @@ jobs:
             echo "::warning title=No integration tier::${{ matrix.name }} ships no test/integration — Tier 2 NOT run"
             exit 0
           fi
-          out=$(go test -tags integration -timeout 600s ./test/integration/... 2>&1) || {
+          # -count=1: a cached result prints only "ok ... (cached)" with none of
+          # the test's own output, so the grep below found nothing and the
+          # warning never fired — the skip stayed silent, which is precisely
+          # what this step was added to stop. The cache cannot see whether the
+          # dev stack is up, so its verdict here is meaningless anyway.
+          out=$(go test -count=1 -tags integration -timeout 600s ./test/integration/... 2>&1) || {
             echo "$out"; exit 1;
           }
           echo "$out"
