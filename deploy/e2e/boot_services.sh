@@ -55,6 +55,15 @@ start_identity() {
     # correct no matter which script/cwd boots identity-service.
     DEMO_BUNDLES_ROOT="$REPO_DIR/deploy/demo"
     DEMO_SEED_SCRIPT="$REPO_DIR/packs/demo_seed_runner.py"
+    # ...and the INTERPRETER, for exactly the same reason. main.go defaults
+    # DEMO_SEED_PYTHON to bare "python3", but demo_seed_runner.py imports
+    # `requests`, which a system python3 generally does not have. The
+    # subprocess then dies on import and SeedDemoContent fails for every
+    # demo-tenant create/reset — with the ModuleNotFoundError buried in the
+    # step's error field, so it reads as "seeding is broken" rather than
+    # "wrong interpreter". Point it at the harness venv, which has requests
+    # (and is the same interpreter every other tool here uses).
+    DEMO_SEED_PYTHON="$PY"
     OIDC_ISSUER="${OIDC_ISSUER:-}" OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-}" OIDC_TENANT_ID="${OIDC_TENANT_ID:-}" )
   say "boot identity (bootstrap pass)"
   boot identity "${env[@]}" "$BIN_DIR/identity-e2e"
