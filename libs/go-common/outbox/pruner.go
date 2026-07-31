@@ -103,12 +103,30 @@ func (p *Pruner) PruneOnce(ctx context.Context) (int64, error) {
 	if !identOK.MatchString(p.Table) || !identOK.MatchString(col) {
 		return 0, fmt.Errorf("outbox: unsafe identifier table=%q column=%q", p.Table, col)
 	}
-	seconds := int64(p.Retention.Seconds())
+	// float64, and make_interval rather than string concatenation, because the
+	// PARAMETER TYPE IS THE BUG THIS FIXES. The old form was
+	//
+	//     now() - ($1::text || ' seconds')::interval        // arg: int64
+	//
+	// and the `::text` cast tells pgx the placeholder's target type is text
+	// (OID 25), so it refused the int64 outright. Observed on every service
+	// boot in the live stack:
+	//
+	//     outbox prune failed  table=outbox
+	//     err="failed to encode args[0]: unable to encode 2592000 into text
+	//          format for text (OID 25)"
+	//
+	// PruneOnce returned that error before touching a row, in all nine services
+	// that wire a Pruner — so no outbox has ever actually been pruned and the
+	// tables grow unboundedly, which is the whole thing BRD 58 B6 asked for.
+	// make_interval's `secs` argument is declared `double precision`, so a Go
+	// float64 binds to it exactly: no cast, no encoding guesswork.
+	seconds := p.Retention.Seconds()
 
 	deleteSQL := fmt.Sprintf(
 		`DELETE FROM %s WHERE ctid IN (
 		   SELECT ctid FROM %s
-		   WHERE %s IS NOT NULL AND %s < now() - ($1::text || ' seconds')::interval
+		   WHERE %s IS NOT NULL AND %s < now() - make_interval(secs => $1)
 		   LIMIT $2
 		 )`, p.Table, p.Table, col, col)
 
