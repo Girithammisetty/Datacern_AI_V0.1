@@ -442,12 +442,24 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
                 jfinal = jd
                 break
         time.sleep(4)
+    # Report `error` FIRST and IN FULL in both branches. The previous version
+    # dumped json.dumps(jfinal)[:300] when the job reached a terminal failure,
+    # and because `model` is serialized ahead of `error` the 300-char cut landed
+    # mid-URN — so a real scoring failure printed the model it was asked to run
+    # and not one word about why it failed. The timeout branch already named the
+    # cause; this one did not, and the asymmetry cost a whole CI round.
+    def scoring_detail() -> str:
+        if jfinal:
+            return (f"status={jfinal.get('status')!r} "
+                    f"error={jfinal.get('error')!r} "
+                    f"model={(jfinal.get('model') or {}).get('urn')!r}")
+        return (f"never reached a terminal status in {polls * 4}s; last seen: "
+                f"status={(last or {}).get('status')!r} "
+                f"error={(last or {}).get('error')!r}")
+
     if not check(bool(jfinal) and jfinal.get("status") == "succeeded",
                  "batch scoring succeeded with the PROMOTED model",
-                 json.dumps(jfinal)[:300] if jfinal else
-                 f"never reached a terminal status in {polls * 4}s; last seen: "
-                 f"status={(last or {}).get('status')!r} error={(last or {}).get('error')!r} "
-                 f"job={json.dumps(last)[:300] if last else 'no successful GET'}"):
+                 scoring_detail()):
         return bail("scoring")
 
     # ground truth: what did the model actually predict? (output parquet bytes)

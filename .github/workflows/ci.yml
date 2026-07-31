@@ -663,9 +663,16 @@ jobs:
       - name: Volume/load soak (make soak-volume)
         run: make soak-volume
 
+      # 100 lines was too small to be useful on the failure it mattered for.
+      # A journey that polls a job every 4s writes one uvicorn access line per
+      # poll, so ~150 polls of "GET /api/v1/inferences/<id> 200 OK" flushed the
+      # traceback that explained the failure clean out of the window. The full
+      # logs go up as an artifact either way, but that artifact is not readable
+      # from every environment, so the inline tail has to carry enough to
+      # diagnose from.
       - name: Tail service boot logs on failure
         if: failure()
-        run: tail -n 100 deploy/e2e/logs/*.log 2>/dev/null || true
+        run: tail -n 400 deploy/e2e/logs/*.log 2>/dev/null || true
 
       - name: Upload Playwright live HTML report
         if: always()
