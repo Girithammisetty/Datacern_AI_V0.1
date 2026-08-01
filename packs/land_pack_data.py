@@ -200,44 +200,31 @@ def ingest_csv(tok: str, ws: str, name: str, blob: bytes) -> bool:
     return False
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--pack", required=True, help="pack name, e.g. card-disputes")
-    ap.add_argument("--tenant", default=None,
-                    help="tenant name (default: wr-demo-<pack>, what demo.sh makes)")
-    ap.add_argument("--admin-sub", default=None,
-                    help="override the admin subject (default: user-admin-<short>, "
-                         "derived from the tenant name the way onboarding does)")
-    args = ap.parse_args()
+def land_bundle(tok: str, ws: str, pack: str) -> list[str]:
+    """Land `pack`'s demo-bundle CSVs into workspace `ws` under the pack's
+    DECLARED dataset names, so a subsequent install resolves them by same-name
+    reuse. Returns a list of failure strings — empty means every declared
+    dataset is present and readable.
 
-    pack_dir = REPO / "packs" / args.pack
-    if not (pack_dir / "pack.yaml").exists():
-        die(f"unknown pack {args.pack!r} (no {pack_dir}/pack.yaml)")
-
-    decl_path = pack_dir / "data" / "datasets.yaml"
+    Shared by this script's CLI and by install_packs_multitenant.onboard_tenant,
+    which calls it BEFORE installing so the flagship packs install in one shot.
+    Idempotent: an existing dataset under the declared name is reused, never
+    re-ingested."""
+    decl_path = REPO / "packs" / pack / "data" / "datasets.yaml"
     if not decl_path.exists():
-        ok(f"{args.pack} declares no datasets — nothing to land")
-        return 0
+        return []
     declared = yaml.safe_load(decl_path.read_text()) or []
+    fileless = [d for d in declared if not d.get("file")]
+    if not fileless:
+        return []
 
-    bundle = REPO / "deploy" / "demo" / args.pack / "data"
+    bundle = REPO / "deploy" / "demo" / pack / "data"
     if not bundle.is_dir():
-        die(f"no demo bundle data at {bundle.relative_to(REPO)} — this pack has "
-            f"no shipped sample rows, so its datasets must be landed from real "
-            f"tenant data (Data > Upload in the UI, or the pack's source connectors)")
+        return [f"no demo bundle at deploy/demo/{pack}/data — "
+                f"{len(fileless)} dataset(s) must be landed from real tenant data"]
 
-    tenant_name = args.tenant or f"wr-demo-{args.pack}"
-    tid = resolve_tenant(tenant_name)
-    ws = resolve_workspace(tid)
-    ok(f"tenant {tenant_name} = {tid}")
-    ok(f"workspace = {ws}")
-    sub = args.admin_sub or f"user-admin-{short_of(tenant_name, args.pack)}"
-    ok(f"acting as {sub}")
-    tok = c.user_token(sub, tid, ["*"], workspace_id=ws)
-
-    failures = []
-    for d in declared:
+    failures: list[str] = []
+    for d in fileless:
         identity, name = d["identity"], d["name"]
         need = d.get("required_columns") or []
 
@@ -261,6 +248,9 @@ def main() -> int:
         else:
             ok(f"{name!r} already exists — reusing")
 
+        # Wait on the 1-row browse, not the dataset row: bind_dataset treats
+        # unreadable columns as unverifiable and fails the component, so
+        # stopping at registration would just move the failure into the install.
         cols = None
         for _ in range(60):
             cols = readable_columns(tok, ds["id"])
@@ -269,7 +259,7 @@ def main() -> int:
             time.sleep(2)
         if cols is None:
             failures.append(f"{identity}: {name!r} has no readable version — "
-                            f"pack-service cannot validate its columns")
+                            f"the installer cannot validate its columns")
             continue
         missing = [x for x in need if x not in cols]
         if missing:
@@ -277,15 +267,42 @@ def main() -> int:
                             f"{', '.join(missing)}")
             continue
         ok(f"{name!r} ready ({len(cols)} columns, all {len(need)} required present)")
+    return failures
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--pack", required=True, help="pack name, e.g. card-disputes")
+    ap.add_argument("--tenant", default=None,
+                    help="tenant name (default: wr-demo-<pack>, what demo.sh makes)")
+    ap.add_argument("--admin-sub", default=None,
+                    help="override the admin subject (default: user-admin-<short>, "
+                         "derived from the tenant name the way onboarding does)")
+    args = ap.parse_args()
+
+    if not (REPO / "packs" / args.pack / "pack.yaml").exists():
+        die(f"unknown pack {args.pack!r} (no packs/{args.pack}/pack.yaml)")
+
+    tenant_name = args.tenant or f"wr-demo-{args.pack}"
+    tid = resolve_tenant(tenant_name)
+    ws = resolve_workspace(tid)
+    ok(f"tenant {tenant_name} = {tid}")
+    ok(f"workspace = {ws}")
+    sub = args.admin_sub or f"user-admin-{short_of(tenant_name, args.pack)}"
+    ok(f"acting as {sub}")
+    tok = c.user_token(sub, tid, ["*"], workspace_id=ws)
+
+    failures = land_bundle(tok, ws, args.pack)
 
     print()
     if failures:
         for f in failures:
             print(f"{RED}  FAIL{NC} {f}")
         print(f"\n{RED}{len(failures)} dataset(s) not landed{NC} — the pack install "
-              f"will still fail on these.\n")
+              f"will report these as awaiting binding.\n")
         return 1
-    print(f"{GRN}{BLD}all {len(declared)} declared dataset(s) landed{NC} — now run:"
+    print(f"{GRN}{BLD}every declared dataset is landed and readable{NC} — now run:"
           f"\n    packs/demo.sh load {args.pack}\n")
     return 0
 

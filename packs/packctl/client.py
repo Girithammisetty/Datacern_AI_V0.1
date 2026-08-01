@@ -107,7 +107,30 @@ class PlatformClient:
         first, else reuse of a same-name tenant dataset. Validates the bound
         dataset exposes the declared required columns (fail-closed with the
         missing list). Never uploads or fabricates anything. Returns the
-        resolved dataset dict, or None (with an honest failed action)."""
+        resolved dataset dict, or None.
+
+        TWO DIFFERENT OUTCOMES, recorded as two different actions — the
+        distinction is the whole point:
+
+          requires_binding  the tenant has supplied nothing to bind to. A
+                            STATE, not an error: it is the expected and
+                            correct condition of a fresh tenant that has not
+                            landed its data yet, and it resolves the moment
+                            the data arrives. Recording it as `failed` (as
+                            this did) made every install of a data-free pack
+                            abort on its FIRST component, so the tenant got
+                            no taxonomy, no dispositions and no roles either
+                            — `make demo-load PACK=<anything>` could not
+                            succeed for 27 of the 28 packs.
+
+          failed            the tenant DID supply something and it is wrong:
+                            a bound URN that does not resolve, a dataset with
+                            no readable version, or one missing declared
+                            columns. Operator error, and still fatal.
+
+        pack-service's own planner already draws this line (`requires_binding`
+        is a distinct plan action there); this brings the CLI installer's
+        vocabulary into agreement with it."""
         ds: dict | None = None
         if urn:
             ds = self.get_dataset(urn.rsplit("/", 1)[-1])
@@ -120,9 +143,9 @@ class PlatformClient:
             if ds is None:
                 need = f" (required columns: {', '.join(required_columns)})" \
                     if required_columns else ""
-                self._record("datasets", identity, "failed", None,
-                             f"requires_binding: no dataset bound for {identity!r} and no "
-                             f"tenant dataset named {name!r} exists{need}")
+                self._record("datasets", identity, "requires_binding", None,
+                             f"no dataset bound for {identity!r} and no tenant dataset "
+                             f"named {name!r} exists{need}")
                 return None
         if required_columns:
             cols = self.dataset_columns(ds["id"])

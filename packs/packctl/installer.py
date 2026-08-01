@@ -13,18 +13,30 @@ Cross-component references inside component files:
   * measure URNs in chart sources use `measure: <name>` and are expanded to
     `wr:<tenant>:semantic:measure/<name>`
 
-The ledger (JSON) is the factual record of what happened: every action is
-`create | noop | verify | warn | failed` — a failed action fails the install
-(exit code 1) unless `--keep-going`. Deferred manifest entries are copied into
-the ledger verbatim so the "what awaits future Core services" record is
-auditable, never lost, and never faked as installed.
+The ledger (JSON) is the factual record of what happened. Every action is
+`create | noop | verify | warn | bind | reuse | requires_binding |
+awaiting_binding | failed`. Only `failed` fails the install (exit code 1)
+unless `--keep-going`. Deferred manifest entries are copied into the ledger
+verbatim so the "what awaits future Core services" record is auditable, never
+lost, and never faked as installed.
+
+`requires_binding` / `awaiting_binding` are a DIFFERENT thing from `failed`,
+and the difference is load-bearing. Packs are data-free by rule: 27 of the 28
+declare dataset BINDING CONTRACTS and ship zero rows, so a tenant that has not
+landed its data yet cannot resolve them. That is a state, not an error. While
+it was recorded as `failed`, and `datasets` is FIRST in INSTALL_ORDER, the
+install aborted on its very first component — so `demo.sh load <pack>` left the
+tenant with no taxonomy, no dispositions and no roles either, for every pack in
+the fleet. Now the datasets and their dependents are recorded as pending, the
+rest of the pack installs, and the ledger says exactly which datasets the
+tenant still owes and with which columns.
 """
 
 from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .client import PlatformClient, any_failed
@@ -45,6 +57,12 @@ class InstallResult:
     ledger_path: Path
     actions: list[dict]
     failed: list[dict]
+    # Datasets the tenant has not bound yet, and the components that were
+    # therefore skipped. `ok` stays True for these: the pack's taxonomy, roles
+    # and decision surfaces DID materialize, and the datasets resolve the
+    # moment the tenant lands its data. Callers should report them, not treat
+    # them as an error (see install_packs_multitenant.install_pack).
+    awaiting: list[dict] = field(default_factory=list)
 
 
 def _expand_sources(client: PlatformClient, sources: list[dict],
@@ -73,9 +91,27 @@ def install(manifest: Manifest, client: PlatformClient,
 
     dataset_urns: dict[str, str] = {}     # identity -> urn
     saved_query_ids: dict[str, str] = {}  # identity -> id
+    awaiting: set[str] = set()            # identities the tenant must still bind
 
     def resolve_dataset(ref: str) -> str | None:
         return dataset_urns.get(ref)
+
+    def unresolved(kind: str, identity: str, ref: str) -> None:
+        """Record a component that cannot be built because its dataset ref did
+        not resolve — as `awaiting_binding` if that dataset is declared and
+        merely unbound, or `failed` if the ref names nothing the pack declares.
+
+        Keeping these apart matters in both directions. A pack whose component
+        references a dataset identity that does not exist is a MANIFEST BUG and
+        must stay loud; collapsing both into one lenient action would hide it.
+        Equally, a dependent of an unbound dataset has not failed at anything —
+        it is waiting for data, exactly like the dataset itself."""
+        if ref in awaiting:
+            client._record(kind, identity, "awaiting_binding", None,
+                           f"needs dataset {ref!r}, which the tenant has not bound yet")
+        else:
+            client._record(kind, identity, "failed", None,
+                           f"unknown dataset ref {ref!r}")
 
     for kind in INSTALL_ORDER:
         comps = manifest.components_of(kind)
@@ -99,28 +135,48 @@ def install(manifest: Manifest, client: PlatformClient,
                         # dataset or fail honestly. Explicit URN bindings are a
                         # pack-service install parameter; the CLI resolves by
                         # name only.
+                        before = len(client.actions)
                         bound = client.bind_dataset(
                             ds["identity"], ds["name"],
                             required_columns=ds.get("required_columns"))
                         urn = client.dataset_urn(bound) if bound else None
+                        # Scan what bind_dataset recorded rather than assuming
+                        # it recorded exactly one row: `requires_binding` there
+                        # means the tenant simply has no data yet, so this
+                        # dataset's dependents are awaiting, not broken.
+                        if any(a.get("action") == "requires_binding"
+                               for a in client.actions[before:]):
+                            awaiting.add(ds["identity"])
                     if urn:
                         dataset_urns[ds["identity"]] = urn
 
             elif kind == "semantic_models":
                 definition = dict(doc["definition"])
-                # rebind entity dataset_urns from identities to live URNs
+                # rebind entity dataset_urns from identities to live URNs.
+                #
+                # If ANY entity's dataset does not resolve, do not author the
+                # model at all. The old code recorded the miss and then carried
+                # on to ensure_semantic_model anyway, with that entity having
+                # LOST its `dataset` key (popped) and gained no `dataset_urn` —
+                # a model published against an entity pointing at nothing. That
+                # was unreachable while an unbound dataset aborted the install
+                # on the first component; now that it does not, it would be
+                # live, so skip and say so instead.
+                broken = False
                 for entity in definition.get("entities", []):
                     ref = entity.pop("dataset", None)
-                    if ref:
-                        urn = resolve_dataset(ref)
-                        if not urn:
-                            client._record(kind, comp.identity, "failed", None,
-                                           f"unknown dataset ref {ref!r}")
-                            continue
-                        entity["dataset_urn"] = urn
-                client.ensure_semantic_model(
-                    comp.identity, doc["name"], doc.get("description", ""),
-                    definition)
+                    if not ref:
+                        continue
+                    urn = resolve_dataset(ref)
+                    if not urn:
+                        unresolved(kind, comp.identity, ref)
+                        broken = True
+                        continue
+                    entity["dataset_urn"] = urn
+                if not broken:
+                    client.ensure_semantic_model(
+                        comp.identity, doc["name"], doc.get("description", ""),
+                        definition)
 
             elif kind == "verified_queries":
                 for i, vq in enumerate(doc):
@@ -158,8 +214,7 @@ def install(manifest: Manifest, client: PlatformClient,
             elif kind == "cases":
                 urn = resolve_dataset(doc["dataset"])
                 if not urn:
-                    client._record(kind, comp.identity, "failed", None,
-                                   f"unknown dataset ref {doc['dataset']!r}")
+                    unresolved(kind, comp.identity, doc["dataset"])
                 else:
                     client.create_cases(comp.identity, urn, doc["rows"],
                                         doc.get("due_days", 7))
@@ -185,8 +240,7 @@ def install(manifest: Manifest, client: PlatformClient,
                 for p in doc:
                     urn = resolve_dataset(p["dataset"])
                     if not urn:
-                        client._record(kind, comp.identity, "failed", None,
-                                       f"unknown dataset ref {p['dataset']!r}")
+                        unresolved(kind, comp.identity, p["dataset"])
                         continue
                     client.ensure_pipeline(comp.identity, p["algorithm"],
                                            p["name"], urn,
@@ -229,6 +283,14 @@ def install(manifest: Manifest, client: PlatformClient,
             break
 
     failed = any_failed(client)
+    pending = [a for a in client.actions
+               if a.get("action") in ("requires_binding", "awaiting_binding")]
+    if failed:
+        result = "failed"
+    elif pending:
+        result = "installed_awaiting_binding"
+    else:
+        result = "installed"
     ledger = {
         "pack": manifest.name, "version": manifest.version,
         "workspace_id": client.workspace_id, "tenant_id": client.tenant_id,
@@ -236,7 +298,8 @@ def install(manifest: Manifest, client: PlatformClient,
         "finished_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "actions": client.actions,
         "deferred": manifest.deferred,
-        "result": "failed" if failed else "installed",
+        "awaiting_binding": pending,
+        "result": result,
     }
     ledger_dir = Path(ledger_dir or Path(manifest.pack_dir) / ".ledgers")
     ledger_dir.mkdir(parents=True, exist_ok=True)
@@ -244,7 +307,8 @@ def install(manifest: Manifest, client: PlatformClient,
         f"{manifest.name}-{manifest.version}-{time.strftime('%Y%m%d%H%M%S')}.json")
     ledger_path.write_text(json.dumps(ledger, indent=2))
     client.log(f"==> {ledger['result']}: {len(client.actions)} actions, "
-               f"{len(failed)} failed, {len(manifest.deferred)} deferred — "
-               f"ledger {ledger_path}")
+               f"{len(failed)} failed, {len(pending)} awaiting binding, "
+               f"{len(manifest.deferred)} deferred — ledger {ledger_path}")
     return InstallResult(ok=not failed, ledger_path=ledger_path,
-                         actions=client.actions, failed=failed)
+                         actions=client.actions, failed=failed,
+                         awaiting=pending)

@@ -23,12 +23,14 @@ _DEFERRED = KNOWN_DEFERRED_KINDS[0]
 class RecordingClient:
     """Duck-types the PlatformClient surface installer.py drives."""
 
-    def __init__(self, fail_kind: str | None = None):
+    def __init__(self, fail_kind: str | None = None, bound=None):
         self.tenant_id = "t-1"
         self.workspace_id = "ws-1"
         self.actions: list[dict] = []
         self.calls: list[tuple] = []
         self.fail_kind = fail_kind
+        # dataset NAMES the tenant has already landed; anything else is unbound
+        self.bound: set[str] = set(bound or ())
         self.log = lambda *_: None
 
     def _record(self, kind, identity, action, urn, detail=""):
@@ -43,6 +45,26 @@ class RecordingClient:
         urn = f"wr:t-1:dataset:dataset/{name}"
         self._record("datasets", identity, "create", urn)
         return urn
+
+    # bind_dataset/dataset_urn are the FILE-LESS path — the one 27 of the 28
+    # packs actually take, and the one this fake did not model at all until the
+    # `demo.sh load` breakage made its absence expensive.
+    def bind_dataset(self, identity, name, *, urn=None, required_columns=None):
+        self.calls.append(("bind_dataset", name))
+        if name in self.bound:
+            ds = {"id": name, "name": name}
+            self._record("datasets", identity, "reuse",
+                         self.dataset_urn(ds), f"bound to tenant dataset {name!r}")
+            return ds
+        need = f" (required columns: {', '.join(required_columns)})" \
+            if required_columns else ""
+        self._record("datasets", identity, "requires_binding", None,
+                     f"no dataset bound for {identity!r} and no tenant dataset "
+                     f"named {name!r} exists{need}")
+        return None
+
+    def dataset_urn(self, ds):
+        return f"wr:t-1:dataset:dataset/{ds['id']}"
 
     def ensure_semantic_model(self, identity, name, description, definition):
         self.calls.append(("semantic_models", name, definition))
@@ -248,3 +270,94 @@ def test_write_adapters_component_materializes(tmp_path):
     assert result.ok
     assert ("write_adapters", "ERP payment write-back", "postgres", "outgoing") in client.calls
     assert ("write_adapters", "Vendor portal post", "http_api", "outgoing") in client.calls
+
+
+# ---------------------------------------------------------------------------
+# The FILE-LESS dataset path — 27 of the 28 packs, and untested until now.
+#
+# A pack declares dataset binding contracts and ships zero rows. A tenant that
+# has not landed its data yet cannot resolve them. That is a STATE, not an
+# error, and conflating the two cost the whole install: `datasets` is first in
+# INSTALL_ORDER and a `failed` action breaks the loop, so `demo.sh load <pack>`
+# left the tenant with no dispositions and no roles either.
+# ---------------------------------------------------------------------------
+
+def _unbind(pack_dir):
+    """Rewrite the fixture's datasets.yaml as a binding CONTRACT (no `file:`),
+    which is the shape every real pack ships."""
+    (pack_dir / "datasets.yaml").write_text(
+        "- {identity: main_ds, name: main-ds, required_columns: [id, v]}\n")
+    return pack_dir
+
+
+def test_unbound_dataset_is_pending_not_failed_and_the_pack_still_installs(tmp_path):
+    manifest = load_manifest(_unbind(_write_pack(tmp_path)))
+    client = RecordingClient()  # tenant has landed nothing
+    result = install(manifest, client, ledger_dir=tmp_path / "ledgers")
+
+    # The install SUCCEEDS: an unbound dataset is the tenant owing data, not
+    # the pack being broken.
+    assert result.ok, f"unbound dataset must not fail the install: {result.failed}"
+    assert not result.failed
+    assert [a["identity"] for a in result.awaiting if a["kind"] == "datasets"] == ["main_ds"]
+
+    ledger = json.loads(result.ledger_path.read_text())
+    assert ledger["result"] == "installed_awaiting_binding"
+    assert any(a["kind"] == "datasets" and a["action"] == "requires_binding"
+               for a in ledger["actions"])
+
+    # THE POINT: components that do not depend on the dataset still landed.
+    # Both sort AFTER datasets in INSTALL_ORDER, so under the old behaviour the
+    # loop had already broken and neither ran.
+    kinds = [c[0] for c in client.calls]
+    assert "dispositions" in kinds and "decision_models" in kinds, kinds
+
+    # ...and the ones that DO depend on it are recorded as waiting, not built.
+    awaiting_kinds = {a["kind"] for a in result.awaiting}
+    assert {"semantic_models", "cases"} <= awaiting_kinds, awaiting_kinds
+    assert "cases" not in kinds, "cases must not be created against an unresolved dataset"
+
+
+def test_unresolved_entity_does_not_publish_a_half_formed_semantic_model(tmp_path):
+    """The `dataset:` key is POPPED off the entity before resolution. If the ref
+    does not resolve and we author anyway, the model is published with an entity
+    pointing at nothing — silently wrong, which is worse than not installing."""
+    manifest = load_manifest(_unbind(_write_pack(tmp_path)))
+    client = RecordingClient()
+    install(manifest, client, ledger_dir=tmp_path / "ledgers")
+    assert not [c for c in client.calls if c[0] == "semantic_models"], \
+        "a model whose entity dataset did not resolve must not be authored"
+
+
+def test_bound_dataset_resolves_and_the_install_is_plainly_installed(tmp_path):
+    """Same pack, same contracts — but the tenant has landed `main-ds` under the
+    pack's declared name, which is exactly what land_pack_data.py arranges."""
+    manifest = load_manifest(_unbind(_write_pack(tmp_path)))
+    client = RecordingClient(bound={"main-ds"})
+    result = install(manifest, client, ledger_dir=tmp_path / "ledgers")
+
+    assert result.ok and not result.awaiting
+    assert json.loads(result.ledger_path.read_text())["result"] == "installed"
+    # the semantic entity rebound to the live URN, and the queue was created
+    _, _, definition = next(c for c in client.calls if c[0] == "semantic_models")
+    assert definition["entities"][0]["dataset_urn"] == "wr:t-1:dataset:dataset/main-ds"
+    assert next(c for c in client.calls if c[0] == "cases")[1] == \
+        "wr:t-1:dataset:dataset/main-ds"
+
+
+def test_a_dataset_ref_the_pack_never_declares_is_still_a_hard_failure(tmp_path):
+    """Leniency must not extend to manifest bugs. `awaiting_binding` is only for
+    refs the pack DECLARED and the tenant has not bound; a ref that names
+    nothing at all is a typo and has to stay loud, or the new tolerance would
+    hide the very class of error the old code caught."""
+    pack = _write_pack(tmp_path)
+    (pack / "datasets.yaml").write_text(
+        "- {identity: other_ds, name: other-ds, required_columns: [id]}\n")
+    manifest = load_manifest(pack)  # model/queue still reference `main_ds`
+    client = RecordingClient()
+    result = install(manifest, client, ledger_dir=tmp_path / "ledgers")
+
+    assert not result.ok, "an undeclared dataset ref must fail the install"
+    assert json.loads(result.ledger_path.read_text())["result"] == "failed"
+    assert any("unknown dataset ref 'main_ds'" in a.get("detail", "")
+               for a in result.failed), result.failed

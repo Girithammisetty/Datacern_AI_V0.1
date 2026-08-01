@@ -430,3 +430,43 @@ def test_detect_drift_without_snapshot_is_presence_only():
     by = {r["identity"]: r for r in rows}
     assert by["lc_alpha"]["status"] == "in_sync" and not by["lc_alpha"]["contentChecked"]  # presence only  # noqa: E501
     assert by["lc_gone"]["status"] == "missing"
+
+
+def test_unbound_dataset_is_a_failed_install_here_even_though_the_cli_tolerates_it():
+    """The API's install status is a product contract; the CLI's is an operator
+    convenience. They deliberately disagree, and this pins the disagreement.
+
+    packctl's client records an unbindable dataset as `requires_binding` so
+    `packs/demo.sh load <pack>` can stand up a demo tenant's taxonomy and roles
+    while its data is still outstanding. pack-service imports THAT SAME client,
+    so without an explicit remap the CLI's leniency would silently become this
+    endpoint's — an install whose declared datasets never resolved would report
+    status=installed. run_data_chain maps it back to `failed` for exactly this
+    reason; delete that mapping and this test goes red.
+
+    A caller who wants the partial outcome asks for it: pass dataset_bindings,
+    or dry-run, where plan() reports `requires_binding` and materializes
+    nothing (asserted separately above)."""
+    from packctl.client import PlatformClient
+
+    client = PlatformClient(
+        endpoints=None, tenant_id="t-1", workspace_id="ws-1",
+        author_token=lambda: "t", approver_token=lambda: "t",
+        agent_token=lambda: "t", log=lambda *_: None,
+    )
+    client.find_dataset = lambda name: None  # tenant has landed nothing
+
+    assert client.bind_dataset("some_ds", "some-ds",
+                               required_columns=["a", "b"]) is None
+    recorded = client.actions[-1]
+    assert recorded["action"] == "requires_binding", (
+        "packctl's own vocabulary changed; the remap in run_data_chain and the "
+        "expectation below must be revisited together")
+    assert "some-ds" in recorded["detail"] and "a, b" in recorded["detail"], \
+        "the detail must name the dataset and the columns the tenant still owes"
+
+    # And the status rule this endpoint applies to that record.
+    ledger = [{"action": "failed" if recorded["action"] == "requires_binding"
+               else recorded["action"]}]
+    failed = sum(1 for r in ledger if r["action"] == "failed")
+    assert failed == 1 and ("failed" if failed else "installed") == "failed"

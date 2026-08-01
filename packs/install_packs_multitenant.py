@@ -266,15 +266,36 @@ def tenant_client(tid: str, ws: str, author_sub: str, approver_sub: str) -> Plat
 def install_pack(pack_dir: str, client: PlatformClient) -> dict:
     manifest = load_manifest(os.path.join(HERE, pack_dir))
     result = install(manifest, client, ledger_dir=os.path.join(HERE, pack_dir, ".ledgers"))
-    status = "installed" if result.ok else "FAILED"
+    status = "FAILED" if not result.ok else (
+        "installed (datasets awaiting binding)" if result.awaiting else "installed")
     ok(f"{pack_dir}: {status} — ledger {os.path.relpath(result.ledger_path, HERE)}")
     if not result.ok:
         for a in client.actions:
             if a.get("action") == "failed":
                 warn(f"  {a['kind']}/{a['identity']}: {a.get('detail', '')[:200]}")
         die(f"pack {pack_dir} failed to install — see ledger")
+    if result.awaiting:
+        # NOT a failure, and deliberately not silent either. The pack's
+        # taxonomy, roles and decision surfaces are live; what is missing is
+        # the tenant's own data, which only the tenant can supply. Name each
+        # dataset and its columns so the next step is obvious rather than a
+        # ledger-archaeology exercise.
+        pending = [a for a in result.awaiting if a["kind"] == "datasets"]
+        blocked = [a for a in result.awaiting if a["kind"] != "datasets"]
+        warn(f"  {len(pending)} dataset(s) await binding — the pack is installed "
+             f"but these components stay dormant until the tenant lands its data:")
+        for a in pending:
+            warn(f"    datasets/{a['identity']}: {a.get('detail', '')[:220]}")
+        for a in blocked:
+            warn(f"    {a['kind']}/{a['identity']}: {a.get('detail', '')[:160]}")
+        warn(f"  to resolve: land the data, then re-run this install. If the pack "
+             f"ships a demo bundle (deploy/demo/{pack_dir}/data/), "
+             f"`land_pack_data.py --pack {pack_dir}` does it for you; otherwise "
+             f"upload via Data > Upload under the dataset's declared name.")
     return {"pack": manifest.name, "version": manifest.version,
-            "ledger": str(result.ledger_path)}
+            "ledger": str(result.ledger_path),
+            "awaiting_binding": [a["identity"] for a in result.awaiting
+                                 if a["kind"] == "datasets"]}
 
 
 def pack_roles(pack_dir: str) -> list[dict]:
@@ -446,6 +467,28 @@ def onboard_tenant(pack_dir: str, tname: str, display: str,
     ok(f"tenant admin live (admin={admin}, caps={'*' if admin else len(caps)})")
 
     client = tenant_client(tid, ws, admin_sub, approver_sub)
+
+    # Land the pack's demo data BEFORE installing, when the pack ships a bundle.
+    #
+    # Packs are data-free by rule: their dataset entries are binding contracts,
+    # and a pack installed into a tenant holding no data leaves those datasets
+    # (and their semantic models, cases and pipelines) dormant. Where
+    # deploy/demo/<pack>/data/ exists, landing it first means the install
+    # resolves everything in one pass — the difference between a demo tenant
+    # that opens on a working dashboard and one that opens on an empty shell.
+    #
+    # Best-effort by design: a pack with no bundle, or a bundle that will not
+    # land, must NOT stop the install. The pack's taxonomy and roles are still
+    # worth having, and install_pack now reports precisely which datasets are
+    # still owed.
+    try:
+        import land_pack_data  # noqa: PLC0415
+        land_failures = land_pack_data.land_bundle(admin_tok, ws, pack_dir)
+        for f in land_failures:
+            warn(f"  demo data not landed: {f}")
+    except Exception as e:  # noqa: BLE001 - never let seeding break onboarding
+        warn(f"  demo-data landing skipped ({type(e).__name__}: {e})")
+
     installed = []
     if pack_dir in LIBRARY_CONSUMERS:
         say(f"layering {LIBRARY_PACK} (BRD-31 library) into {tname} first")
