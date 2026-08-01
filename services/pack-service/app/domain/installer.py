@@ -610,9 +610,25 @@ def run_data_chain(client, manifest, origin_of, bindings: dict[str, str] | None 
                 act = client.actions[-1] if client.actions else {}
                 if urn:
                     dataset_urns[ds["identity"]] = urn
+            action = act.get("action", "failed" if not urn else "create")
+            # DELIBERATE DIVERGENCE FROM THE CLI, stated rather than implied.
+            #
+            # packctl's client now records an unbindable dataset as
+            # `requires_binding` instead of `failed`, so `packs/demo.sh load`
+            # can provision a demo tenant's taxonomy and roles while its data
+            # is still outstanding. That leniency is right for an operator tool
+            # and wrong here: this endpoint's `status` is a product contract,
+            # and a pack whose declared datasets did not resolve has NOT
+            # installed. Callers who want the partial outcome say so by passing
+            # dataset_bindings, or by planning first (plan() reports
+            # `requires_binding` without materializing anything).
+            #
+            # Both call sites share client.bind_dataset, so without this the
+            # CLI's policy would silently become the API's.
+            if action == "requires_binding":
+                action = "failed"
             records.append(_rec("datasets", ds["name"], origin_of,
-                                action=act.get("action", "failed" if not urn else "create"),
-                                urn=urn, detail=act.get("detail", "")))
+                                action=action, urn=urn, detail=act.get("detail", "")))
 
     # semantic models — authored as governed DRAFTS (submitted, not approved).
     for comp in manifest.components_of("semantic_models"):
