@@ -1,50 +1,49 @@
-# Pitch: Datacern AI → CEO, $150M-revenue operating company
+# Pitch: Datacern AI → CEO, healthcare AI solution provider (~$150M revenue)
 
-**Audience:** the CEO of an existing ~$150M-revenue business — not a venture investor.
+**Who they are:** AI solution provider, ~$150M revenue. Contact-centre **voice agent** platform with live customers. Offshore IT team. Onsite GTM team. **Healthcare vertical focus.**
 **Your position:** deep technical asset, no capital.
-**Structure:** the 12-part "Perfect Pitch" frame, re-aimed at an operator.
+**Structure:** the 12-part "Perfect Pitch" frame, re-aimed at an operator who is also a potential partner.
 
-**Rule of this document:** every claim traces to `docs/DATACERN_PARTNER_BRIEFING.md` (verified against code/CI) or to a count re-measured on 2026-08-01. Numbers that moved since that briefing are marked **[updated]**. Nothing here is aspirational unless labelled **ROADMAP**.
+**Rule of this document:** every claim traces to `docs/DATACERN_PARTNER_BRIEFING.md` (verified against code/CI) or to a count re-measured on 2026-08-01. Anything aspirational is labelled **ROADMAP**. If this document and the codebase disagree, the codebase is right and this is a bug.
+
+---
+
+## The single most important thing on this page
+
+**They are not a customer. They are the other half of a product.**
+
+Their voice agent answers the call. But every healthcare call that matters *ends in a case* — a prior auth to adjudicate, an appeal to review, a denial to work, a claim to reprocess. Today that case falls off the end of their platform into a human queue with no governance, no audit trail, no learning loop.
+
+> **Their product stops when the call ends. Mine starts there.**
+
+And the fit is unusually exact:
+
+| They have | You have | The briefing calls it |
+|---|---|---|
+| Healthcare customers + onsite GTM | 9 healthcare packs, zero customers | WS-4 |
+| Offshore IT team | A written gap list that is exactly offshore-sized work | WS-2 |
+| Voice / front office | Back office, **zero** voice surface — no overlap at all | — |
+| A commoditising product line | A defensible one they can't quickly build | — |
+
+Their four biggest assets map 1:1 onto your four biggest gaps. That is the pitch. Everything below is support.
+
+**The commercial argument that makes a CEO lean in:** voice agents are commoditising. Every CCaaS vendor ships one now. Their $150M sits on a line where differentiation erodes and margin compresses annually. Governed back-office decisioning is the opposite — hard to build, hard to copy, sold to the same buyer they already have a relationship with. You are offering a **second product line into their existing accounts**, not a tool.
 
 ---
 
 ## Read this first: the frame change
 
-The 12-part structure in your screenshot is a **seed VC deck**. Three of its sections are the wrong instrument for this room, and using them will cost you credibility:
+The 12-part structure in your screenshot is a **seed VC deck**. Three sections misfire here:
 
-| VC section | Why it misfires with an operator CEO | Use instead |
+| VC section | Why it misfires | Use instead |
 |---|---|---|
-| **5. Market (TAM/SAM/SOM)** | They don't care about a $40B market. They care about one line in *their* P&L. | Their operation, bottom-up, in their numbers |
-| **10. Financials / projections** | A five-year hockey stick from a pre-revenue solo founder reads as fiction. | Payback period on *their* spend |
-| **12. The ask (raise $X)** | They're not an asset allocator. Asking them to be one puts you in the wrong queue. | A menu of structures, priced |
+| **5. Market (TAM/SAM/SOM)** | They know the healthcare AI market better than you. Quoting it back is a status error. | Their account base × attach rate |
+| **10. Financials / projections** | A hockey stick from a pre-revenue solo founder reads as fiction. | Payback on *their* pilot spend |
+| **12. The ask (raise $X)** | They're an operator, not an allocator. Asking them to allocate puts you in the wrong queue. | A menu of partnership structures |
 
-A CEO at this scale is asking four questions, in this order:
-1. Does this fix a problem I actually have?
-2. What does it cost me — in money, in my people's time, and in risk?
-3. If it goes wrong, who is accountable?
-4. Is this person credible?
+And note the audience shift: this CEO **sells AI for a living**. They will not be impressed by "we use AI". They will be impressed — or not — by whether you understand governance, healthcare clocks, and why their own pilots stall. Pitch to a peer, not to a buyer.
 
-Your entire pitch is the answer to those four. Everything else is decoration.
-
-**Your one structural weakness — and its fix.** A solo founder with no capital and no customers has no track record to borrow credibility from. So you substitute a different currency: **verifiable precision.** You will state what is not built, before they ask. That is not modesty; it is the only move that makes the *rest* of your claims believable. A CEO who catches you overclaiming once discounts everything you said. A CEO who watches you volunteer your own gaps starts trusting the parts you assert.
-
-The briefing already says it: *the honesty is the brand.*
-
----
-
-## Before you fill this in: one input I need
-
-The single biggest lever on this pitch is **what business the company is in.** It determines which of the 27 verticals you lead with, which problem you open on, and whether you demo claims, disputes, or AML.
-
-Below, `[VERTICAL]` marks every place that changes. The three strongest fits in the built pack fleet:
-
-| If they are… | Lead pack | Their pain in one line |
-|---|---|---|
-| Insurance / health plan / TPA | `insurance-claims-payer`, `payer-fwa-siu` | Claims and prior-auth review is people-expensive and audit-exposed |
-| Bank / fintech / card issuer | `card-disputes`, `banking-aml`, `chargeback-representment` | Reg E/Z clocks, dispute volume, AML alert triage |
-| Any firm with a back-office review queue | `ap-invoice-audit`, `underwriting-intake`, `warranty-claims` | Humans reading documents and deciding, at cost |
-
-Tell me the industry and I'll sharpen every section.
+**Your one structural weakness — and its fix.** No capital, no customers, no track record. So you substitute a different currency: **verifiable precision.** State what is not built before they ask. A CEO who catches you overclaiming once discounts everything. A CEO who watches you volunteer your own gaps starts trusting what you assert. Their CTO will do diligence; make sure they find nothing you didn't already say.
 
 ---
 
@@ -52,29 +51,36 @@ Tell me the industry and I'll sharpen every section.
 
 ## 1 · Title / one-liner
 
-> **"I've built the system that lets you put AI into [VERTICAL] decisions without losing the audit trail — and I'm looking for the first company brave enough to run it for real."**
+> **"Your voice agents answer the call. I built the system that governs what happens after it — prior auth, appeals, denials — with an audit trail a payer's compliance team will accept."**
 
 Delivery notes:
-- One sentence. Then **stop talking.** The silence does work.
-- No architecture, no service count, no "agentic". They will ask "how" — let them pull it out of you.
-- The phrase *"brave enough"* is deliberate. It's honest about stage, and it invites a CEO who likes being first.
+- One sentence. Then **stop.** Let the silence work.
+- No service counts, no architecture, no "agentic". They'll pull it out of you.
+- It positions you as **complementary in the first six words.** Nobody in that room needs to feel threatened.
 
 ---
 
 ## 2 · Problem
 
-Aim at the thing already on their exec agenda. Frame it as the **trap**, not the pain — CEOs know their pain, they don't know they're in a trap:
+Aim at *their* ceiling, not at healthcare's. They already know healthcare's.
 
-> "You're under pressure to use AI in operations. You've probably got pilots running. And every one of them stalls in the same place — not because the model is wrong, but because nobody can answer the compliance question: *who decided this, on what evidence, and can you prove it a year from now?*
+> "You've automated the conversation. But in healthcare the conversation is rarely the work — the work is the decision behind it. A member calls about a denied claim; your agent handles the call beautifully and then hands off to a queue where a human reads the file and decides, exactly as they did before.
 >
-> So you're choosing between two bad options. Ship AI you can't defend to a regulator or an auditor. Or don't ship, and keep paying humans to read files."
+> So two things happen. Your value stops at the end of the call — which caps what you can charge. And your customer's actual cost centre, the review staff, is untouched.
+>
+> Meanwhile every voice vendor now ships an agent. That line is commoditising underneath you."
 
-Why this lands: it's true, it's specific to regulated operations, and it names a failure *they have already experienced* — which makes you sound like someone who's been in the room rather than someone selling.
+Then the mirror — **ask, do not assert**:
 
-**Then hand them the mirror** — ask, don't assert:
-> "How many people in [VERTICAL] operations are, functionally, reading a file and applying a rule?"
+> "When one of your agents finishes a healthcare call, what happens to the case it just created?"
 
-Their answer is the entire business case. Write the number down in front of them.
+Their answer is the whole opening. Let them describe the gap in their own words; then you are not selling, you are agreeing.
+
+**Second question, once they've answered:**
+
+> "And across your healthcare accounts — how many of them have review staff sitting behind that queue?"
+
+Write the number down in front of them. That is your attach-rate denominator for §5.
 
 ---
 
@@ -82,255 +88,279 @@ Their answer is the entire business case. Write the number down in front of them
 
 > "AI drafts the decision with cited evidence. A named human approves it. Every approval becomes training data that improves the next one — and the retrain goes through the same approval gate.
 >
-> The point isn't AI that decides. It's **AI decisions your regulator can audit**: evidence, proposer, approver, effect, on a tamper-evident record."
+> It isn't AI that decides. It's **AI decisions a payer's compliance team can audit**: evidence, proposer, approver, effect, on a tamper-evident record."
 
-Three proof points — say them as facts, because they are, and each is checkable:
+Three proof points. Each is checkable, and each is chosen because *this* CEO will recognise why it's hard:
 
-1. **Self-approval is rejected by the server.** Not a UI convention, not a policy document. The person who proposed cannot be the person who approves. High-risk, destructive and admin actions require a second, distinct human, with **no tenant opt-out**.
-2. **A pack refuses to install against a tenant with no real data** — and names every missing field. The platform will not half-work to make a demo look good.
-3. **Hard budget caps that fail closed.** Platform → tenant → workspace → principal → key. When the ceiling is hit, it stops. A CEO who has been surprised by a cloud bill will react to this.
+1. **Self-approval is rejected server-side.** Not a UI convention. The proposer cannot be the approver. High-risk, destructive and admin actions require a second, distinct human with **no tenant opt-out**. They have tried to sell AI into a payer; they know what that unlocks.
+2. **A pack refuses to install against a tenant with no real data**, naming every missing field. The platform will not half-work to make a demo look good.
+3. **Hard budget caps that fail closed** — platform → tenant → workspace → principal → key. Anyone running LLMs at customer scale has been surprised by a bill.
+
+**Then close the loop back to their product:**
+
+> "And the integration seam already exists — webhook ingestion with signed per-source secrets. Your voice agent finishes a call and posts the outcome; a governed case exists on the other side. That's a connector, not a re-architecture."
 
 ---
 
 ## 4 · Why now
 
-Three converging forces, no hype:
+Three forces, aimed at a healthcare AI seller:
 
-- **Regulatory.** The EU AI Act's high-risk obligations, and the auditability expectations already live in financial services and healthcare, are turning "explain this decision" from good practice into a filing requirement. The pack fleet already carries control mappings to EU AI Act, NIST AI RMF and ISO 42001.
-- **Economic.** Model capability is now good enough for drafting; the bottleneck moved from *can it reason* to *can you govern it*. The scarce thing is the governance layer, not the model.
-- **Competitive.** Their competitors are running the same stalled pilots. Being 12 months early on *governed* AI in [VERTICAL] is a durable operating advantage — the data flywheel compounds and can't be bought later.
+- **Regulatory.** CMS interoperability rules put hard clocks on prior auth (24–72h expedited). The EU AI Act's high-risk obligations and existing payer audit expectations are turning "explain this decision" into a filing requirement. The pack fleet already carries control mappings to EU AI Act, NIST AI RMF and ISO 42001.
+- **Economic.** Models are good enough to draft; the bottleneck moved from *can it reason* to *can you govern it*. The scarce asset is the governance layer, not the model — and it is not the thing a voice platform naturally grows into.
+- **Competitive, and this is the one for them.** Their voice competitors will reach back-office in 18–24 months. Getting there first, with an audit story, is a durable position. Building it from scratch is 2–3 years and several million dollars of engineering they'd rather spend on their core.
 
-> "The models are commodities and getting cheaper. The governed workflow around them is the moat. That's what I built."
+> "The models are commodities and getting cheaper. The governed workflow around them is the moat — and it's the half you don't have."
 
 ---
 
-## 5 · Market → **their** P&L
+## 5 · Market → **their** account base
 
-**Do not present a TAM slide.** Build the case from their numbers, live, on a whiteboard. It is more persuasive than any market chart because *they* supply the inputs.
+**Do not present a TAM slide to a company that sells into this market.** Build it from their numbers, on a whiteboard:
 
 ```
-  A   People doing review work in [VERTICAL]        ← ask them
-  B   Fully-loaded cost per person                  ← ask them
-  C   Share of their time that is read-file-apply-rule   ← ask; typically 50-70%
-  D   Share of that AI can draft (human still signs)     ← be conservative: 30-40%
+  A   Healthcare accounts they already serve         ← ask them
+  B   Share with a back-office review queue          ← ask; in healthcare, most
+  C   Realistic attach rate in 24 months             ← be conservative: 20-30%
+  D   Annual platform + pack ACV per account         ← anchor to displaced review labour
 
-      Addressable labour  = A × B × C
-      Year-1 realistic    = A × B × C × D × 0.5   ← half-year ramp, stated as such
+      New recurring line  =  A × B × C × D
 ```
 
-Then the second line, which for a regulated operation is often the bigger one:
+Then the second number, which is theirs alone:
 
-> "That's the labour line. The one your CFO will care about more is the error line — rework, leakage, and the cost of an audit finding. I can't size that from outside. You can."
+> "That's the licence line. The bigger one for you is probably services — your offshore team implements every one of these, and SI services typically run one to three times the platform subscription on enterprise deployments. That pool is yours, not mine."
 
-**Why this beats a TAM slide:** you never claim a number about their business. They compute it. People don't argue with their own arithmetic.
+**Why this beats a market chart:** you never assert a number about their business. They supply every input. Nobody argues with their own arithmetic — and the services pool makes it *their* upside, not just yours.
 
 ---
 
 ## 6 · Product / tech
 
-Keep it to four sentences unless they ask. Then go as deep as they want — depth is your advantage, but only *on request*.
+Four sentences unless asked. Then go as deep as they want — depth is your advantage, but only on request.
 
-> "It's a platform Core plus installable vertical packs. The Core does identity, permissions, case management, the data lakehouse, the agent runtime and the governance gate. A pack is configuration — the ontology, decision tables, dashboards and agent setup for one vertical. 27 verticals are built. Installing one configures a tenant without touching platform code."
+> "A platform Core plus installable vertical packs. The Core does identity, permissions, case management, the lakehouse, the agent runtime and the governance gate. A pack is configuration — ontology, decision tables, dashboards, agent setup — for one vertical. 27 verticals are built; **9 of them are healthcare or life sciences.**"
 
-**Verified state, as of 2026-08-01** — hand this to their CTO, it's designed to survive scrutiny:
+**The healthcare fleet — lead with this, it is your strongest single slide for this company:**
 
-| | Verified | **[updated]** |
-|---|---|---|
-| Services | **24** in the build inventory (Go + Python + GraphQL BFF + Next.js UI) | was 23 |
-| Vertical packs | **28** (27 verticals at v2.1.0 + 1 shared library) | — |
-| Agents | 9 built-in, all 9 passing a live real-LLM roster test | — |
-| BRDs | **72** numbered requirement docs written before build | was 70+ |
-| Tests | **~2,560 test functions** in-repo, strict count (985 Go, 996 TS, 578 Python) | conservative recount |
-| Packs with a seeded demo scenario | **4 of 28** (insurance-claims-payer, card-disputes, banking-aml, payer-fwa-siu) | was 2 |
-| Multi-tenancy | Postgres RLS with `FORCE ROW LEVEL SECURITY` across the stateful services; tenant pinned from the verified JWT only | — |
-| Audit | Per-tenant hash-chained log in ClickHouse + S3 Object-Lock COMPLIANCE-mode WORM export | — |
-| Infrastructure-as-code | Helm + Terraform for AWS/GCP/Azure — **written and CI-built, never applied to a production cloud** | — |
+| Pack | What it governs |
+|---|---|
+| `insurance-claims-payer` | Prior-auth review, appeal analysis, denial analytics — X12 837 intake, claim-status sync |
+| `payer-fwa-siu` | FWA screening and SIU investigation |
+| `healthcare-provider-rcm` | Provider-side revenue cycle, denials |
+| `benefits-appeals` | Eligibility adjudication and appeals |
+| `care-management-medicare` | CCM/PCM/TCM/BHI/CoCM/RPM/RTM/APCM |
+| `pharmacy-benefit-mgmt` | PBM / Part D |
+| `post-acute-care` | Home health, SNF, hospice — PDGM/PDPM |
+| `device-complaints` | Complaint handling, MDR reportability |
+| `pharmacovigilance` | 21 CFR 314.80/312.32, ICH E2A/E2D |
 
-The last row is deliberately in the table. Put your biggest gap where they can see it, in your own material.
+> "The first one is the point for you. Prior auth, appeals and denials are *what healthcare contact-centre calls are about.* Your agents are already having these conversations."
+
+**Verified state, 2026-08-01** — hand this table to their CTO; it is built to survive scrutiny:
+
+| | Verified |
+|---|---|
+| Services | **24** in the build inventory (Go + Python + GraphQL BFF + Next.js UI) |
+| Vertical packs | **28** (27 verticals at v2.1.0 + 1 shared library); **9 healthcare / life sciences** |
+| Healthcare wire formats | X12 (837, 276/277 outbound status), FHIR, HL7v2 — decoders built and tested |
+| Agents | 9 built-in, all 9 passing a live real-LLM roster test |
+| BRDs | **72** numbered requirement docs, written before build |
+| Tests | **~2,560** test functions, strict count (985 Go, 996 TS, 578 Python) |
+| Packs with a seeded demo scenario | **4 of 28** |
+| Multi-tenancy | Postgres RLS with `FORCE ROW LEVEL SECURITY`; tenant pinned from the verified JWT only |
+| Audit | Per-tenant hash-chained log in ClickHouse + S3 Object-Lock COMPLIANCE-mode WORM export |
+| Event backbone | Kafka + transactional outbox in every service; SSE live UI; **webhook ingestion with signed per-source secrets** |
+| Voice / telephony | **None. Zero surface.** Deliberately — that's their half |
+| Infrastructure-as-code | Helm + Terraform for AWS/GCP/Azure — **written and CI-built, never applied to a production cloud** |
+
+Put the last two rows in front of them yourself. "Zero voice surface" is a *feature* in this conversation — it means no overlap, no threat, no wasted engineering. And volunteering "never deployed to a cloud" is what buys you belief on the rows above it.
 
 ---
 
 ## 7 · Commercial model
 
-Be straight that pricing is unset — and turn that into their advantage:
+They are a channel, so price the **channel**, not the seat:
 
-> "Annual platform subscription per use-case, plus consumption on metered decisions, plus packs as add-ons. I'm not going to pretend I have a price list — you'd be the first customer, so the first three design partners set it.
+> "For an end customer: annual platform subscription per use case, consumption on metered decisions, packs as add-ons. For you: resale margin, or an OEM licence if you'd rather it carry your name.
 >
-> What I'll commit to: design-partner pricing at roughly 60% off whatever list becomes, co-development input on the roadmap, and case-study rights. If you want an anchor for magnitude, enterprise ACV lands in the mid-six figures — but it should be anchored to the review labour it displaces, and you just told me that number."
+> Directionally — resale margin in the 20–30% range, referral 10–15% of first-year subscription. But the number that should interest you more is the services pool your offshore team bills on every implementation."
 
-Built vs roadmap, so their CTO doesn't catch you:
-- **Built:** commercial plans, seat/quota enforcement, metering by tenant/workspace/user/agent, a governed-decision counter, hard budget caps, ROI reporting.
-- **ROADMAP:** per-*decision* cost attribution. The join key linking LLM spend to an individual decision doesn't exist yet.
+Built vs roadmap, so their CTO can't catch you:
+- **Built:** commercial plans, seat/quota enforcement, metering by tenant/workspace/user/agent, governed-decision counter, hard budget caps, ROI reporting.
+- **ROADMAP:** per-*decision* cost attribution — the join key linking LLM spend to an individual decision does not exist yet.
 
-**One detail worth demoing** — it's small and it tells them who you are: the ROI report **refuses to compute** rather than estimate. When decision kinds have no labour assumption configured, it returns an explicit gap message instead of a plausible number. Most vendor ROI dashboards do the opposite.
+**One detail worth demoing** — small, and it tells them exactly who you are: the ROI report **refuses to compute** rather than estimate. With no labour assumption configured for a decision kind, it returns an explicit gap message instead of a plausible number. Most vendor ROI dashboards do the opposite, and this CEO has probably shipped one that does.
 
 ---
 
 ## 8 · Traction
 
-This is your weakest section. **Do not dress it up — reframe what traction means at this stage.**
+Your weakest section. Do not dress it. **Reframe what traction means at this stage — then convert it into the ask.**
 
 > "Commercial traction: zero. No customers, no pilots, no revenue. You'd be the first.
 >
-> Engineering traction is the real number: 72 requirement documents written before the code, 24 services, 28 verticals, ~2,500 tests, and a 12-step end-to-end test that runs the whole claims lifecycle against real infrastructure — real Kafka, real object storage, real MLflow, a real LLM — including the negative cases. A forged authorisation grant gets rejected. Self-approval gets rejected. Those assertions run in CI."
+> Engineering traction is the real number: 72 requirement documents written before the code, 24 services, 28 verticals, ~2,500 tests, and a 12-step end-to-end test that runs a full claims lifecycle against real infrastructure — real Kafka, real object storage, real MLflow, a real LLM — including the negative cases. A forged authorisation grant is rejected. Self-approval is rejected. Those assertions run in CI."
 
-Then the line that reframes the whole section:
+Then the pivot that makes the whole section work:
 
-> "What I'm short of isn't engineering. It's the one thing I can't build alone — a real operation, with real data and real reviewers, to prove it against. That's the specific thing I'm here for."
-
-That sentence converts your weakness into the reason for the meeting.
+> "What I'm short of isn't engineering. It's the three things I can't build alone: customers, a GTM motion, and a team. You have all three, pointed at healthcare, today. That's the entire reason I asked for this meeting."
 
 ---
 
 ## 9 · Competition / advantage
 
-**Name the real alternatives.** Pretending you have no competition is the fastest way to look naive:
+**Name the real alternatives** — pretending you have none is the fastest way to look naive to someone who sells in this space:
 
 | Their real option | Honest read |
 |---|---|
-| Big consultancy builds it | 18-24 months, $5-15M, and they own nothing reusable |
-| Point AI vendor | Solves one workflow, no governance spine, another silo |
-| Build in-house | Their engineers don't want to build audit infrastructure, and it isn't their business |
-| **Do nothing** | The most likely competitor. Name it. |
+| Build it in-house with the offshore team | 2–3 years, $5–15M. And governance/audit/multi-tenancy is not the muscle a voice platform has built. |
+| Partner with a healthcare AI point vendor | Solves one workflow, no governance spine, and they become a reseller of someone else's roadmap |
+| Buy a back-office vendor | Priced on revenue, not on asset. Far more than this conversation costs. |
+| Stay front-office only | The most likely choice — and the one where the margin erodes. Name it. |
 
-Your advantage, stated without inflation:
+Your advantage, without inflation:
 
-> "Two things. First, the governance is the architecture, not a feature bolted on — you cannot get an ungoverned write through this system, because the gate is the write path. Retrofitting that into a point solution is a rewrite.
+> "Two things. First, the governance *is* the architecture, not a feature bolted on. You cannot get an ungoverned write through this system because the gate is the write path. Retrofitting that into a point solution is a rewrite, not a sprint.
 >
-> Second, and I'd rather say this plainly: the asset already exists. Somebody already spent two years and the equivalent of several million dollars in engineering on it. That somebody was me, and I did it without capital. You'd be acquiring a running start, not funding a plan."
+> Second — plainly: the asset exists. Somebody already spent two years and several million dollars' worth of engineering on it. That was me, without capital. You'd be acquiring a running start, not funding a plan."
 
 ---
 
 ## 10 · Financials → the business case **for them**
 
-Not projections. **Payback.**
+Not projections. **Payback**, on the smallest possible commitment.
 
-> "Here's the only financial slide that should matter to you: what you spend, what you get back, and when."
+> "The only financial question that should matter today: what does one pilot cost you, and what does it prove?"
 
-| | Design partner year 1 |
+| | Joint pilot, 90 days |
 |---|---|
-| **They spend** | Subscription (design-partner rate) + ~2 SME days/week for 90 days + a dev/infra contact |
-| **They get** | One [VERTICAL] workflow in production, an ROI report from the platform's own meters, and preferential pricing locked for 3 years |
-| **Payback** | Compute live from §5. If Year-1 realisable savings > Year-1 cost, you have your answer in the room. |
-| **Their downside** | Bounded and stated: a 90-day pilot, running in shadow mode first, alongside the existing process |
+| **They give** | One existing healthcare account, an exec intro, one SME, and 2–3 offshore engineers part-time |
+| **They spend** | Nothing in licence. Their cost is people-time and a warm introduction. |
+| **They get** | A governed prior-auth or appeals workflow live behind their voice agent, an ROI report from the platform's own meters, and a reference they own |
+| **They learn** | Whether this becomes a product line — for the price of a quarter |
+| **Downside** | Bounded and stated: shadow mode first. Nothing the AI produces touches a member or a claim. |
 
-**Shadow mode is the risk answer.** Say it explicitly:
+**Shadow mode is the risk answer. Say it explicitly:**
 
-> "For the first phase nothing the AI produces touches a customer. It drafts, your people decide as they do today, and we compare. If the agreement rate isn't good enough, you've spent 90 days and a small budget and you keep your existing process untouched. That's the whole downside."
+> "Phase one, nothing the AI produces reaches a member. It drafts, their people decide as they do today, and we compare agreement rates on real files. If the number is bad, you've spent a quarter and some engineer time and your customer's process is untouched."
 
-A CEO buys bounded downside far more readily than they buy upside.
+A CEO buys bounded downside far more readily than upside — and this CEO has sold enough pilots to recognise a well-constructed one.
 
 ---
 
 ## 11 · Team
 
-**Do not hide the bus factor. Price it, then mitigate it in the same breath.**
+**Do not hide the bus factor. Price it, mitigate it, then convert it — in one breath.**
 
 > "The team is me. That's a real risk and you should treat it as one.
 >
-> What reduces it: 72 written requirement documents, enforced documentation conventions, ~2,500 tests, and a full CI pipeline — so the system is specified and verified, not just in my head. Somebody competent can pick this up from the docs. That was a deliberate choice from the start, and it's why I'd hand your CTO the repository and the gap list on day one."
+> What reduces it: 72 written requirement documents, enforced documentation conventions, ~2,500 tests and a full CI pipeline — the system is specified and verified, not carried in my head. A competent team can pick it up from the docs. That was deliberate from day one, and it's why I'd hand your CTO the repository, the security posture doc and the gap list on day one."
 
-Then convert it into an ask:
+Then the conversion — and for **this** company it is the natural close:
 
-> "The honest fix isn't reassurance, it's people. If this goes forward, part of what I need from you is engineers alongside me — yours or funded — so the bus factor stops being one."
+> "The honest fix isn't reassurance, it's people. You have an offshore team. My gap list is already written as scoped work items — connectors, pack authoring, the named product gaps. It reads like a backlog for exactly the team you already have."
 
-If the CEO's first instinct is *"why don't we just hire you"* — that is a **good sign**, not a rejection. See §12, Option D. Be ready for it; it's the most likely counter-offer in this room.
+If the CEO's first instinct is *"why don't we just hire you"* — that is a **good sign**, not a rejection. See §12 Option D. It is the most likely counter-offer in this room. Be ready, and be ready on IP.
 
 ---
 
 ## 12 · The ask
 
-**Never open with a number.** Open with the shape, present a menu, let them choose their own commitment level. Menus convert better than single asks because the CEO gets to negotiate *which*, not *whether*.
+**Never open with a number.** Open with the shape, offer a menu, let them choose their commitment level. A menu converts because the CEO negotiates *which*, not *whether*.
 
-> "I'm not raising a round. I'd rather have a customer than an investor. Here's what would actually move this forward, in increasing order of commitment — and I'm happy with any of them."
+> "I'm not raising a round. I'd rather have a partner than an investor. Four ways this could work, in increasing order of commitment — and I'm genuinely happy with any of them."
 
-### Option A — Design partner *(lead with this)*
-- **They give:** a paid 90-day pilot on one [VERTICAL] workflow, an SME, and a named exec sponsor.
-- **They get:** design-partner pricing, roadmap input, 3-year price lock, first-mover advantage in their sector.
-- **You get:** revenue, a reference logo, and real data — the three things you cannot manufacture alone.
-- **Why lead here:** it's the smallest yes, it needs no board approval, and it's *customer-funded* — you keep 100% of the company.
+### Option A — One joint pilot *(lead with this)*
+- **They give:** one existing healthcare account, an exec intro, an SME, 2–3 offshore engineers part-time.
+- **They get:** a governed workflow behind their voice agent, an ROI report, a reference they own, and first look at everything after.
+- **You get:** the three things you cannot manufacture — a real customer, real data, and proof.
+- **Why lead here:** smallest yes, no board approval, no money changes hands, and it's the natural test of whether the bigger structures are worth doing.
 
-### Option B — Design partner + upside
-- As A, plus warrants or a small equity grant for the sponsor company.
-- Use when the CEO likes the product but wants to participate in the outcome.
+### Option B — Channel / OEM partner
+- They resell or white-label Datacern into their healthcare base. Resale margin theirs, subscription yours, services pool theirs.
+- Use when they like the product but want to stay asset-light.
 
-### Option C — Venture build
-- They capitalise a new entity ($1-3M). You contribute the IP for founder-level equity plus a salary. They take a meaningful stake and a preferential internal licence.
-- Use when the CEO is genuinely ambitious about the category rather than just wanting the tool.
+### Option C — New product line / JV
+- They capitalise a venture ($1–3M) as their back-office line. You contribute the IP for founder-level equity plus salary; they take a meaningful stake, a preferential internal licence, and the services revenue.
+- Use when the CEO is ambitious about the category rather than just wanting a tool. Given they already sell AI, this is a realistic landing spot.
 
-### Option D — You join them
-- You come in as CTO / Head of AI. The platform is **licensed** to them, or assigned on agreed terms, with your compensation reflecting the asset — not a standard employment package.
-- **Be ready for this — it is the most probable counter-offer.** It is a legitimate outcome, not a defeat, provided the IP terms are right.
+### Option D — Acquisition / you join them
+- They acquire the platform; you come in as CTO or Head of Healthcare AI. Compensation reflects the **asset**, not a standard employment package.
+- **Be ready — this is the most probable counter-offer.** It is a legitimate outcome, not a defeat, provided the IP terms are right.
 
-> ⚠️ **Protect the asset.** If the conversation moves toward employment, do not sign anything before a lawyer reads the IP-assignment clause. Standard employment agreements routinely assign *all* IP, including pre-existing work, unless the existing codebase is explicitly carved out in writing. Get the carve-out, in the contract, before you start. *(I'm not a lawyer — this is a flag, not advice.)*
+> ⚠️ **Protect the asset.** If the conversation turns to employment, do not sign before a lawyer reads the IP-assignment clause. Standard employment agreements routinely assign *all* IP including pre-existing work unless the existing codebase is explicitly carved out in writing. Get the carve-out in the contract, before you start. *(Not legal advice — a flag.)*
 
 ### Close
 
-> "You've seen exactly what's built and exactly what isn't. The gap list is the work order. What I want is one real operation to prove it in — and I'd rather that be a company that moves first than a bigger name that moves in a year."
+> "You've seen exactly what's built and exactly what isn't. The gap list is a work order, and it's sized for a team you already have. What I want is one healthcare account to prove this in — and I'd rather it be a company that already knows how to sell into a payer than a bigger name that takes a year to decide."
 
 ---
 
 # Objection handling
 
-The six you will actually get.
+The seven you will actually get from **this** CEO.
+
+**"We could just build this ourselves."**
+> "You could. It'd be two to three years and the expensive part isn't the AI — it's the governance, the multi-tenancy and the audit trail, and that's not the muscle a voice platform builds. Meanwhile your competitors get there too. The question isn't whether you can, it's whether it's the best use of the next two years of your team."
+
+**"How is this different from what our voice agents already do?"**
+> "It doesn't overlap at all — there is zero telephony in my platform, by design. Yours handles the conversation. Mine handles the decision the conversation creates. The seam between them is a webhook."
 
 **"You're one person. What if you get hit by a bus?"**
-> "Then you'd have 72 requirement docs, 2,500 tests and a full CI pipeline, and any competent team could continue — that's why I built it that way. But you're right that it's a real risk, and the fix is engineers, not reassurance. That's part of what I'm asking for."
+> "Then you'd have 72 requirement docs, 2,500 tests and a full CI pipeline, and any competent team could continue — that's why I built it that way. But you're right that it's a real risk, and the fix is engineers, not reassurance. You happen to have them."
 
 **"Why hasn't anyone bought this?"**
-> "I've never sold it. I've been building. You're one of the first conversations — which is exactly why the terms available to you now won't exist in twelve months."
+> "I've never sold it — I've been building. You're one of the first conversations, which is exactly why the terms available now won't exist in twelve months."
 
-**"We don't have AI budget."**
-> "Then don't take it from AI budget. This displaces review labour in [VERTICAL] operations — that's where the money is and where the return shows up. And the pilot is small by design."
+**"HIPAA? SOC 2? HITRUST?"** *(the first question their healthcare customers will ask)*
+> "None started, and I'll be blunt: it's the number one blocker to a regulated production deployment. Six to twelve months and it needs funding. That's a genuine reason to start in shadow mode on a bounded dataset — and it's precisely the kind of thing a partner with healthcare customers and a compliance function does far better than a solo founder. It's on the ask list for a reason."
 
-**"How do I know it works?"**
-> "You don't yet, and I'm not going to ask you to believe me. That's what shadow mode is for: 90 days running alongside your existing process, measuring agreement rate on your real files. If the number is bad, you've lost a quarter and a small budget and nothing else."
+**"How do we know it works?"**
+> "You don't yet, and I won't ask you to believe me. That's what shadow mode is for — 90 days alongside the existing process, measuring agreement rate on real files. If the number's bad, you've lost a quarter."
 
-**"What about SOC 2 / HITRUST?"**
-> "Not started, and it's the number one blocker to a regulated production deployment — six to twelve months and it needs funding. That's a genuine reason to start in shadow mode on a bounded dataset. It's also one of the things a first customer relationship pays for."
-
-**"Our IT will say no."**
-> "They should push back, and I'd want the meeting. It runs in your cloud or on-prem, the tenancy isolation is enforced at the database, and I'll give your CTO the repository, the security posture document and the gap list on day one. I'd rather they find problems now than in production."
+**"Our customers won't let AI touch claims decisions."**
+> "They're right not to, and that's the product thesis. The AI never decides — it drafts, a named human approves, and the whole chain is on a tamper-evident record. The pitch to their compliance officer isn't 'trust the AI', it's 'you now have an audit trail you didn't have when a human did it silently'."
 
 ---
 
 # The do-not-say list
 
-Every line below is checkable and currently **false**. Saying one and being caught ends the meeting.
+Every line below is checkable and currently **false**. One slip ends the meeting.
 
+- ❌ "We integrate with your voice platform" → **no integration exists.** Say: *"the seam is a webhook, and webhook ingestion is built."*
+- ❌ "HIPAA compliant" / "SOC 2 in progress" / "HITRUST" → **none started.**
 - ❌ "All tests are green" → CI has known, tracked red items. Say *"green except known, tracked items."*
 - ❌ "Four-eyes on every write, no exceptions" → tenants can policy-enable auto-execution for low-risk non-destructive writes. High-risk/destructive/admin **cannot** bypass — say it that precisely.
 - ❌ "Cost per decision" as a live metric → ROADMAP, no join key exists.
-- ❌ "SOC 2 in progress" → not started.
-- ❌ "Bedrock and Vertex supported" → schema accepts them, **no adapter**. Three real providers: Ollama, OpenAI/Azure-OpenAI, Anthropic.
+- ❌ "Bedrock and Vertex supported" → schema accepts them, **no adapter**. Three real: Ollama, OpenAI/Azure-OpenAI, Anthropic.
 - ❌ "Packs come with demo data" → **4 of 28** have seeded scenarios.
-- ❌ "Fully autonomous agents" → autonomous event-triggered agent runs are **off** in every shipped configuration. Human-initiated is the solid path.
+- ❌ "Fully autonomous agents" → autonomous event-triggered runs are **off** in every shipped configuration. Human-initiated is the solid path.
 - ❌ Any reference to a customer, pilot, or user. There are none.
-- ❌ Any revenue projection presented as a forecast rather than an illustration.
+- ❌ Any revenue projection presented as forecast rather than illustration.
 
 ---
 
 # Pre-meeting checklist
 
 **One week out**
-- [ ] Confirm the industry → pick the lead pack and rewrite every `[VERTICAL]`
-- [ ] Research their operation: headcount, recent earnings commentary, any public AI initiative
-- [ ] Decide your walk-away and your preferred structure *before* you walk in
+- [ ] Research their voice platform: which healthcare workflows do their agents already handle? Name one in the meeting.
+- [ ] Find their published healthcare logos and recent announcements — you want to name the *type* of account for the pilot
+- [ ] Decide your walk-away and your preferred structure **before** you walk in
 - [ ] Print two copies of the §6 verified-state table — one is for their CTO to keep
 
-**The day before — this one is not optional**
-- [ ] **Rehearse the exact demo, end to end, on the exact machine.** `make up`, then walk all five beats.
-- [ ] Then `make doctor` and confirm green.
-- [ ] Demo the **claims** path (`make up`). It is the proven one — 8 seeded cases, 2 pending proposals, a promoted model.
-- [ ] **Do not demo an arbitrary pack install live.** The `demo.sh load` path for the other 26 packs was broken until 2026-08-01 and the fix has not yet been verified against a live stack. If you want the pack-refusal beat, rehearse it specifically and have a recording as backup.
-- [ ] Record the demo as a fallback. Laptops fail; a $150M CEO's calendar doesn't reschedule easily.
+**The day before — not optional**
+- [ ] **Rehearse the exact demo end to end on the exact machine.** `make up`, then walk all five beats. Then `make doctor`, confirm green.
+- [ ] Demo the **claims / prior-auth** path — `make up` seeds `insurance-claims-payer`-shaped work and it is the proven path. 8 seeded cases, 2 pending proposals, a promoted model.
+- [ ] **Do not demo an arbitrary pack install live.** The `demo.sh load` path for the other 26 packs was broken until 2026-08-01 and the fix is not yet verified against a live stack. Want the pack-refusal beat? Rehearse that one specifically and record a backup.
+- [ ] Record the whole demo as a fallback. Laptops fail; a $150M CEO's calendar doesn't reschedule.
 
 **In the room**
 - [ ] One-liner, then stop
-- [ ] Ask the headcount question early and write the number down
-- [ ] Show the refusal beat before any slide — 30 seconds, and it proves the thesis better than talking
+- [ ] Ask "what happens to the case after your agent finishes the call?" early — and let them answer fully
+- [ ] Show the refusal beat before any slide. 30 seconds, and it proves the thesis better than talking.
 - [ ] Volunteer the gap list before they ask
-- [ ] Present the ask as a menu
+- [ ] Present the ask as a menu, lead with the pilot
 - [ ] **Never leave without a dated next step and a named person**
 
 ---
@@ -339,20 +369,20 @@ Every line below is checkable and currently **false**. Saying one and being caug
 
 | Min | What |
 |---|---|
-| 0-5 | One-liner. The problem. The headcount question — write the number down. |
-| 5-15 | Live demo: the five beats. Refusal → triage → approval (self-approval rejected) → learning loop → audit trail. |
-| 15-25 | Verified state (§6 table) and the gap list (§8), presented **together**, in that order. |
-| 25-35 | The business case, built on the whiteboard from *their* numbers. |
-| 35-42 | The ask menu. Let them pick. |
-| 42-45 | Next step: dated, named, written down. |
+| 0-5 | One-liner. The after-the-call question. Let them describe the gap themselves. |
+| 5-15 | Live demo, five beats: refusal → prior-auth triage → approval (self-approval rejected) → learning loop → audit trail. |
+| 15-22 | The healthcare fleet (§6) and the asset-fit table. This is the "oh" moment — don't rush it. |
+| 22-30 | Verified state **and** the gap list, together, in that order. |
+| 30-38 | The business case on the whiteboard, from their account numbers. |
+| 38-43 | The ask menu. Lead with the pilot. Let them pick. |
+| 43-45 | Next step: dated, named, written down. |
 
 ---
 
 ## Source & provenance
 
-- Claims base: `docs/DATACERN_PARTNER_BRIEFING.md` (verified against code/CI 2026-07-26), `docs/security/SECURITY_POSTURE.md`, `docs/demo/RUNBOOK.md`
-- Counts marked **[updated]** re-measured against the repository on 2026-08-01
-- Demo beats: `docs/DATACERN_PARTNER_BRIEFING.md` §7B
-- Gap list: `docs/DATACERN_PARTNER_BRIEFING.md` §3
-
-If a claim in this document and the codebase ever disagree, **the codebase is right and this document is a bug.**
+- Claims base: `docs/DATACERN_PARTNER_BRIEFING.md` (verified against code/CI 2026-07-26), `docs/security/SECURITY_POSTURE.md`, `docs/DATACERN_REALTIME_HEALTHCARE_POSITION.md`, `docs/demo/RUNBOOK.md`
+- Counts re-measured against the repository 2026-08-01: 24 services, 28 packs (9 healthcare/life-sciences), 72 BRDs, ~2,560 test functions, 4 packs with seeded demo scenarios
+- Voice/telephony surface: confirmed **absent** by repo-wide search, 2026-08-01
+- Webhook ingestion + X12/FHIR/HL7v2 decoders: `services/ingestion-service/app/api/routes/hooks.py`, `services/ingestion-service/app/domain/{x12,fhir,hl7v2}.py`
+- Healthcare clocks and event-native argument: `docs/DATACERN_REALTIME_HEALTHCARE_POSITION.md` §1
