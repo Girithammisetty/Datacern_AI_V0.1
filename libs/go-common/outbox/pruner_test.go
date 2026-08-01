@@ -3,7 +3,9 @@ package outbox
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -199,5 +201,46 @@ func TestNewPruner_Defaults(t *testing.T) {
 	}
 	if p.PlatformGUC != "app.role" || p.PlatformVal != "platform" {
 		t.Fatalf("platform GUC not threaded through: %+v", p)
+	}
+}
+
+// The retention argument must be a float64, and the SQL must bind it somewhere
+// that accepts one. This is not style — a fake Tx accepts any Go value in any
+// position, which is precisely why the real defect lived here unnoticed:
+//
+//	now() - ($1::text || ' seconds')::interval     // arg: int64
+//
+// pgx reads the placeholder's target type off the `::text` cast and refuses to
+// encode an int64 into it, so every PruneOnce in every service failed before
+// deleting a row ("unable to encode 2592000 into text format for text (OID
+// 25)"). No test above could see it: they assert on RowsAffected and
+// transaction counts, and a fake never encodes anything.
+//
+// So assert the two things a fake CAN check — the argument's Go type, and that
+// the SQL does not cast that placeholder to text. Together they pin the
+// contract that broke.
+func TestPruneOnce_RetentionArgIsBindableAsSeconds(t *testing.T) {
+	fb := &fakeBeginner{results: []int64{0}}
+	p := &Pruner{Pool: fb, Table: "outbox", Retention: 30 * 24 * time.Hour, Batch: 1000}
+	if _, err := p.PruneOnce(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	sql, args := fb.calls[0][0].(string), fb.calls[0][1].([]any)
+
+	secs, ok := args[0].(float64)
+	if !ok {
+		t.Fatalf("retention arg is %T, want float64 — make_interval(secs) is "+
+			"declared double precision, and the wrong type here is the encode "+
+			"failure that silently disabled every pruner", args[0])
+	}
+	if secs != 2592000 {
+		t.Fatalf("30d retention = %v seconds, want 2592000", secs)
+	}
+	if strings.Contains(sql, "$1::text") {
+		t.Fatalf("$1 is cast to text, which forces pgx to encode the retention "+
+			"as a string and reject a numeric arg:\n%s", sql)
+	}
+	if !strings.Contains(sql, "make_interval(secs => $1)") {
+		t.Fatalf("retention is not bound through make_interval(secs => $1):\n%s", sql)
 	}
 }
