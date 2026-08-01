@@ -319,6 +319,11 @@ The seven you will actually get from **this** CEO.
 **"How do we know it works?"**
 > "You don't yet, and I won't ask you to believe me. That's what shadow mode is for — 90 days alongside the existing process, measuring agreement rate on real files. If the number's bad, you've lost a quarter."
 
+**"Can your agents talk to our systems over MCP?"** *(their CTO will ask this)*
+> "Separate the two directions. Inbound — yes, today: we're an MCP server, spec 2025-06-18, `initialize`/`tools/list`/`tools/call`, and all nine agents' tool calls go through that one chokepoint. Your voice agent can call us as a standard MCP client and every call is authorised, tiered, kill-switchable and audited. Outbound — not yet: our federation to backends uses our own facade contract, so we can't consume a third-party MCP server today. The backend model already carries external kind, egress allow-list and vault auth, so it's an adapter behind an existing interface — but I haven't scoped it and I won't quote a date."
+>
+> Full detail: `docs/DATACERN_MCP_CONNECTIVITY.md`. Hand it to their CTO.
+
 **"Our customers won't let AI touch claims decisions."**
 > "They're right not to, and that's the product thesis. The AI never decides — it drafts, a named human approves, and the whole chain is on a tamper-evident record. The pitch to their compliance officer isn't 'trust the AI', it's 'you now have an audit trail you didn't have when a human did it silently'."
 
@@ -329,6 +334,8 @@ The seven you will actually get from **this** CEO.
 Every line below is checkable and currently **false**. One slip ends the meeting.
 
 - ❌ "We integrate with your voice platform" → **no integration exists.** Say: *"the seam is a webhook, and webhook ingestion is built."*
+- ❌ "We can plug into any MCP server" → **no MCP client exists.** We are an MCP *server*; outbound federation is a proprietary facade. Inbound only.
+- ❌ "All agent data access is MCP" → all agent *tool calls* are. Reads go direct to internal services.
 - ❌ "HIPAA compliant" / "SOC 2 in progress" / "HITRUST" → **none started.**
 - ❌ "All tests are green" → CI has known, tracked red items. Say *"green except known, tracked items."*
 - ❌ "Four-eyes on every write, no exceptions" → tenants can policy-enable auto-execution for low-risk non-destructive writes. High-risk/destructive/admin **cannot** bypass — say it that precisely.
