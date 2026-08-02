@@ -711,6 +711,80 @@ async function buildAgentFleetRows(
   );
 }
 
+/**
+ * Server-authoritative report catalog for Insights › Reports. The BFF owns this
+ * list so the UI renders a capability-filtered set instead of deciding
+ * visibility client-side. Each entry's `requiredCapability` is an rbac
+ * capability the caller must hold; it is stripped before returning (the filter
+ * is server-side, the client never needs it). `note` uses null (not undefined)
+ * so the GraphQL String field serializes cleanly.
+ */
+interface ReportCatalogEntry {
+  id: string;
+  title: string;
+  description: string;
+  domain: "financial" | "governance" | "operations";
+  formats: Array<"csv" | "json" | "artifact">;
+  cadence: "on_demand" | "monthly" | "point_in_time";
+  href: string;
+  schedulable: boolean;
+  note: string | null;
+  requiredCapability: string;
+}
+
+const REPORT_CATALOG: ReportCatalogEntry[] = [
+  {
+    id: "chargeback", title: "Chargeback / spend showback",
+    description: "Priced monthly AI spend per meter and workspace — the invoice-line view of a finalized month.",
+    domain: "financial", formats: ["csv"], cadence: "monthly", href: "/admin/usage",
+    schedulable: false, note: "Available for finalized months only; a month in reconciliation variance is blocked until resolved.",
+    requiredCapability: "usage.report.read",
+  },
+  {
+    id: "value-roi", title: "ROI / value report",
+    description: "Governed decisions, hours saved and cost-per-decision for the period, with every derived figure disclosing its assumption.",
+    domain: "financial", formats: ["csv", "json"], cadence: "monthly", href: "/admin/value",
+    schedulable: false, note: "Hours-saved and net-value need a minutes-per-decision + loaded-rate assumption; no default is assumed for you.",
+    requiredCapability: "usage.report.read",
+  },
+  {
+    id: "agent-inventory", title: "Agent inventory",
+    description: "A flat, point-in-time list of every AI agent, what it's allowed to do, and its current control state — the EU AI Act Annex IV system inventory.",
+    domain: "governance", formats: ["csv"], cadence: "point_in_time", href: "/admin/agents",
+    schedulable: false, note: null, requiredCapability: "ai.agent.read",
+  },
+  {
+    id: "evidence-pack", title: "Decision evidence pack",
+    description: "For one governed decision: who proposed, who approved (a distinct human), the exact tool call, and cryptographic proof the record is unaltered.",
+    domain: "governance", formats: ["json"], cadence: "point_in_time", href: "/inbox",
+    schedulable: false, note: null, requiredCapability: "audit.compliance.read",
+  },
+  {
+    id: "compliance-pack", title: "Compliance / audit pack",
+    description: "A tenant + date-range evidence bundle (SOC 2 / EU AI Act) assembled from the tamper-evident audit chain.",
+    domain: "governance", formats: ["artifact"], cadence: "on_demand", href: "/admin/audit/export",
+    schedulable: false, note: null, requiredCapability: "audit.compliance.read",
+  },
+  {
+    id: "case-export", title: "Case export",
+    description: "The current case worklist as a file — filtered by status — for offline review or hand-off.",
+    domain: "operations", formats: ["csv"], cadence: "on_demand", href: "/cases",
+    schedulable: false, note: null, requiredCapability: "case.case.export",
+  },
+  {
+    id: "decision-outcomes", title: "Decision outcomes",
+    description: "How decisions resolved — approved / edited / rejected — the substrate for the learning loop and outcome monitoring.",
+    domain: "operations", formats: ["csv"], cadence: "on_demand", href: "/decisions",
+    schedulable: false, note: null, requiredCapability: "case.disposition.read",
+  },
+  {
+    id: "dashboard-chart", title: "Dashboard & chart export",
+    description: "Any governed chart's underlying rows as a file, straight from the dashboard it lives on.",
+    domain: "operations", formats: ["csv"], cadence: "on_demand", href: "/dashboards",
+    schedulable: true, note: null, requiredCapability: "chart.chart.export",
+  },
+];
+
 export const resolvers = {
   JSON: JSONScalar,
   DateTime: DateTimeScalar,
@@ -1288,6 +1362,24 @@ export const resolvers = {
       const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
       const page = await ctx.clients.notification.reportSubscriptions(a.dashboardId ?? undefined, limit, cursor);
       return toConnection(page, (d) => mapReportSubscription(ctx, d));
+    },
+
+    /** The report catalog, filtered server-side to the caller's rbac
+     * capabilities. Fail-closed: if the capability lookup fails we return [] (a
+     * degraded-but-safe empty hub) rather than leaking reports the caller may
+     * not reach. `requiredCapability` is stripped — the filter is server-side. */
+    reportCatalog: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      let caps: Set<string>;
+      try {
+        const c = await ctx.clients.rbac.meCapabilities();
+        caps = new Set(c.capabilities);
+      } catch (e) {
+        console.error("reportCatalog: rbac meCapabilities failed", e);
+        return [];
+      }
+      return REPORT_CATALOG.filter((r) => caps.has(r.requiredCapability)).map(
+        ({ requiredCapability: _cap, ...rest }) => rest,
+      );
     },
 
     // ---- charts: catalog + single chart + live preview (JWT passthrough) -----

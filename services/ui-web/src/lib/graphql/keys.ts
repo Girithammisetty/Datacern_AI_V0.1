@@ -139,6 +139,7 @@ export const qk = {
   semanticModel: (name: string) => ["dashboards", "semanticModel", name] as const,
 
   reportSubscriptions: (dashboardId?: string) => ["dashboards", "reportSubscriptions", dashboardId ?? null] as const,
+  reportCatalog: () => ["dashboards", "reportCatalog"] as const,
 
   costPanel: (workspaceId: string, from: string, to: string) =>
     ["usage", "costPanel", workspaceId, from, to] as const,

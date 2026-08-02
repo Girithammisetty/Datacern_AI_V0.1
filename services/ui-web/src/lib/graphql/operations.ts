@@ -276,6 +276,7 @@ import type {
   TenantBranding,
 
   DecisionDrift,} from "./types";
+import type { ReportDefinition } from "@/lib/reports/catalog";
 
 export const ME = /* GraphQL */ `
   query Me {
@@ -2799,6 +2800,16 @@ export const CHART_TYPES = /* GraphQL */ `
 `;
 export interface ChartTypesResult {
   chartTypes: ChartType[];
+}
+
+/* ---------- reports: server-authoritative catalog (Insights › Reports) ---------- */
+export const REPORT_CATALOG = /* GraphQL */ `
+  query ReportCatalog {
+    reportCatalog { id title description domain formats cadence href schedulable note }
+  }
+`;
+export interface ReportCatalogResult {
+  reportCatalog: ReportDefinition[];
 }
 
 export const SEMANTIC_MODELS = /* GraphQL */ `

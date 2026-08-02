@@ -18,10 +18,8 @@ import type { ReportSubscription } from "@/lib/graphql/types";
 import { useSession } from "@/lib/session/SessionContext";
 import { formatLocal } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n/messages";
-import { useCapabilities } from "@/lib/authz/useCapabilities";
-import {
-  visibleReports, reportsByDomain, REPORT_DOMAINS, type ReportFormat,
-} from "@/lib/reports/catalog";
+import { useReportCatalog } from "@/lib/graphql/hooks";
+import { reportsByDomain, REPORT_DOMAINS, type ReportFormat } from "@/lib/reports/catalog";
 
 const FORMAT_LABEL: Record<ReportFormat, string> = { csv: "CSV", json: "JSON", artifact: "File" };
 
@@ -33,8 +31,8 @@ const FORMAT_LABEL: Record<ReportFormat, string> = { csv: "CSV", json: "JSON", a
  * scheduled-delivery list; no report is listed a viewer can't reach.
  */
 function ReportCatalogSection() {
-  const { can, isLoading } = useCapabilities();
-  const groups = useMemo(() => reportsByDomain(visibleReports(can)), [can]);
+  const { data, isLoading } = useReportCatalog();
+  const groups = useMemo(() => reportsByDomain(data ?? []), [data]);
   if (isLoading || groups.length === 0) return null;
 
   return (

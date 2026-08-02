@@ -2919,6 +2919,16 @@ export function useChartTypes() {
   });
 }
 
+/** The server-authoritative report catalog (Insights › Reports) — already
+ * filtered to the caller's capabilities by the BFF. */
+export function useReportCatalog() {
+  return useQuery({
+    queryKey: qk.reportCatalog(),
+    queryFn: () => graphqlRequest<ops.ReportCatalogResult>(ops.REPORT_CATALOG).then((r) => r.reportCatalog),
+    staleTime: 10 * 60_000,
+  });
+}
+
 /** Semantic-model headers (id/name only) for the model picker. */
 export function useSemanticModels(workspaceId: string) {
   return useQuery({
