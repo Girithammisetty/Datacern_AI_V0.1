@@ -28,6 +28,8 @@ import type {
   AgentDefinitionDTO, AgentVersionDTO, TenantAgentConfigDTO, AgentRunListItemDTO,
   // BRD 54 inc2: governed decision tables.
   DecisionModelDTO, DecisionOutcomeDTO, BatchEvaluateDTO, EntityMergeProposalDTO,
+  // BRD 55: decision outcome monitoring.
+  OutcomeLabelDTO, DecisionEffectivenessDTO,
 } from "../clients/agent.js";
 import type {
   PackSummaryDTO, PackDetailDTO, PlanOpDTO, LedgerRowDTO, InstallDTO,
@@ -2543,6 +2545,38 @@ export function mapDecisionModel(d: DecisionModelDTO) {
       note: r.note ?? null,
     })),
     defaultOutcome: mapDecisionOutcome(d.default_outcome),
+  };
+}
+
+export function mapOutcomeLabel(d: OutcomeLabelDTO) {
+  return {
+    __typename: "DecisionOutcomeLabel" as const,
+    id: d.id,
+    decisionRef: d.decision_ref,
+    decisionType: d.decision_type ?? null,
+    producer: d.producer ?? null,
+    decidedOutcome: d.decided_outcome ?? null,
+    realizedOutcome: d.realized_outcome,
+    correct: d.correct ?? null,
+    labelSource: d.label_source ?? null,
+    note: d.note ?? null,
+    labeledBy: d.labeled_by ?? null,
+  };
+}
+
+export function mapDecisionEffectiveness(d: DecisionEffectivenessDTO) {
+  return {
+    __typename: "DecisionEffectiveness" as const,
+    by: d.by === "producer" ? ("PRODUCER" as const) : ("DECISION_TYPE" as const),
+    labeledDecisions: d.labeled_decisions,
+    groups: (d.groups ?? []).map((g) => ({
+      key: g.key,
+      total: g.total,
+      correct: g.correct,
+      incorrect: g.incorrect,
+      unknown: g.unknown,
+      effectivenessRate: g.effectiveness_rate ?? null,
+    })),
   };
 }
 

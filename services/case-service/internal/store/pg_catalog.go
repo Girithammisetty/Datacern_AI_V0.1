@@ -337,6 +337,49 @@ func (s *PG) DeleteComment(ctx context.Context, tenant, id uuid.UUID) error {
 	})
 }
 
+// ListComments returns a case's non-deleted comments newest-first, paginated
+// by created_at (`before` cursor). Same case-visibility 404 pre-check as
+// ListTimeline: an unknown (or soft-deleted, or other-tenant) case is
+// ErrNotFound, not an empty list.
+func (s *PG) ListComments(ctx context.Context, tenant, caseID uuid.UUID, limit int, before *time.Time) ([]domain.Comment, error) {
+	limit = ClampLimit(limit)
+	var out []domain.Comment
+	err := s.withTenant(ctx, tenant, func(tx pgx.Tx) error {
+		// Confirm the case is visible (RLS/404).
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT true FROM cases WHERE id=$1 AND deleted_at IS NULL`, caseID).Scan(&exists); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			}
+			return err
+		}
+		q := `SELECT id, tenant_id, case_id, author_id, body, edited_at, created_at
+			FROM case_comments
+			WHERE case_id=$1 AND deleted_at IS NULL`
+		args := []any{caseID}
+		if before != nil {
+			args = append(args, *before)
+			q += ` AND created_at < $2`
+		}
+		args = append(args, limit)
+		q += ` ORDER BY created_at DESC LIMIT $` + strconv.Itoa(len(args))
+		rows, err := tx.Query(ctx, q, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c domain.Comment
+			if err := rows.Scan(&c.ID, &c.TenantID, &c.CaseID, &c.AuthorID, &c.Body, &c.EditedAt, &c.CreatedAt); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // ---- Timeline (CASE-FR-025) -------------------------------------------------
 
 // ListTimeline returns the merged event+comment timeline (comment.added events
@@ -354,9 +397,9 @@ func (s *PG) ListTimeline(ctx context.Context, tenant, caseID uuid.UUID, limit i
 			return err
 		}
 		// Enrich comment events with the comment body (LEFT JOIN case_comments on
-		// the new_value.comment_id) so the timeline is self-contained — there is no
-		// separate list-comments route, and a comment body must be readable from
-		// the timeline itself, not only on the create response.
+		// the new_value.comment_id) so the timeline is self-contained — a comment
+		// body is readable straight from the timeline, not only via ListComments
+		// or the create response.
 		q := `SELECT ce.id, ce.case_id, ce.event_type, ce.actor_type, ce.actor_id,
 				ce.via_agent, ce.proposal_urn, ce.old_value, ce.new_value, ce.occurred_at, cc.body
 			FROM case_events ce
@@ -401,7 +444,7 @@ func (s *PG) ListTimeline(ctx context.Context, tenant, caseID uuid.UUID, limit i
 				_ = json.Unmarshal(newV, &a.NewValue)
 			}
 			// Surface the joined comment body so a comment is readable straight
-			// from the timeline (no separate list-comments route).
+			// from the timeline without a second ListComments call.
 			if commentBody != nil {
 				if a.NewValue == nil {
 					a.NewValue = map[string]any{}

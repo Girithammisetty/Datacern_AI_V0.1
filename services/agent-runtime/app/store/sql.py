@@ -421,6 +421,30 @@ class SqlStore:
                 "UPDATE rollouts SET status=:st, updated_at=now() WHERE rollout_id=cast(:id as uuid)"),
                 {"st": r.status, "id": r.rollout_id})
 
+    async def list_rollouts(self, agent_key: str | None = None, status: str | None = None,
+                            cell: str | None = None) -> list[Rollout]:
+        """All rollouts matching the optional filters, newest first (created_at
+        DESC — the table carries created_at/updated_at even though the entity
+        does not). Platform-scoped read: rollouts have no tenant_id column."""
+        q = "SELECT * FROM rollouts"
+        clauses: list[str] = []
+        params: dict = {}
+        if agent_key:
+            clauses.append("agent_key=:k")
+            params["k"] = agent_key
+        if status:
+            clauses.append("status=:st")
+            params["st"] = status
+        if cell:
+            clauses.append("cell=:c")
+            params["c"] = cell
+        if clauses:
+            q += " WHERE " + " AND ".join(clauses)
+        q += " ORDER BY created_at DESC"
+        async with self._plain() as s:
+            rows = (await s.execute(text(q), params)).mappings().all()
+        return [_rollout(r) for r in rows]
+
     # ---- kill switches -----------------------------------------------------
     # NOTE (RLS remediation, same bug class as MASTER outbox-relay fixes): 0004
     # put kill_switches under FORCE RLS (`tenant_id IS NULL OR tenant_id = GUC`),

@@ -44,9 +44,9 @@ export interface CreateCasesDTO {
 // disposition catalog, custom case-fields, SLA policy (case-service BRD 08).
 // ---------------------------------------------------------------------------
 
-/** A case comment (case-service Comment). NOTE: case-service exposes NO
- * "list comments" route — a comment body is only ever available on this create
- * response; the timeline carries the comment_id only. */
+/** A case comment (case-service Comment): listable via GET
+ * /cases/{id}/comments; the timeline additionally joins each comment.added
+ * event's body in place. */
 export interface CaseCommentDTO {
   id: string;
   case_id?: string;
@@ -411,14 +411,26 @@ export class CaseClient {
     return unwrap<CaseCommentDTO>(r);
   }
 
-  /** PATCH /comments/{cid} — author-only within 15 min (403 otherwise). The
-   * route echoes ONLY {id, body} — never the full comment. */
-  async editComment(commentId: string, body: string): Promise<{ id: string; body: string }> {
-    const r = await this.http.patch<{ data: { id: string; body: string } } | { id: string; body: string }>(
+  /** GET /cases/{id}/comments — newest-first, non-deleted; `before` (RFC3339)
+   * pages by created_at keyset. Needs case.case.read. 404 on unknown case. */
+  async listComments(caseId: string, params?: { limit?: number; before?: string }): Promise<CaseCommentDTO[]> {
+    const r = await this.http.get<{ data: CaseCommentDTO[] } | CaseCommentDTO[]>(
+      `/api/v1/cases/${encodeURIComponent(caseId)}/comments`,
+      { query: { limit: params?.limit, before: params?.before } },
+    );
+    const u = unwrap<CaseCommentDTO[] | { data: CaseCommentDTO[] }>(r);
+    return Array.isArray(u) ? u : (u.data ?? []);
+  }
+
+  /** PATCH /comments/{cid} — author-only within 15 min (403 otherwise). Echoes
+   * the full updated comment (id, case_id, author_id, body, edited_at,
+   * created_at). */
+  async editComment(commentId: string, body: string): Promise<CaseCommentDTO> {
+    const r = await this.http.patch<{ data: CaseCommentDTO } | CaseCommentDTO>(
       `/api/v1/comments/${encodeURIComponent(commentId)}`,
       { body: { body } },
     );
-    return unwrap<{ id: string; body: string }>(r);
+    return unwrap<CaseCommentDTO>(r);
   }
 
   /** DELETE /comments/{cid} (204; same author-only 15-min guard). */

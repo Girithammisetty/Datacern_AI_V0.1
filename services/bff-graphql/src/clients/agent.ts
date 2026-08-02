@@ -69,6 +69,20 @@ export interface DecideBody {
 }
 
 /** agent-runtime KillSwitch (ART-FR-073). scope: agent|agent_version|agent_version_tenant. */
+/** One rollout record (agent-runtime rollouts table; GET /registry/rollouts).
+ * mode: direct|canary|shadow · status: active|promoted|rolled_back. */
+export interface AgentRolloutDTO {
+  rollout_id: string;
+  agent_key: string;
+  cell?: string;
+  mode: string;
+  candidate_version: number;
+  baseline_version: number;
+  pct?: number;
+  tenant_filter?: Record<string, unknown>;
+  status: string;
+}
+
 export interface AgentKillSwitchDTO {
   kill_id: string;
   scope: string;
@@ -333,6 +347,16 @@ export class AgentClient {
     return this.http.get(`/api/v1/runs/${encodeURIComponent(id)}/trace`);
   }
 
+  /** GET /registry/rollouts — rollout records (platform-scoped, like the data
+   * the fleet's rollout column describes). Needs ai.agent.read (same gate as
+   * the kill-switch list). Filters optional. */
+  async rollouts(params?: { agentKey?: string; status?: string; cell?: string }): Promise<AgentRolloutDTO[]> {
+    const r = await this.http.get<{ data: AgentRolloutDTO[] }>("/api/v1/registry/rollouts", {
+      query: { agent_key: params?.agentKey, status: params?.status, cell: params?.cell },
+    });
+    return r.data ?? [];
+  }
+
   /** GET /registry/kill-switches — active kills (operator: all tenants; tenant
    * admin: own tenant + global). Needs operator or tenant.admin JWT scope. */
   async killSwitches(): Promise<AgentKillSwitchDTO[]> {
@@ -539,6 +563,80 @@ export class AgentClient {
     );
     return unwrap<BatchEvaluateDTO>(r);
   }
+
+  // ---- BRD 55: decision outcome monitoring (realized outcomes on decisions) --
+
+  /** GET /decisions/{ref}/outcome — the realized-outcome label, or 404. */
+  async decisionOutcome(decisionRef: string): Promise<OutcomeLabelDTO> {
+    const r = await this.http.get<{ data: OutcomeLabelDTO } | OutcomeLabelDTO>(
+      `/api/v1/decisions/${encodeURIComponent(decisionRef)}/outcome`,
+    );
+    return unwrap<OutcomeLabelDTO>(r);
+  }
+
+  /** POST /decisions/{ref}/outcome — record the realized outcome (201). When the
+   * ref is a proposal id the service joins decided_outcome/producer from its
+   * provenance; otherwise decision_type must be supplied. */
+  async markDecisionOutcome(
+    decisionRef: string,
+    body: {
+      realized_outcome: string;
+      label_source?: string;
+      note?: string;
+      decision_type?: string;
+      producer?: string;
+      decided_outcome?: string;
+    },
+    idempotencyKey?: string,
+  ): Promise<OutcomeLabelDTO> {
+    const r = await this.http.post<{ data: OutcomeLabelDTO } | OutcomeLabelDTO>(
+      `/api/v1/decisions/${encodeURIComponent(decisionRef)}/outcome`,
+      { body, idempotencyKey },
+    );
+    return unwrap<OutcomeLabelDTO>(r);
+  }
+
+  /** GET /decision-effectiveness — decided-vs-realized agreement grouped by
+   * decision_type or producer (OM-FR-020). */
+  async decisionEffectiveness(
+    by: "decision_type" | "producer",
+    decisionType?: string,
+  ): Promise<DecisionEffectivenessDTO> {
+    const r = await this.http.get<{ data: DecisionEffectivenessDTO } | DecisionEffectivenessDTO>(
+      "/api/v1/decision-effectiveness",
+      { query: { by, decision_type: decisionType } },
+    );
+    return unwrap<DecisionEffectivenessDTO>(r);
+  }
+}
+
+/** One realized-outcome label on a decision (agent-runtime outcome_labels,
+ * BRD 55). `correct` is null when there is no decided outcome to compare. */
+export interface OutcomeLabelDTO {
+  id: string;
+  decision_ref: string;
+  decision_type?: string | null;
+  producer?: string | null;
+  decided_outcome?: string | null;
+  realized_outcome: string;
+  correct?: boolean | null;
+  label_source?: string;
+  note?: string | null;
+  labeled_by?: string | null;
+}
+
+/** GET /decision-effectiveness response (groups sorted by total desc). */
+export interface DecisionEffectivenessDTO {
+  by: string;
+  labeled_decisions: number;
+  groups: {
+    key: string;
+    total: number;
+    correct: number;
+    incorrect: number;
+    unknown: number;
+    effectiveness_rate: number | null;
+  }[];
 }
 
 /** One captured agent-run transcript (only the fields the loop stats need). */

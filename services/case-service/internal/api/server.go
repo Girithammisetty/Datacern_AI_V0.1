@@ -97,6 +97,7 @@ func (s *Server) Router() http.Handler {
 			r.With(s.RequireAction(authz.ActionCaseRead), s.RequireCaseWorkspace).Get("/{id}", s.handleGetCase)
 			r.With(s.RequireAction(authz.ActionCaseUpdate), s.RequireCaseWorkspace).Patch("/{id}", s.handlePatchCase)
 			r.With(s.RequireAction(authz.ActionCaseRead), s.RequireCaseWorkspace).Get("/{id}/timeline", s.handleTimeline)
+			r.With(s.RequireAction(authz.ActionCaseRead), s.RequireCaseWorkspace).Get("/{id}/comments", s.handleListComments)
 			r.With(s.RequireAction(authz.ActionCaseComment), s.RequireCaseWorkspace).Post("/{id}/comments", s.handleAddComment)
 
 			// Evidence attachments (task #77): list/upload/download files on a case.
@@ -112,6 +113,12 @@ func (s *Server) Router() http.Handler {
 			r.With(s.RequireAction(authz.ActionCaseManage), s.RequireCaseWorkspace).Post("/{id}/close", s.handleClose)
 			r.With(s.RequireAction(authz.ActionCaseManage), s.RequireCaseWorkspace).Post("/{id}/escalate", s.handleEscalate)
 
+			// CALLER-LESS (gap audit 2026-08-02, docs/platform/
+			// SERVICE_BFF_UI_GAP_ANALYSIS.md §4 "Other"): approved proposals
+			// execute through the tool-plane MCP facade (handlers_facade.go),
+			// which checks the same ActionProposalApply; no BFF client, UI
+			// route, or service invokes this direct human path. Kept pending a
+			// live-stack regression pass; candidate for removal.
 			r.With(s.RequireAction(authz.ActionProposalApply), s.RequireCaseWorkspace).Post("/{id}/apply-proposal", s.handleApplyProposal)
 		})
 

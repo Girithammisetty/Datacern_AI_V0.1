@@ -22,6 +22,9 @@ export const qk = {
   decisionModels: () => ["data", "decisionModels"] as const,
   decisionModel: (id: string) => ["data", "decisionModel", id] as const,
   decisionModelVersions: (id: string) => ["data", "decisionModelVersions", id] as const,
+  decisionOutcome: (ref: string) => ["data", "decisionOutcome", ref] as const,
+  decisionEffectiveness: (by: string, decisionType?: string) =>
+    ["data", "decisionEffectiveness", by, decisionType ?? ""] as const,
   resolutionRuns: (datasetId: string) => ["data", "resolutionRuns", datasetId] as const,
   resolutionRun: (id: string) => ["data", "resolutionRun", id] as const,
   mergeCandidates: (runId: string) => ["data", "mergeCandidates", runId] as const,
@@ -66,6 +69,7 @@ export const qk = {
   case: (id: string) => ["cases", "case", id] as const,
   // Tier 4b: case ops
   caseTimeline: (caseId: string) => ["cases", "timeline", caseId] as const,
+  caseComments: (caseId: string) => ["cases", "comments", caseId] as const,
   caseOperation: (id: string) => ["cases", "operation", id] as const,
   dispositions: () => ["cases", "dispositions"] as const,
   caseFields: (queryUrn?: string) => ["cases", "caseFields", queryUrn ?? null] as const,

@@ -47,6 +47,11 @@ async def compile_metrics(
     return {"data": result}
 
 
+# CALLER-LESS (gap audit 2026-08-02, docs/platform/SERVICE_BFF_UI_GAP_ANALYSIS.md
+# §4 "Other"): chart-service compiles through POST /api/v1/compile
+# (chart-service internal/resolve/clients.go), and no service, BFF client, or
+# UI route invokes this chart-shaped variant. Kept for now because removal
+# deserves a live-stack regression pass; candidate for deletion.
 @router.post("/compile/chart")
 async def compile_chart(
     request: Request,

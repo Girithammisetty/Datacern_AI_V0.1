@@ -8,6 +8,7 @@ import { DiffView } from "@/components/primitives/DiffView";
 import { UrnLink } from "@/components/primitives/UrnLink";
 import { StatusChip } from "@/components/primitives/StatusChip";
 import { EvidencePackPanel } from "@/components/inbox/EvidencePackPanel";
+import { OutcomeSection } from "@/components/decisions/OutcomeSection";
 import { useDecideProposal } from "@/lib/graphql/hooks";
 import { useToasts } from "@/stores/ui";
 import { normalizeArgsDiff } from "@/lib/diff";
@@ -221,6 +222,8 @@ export function ProposalDetail({ proposal }: { proposal: Proposal }) {
         </section>
 
         <EvidencePackPanel proposalId={proposal.id} />
+
+        <OutcomeSection proposalId={proposal.id} status={proposal.status} />
 
         {mode === "view" && (
           <div className="flex flex-wrap gap-2">

@@ -1919,6 +1919,43 @@ export interface BatchEvaluateResult {
   results: BatchEvaluateRow[];
 }
 
+// ---- BRD 55: decision outcome monitoring -----------------------------------
+/** A realized-outcome label on a decision. `correct` is null when there was no
+ * decided outcome to compare against (agreement unknowable, never guessed). */
+export interface DecisionOutcomeLabel {
+  id: ID;
+  decisionRef: ID;
+  decisionType?: string | null;
+  producer?: string | null;
+  decidedOutcome?: string | null;
+  realizedOutcome: string;
+  correct?: boolean | null;
+  labelSource?: string | null;
+  note?: string | null;
+  labeledBy?: string | null;
+}
+export interface DecisionEffectivenessGroup {
+  key: string;
+  total: number;
+  correct: number;
+  incorrect: number;
+  unknown: number;
+  effectivenessRate?: number | null;
+}
+export interface DecisionEffectiveness {
+  by: "DECISION_TYPE" | "PRODUCER";
+  labeledDecisions: number;
+  groups: DecisionEffectivenessGroup[];
+}
+export interface MarkDecisionOutcomeInput {
+  realizedOutcome: string;
+  labelSource?: string;
+  note?: string;
+  decisionType?: string;
+  producer?: string;
+  decidedOutcome?: string;
+}
+
 // ---- BRD 56: entity resolution (steward surface) ---------------------------
 export interface ResolutionRun {
   runId: ID;

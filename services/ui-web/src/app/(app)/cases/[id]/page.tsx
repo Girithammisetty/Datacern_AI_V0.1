@@ -14,8 +14,8 @@ import { CaseActionsBar } from "@/components/cases/CaseActionsBar";
 import { FEATURE_GATES, cap } from "@/lib/authz/registry";
 import { Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
-import { useCaseDetail, useUpdateCase, useCaseTimeline, useAddCaseComment,
-  useUpdateCaseComment, useDeleteCaseComment } from "@/lib/graphql/hooks";
+import { useCaseDetail, useUpdateCase, useCaseTimeline, useCaseComments,
+  useAddCaseComment, useUpdateCaseComment, useDeleteCaseComment } from "@/lib/graphql/hooks";
 import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import { useSession } from "@/lib/session/SessionContext";
 import { useToasts } from "@/stores/ui";
@@ -450,30 +450,32 @@ const COMMENT_EDIT_WINDOW_MS = 15 * 60_000;
 
 /**
  * The real merged event+comment timeline (GET /cases/{id}/timeline), newest-
- * first, plus a comment composer. CONTRACT GAP (documented in the BFF SDL):
- * case-service has NO list-comments route — a comment body is only readable on
- * the create/edit response, and the timeline row carries just {comment_id}. So
- * bodies for comments posted in THIS session are cached client-side keyed by
- * comment id; older comments honestly show a placeholder instead of a
- * fabricated body.
+ * first, plus a comment composer. Comment bodies come from the authoritative
+ * list (Query.caseComments -> case-service GET /cases/{id}/comments), with the
+ * timeline's joined body as the fast path; a comment.added row with neither is
+ * a since-deleted comment and says so.
  */
 function ActivityPanel({ caseId }: { caseId: string }) {
   const session = useSession();
   const push = useToasts((s) => s.push);
   const timeline = useCaseTimeline(caseId);
+  const comments = useCaseComments(caseId);
   const addComment = useAddCaseComment(caseId);
   const updateComment = useUpdateCaseComment(caseId);
   const deleteComment = useDeleteCaseComment(caseId);
 
   const [draft, setDraft] = useState("");
-  // Session-local comment bodies keyed by comment id (see doc comment above).
-  const [bodies, setBodies] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
 
   const activities = useMemo(
     () => timeline.data?.pages.flatMap((p) => p.nodes) ?? [],
     [timeline.data],
+  );
+  // Authoritative comment bodies keyed by id (GET /cases/{id}/comments).
+  const commentById = useMemo(
+    () => new Map((comments.data ?? []).map((c) => [c.id, c])),
+    [comments.data],
   );
 
   const toastError = (title: string) => (err: unknown) => {
@@ -486,10 +488,7 @@ function ActivityPanel({ caseId }: { caseId: string }) {
     const body = draft.trim();
     if (!body || addComment.isPending) return;
     addComment.mutate(body, {
-      onSuccess: (r) => {
-        setBodies((prev) => ({ ...prev, [r.addCaseComment.id]: body }));
-        setDraft("");
-      },
+      onSuccess: () => setDraft(""),
       onError: toastError("Comment failed"),
     });
   }
@@ -499,9 +498,8 @@ function ActivityPanel({ caseId }: { caseId: string }) {
     return nv && typeof nv === "object" ? (nv.comment_id ?? null) : null;
   }
 
-  // The timeline now carries the comment body (case-service joins case_comments),
-  // so it's readable for EVERY comment, not just this session's. Fall back to the
-  // session-local cache only if the join returned nothing (e.g. just-deleted).
+  // The timeline carries the joined live body; the authoritative list backs it
+  // up (and adds edit state). Neither having it means the comment was deleted.
   function commentBodyOf(a: CaseActivity): string | undefined {
     const nv = a.newValue as { body?: string } | null | undefined;
     return nv && typeof nv === "object" && typeof nv.body === "string" ? nv.body : undefined;
@@ -541,10 +539,9 @@ function ActivityPanel({ caseId }: { caseId: string }) {
           {activities.map((a) => {
             const isComment = a.eventType === "comment.added";
             const commentId = isComment ? commentIdOf(a) : null;
-            // Prefer the body the timeline now carries; fall back to the
-            // session-local cache (e.g. an optimistic just-posted comment).
+            const listed = commentId ? commentById.get(commentId) : undefined;
             const cachedBody = isComment
-              ? (commentBodyOf(a) ?? (commentId ? bodies[commentId] : undefined))
+              ? (commentBodyOf(a) ?? listed?.body ?? undefined)
               : undefined;
             const mine = a.actorType === "user" && a.actorId === session.userId;
             const withinWindow =
@@ -581,10 +578,7 @@ function ActivityPanel({ caseId }: { caseId: string }) {
                                 updateComment.mutate(
                                   { id: commentId!, body: editDraft.trim() },
                                   {
-                                    onSuccess: () => {
-                                      setBodies((prev) => ({ ...prev, [commentId!]: editDraft.trim() }));
-                                      setEditingId(null);
-                                    },
+                                    onSuccess: () => setEditingId(null),
                                     onError: toastError("Edit failed"),
                                   },
                                 )
@@ -599,12 +593,10 @@ function ActivityPanel({ caseId }: { caseId: string }) {
                         </div>
                       ) : (
                         <div className="space-y-1">
-                          {cachedBody !== undefined ? (
+                          {cachedBody != null ? (
                             <p className="whitespace-pre-wrap">{cachedBody}</p>
                           ) : (
-                            <p className="italic text-muted-foreground">
-                              Comment (body available at creation time only)
-                            </p>
+                            <p className="italic text-muted-foreground">Comment deleted</p>
                           )}
                           {editable && (
                             <div className="flex gap-2">
@@ -624,14 +616,7 @@ function ActivityPanel({ caseId }: { caseId: string }) {
                                 disabled={deleteComment.isPending}
                                 onClick={() =>
                                   deleteComment.mutate(commentId!, {
-                                    onSuccess: () => {
-                                      setBodies((prev) => {
-                                        const next = { ...prev };
-                                        delete next[commentId!];
-                                        return next;
-                                      });
-                                      push({ title: "Comment deleted", variant: "success" });
-                                    },
+                                    onSuccess: () => push({ title: "Comment deleted", variant: "success" }),
                                     onError: toastError("Delete failed"),
                                   })
                                 }

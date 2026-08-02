@@ -141,7 +141,9 @@ paths:
         "200": { description: case }
         "422": { description: PROPOSAL_FIELD_NOT_ALLOWED }
   /cases/{id}/timeline: { get: { summary: "Merged event+comment timeline (CASE-FR-025)", responses: { "200": { description: page } } } }
-  /cases/{id}/comments: { post: { summary: "Add a comment (CASE-FR-024)", responses: { "201": { description: comment } } } }
+  /cases/{id}/comments:
+    get: { summary: "List non-deleted comments newest-first (?limit, ?before RFC3339) (CASE-FR-024)", responses: { "200": { description: comments } } }
+    post: { summary: "Add a comment (CASE-FR-024)", responses: { "201": { description: comment } } }
   /cases/bulk:
     post:
       summary: "Bulk assign/unassign/resolve/set_severity/add_comment (≤500 ids, partial failure) (CASE-FR-030/031)"

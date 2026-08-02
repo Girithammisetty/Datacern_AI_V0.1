@@ -34,3 +34,6 @@ playwright-live-report/
 # by accident and were untracked to stop the repo growing every rebuild.
 /services/*/server
 mlruns/
+
+# Claude Code agent worktrees (transient per-session checkouts)
+.claude/worktrees/
