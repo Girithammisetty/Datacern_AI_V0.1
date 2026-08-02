@@ -6285,6 +6285,11 @@ export const typeDefs = gql`
     """Lift a spend freeze (ai-gateway DELETE /admin/spend-freezes). Same authz
     split as create. Returns whether anything was actually cleared."""
     clearAiSpendFreeze(scope: String!, tenantId: String): AiSpendFreezeCleared!
+    """Purge the tenant's LLM response cache (ai-gateway DELETE /admin/cache;
+    scope tenant or one workspace). Use after a guardrail/policy change so
+    stale cached answers cannot serve. Returns entries purged. Needs
+    ai.cache.delete."""
+    clearAiCache(scope: String! = "tenant", workspaceId: String): Int!
     """Patch an ai-gateway budget's limit/degrade-threshold/status (ai-gateway
     PATCH /admin/budgets/{id}). Needs ai.budget.update."""
     updateAiBudget(id: ID!, input: PatchAiBudgetInput!): AiBudget!

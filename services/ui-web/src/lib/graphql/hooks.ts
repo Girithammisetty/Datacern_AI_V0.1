@@ -473,6 +473,14 @@ export function useDeleteRun() {
   });
 }
 
+/** Purge the tenant's LLM response cache (returns entries purged). */
+export function useClearAiCache() {
+  return useMutation({
+    mutationFn: (vars: { scope: "tenant" | "workspace"; workspaceId?: string }) =>
+      graphqlRequest<ops.ClearAiCacheResult>(ops.CLEAR_AI_CACHE, vars).then((r) => r.clearAiCache),
+  });
+}
+
 /** Active LLM spend freezes (the emergency brake state). */
 export function useAiSpendFreezes() {
   return useQuery({

@@ -520,6 +520,12 @@ export const FEATURE_GATES = {
   /** Freeze/unfreeze LLM spend (ai-gateway spend kill-switch; matches the
    * downstream require("ai.budget.update") exactly). */
   manageAiSpendFreeze: cap("ai.budget.update"),
+  /** Purge the tenant LLM response cache (ai-gateway DELETE /admin/cache,
+   * ai.cache.delete). ai.cache.* is absent from the canonical rbac catalog
+   * today (catalog.go documents the reconciliation as a follow-up), so the
+   * platform gate is the working path; the capability lights up for tenant
+   * admins when the catalog lands. */
+  clearAiCache: anyOf(platformGate, cap("ai.cache.delete")),
   /** Read live spend against ai-gateway budgets (ai-gateway GET /admin/spend). */
   viewAiSpend: cap("ai.spend.read"),
   /** Read the virtual-key list (ai-gateway GET /admin/keys) — never carries secrets. */

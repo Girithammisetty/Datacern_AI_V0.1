@@ -522,6 +522,13 @@ export const DELETE_RUN = /* GraphQL */ `
 `;
 export interface DeleteRunResult { deleteRun: boolean }
 
+export const CLEAR_AI_CACHE = /* GraphQL */ `
+  mutation ClearAiCache($scope: String!, $workspaceId: String) {
+    clearAiCache(scope: $scope, workspaceId: $workspaceId)
+  }
+`;
+export interface ClearAiCacheResult { clearAiCache: number }
+
 export const AI_SPEND_FREEZES = /* GraphQL */ `
   query AiSpendFreezes {
     aiSpendFreezes { scope reason frozenBy frozenAt }

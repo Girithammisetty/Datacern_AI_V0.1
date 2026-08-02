@@ -3535,6 +3535,9 @@ export const resolvers = {
       return { __typename: "AiSpendFreezeCleared" as const, scope: d.scope, cleared: d.cleared };
     },
 
+    clearAiCache: (_p: unknown, a: { scope: string; workspaceId?: string | null }, ctx: GraphQLContext) =>
+      ctx.clients.aiGateway.clearCache(a.scope as "tenant" | "workspace", a.workspaceId ?? undefined),
+
     updateAiBudget: (
       _p: unknown,
       a: { id: string; input: { limitUsd?: number; degradePct?: number; status?: string } },
