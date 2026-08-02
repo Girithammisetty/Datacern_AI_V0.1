@@ -24,6 +24,7 @@ const (
 	CodeFieldInUse          = "FIELD_IN_USE"
 	CodeCaseLimitExceeded   = "CASE_LIMIT_EXCEEDED"
 	CodeStaleVersion        = "CONFLICT"
+	CodeTrialExpired        = "TRIAL_EXPIRED"
 )
 
 // Error is a coded application error carrying its HTTP status (MASTER-FR-024).
@@ -58,6 +59,16 @@ func EUnauthenticated(msg string) *Error {
 }
 func EPermissionDenied(msg string) *Error {
 	return &Error{Code: CodePermissionDenied, HTTP: http.StatusForbidden, Message: msg}
+}
+
+// ETrialExpired is the COMMERCIAL gate (BRD 66 CPL-FR-022, AC-2): the tenant's
+// trial lapsed and the sweep moved it to suspended_commercial, so value-
+// delivering writes are refused while every read keeps working. Deliberately
+// distinct from EPermissionDenied — the caller HAS the capability, the tenant
+// just has no live entitlement to spend; the stable TRIAL_EXPIRED code is what
+// lets the UI offer "convert" here instead of "ask your admin for access".
+func ETrialExpired(msg string) *Error {
+	return &Error{Code: CodeTrialExpired, HTTP: http.StatusForbidden, Message: msg}
 }
 func EConflict(msg string) *Error {
 	return &Error{Code: CodeConflict, HTTP: http.StatusConflict, Message: msg}

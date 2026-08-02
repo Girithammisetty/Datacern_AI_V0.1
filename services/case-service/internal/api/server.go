@@ -108,7 +108,7 @@ func (s *Server) Router() http.Handler {
 			r.With(s.RequireAction(authz.ActionCaseAssign), s.RequireCaseWorkspace).Post("/{id}/assign", s.handleAssign)
 			r.With(s.RequireAction(authz.ActionCaseAssign), s.RequireCaseWorkspace).Post("/{id}/unassign", s.handleUnassign)
 			r.With(s.RequireAction(authz.ActionCaseWork), s.RequireCaseWorkspace).Post("/{id}/start", s.handleStart)
-			r.With(s.RequireAction(authz.ActionCaseResolve), s.RequireCaseWorkspace).Post("/{id}/resolve", s.handleResolve)
+			r.With(s.RequireAction(authz.ActionCaseResolve), s.RequireCaseWorkspace, s.RequireCommercialActive).Post("/{id}/resolve", s.handleResolve)
 			r.With(s.RequireAction(authz.ActionCaseManage), s.RequireCaseWorkspace).Post("/{id}/reopen", s.handleReopen)
 			r.With(s.RequireAction(authz.ActionCaseManage), s.RequireCaseWorkspace).Post("/{id}/close", s.handleClose)
 			r.With(s.RequireAction(authz.ActionCaseManage), s.RequireCaseWorkspace).Post("/{id}/escalate", s.handleEscalate)
@@ -119,7 +119,7 @@ func (s *Server) Router() http.Handler {
 			// which checks the same ActionProposalApply; no BFF client, UI
 			// route, or service invokes this direct human path. Kept pending a
 			// live-stack regression pass; candidate for removal.
-			r.With(s.RequireAction(authz.ActionProposalApply), s.RequireCaseWorkspace).Post("/{id}/apply-proposal", s.handleApplyProposal)
+			r.With(s.RequireAction(authz.ActionProposalApply), s.RequireCaseWorkspace, s.RequireCommercialActive).Post("/{id}/apply-proposal", s.handleApplyProposal)
 		})
 
 		r.Route("/comments", func(r chi.Router) {
