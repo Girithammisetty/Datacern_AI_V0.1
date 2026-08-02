@@ -115,6 +115,50 @@ func NewBillingPeriod(
 	}
 }
 
+// BillingPeriodRecord is a persisted, closed period joined with its export
+// (the read shape GET /api/v1/billing/periods returns). Export is nil when the
+// period is closed but its artifacts haven't been recorded yet.
+type BillingPeriodRecord struct {
+	ID             uuid.UUID      `json:"id"`
+	TenantID       uuid.UUID      `json:"tenant_id"`
+	Period         string         `json:"period"`
+	Version        int            `json:"version"`
+	RateCardID     uuid.UUID      `json:"rate_card_id"`
+	RateCardVer    int            `json:"rate_card_version"`
+	GrossUSD       float64        `json:"gross_usd"`
+	NetBillableUSD float64        `json:"net_billable_usd"`
+	Status         string         `json:"status"`
+	ClosedAt       time.Time      `json:"closed_at"`
+	ClosedBy       string         `json:"closed_by"`
+	Export         *BillingExport `json:"export,omitempty"`
+}
+
+// BillingExport is the persisted artifact record for a period version.
+type BillingExport struct {
+	JSONLKey        string     `json:"jsonl_key"`
+	JSONLSHA256     string     `json:"jsonl_sha256"`
+	CSVKey          string     `json:"csv_key"`
+	CSVSHA256       string     `json:"csv_sha256"`
+	PushedStatus    *string    `json:"pushed_status,omitempty"`
+	PushedReference *string    `json:"pushed_reference,omitempty"`
+	PushedAt        *time.Time `json:"pushed_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+// Billing-period statuses (design §2.6).
+const (
+	BillingClosed       = "closed"
+	BillingExported     = "exported"
+	BillingExportFailed = "export_failed"
+)
+
+// Billing-export push statuses recorded on billing_exports.pushed_status.
+const (
+	PushPushed        = "pushed"
+	PushNotConfigured = "billing_push_not_configured"
+	PushFailed        = "push_failed"
+)
+
 // BillingPushResult reports what a pusher accepted. Reference is the
 // provider-side batch/reference id when the provider returns one; Accepted is
 // the number of lines/events the provider took. Idempotent is true when the

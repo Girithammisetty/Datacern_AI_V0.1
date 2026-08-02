@@ -280,11 +280,27 @@ The pure, infra-free heart of slice 3 (§2.6/§2.7) is built and unit-tested; th
 
 **Verified (executed here):** `go build ./... && go vet ./...` clean; `make nostub` passed; `go test -short ./...` green, including `internal/billing/export_test.go` (6 tests: keys/checksums, JSONL sort + fields, CSV summary shape, cross-run determinism, version-bump prefix isolation, empty period) and `internal/billing/close_test.go` (8-case gate matrix + idempotency).
 
-**Not built / deferred (needs live Postgres + MinIO — no Docker daemon here):**
-- Store CRUD for `billing_periods`/`billing_exports` (insert at v+1, read prior version, annotate `pushed_status`).
-- The **advisory-lock close job** loop itself: `pg_try_advisory_lock` acquisition + the composed pipeline `FinalizeMonth → ReconciliationStatus gate → Chargeback → NewBillingPeriod → BuildArtifacts → object-store Put → store insert → Pusher.Push`. Every *step* exists and is tested in isolation (`Chargeback`, `NewBillingPeriod`, `BuildArtifacts`, `DecideClose`, `Pusher.Push`); the loop that threads them needs real infra to verify, so it is scoped out rather than written blind.
-- The object-store `Put` adapter for billing artifacts (reuse `valueexport`'s `FSStore`/MinIO shape).
-- `GET /api/v1/billing/periods` (VMB-FR-023).
+### Slice 3 (close loop + store + API) — the infra-coupled shell (2026-08-02)
+
+The DB/object-store shell that threads the pure helpers is now written — build/vet-clean and with an auto-skipping integration test — completing slice 3 to the buildable limit of this environment (no Docker daemon → no live run).
+
+- `internal/store/billing.go` (new) — `MonthFinalized`, `BillingPeriodVersion`, `InsertBillingPeriod` (closes at `bp.Version` + records the export atomically under a per-`(tenant,period)` `pg_advisory_xact_lock` so two replicas can't both insert the same version; the `UNIQUE (tenant_id, period, version)` constraint is the final backstop), `MarkExportPush` (annotates `pushed_status`/`pushed_reference`, never blocks the close), `ListBillingPeriods` (join period+export, newest first — VMB-FR-023). `*store.PG` now satisfies the API `Store` interface's new `ListBillingPeriods`.
+- `internal/billing/objectstore.go` (new) — `ArtifactStore` port (`Put(key, data)`) + `FSArtifactStore` (filesystem, dev/self-host); the prod MinIO adapter wraps go-common/objectstore, mirroring `jobs.MinioBillStore`.
+- `internal/jobs/billing_close.go` (new) — `Runner.CloseBilling(tenant, period)` composes the whole pipeline: `MonthFinalized` + `ReconciliationStatus` → `DecideClose` gate → `Chargeback` → `chargebackToRollup` → `NewBillingPeriod` → `BuildArtifacts` → `Artifacts.Put` (files first) → `InsertBillingPeriod` → `Pusher.Push` → `MarkExportPush`. `CloseAllBilling(period)` sweeps every tenant; `PreviousMonth` targets the just-ended month. Failures degrade safely (a broken push only annotates the export).
+- `internal/api/handlers_billing.go` + route (new) — `GET /api/v1/billing/periods` (`?period`, `?limit`), guarded by `ActionReportRead`, RLS-scoped.
+- `cmd/server/main.go` — constructs `runner.Artifacts` (`BILLING_ARTIFACT_ROOT`, default `/var/lib/datacern/billing`) with a startup log, and adds a **daily** `CloseAllBilling(PreviousMonth(now))` tick to `startJobs` — safe because `DecideClose` no-ops an unfinalized / unsettled / already-closed month.
+
+**Verified (executed here):** `go build ./... && go vet ./...` clean; `make nostub` passed; `go test -short ./...` green, including the new pure-helper tests `internal/jobs/billing_close_test.go` (`PreviousMonth`, `chargebackToRollup`, `rateCardOf`, `pushOutcome`) and `internal/billing/objectstore_test.go` (FS `Put` + version isolation).
+
+**Written but NOT executed (needs live Postgres — no Docker daemon here):**
+- `test/integration/billing_close_test.go` (new: `TestBillingClose_EndToEnd`) drives `Runner.CloseBilling` the way cmd/server's ticker does — seed `governed_decision` usage → refresh rollups → assert an unfinalized month does NOT close → `FinalizeMonth` → close → assert the `billing_periods` row + export + `ListBillingPeriods` + the honest `billing_push_not_configured` annotation → re-run asserts no duplicate version. Confirmed it **SKIPs** here with `real infra unavailable: pg ping … connection refused` (compiles + auto-skips, exactly like `governed_decision_test.go`). Pending live verification.
+- `migrations/000008_billing_periods` applied against a real DB (the DDL mirrors `value_exports`, but its RLS/constraints aren't exercised until the integration test runs).
+
+**Remaining deferred (follow-ons, not this pass):**
+- The **correction path** (`Corrected=true` → v+1): wiring `usage.month_refinalized` / late-adjustment triggers to re-close at v+1. `DecideClose` already handles the decision; the trigger that sets `Corrected` isn't wired.
+- **Allowance drawdown** (net billable < gross): reading the entitlements snapshot (§2.6) to offset included allowance. Until wired, `net_billable_usd == gross_usd` (never a fabricated discount).
+- **`rate_card_version`** threading (Chargeback surfaces the id, not the version — left 0 today).
+- A **live-Stripe** run and a signed billing-artifact **download** endpoint.
 
 ### Slice 1 — what was built (2026-07-25)
 
@@ -336,7 +352,7 @@ The pure, infra-free heart of slice 3 (§2.6/§2.7) is built and unit-tested; th
 
 1. ✅ **Slice 1 — `governed_decision` meter end-to-end** (this pass). Catalog entry + `usage_raw`/rollup migration (§2.2) → agent-runtime payload fields (`decision_latency_ms`, `edit_distance_bucket`, `proposal_kind`; `pack_name` deferred, nullable) → ingest mapping entries (§2.1's filter-based `auto_executed_action` included) → rollup verification (unit-level; integration written, not run — see above). Emission→catalog→ingest→rollup proven on the cheapest meter (no cross-service propagation needed).
 2. **Slice 2 — `usage_decisions` attribution.** `decision_urns[]` propagation (§2.5, both services) + `usage_decisions` DDL + split-insert logic (§2.4) + `GET /api/v1/decisions/costs` (VMB-FR-011). Not started.
-3. 🟡 **Slice 3 (partial) — period close + export.** DDL (`000008_billing_periods`), the pure JSONL/CSV+checksum artifact builder (`BuildArtifacts`, §2.7) and the pure close-gate ordering (`DecideClose`, §2.6) built and unit-tested (2026-08-02, see above). **Remaining:** store CRUD, the advisory-lock close-job loop that threads the (already-tested) steps, the object-store Put adapter, and `billing.export_ready.v1` — all need live Postgres+MinIO.
+3. 🟢 **Slice 3 — period close + export (written; live-run pending).** DDL, the pure artifact builder (`BuildArtifacts`) + close gate (`DecideClose`), AND the infra shell — store CRUD (advisory-lock `InsertBillingPeriod`, `ListBillingPeriods`), the `CloseBilling`/`CloseAllBilling` job loop, the `FSArtifactStore`, `GET /api/v1/billing/periods`, and the daily close tick — all built build/vet-clean (2026-08-02, see above). The end-to-end integration test is written and auto-skips without infra; live-run verification against real Postgres is the only remaining step. **Deferred follow-ons:** correction-path trigger, allowance drawdown, `rate_card_version` threading, `billing.export_ready.v1`.
 4. 🟡 **Slice 4 (partial) — pusher adapters.** `BillingPusher` port + `UnconfiguredPusher` stub + a real **Stripe** adapter (Billing Meter Events) + `BuildPusher` selection, all unit-tested and wired into `cmd/server` startup (2026-08-02, see above). **Remaining:** the close job's post-export `Push` call (blocked on slice 3), `GET /api/v1/billing/periods` (VMB-FR-023), a Lago adapter, and live-Stripe verification.
 
 ### Test plan

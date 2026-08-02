@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/datacern-ai/usage-service/internal/anomaly"
+	"github.com/datacern-ai/usage-service/internal/billing"
 	"github.com/datacern-ai/usage-service/internal/domain"
 	"github.com/datacern-ai/usage-service/internal/recon"
 	"github.com/datacern-ai/usage-service/internal/store"
@@ -41,8 +42,14 @@ type Runner struct {
 	// (honest typed failure, never a fake "pushed") until STRIPE_API_KEY is
 	// set, so the (slice-3) close job can call Push unconditionally and let the
 	// file export stay the source of truth (VMB-FR-022/AC-6). Held here as the
-	// designated call site; the close job that invokes it is not built yet.
+	// designated call site for CloseBilling.
 	Pusher domain.BillingPusher
+
+	// Artifacts persists billing JSONL/CSV exports durably (design §2.7). Nil
+	// is a valid dev/demo state: CloseBilling then records artifact keys in the
+	// DB without writing bytes (a startup warning flags the unconfigured store),
+	// mirroring the Bills nil-is-fine posture above.
+	Artifacts billing.ArtifactStore
 }
 
 func (r *Runner) log() *slog.Logger {
