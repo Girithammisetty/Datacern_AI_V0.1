@@ -455,6 +455,36 @@ export const typeDefs = gql`
     processingMemory: String
   }
 
+  """One provisioning-saga step (identity-service, compensable 7-step saga).
+  status: pending|running|succeeded|failed|compensated; compensation names the
+  recorded rollback path when one ran."""
+  type ProvisioningStep {
+    id: ID!
+    stepIndex: Int!
+    stepName: String!
+    status: String!
+    attempt: Int
+    error: String
+    compensation: String
+    startedAt: String
+    completedAt: String
+  }
+  """createTenant result: the tenant, plus the saga operation id when
+  publish=true started provisioning immediately (202 downstream)."""
+  type CreateTenantResult { tenant: Tenant! operationId: ID }
+  """reactivateTenant result: the tenant plus any config drift detected while
+  it was suspended (passthrough JSON; null when clean)."""
+  type ReactivateTenantResult { tenant: Tenant! drift: JSON }
+  input CreateTenantInput {
+    name: String!
+    displayName: String
+    ownerEmail: String
+    tier: String
+    cloud: String
+    "Start the provisioning saga immediately."
+    publish: Boolean = false
+  }
+
   """
   A tenant + its settings (identity-service GET /tenants/{id}). Settings live on
   the tenant object itself; there is no separate settings resource.
@@ -4507,6 +4537,10 @@ export const typeDefs = gql`
 
     """All tenants (identity-service GET /tenants). Platform-admin only (identity's requireSuperAdmin enforces)."""
     tenants(limit: Int): [Tenant!]!
+    """The provisioning saga's step-by-step state for one tenant
+    (identity-service GET /tenants/{id}/provisioning). Platform operator only
+    (identity requireSuperAdmin downstream)."""
+    tenantProvisioning(id: ID!): [ProvisioningStep!]!
 
     """BRD 66 slice 3 (CPL-FR-033): the tenant's commercial plane (plan,
     trial, effective entitlements) for gating + upsell UI. Reachable by ANY
@@ -5633,6 +5667,33 @@ export const typeDefs = gql`
     presenting the old one starts getting 401s from /token/embed. Tenant admin
     only (identity.tenant.update)."""
     setEmbedConfig(tenantId: ID!, allowedOrigins: [String!]!, idempotencyKey: String): SetEmbedConfigResult!
+    # ---- tenant lifecycle (identity requireSuperAdmin on every one) -----------
+    """Provision a tenant (identity-service POST /tenants; 202+operationId when
+    publish=true). Platform operator only."""
+    createTenant(input: CreateTenantInput!, idempotencyKey: String): CreateTenantResult!
+    """Edit tenant attributes (PATCH /tenants/{id}; passthrough JSON body of
+    the fields to change). Platform operator only."""
+    patchTenant(id: ID!, patch: JSON!): Tenant!
+    """Archive or destroy a tenant (DELETE /tenants/{id}?mode=&force=,
+    IDN-FR-008). mode=archive keeps data recoverable; destroy is terminal and
+    needs force. Platform operator only."""
+    deleteTenant(id: ID!, mode: String!, force: Boolean = false): Tenant!
+    """Start the provisioning saga for a drafted tenant (POST
+    /tenants/{id}/publish, 202). Returns the operation id. Operator only."""
+    publishTenant(id: ID!): ID!
+    """Suspend a tenant — data intact, access off (POST /tenants/{id}/suspend).
+    Operator only."""
+    suspendTenant(id: ID!): Tenant!
+    """Reactivate a suspended tenant; reports config drift detected while
+    suspended (POST /tenants/{id}/reactivate). Operator only."""
+    reactivateTenant(id: ID!): ReactivateTenantResult!
+    """Retry a failed provisioning saga (POST /tenants/{id}/provisioning/retry,
+    202). Returns the operation id. Operator only."""
+    retryTenantProvisioning(id: ID!): ID!
+    """Re-activate a deactivated user (identity-service POST
+    /users/{id}/activate). Needs identity.user.admin."""
+    activateUser(id: ID!): User!
+
     """Register/update the caller tenant's OIDC IdP (BYO-P4, PUT /tenants/self/
     idp). The issuer must be globally unique. Needs the tenant-admin scope."""
     setTenantIdp(input: SetTenantIdpInput!, idempotencyKey: String): TenantIdpConfig!

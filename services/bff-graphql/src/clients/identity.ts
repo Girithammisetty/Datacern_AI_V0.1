@@ -79,6 +79,21 @@ export interface TenantDTO {
   updated_at?: string | null;
 }
 
+/** One provisioning-saga step (identity domain.ProvisioningStep). */
+export interface ProvisioningStepDTO {
+  id: string;
+  tenant_id?: string;
+  workflow_id?: string;
+  step_index: number;
+  step_name: string;
+  status: string;
+  attempt?: number;
+  error?: string;
+  compensation?: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
 /** GET /api/v1/tenants/self — the member-safe subset of the caller's tenant. */
 export interface TenantSelfDTO {
   id?: string;
@@ -269,6 +284,77 @@ export class IdentityClient {
   /** GET /api/v1/tenants/{id} — the tenant object + its settings. */
   tenant(id: string): Promise<TenantDTO> {
     return this.http.get<TenantDTO>(`/api/v1/tenants/${encodeURIComponent(id)}`);
+  }
+
+  // ---- tenant lifecycle (IDN-FR-005..008; identity requireSuperAdmin) ------
+
+  /** POST /api/v1/tenants — provision a tenant (201; 202 + operation_id when
+   * publish=true starts the saga immediately). */
+  async createTenant(
+    body: { name: string; display_name?: string; owner_email?: string; tier?: string; cloud?: string; publish?: boolean },
+    idempotencyKey?: string,
+  ): Promise<{ tenant: TenantDTO; operation_id?: string }> {
+    const r = await this.http.post<TenantDTO | { operation_id: string; tenant: TenantDTO }>(
+      "/api/v1/tenants",
+      { body, idempotencyKey },
+    );
+    return "operation_id" in (r as Record<string, unknown>)
+      ? (r as { operation_id: string; tenant: TenantDTO })
+      : { tenant: r as TenantDTO };
+  }
+
+  /** PATCH /api/v1/tenants/{id} — edit tenant attributes. */
+  patchTenant(id: string, body: Record<string, unknown>): Promise<TenantDTO> {
+    return this.http.patch<TenantDTO>(`/api/v1/tenants/${encodeURIComponent(id)}`, { body });
+  }
+
+  /** DELETE /api/v1/tenants/{id}?mode=archive|destroy&force= (IDN-FR-008). */
+  deleteTenant(id: string, mode: "archive" | "destroy", force = false): Promise<TenantDTO> {
+    return this.http.delete<TenantDTO>(`/api/v1/tenants/${encodeURIComponent(id)}`, {
+      query: { mode, force },
+    });
+  }
+
+  /** POST /api/v1/tenants/{id}/publish (202) — start the provisioning saga. */
+  async publishTenant(id: string): Promise<string> {
+    const r = await this.http.post<{ operation_id: string }>(
+      `/api/v1/tenants/${encodeURIComponent(id)}/publish`, {},
+    );
+    return r.operation_id;
+  }
+
+  /** POST /api/v1/tenants/{id}/suspend — data intact, access off. */
+  suspendTenant(id: string): Promise<TenantDTO> {
+    return this.http.post<TenantDTO>(`/api/v1/tenants/${encodeURIComponent(id)}/suspend`, {});
+  }
+
+  /** POST /api/v1/tenants/{id}/reactivate — returns the tenant + any config
+   * drift detected while suspended. */
+  reactivateTenant(id: string): Promise<{ tenant: TenantDTO; drift?: unknown }> {
+    return this.http.post<{ tenant: TenantDTO; drift?: unknown }>(
+      `/api/v1/tenants/${encodeURIComponent(id)}/reactivate`, {},
+    );
+  }
+
+  /** GET /api/v1/tenants/{id}/provisioning — the saga's step-by-step state. */
+  async provisioningStatus(id: string): Promise<ProvisioningStepDTO[]> {
+    const r = await this.http.get<{ steps: ProvisioningStepDTO[] }>(
+      `/api/v1/tenants/${encodeURIComponent(id)}/provisioning`,
+    );
+    return r.steps ?? [];
+  }
+
+  /** POST /api/v1/tenants/{id}/provisioning/retry (202) — retry a failed saga. */
+  async retryProvisioning(id: string): Promise<string> {
+    const r = await this.http.post<{ operation_id: string }>(
+      `/api/v1/tenants/${encodeURIComponent(id)}/provisioning/retry`, {},
+    );
+    return r.operation_id;
+  }
+
+  /** POST /api/v1/users/{id}/activate — re-activate a deactivated user. */
+  activateUser(id: string): Promise<UserDTO> {
+    return this.http.post<UserDTO>(`/api/v1/users/${encodeURIComponent(id)}/activate`, {});
   }
 
   /** GET /api/v1/tenants/{id}/entitlements (BRD 66 slice 3, CPL-FR-011/033):

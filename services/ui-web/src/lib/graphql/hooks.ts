@@ -486,6 +486,65 @@ export function useClearAiCache() {
   });
 }
 
+/** Provisioning-saga steps for one tenant (operator only). */
+export function useTenantProvisioning(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.tenantProvisioning(id),
+    queryFn: () => graphqlRequest<ops.TenantProvisioningResult>(
+      ops.TENANT_PROVISIONING, { id }).then((r) => r.tenantProvisioning),
+    enabled: enabled && !!id,
+  });
+}
+
+/** Provision a tenant (optionally publish=true to start the saga now). */
+export function useCreateTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; displayName?: string; ownerEmail?: string; tier?: string; cloud?: string; publish?: boolean }) =>
+      graphqlRequest<ops.CreateTenantResult2>(ops.CREATE_TENANT, {
+        input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function usePublishTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.PublishTenantResult>(ops.PUBLISH_TENANT, { id }).then((r) => r.publishTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useSuspendTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.SuspendTenantResult>(ops.SUSPEND_TENANT, { id }).then((r) => r.suspendTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useReactivateTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ReactivateTenantResult>(ops.REACTIVATE_TENANT, { id }).then((r) => r.reactivateTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useRetryTenantProvisioning() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.RetryTenantProvisioningResult>(ops.RETRY_TENANT_PROVISIONING, { id })
+        .then((r) => r.retryTenantProvisioning),
+    onSuccess: (_d, id) => client.invalidateQueries({ queryKey: qk.tenantProvisioning(id) }),
+  });
+}
+
 /** Active LLM spend freezes (the emergency brake state). */
 export function useAiSpendFreezes() {
   return useQuery({

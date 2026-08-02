@@ -2050,6 +2050,18 @@ export interface BatchEvaluateResult {
   results: BatchEvaluateRow[];
 }
 
+export interface ProvisioningStep {
+  id: ID;
+  stepIndex: number;
+  stepName: string;
+  status: string;
+  attempt?: number | null;
+  error?: string | null;
+  compensation?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+}
+
 export interface AiSpendFreeze {
   scope: string;
   reason?: string | null;

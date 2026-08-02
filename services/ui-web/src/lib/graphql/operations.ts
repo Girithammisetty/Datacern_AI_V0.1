@@ -167,6 +167,7 @@ import type {
   DecisionEvaluation,
   AgentChatSession,
   AiSpendFreeze,
+  ProvisioningStep,
   ResolutionRun,
   ResolutionRunDetail,
   MergeCandidate,
@@ -538,6 +539,48 @@ export const CLEAR_AI_CACHE = /* GraphQL */ `
   }
 `;
 export interface ClearAiCacheResult { clearAiCache: number }
+
+const TENANT_LIFECYCLE_FIELDS = `id name displayName status tier cloud ownerEmail`;
+
+export const TENANT_PROVISIONING = /* GraphQL */ `
+  query TenantProvisioning($id: ID!) {
+    tenantProvisioning(id: $id) {
+      id stepIndex stepName status attempt error compensation startedAt completedAt
+    }
+  }
+`;
+export interface TenantProvisioningResult { tenantProvisioning: ProvisioningStep[] }
+
+export const CREATE_TENANT = /* GraphQL */ `
+  mutation CreateTenant($input: CreateTenantInput!, $idempotencyKey: String!) {
+    createTenant(input: $input, idempotencyKey: $idempotencyKey) {
+      tenant { ${TENANT_LIFECYCLE_FIELDS} } operationId
+    }
+  }
+`;
+export interface CreateTenantResult2 { createTenant: { tenant: Tenant; operationId: string | null } }
+
+export const PUBLISH_TENANT = /* GraphQL */ `
+  mutation PublishTenant($id: ID!) { publishTenant(id: $id) }
+`;
+export interface PublishTenantResult { publishTenant: string }
+
+export const SUSPEND_TENANT = /* GraphQL */ `
+  mutation SuspendTenant($id: ID!) { suspendTenant(id: $id) { ${TENANT_LIFECYCLE_FIELDS} } }
+`;
+export interface SuspendTenantResult { suspendTenant: Tenant }
+
+export const REACTIVATE_TENANT = /* GraphQL */ `
+  mutation ReactivateTenant($id: ID!) {
+    reactivateTenant(id: $id) { tenant { ${TENANT_LIFECYCLE_FIELDS} } drift }
+  }
+`;
+export interface ReactivateTenantResult { reactivateTenant: { tenant: Tenant; drift?: unknown } }
+
+export const RETRY_TENANT_PROVISIONING = /* GraphQL */ `
+  mutation RetryTenantProvisioning($id: ID!) { retryTenantProvisioning(id: $id) }
+`;
+export interface RetryTenantProvisioningResult { retryTenantProvisioning: string }
 
 export const AI_SPEND_FREEZES = /* GraphQL */ `
   query AiSpendFreezes {

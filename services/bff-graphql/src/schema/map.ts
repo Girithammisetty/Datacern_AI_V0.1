@@ -68,7 +68,7 @@ import type {
   ExternalAgentKeyDTO, CreatedExternalAgentKeyDTO,
   // BRD 66 slice 3 (CPL-FR-033): commercial plane (plan/trial/entitlements).
   TenantEntitlementsDTO,
-} from "../clients/identity.js";
+ ProvisioningStepDTO,} from "../clients/identity.js";
 import type {
   WorkspaceDTO, GroupDTO, MemberDTO, RoleDTO, ExplainAuthzDTO,
   // Tier 4b: identity/rbac admin (content grants + bulk membership).
@@ -289,6 +289,21 @@ export function mapRegisteredExternalAgent(ctx: GraphQLContext, d: CreatedExtern
     __typename: "RegisteredExternalAgent" as const,
     externalAgent: mapExternalAgent(ctx, d.key),
     apiKey: d.plaintext,
+  };
+}
+
+export function mapProvisioningStep(d: ProvisioningStepDTO) {
+  return {
+    __typename: "ProvisioningStep" as const,
+    id: d.id,
+    stepIndex: d.step_index,
+    stepName: d.step_name,
+    status: d.status,
+    attempt: d.attempt ?? null,
+    error: d.error ?? null,
+    compensation: d.compensation ?? null,
+    startedAt: d.started_at ?? null,
+    completedAt: d.completed_at ?? null,
   };
 }
 

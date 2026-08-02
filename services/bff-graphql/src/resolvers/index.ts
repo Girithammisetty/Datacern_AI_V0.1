@@ -68,6 +68,7 @@ import {
   mapDecisionModel, mapBatchEvaluate, mapOutcomeLabel, mapDecisionEffectiveness,
   mapAgentChatSession, mapDecisionEvaluation,
   mapAiSpendFreeze,
+  mapProvisioningStep,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
@@ -812,6 +813,9 @@ export const resolvers = {
 
     // Cross-tenant list for the platform-admin all-tenants view. identity's
     // requireSuperAdmin gate enforces (a tenant admin's JWT is rejected there).
+    tenantProvisioning: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.identity.provisioningStatus(a.id).then((rows) => rows.map(mapProvisioningStep)),
+
     tenants: (_p: unknown, a: { limit?: number }, ctx: GraphQLContext) =>
       ctx.clients.identity
         .tenants(a.limit ?? 200)
@@ -2402,6 +2406,54 @@ export const resolvers = {
       const d = await ctx.clients.identity.setEmbedConfig(a.tenantId, a.allowedOrigins, a.idempotencyKey);
       return { __typename: "SetEmbedConfigResult" as const, embedSecret: d.embed_secret, allowedOrigins: d.allowed_origins };
     },
+
+    // ---- tenant lifecycle (identity requireSuperAdmin downstream) -----------
+    createTenant: async (
+      _p: unknown,
+      a: { input: { name: string; displayName?: string | null; ownerEmail?: string | null; tier?: string | null; cloud?: string | null; publish?: boolean | null }; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.identity.createTenant({
+        name: a.input.name,
+        display_name: a.input.displayName ?? undefined,
+        owner_email: a.input.ownerEmail ?? undefined,
+        tier: a.input.tier ?? undefined,
+        cloud: a.input.cloud ?? undefined,
+        publish: a.input.publish ?? undefined,
+      }, a.idempotencyKey);
+      return {
+        __typename: "CreateTenantResult" as const,
+        tenant: mapTenant(ctx, d.tenant),
+        operationId: d.operation_id ?? null,
+      };
+    },
+
+    patchTenant: async (_p: unknown, a: { id: string; patch: Record<string, unknown> }, ctx: GraphQLContext) =>
+      mapTenant(ctx, await ctx.clients.identity.patchTenant(a.id, a.patch)),
+
+    deleteTenant: async (_p: unknown, a: { id: string; mode: string; force?: boolean }, ctx: GraphQLContext) =>
+      mapTenant(ctx, await ctx.clients.identity.deleteTenant(a.id, a.mode as "archive" | "destroy", a.force ?? false)),
+
+    publishTenant: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.identity.publishTenant(a.id),
+
+    suspendTenant: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapTenant(ctx, await ctx.clients.identity.suspendTenant(a.id)),
+
+    reactivateTenant: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.identity.reactivateTenant(a.id);
+      return {
+        __typename: "ReactivateTenantResult" as const,
+        tenant: mapTenant(ctx, d.tenant),
+        drift: d.drift ?? null,
+      };
+    },
+
+    retryTenantProvisioning: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.identity.retryProvisioning(a.id),
+
+    activateUser: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapUser(ctx, await ctx.clients.identity.activateUser(a.id)),
 
     setTenantIdp: async (
       _p: unknown,
