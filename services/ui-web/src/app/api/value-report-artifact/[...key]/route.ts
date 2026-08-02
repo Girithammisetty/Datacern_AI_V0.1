@@ -9,6 +9,7 @@
  * content type all stay downstream.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionToken } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,19 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ key: string[] }> },
 ) {
+  // A platform session is required so ui-web never acts as an open relay for a
+  // leaked presigned link — the same guard query-export uses. Signature/expiry
+  // validation still stays downstream; this only refuses anonymous callers.
+  const session = await getSessionToken();
+  if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+
   const { key } = await params;
+  // Reject dot-segments before assembling the path: encodeURIComponent leaves
+  // "." untouched, so a "%2e%2e" catch-all segment would otherwise survive into
+  // the URL and normalize to a path-traversal within usage-service.
+  if (key.some((seg) => seg === "." || seg === ".." || seg.includes("/") || seg.includes("\\"))) {
+    return NextResponse.json({ error: "invalid artifact key" }, { status: 400 });
+  }
   const path = key.map(encodeURIComponent).join("/");
 
   let upstream: Response;

@@ -16,6 +16,26 @@ export const dynamic = "force-dynamic";
 
 const CHART_URL = process.env.CHART_URL ?? "http://localhost:9007";
 
+/** Hosts the artifact fetch may egress to. Always chart-service itself (the
+ * FSStore-relative branch); an optional comma-separated allowlist
+ * (ARTIFACT_S3_HOSTS) admits the S3/object-store endpoint chart-service
+ * presigns against. An absolute artifact_url on any other host is refused, so
+ * a chart-service compromised into returning an attacker URL cannot turn this
+ * same-origin route into an SSRF egress. */
+function artifactHostAllowed(url: URL): boolean {
+  const allow = new Set<string>();
+  try {
+    allow.add(new URL(CHART_URL).host);
+  } catch {
+    /* CHART_URL always parses in practice; ignore. */
+  }
+  for (const h of (process.env.ARTIFACT_S3_HOSTS ?? "").split(",")) {
+    const t = h.trim();
+    if (t) allow.add(t);
+  }
+  return allow.has(url.host);
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ operationId: string }> },
@@ -50,10 +70,16 @@ export async function GET(
 
   // 2. Stream the signed artifact. A relative FSStore path resolves against
   //    chart-service; an S3 presigned URL is already absolute.
-  const artifactUrl = new URL(op.artifact_url, CHART_URL).toString();
+  const artifactUrl = new URL(op.artifact_url, CHART_URL);
+  if (!artifactHostAllowed(artifactUrl)) {
+    // The artifact_url is minted server-side, so this only trips if
+    // chart-service were induced to store an off-allowlist host — refuse
+    // rather than let ui-web fetch it.
+    return NextResponse.json({ error: "artifact host not allowed" }, { status: 502 });
+  }
   let upstream: Response;
   try {
-    upstream = await fetch(artifactUrl);
+    upstream = await fetch(artifactUrl.toString());
   } catch {
     return NextResponse.json({ error: "artifact store unreachable" }, { status: 502 });
   }
