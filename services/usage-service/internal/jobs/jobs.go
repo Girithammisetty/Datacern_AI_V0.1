@@ -34,6 +34,15 @@ type Runner struct {
 	// BillPrefix is the object-storage prefix bills are listed under. Empty
 	// defaults to "bills/".
 	BillPrefix string
+
+	// Pusher forwards a closed BillingPeriod to an external rating system
+	// (Stripe, …) — slice 4 of the value-metering-billing-export design
+	// (§2.8). It is always non-nil: BuildPusher returns an UnconfiguredPusher
+	// (honest typed failure, never a fake "pushed") until STRIPE_API_KEY is
+	// set, so the (slice-3) close job can call Push unconditionally and let the
+	// file export stay the source of truth (VMB-FR-022/AC-6). Held here as the
+	// designated call site; the close job that invokes it is not built yet.
+	Pusher domain.BillingPusher
 }
 
 func (r *Runner) log() *slog.Logger {

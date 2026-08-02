@@ -249,7 +249,26 @@ Invoice rendering, payment collection, dunning, tax (external billing system, un
 
 ## 3. Implementation & Test
 
-**Status: slice 1 (`governed_decision` meter end-to-end) implemented and unit-tested; slices 2-4 not started.** §2 remains the design for slices 2-4.
+**Status: slice 1 (`governed_decision` meter end-to-end) implemented and unit-tested; slice 4's billing-push seam (port + Stripe adapter) scaffolded and unit-tested; slices 2-3 not started.** §2 remains the design for slices 2-3.
+
+### Slice 4 (partial) — billing-push seam + Stripe adapter (2026-08-02)
+
+The `BillingPusher` port and the first real adapter (Stripe) are built and unit-tested ahead of slice 3's close job, exactly as §2.8 designs the honest-stub triad. This is the "metering → billing" seam (GTM roadmap §6 B2), scaffolded against Stripe.
+
+**usage-service:**
+- `internal/domain/billing.go` (new) — the Go instance of the `GpuTrainer`/`NotConfigured`/`Unconfigured` triad (§2.8, first in the repo): `BillingPusher` port (`Push(ctx, BillingPeriod) (BillingPushResult, error)`), `ErrBillingPushNotConfigured` sentinel, `BillingPushNotConfiguredError{Adapter,Reason}` (matches `errors.Is`), and `UnconfiguredPusher` (a real object that fails honestly, never a fake "pushed"). Also `BillingPeriod`/`BillingLine` (the in-memory shape slice 3's close job will produce) and a pure `NewBillingPeriod(...)` that aggregates priced rollup rows (the output of the existing `store.Chargeback`, §2.6) into one sorted, summed line per meter — deterministic for replay safety (VMB-FR-021).
+  - Note: the port returns `(BillingPushResult, error)` rather than §2.8's sketched bare `error` + artifact-URL params. Stripe meter events need the period's quantities, not a URL, and the result (`Accepted`, `Reference`, `Idempotent`) is what the close job records on `billing_exports.pushed_status`. This is a typed evolution of the sketch, not a departure from its intent.
+- `internal/billing/stripe.go` (new) — `StripePusher` posts one **Stripe Billing Meter Event** per billable, non-zero line: `event_name`, `identifier` (the stable `<tenant>:<period>:v<version>:<meter>` dedup key), `payload[stripe_customer_id]`, `payload[value]=<quantity>`. It sends **quantities only** — Stripe's own meter aggregation + price config does the money, so usage-service "never touches money" (§1a). The HTTP call is behind an injectable `HTTPDoer` (real `*http.Client` in prod, a fake in tests) and only fires when `STRIPE_API_KEY` is set — no SDK dependency added, no secret in the repo, no live call under test (README "No credential-gated exceptions": payload-shaping is fully unit-tested; the live call is operator-activated). A `CustomerResolver` maps tenant → Stripe `cus_…`; a tenant with no mapping fails honestly for that tenant (typed not-configured error), never invents a customer. Request-level `Idempotency-Key` header + the event `identifier` make a retried push a no-op in Stripe.
+- `internal/billing/pusher.go` (new) — `BuildPusher(cfg)` selection (mirrors agent-runtime's `build_trainer()`): returns the `StripePusher` when `BILLING_PUSHER=stripe` + `STRIPE_API_KEY` are set, else an `UnconfiguredPusher`. `FromEnv(get)` reads `BILLING_PUSHER`, `STRIPE_API_KEY`, `STRIPE_API_BASE`, `STRIPE_METER_EVENTS` (JSON or `k=v,k=v`, default `governed_decision`), `STRIPE_CUSTOMER_MAP` (JSON tenant→customer); malformed maps degrade to unconfigured rather than crashing boot.
+- `internal/jobs/jobs.go` — `Runner.Pusher domain.BillingPusher` (the designated call site for slice 3's close job; always non-nil).
+- `cmd/server/main.go` — constructs `runner.Pusher = billing.BuildPusher(billing.FromEnv(os.Getenv))` at boot and logs its state (a loud "unconfigured (export-only)" warning by default, mirroring the provider-bill `MINIO_ENDPOINT` warning), so the billing posture is visible at startup even before a close job calls `Push`.
+
+**Verified (executed here):** `go build ./... && go vet ./...` clean; `make nostub` passed; `go test -short ./...` all packages ok, including the new `internal/domain/billing_test.go` (4 tests: aggregation/sort/sum, unpriced-row, empty, unconfigured-fails-honestly) and `internal/billing/{stripe,pusher}_test.go` (14 tests: one-event-per-billable-line with exact form-body + headers, identifier stability across runs, zero-quantity/non-billable no-ops, missing-customer honest failure, Stripe API-error message surfacing, transport-error propagation, custom meter allowlist ordering, `BuildPusher` selection paths, `FromEnv`/parser robustness, and a wired end-to-end push through a fake doer).
+
+**Not built / deferred (honest):**
+- **Slice 3 (close job + export + DDL) is still not built** — so nothing *calls* `Pusher.Push` in production yet. `NewBillingPeriod` is unit-tested against synthetic rollup rows; the `billing_periods`/`billing_exports` tables, the advisory-lock close job, and the JSONL/CSV export (§2.6/§2.7) remain slice 3.
+- **No live Stripe verification.** The adapter is proven against a fake `HTTPDoer`; a real `sk_test_…` key + a Stripe test meter would confirm the wire format end-to-end. Command to verify once a test key is available: set `BILLING_PUSHER=stripe STRIPE_API_KEY=sk_test_… STRIPE_CUSTOMER_MAP='{"<tenant>":"cus_…"}'` and drive a `BillingPeriod` through `StripePusher.Push` against `https://api.stripe.com` (or Stripe's test-mode base).
+- **Slice 2** (`usage_decisions` attribution, `decision_urns[]` propagation) unchanged — not started.
 
 ### Slice 1 — what was built (2026-07-25)
 
@@ -302,7 +321,7 @@ Invoice rendering, payment collection, dunning, tax (external billing system, un
 1. ✅ **Slice 1 — `governed_decision` meter end-to-end** (this pass). Catalog entry + `usage_raw`/rollup migration (§2.2) → agent-runtime payload fields (`decision_latency_ms`, `edit_distance_bucket`, `proposal_kind`; `pack_name` deferred, nullable) → ingest mapping entries (§2.1's filter-based `auto_executed_action` included) → rollup verification (unit-level; integration written, not run — see above). Emission→catalog→ingest→rollup proven on the cheapest meter (no cross-service propagation needed).
 2. **Slice 2 — `usage_decisions` attribution.** `decision_urns[]` propagation (§2.5, both services) + `usage_decisions` DDL + split-insert logic (§2.4) + `GET /api/v1/decisions/costs` (VMB-FR-011). Not started.
 3. **Slice 3 — period close + export.** `billing_periods`/`billing_exports` DDL, advisory-lock close job (§2.6), JSONL/CSV export with checksums (§2.7), `billing.export_ready.v1`. Not started.
-4. **Slice 4 — pusher adapters.** `BillingPusher` port + `UnconfiguredPusher` stubs (§2.8) wired into the close job's post-export step; `GET /api/v1/billing/periods` (VMB-FR-023). Not started.
+4. 🟡 **Slice 4 (partial) — pusher adapters.** `BillingPusher` port + `UnconfiguredPusher` stub + a real **Stripe** adapter (Billing Meter Events) + `BuildPusher` selection, all unit-tested and wired into `cmd/server` startup (2026-08-02, see above). **Remaining:** the close job's post-export `Push` call (blocked on slice 3), `GET /api/v1/billing/periods` (VMB-FR-023), a Lago adapter, and live-Stripe verification.
 
 ### Test plan
 

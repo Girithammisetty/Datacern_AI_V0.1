@@ -29,6 +29,8 @@ import (
 
 	"github.com/datacern-ai/usage-service/internal/api"
 	"github.com/datacern-ai/usage-service/internal/authz"
+	"github.com/datacern-ai/usage-service/internal/billing"
+	"github.com/datacern-ai/usage-service/internal/domain"
 	"github.com/datacern-ai/usage-service/internal/entitlements"
 	"github.com/datacern-ai/usage-service/internal/events"
 	"github.com/datacern-ai/usage-service/internal/ingest"
@@ -183,6 +185,20 @@ func main() {
 		}
 	} else {
 		slog.Warn("provider-bill object store: MINIO_ENDPOINT unset, reconciliation job has no bill source (dev-only; the variance-block gate stays inert -- always 'pending' -- until a real bucket is configured)")
+	}
+
+	// Billing pusher (revenue side, GTM B2 / value-metering-billing-export
+	// slice 4): forwards closed periods' billable meter quantities to an
+	// external rating system. Defaults to an honest UnconfiguredPusher — the
+	// file/CSV export is the source of truth and a provider push is opt-in
+	// (set BILLING_PUSHER=stripe + STRIPE_API_KEY + STRIPE_CUSTOMER_MAP). The
+	// close job that calls Push is not built yet (slice 3); this constructs and
+	// logs the pusher's configured state so the posture is visible at boot.
+	runner.Pusher = billing.BuildPusher(billing.FromEnv(os.Getenv))
+	if _, unconfigured := runner.Pusher.(*domain.UnconfiguredPusher); unconfigured {
+		slog.Warn("billing pusher: unconfigured (export-only); set BILLING_PUSHER=stripe + STRIPE_API_KEY + STRIPE_CUSTOMER_MAP to push metered usage to Stripe")
+	} else {
+		slog.Info("billing pusher: configured", "adapter", env("BILLING_PUSHER", "none"))
 	}
 
 	startJobs(ctx, runner)
