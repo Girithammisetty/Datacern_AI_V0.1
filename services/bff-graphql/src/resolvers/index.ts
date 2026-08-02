@@ -6314,7 +6314,7 @@ export const resolvers = {
           config: {
             entityType?: string;
             deterministicKeys?: string[][];
-            scoringFields?: Array<{ column: string; weight?: number }>;
+            scoringFields?: Array<{ column: string; weight?: number; comparator?: string }>;
             blockingFields?: string[];
             autoMergeThreshold?: number;
             reviewThreshold?: number;
@@ -6334,7 +6334,11 @@ export const resolvers = {
           config: {
             entity_type: cfg.entityType,
             deterministic_keys: cfg.deterministicKeys ?? [],
-            scoring_fields: (cfg.scoringFields ?? []).map((f) => ({ column: f.column, weight: f.weight })),
+            scoring_fields: (cfg.scoringFields ?? []).map((f) => ({
+              column: f.column,
+              weight: f.weight,
+              comparator: f.comparator,
+            })),
             blocking_fields: cfg.blockingFields ?? [],
             auto_merge_threshold: cfg.autoMergeThreshold,
             review_threshold: cfg.reviewThreshold,

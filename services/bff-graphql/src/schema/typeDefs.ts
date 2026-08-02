@@ -6101,7 +6101,11 @@ export const typeDefs = gql`
     versionNo: Int!
     icebergTable: String!
   }
-  input ScoringFieldInput { column: String! weight: Float = 1.0 }
+  """A field compared during probabilistic scoring. \`comparator\`: dice
+  (default, free text) | jaro_winkler (short names + transpositions) | phonetic
+  (Soundex sounds-alike) | exact (normalized equality) | numeric (magnitude).
+  An unknown value falls back to dice downstream — never rejected."""
+  input ScoringFieldInput { column: String! weight: Float = 1.0 comparator: String = "dice" }
   "A resolution config the steward runs (deterministic keys + probabilistic scoring)."
   input ResolutionConfigInput {
     entityType: String = "entity"

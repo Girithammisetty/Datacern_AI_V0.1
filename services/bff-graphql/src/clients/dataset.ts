@@ -167,6 +167,8 @@ export interface LineageDTO {
 export interface ScoringFieldDTO {
   column: string;
   weight?: number;
+  /** dice (default) | jaro_winkler | phonetic | exact | numeric. */
+  comparator?: string;
 }
 
 /** Resolution config the steward runs (dataset-service ResolutionConfigIn). */
