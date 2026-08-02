@@ -17,7 +17,7 @@ function downstream() {
       return {
         status: 200,
         body: { data: {
-          dataset_id: "ds-1", entity_type: "claimant", record_count: 14,
+          dataset_id: "ds-1", entity_type: "claimant", ontology_linked: true, record_count: 14,
           resolved_entity_count: 12, merged_cluster_count: 1, review_candidate_count: 1,
           run_id: "run-9", config_id: "cfg-9", config_version: 1,
         } },
@@ -101,14 +101,15 @@ describe("entity-resolution resolvers (BRD 56 steward surface)", () => {
         resolveEntities(datasetId:"ds-1", input:{
           pkColumn:"claim_id",
           config:{ entityType:"claimant", deterministicKeys:[["policy_no"]], autoMergeThreshold:0.85, reviewThreshold:0.6 }
-        }) { datasetId entityType recordCount resolvedEntityCount mergedClusterCount reviewCandidateCount runId configVersion }
+        }) { datasetId entityType ontologyLinked recordCount resolvedEntityCount mergedClusterCount reviewCandidateCount runId configVersion }
       }` },
       { contextValue: ctx },
     );
     const body = res.body.kind === "single" ? res.body.singleResult : null;
     expect(body?.errors).toBeUndefined();
     expect(body?.data?.resolveEntities).toMatchObject({
-      datasetId: "ds-1", entityType: "claimant", recordCount: 14,
+      // WS2: entity_type resolved against the workspace ontology registry.
+      datasetId: "ds-1", entityType: "claimant", ontologyLinked: true, recordCount: 14,
       resolvedEntityCount: 12, mergedClusterCount: 1, reviewCandidateCount: 1,
       runId: "run-9", configVersion: 1,
     });

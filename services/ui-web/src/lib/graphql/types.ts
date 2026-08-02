@@ -2356,6 +2356,10 @@ export interface ResolutionRunDetail extends ResolutionRun {
 export interface ResolveEntitiesResult {
   datasetId: ID;
   entityType: string;
+  /** WS2: true when entityType is a declared ontology type in the dataset's
+   * workspace (the knowledge-spine join key); false = not in the domain model
+   * yet — honest metadata, not an error. */
+  ontologyLinked: boolean;
   recordCount: number;
   resolvedEntityCount: number;
   mergedClusterCount: number;

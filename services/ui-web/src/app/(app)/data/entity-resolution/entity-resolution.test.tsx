@@ -149,4 +149,36 @@ describe("EntityResolutionPage (BRD 56 steward surface)", () => {
     await selectDataset();
     expect(await screen.findByText(/No resolution runs yet/i)).toBeInTheDocument();
   });
+
+  it("surfaces the WS2 ontology link on a run result (and the honest miss)", async () => {
+    // The knowledge-spine join: entityType resolved against the workspace
+    // ontology registry. First an unlinked run — the miss reads as guidance.
+    let linked = false;
+    handler = (doc: string) => {
+      if (doc.includes("mutation ResolveEntities")) {
+        return { resolveEntities: {
+          datasetId: "ds-1", entityType: "claimant", ontologyLinked: linked,
+          recordCount: 14, resolvedEntityCount: 12, mergedClusterCount: 1,
+          reviewCandidateCount: 1, runId: "run-9", configId: "cfg-9", configVersion: 1,
+        } };
+      }
+      return baseHandler(doc);
+    };
+    const user = await selectDataset();
+    await user.selectOptions(await screen.findByLabelText("Primary key column"), "claim_id");
+    await user.type(screen.getByPlaceholderText(/e\.g\./), "policy_no");
+    await user.click(screen.getByRole("button", { name: /Run resolution/i }));
+
+    const result = await screen.findByTestId("er-run-result");
+    expect(result.textContent).toMatch(/isn't declared in the workspace ontology/);
+
+    // Re-run once the type IS declared -> the link is stated.
+    linked = true;
+    await user.click(screen.getByRole("button", { name: /Run resolution/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("er-run-result").textContent).toMatch(
+        /Linked to ontology type/,
+      ),
+    );
+  });
 });
