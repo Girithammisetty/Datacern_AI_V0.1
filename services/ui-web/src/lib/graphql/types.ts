@@ -483,6 +483,47 @@ export interface AuditEventsFilter {
   resourceUrn?: string;
 }
 
+/** Query.auditAgentActivity variables — dual-attribution activity for ONE
+ * agent (agentId required; oboUserId narrows to one on-behalf-of user). */
+export interface AuditAgentActivityFilter {
+  agentId: string;
+  oboUserId?: string;
+  from?: string;
+  to?: string;
+  includeAutonomous?: boolean;
+}
+
+/** Query.auditEvent — one event + its hash-chain position. */
+export interface AuditEventDetail {
+  event: AuditEvent;
+  chainDate: string;
+  chainSeq: number;
+  sealed: boolean;
+}
+
+/** Query.auditExports row — one sealed WORM export batch (manifest). */
+export interface AuditExportBatch {
+  date: string;
+  revision: number;
+  uri: string;
+  manifestSha256: string;
+  chainHead: string;
+  rowCount: number;
+  sealedAt?: string | null;
+  downloadUrl?: string | null;
+}
+
+export type AuditExportFormat = "CSV" | "NDJSON";
+
+/** Query.auditExportFile — descriptor for the raw CSV/NDJSON download; the
+ * file itself streams through the same-origin /api/audit-export proxy. */
+export interface AuditExportFile {
+  downloadPath: string;
+  format: AuditExportFormat;
+  from: string;
+  to: string;
+}
+
 export interface Profile {
   rowCount?: number | null;
   columnCount?: number | null;

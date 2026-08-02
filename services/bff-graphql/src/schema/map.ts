@@ -72,6 +72,8 @@ import type {
 } from "../clients/rbac.js";
 import type {
   AuditEventDTO,
+  AuditEventDetailDTO,
+  AuditExportBatchDTO,
   ChainVerifyResultDTO,
   ComplianceJobDTO,
   EvidencePackDTO,
@@ -391,6 +393,33 @@ export function mapAuditEvent(ctx: GraphQLContext, d: AuditEventDTO) {
     payload: d.payload ?? null,
     chainSeq: d.chain_seq ?? null,
     chainHash: d.chain_hash ?? null,
+  };
+}
+
+/** GET /audit/events/{event_id}: the event plus its chain position + sealed
+ * flag (whether the day is verifiable against its WORM manifest). */
+export function mapAuditEventDetail(ctx: GraphQLContext, d: AuditEventDetailDTO) {
+  return {
+    __typename: "AuditEventDetail" as const,
+    event: mapAuditEvent(ctx, d.event),
+    chainDate: d.chain_date,
+    chainSeq: d.chain_seq,
+    sealed: d.sealed,
+  };
+}
+
+/** GET /exports row: one sealed WORM export batch (manifest). */
+export function mapAuditExportBatch(d: AuditExportBatchDTO) {
+  return {
+    __typename: "AuditExportBatch" as const,
+    date: d.date,
+    revision: d.revision,
+    uri: d.uri,
+    manifestSha256: d.manifest_sha256,
+    chainHead: d.chain_head,
+    rowCount: d.row_count,
+    sealedAt: d.sealed_at ?? null,
+    downloadUrl: d.download_url ?? null,
   };
 }
 

@@ -18,6 +18,8 @@ import type {
   CreateCasesInput,
   CreateCasesResult,
   AuditEventsFilter,
+  AuditAgentActivityFilter,
+  AuditExportFormat,
   CaseFilter,
   CasePatchInput,
   Connection,
@@ -3975,6 +3977,57 @@ export function useAuditEvents(vars: AuditEventsFilter = {}) {
         ...vars,
       }).then((r) => r.auditEvents),
     getNextPageParam: (last) => (last.pageInfo.hasMore ? last.pageInfo.nextCursor : undefined),
+  });
+}
+
+/** Dual-attribution activity for ONE agent (audit-service GET
+ * /audit/agent-activity): which agent acted, on whose behalf. Bounded at 200
+ * rows (no cursor — the downstream never paginates), so a plain query, not an
+ * infinite one. Disabled until an agentId is entered. */
+export function useAuditAgentActivity(vars: AuditAgentActivityFilter) {
+  return useQuery({
+    queryKey: qk.auditAgentActivity(vars),
+    queryFn: () =>
+      graphqlRequest<ops.AuditAgentActivityResult>(ops.AUDIT_AGENT_ACTIVITY, { ...vars }).then(
+        (r) => r.auditAgentActivity,
+      ),
+    enabled: !!vars.agentId,
+  });
+}
+
+/** One audit event by id + its chain position (audit-service GET
+ * /audit/events/{event_id}) — the /admin/audit/events/{id} deep link. Null
+ * for cross-tenant and nonexistent alike (the downstream 404s both). */
+export function useAuditEvent(id: string | null) {
+  return useQuery({
+    queryKey: qk.auditEvent(id ?? ""),
+    queryFn: () => graphqlRequest<ops.AuditEventResult>(ops.AUDIT_EVENT, { id }).then((r) => r.auditEvent),
+    enabled: !!id,
+  });
+}
+
+/** Previously generated (sealed) WORM export batches (audit-service GET
+ * /exports), optionally narrowed to one YYYY-MM-DD day. */
+export function useAuditExports(date?: string) {
+  return useQuery({
+    queryKey: qk.auditExports(date),
+    queryFn: () =>
+      graphqlRequest<ops.AuditExportsResult>(ops.AUDIT_EXPORTS, { date: date || undefined }).then(
+        (r) => r.auditExports,
+      ),
+  });
+}
+
+/** Descriptor for a raw CSV/NDJSON audit export of the current filters — the
+ * BFF validates the window and returns the same-origin /api/audit-export
+ * download path; the file itself never traverses GraphQL. */
+export function useAuditExportFile(vars: AuditEventsFilter & { format?: AuditExportFormat } = {}) {
+  return useQuery({
+    queryKey: qk.auditExportFile(vars),
+    queryFn: () =>
+      graphqlRequest<ops.AuditExportFileResult>(ops.AUDIT_EXPORT_FILE, { ...vars }).then(
+        (r) => r.auditExportFile,
+      ),
   });
 }
 

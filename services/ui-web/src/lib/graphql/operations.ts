@@ -10,6 +10,9 @@ import type {
   AgentFleetSummary,
   AlgorithmTemplate,
   AuditEvent,
+  AuditEventDetail,
+  AuditExportBatch,
+  AuditExportFile,
   Case,
   CaseComment,
   CaseActivity,
@@ -3518,6 +3521,80 @@ export const AUDIT_EVENTS = /* GraphQL */ `
 `;
 export interface AuditEventsResult {
   auditEvents: Connection<AuditEvent>;
+}
+
+/** Dual-attribution activity for one agent (audit-service GET
+ * /audit/agent-activity). Bounded at 200 rows — hasMore is always false. */
+export const AUDIT_AGENT_ACTIVITY = /* GraphQL */ `
+  query AuditAgentActivity(
+    $agentId: ID!, $oboUserId: String, $from: DateTime, $to: DateTime,
+    $includeAutonomous: Boolean
+  ) {
+    auditAgentActivity(
+      agentId: $agentId, oboUserId: $oboUserId, from: $from, to: $to,
+      includeAutonomous: $includeAutonomous
+    ) {
+      nodes {
+        eventId urn eventType tenantId actorType actorId viaAgentId viaAgentVersion
+        action resourceUrn occurredAt ingestedAt traceId payloadDigest bodyWithheld chainSeq
+      }
+      pageInfo { nextCursor hasMore }
+    }
+  }
+`;
+export interface AuditAgentActivityResult {
+  auditAgentActivity: Connection<AuditEvent>;
+}
+
+/** One event by id + its chain position (audit-service GET
+ * /audit/events/{event_id}); null for cross-tenant/nonexistent alike. */
+export const AUDIT_EVENT = /* GraphQL */ `
+  query AuditEvent($id: ID!) {
+    auditEvent(id: $id) {
+      event {
+        eventId urn eventType tenantId actorType actorId viaAgentId viaAgentVersion
+        action resourceUrn occurredAt ingestedAt traceId payloadDigest bodyWithheld
+        payload chainSeq chainHash
+      }
+      chainDate
+      chainSeq
+      sealed
+    }
+  }
+`;
+export interface AuditEventResult {
+  auditEvent: AuditEventDetail | null;
+}
+
+/** Previously generated (sealed) WORM export batches (audit-service GET /exports). */
+export const AUDIT_EXPORTS = /* GraphQL */ `
+  query AuditExports($date: String) {
+    auditExports(date: $date) {
+      date revision uri manifestSha256 chainHead rowCount sealedAt downloadUrl
+    }
+  }
+`;
+export interface AuditExportsResult {
+  auditExports: AuditExportBatch[];
+}
+
+/** Raw CSV/NDJSON export descriptor — the file streams through the
+ * same-origin /api/audit-export proxy, never through GraphQL. */
+export const AUDIT_EXPORT_FILE = /* GraphQL */ `
+  query AuditExportFile(
+    $from: DateTime, $to: DateTime, $eventType: String, $action: String,
+    $actorId: String, $actorType: String, $resourceUrn: String, $format: AuditExportFormat
+  ) {
+    auditExportFile(
+      from: $from, to: $to, eventType: $eventType, action: $action,
+      actorId: $actorId, actorType: $actorType, resourceUrn: $resourceUrn, format: $format
+    ) {
+      downloadPath format from to
+    }
+  }
+`;
+export interface AuditExportFileResult {
+  auditExportFile: AuditExportFile;
 }
 
 export type {

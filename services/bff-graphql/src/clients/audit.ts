@@ -43,6 +43,42 @@ export interface AuditSearchQuery {
   cursor?: string;
 }
 
+/** Filters supported by GET /api/v1/audit/agent-activity. `agentId` is
+ * required by the backend; `from`/`to` are optional RFC3339 (the backend
+ * defaults to its max 92-day window). Results are capped at 200 rows and the
+ * route never paginates (`page.has_more` is always false). */
+export interface AuditAgentActivityQuery {
+  agentId: string;
+  oboUserId?: string;
+  from?: string;
+  to?: string;
+  includeAutonomous?: boolean;
+}
+
+/** GET /api/v1/audit/events/{event_id} response (no envelope): the event plus
+ * its hash-chain position and whether its chain-day has been sealed by the
+ * WORM export (i.e. is verifiable against an Object-Lock manifest). */
+export interface AuditEventDetailDTO {
+  event: AuditEventDTO;
+  chain_date: string;
+  chain_seq: number;
+  sealed: boolean;
+}
+
+/** One sealed WORM export batch (GET /api/v1/exports row — audit-service
+ * pgstore.Manifest projection). `sealed_at` is RFC3339; `download_url` is a
+ * presigned manifest link, only present when signing succeeded. */
+export interface AuditExportBatchDTO {
+  date: string;
+  revision: number;
+  uri: string;
+  manifest_sha256: string;
+  chain_head: string;
+  row_count: number;
+  sealed_at?: string | null;
+  download_url?: string;
+}
+
 /** POST /api/v1/audit/verify response (chain.VerifyResult, no envelope). */
 export interface ChainVerifyResultDTO {
   valid: boolean;
@@ -162,6 +198,43 @@ export class AuditClient {
         cursor: q.cursor,
       },
     });
+  }
+
+  /** GET /api/v1/audit/agent-activity — dual-attribution activity for ONE
+   * agent (which agent acted, on whose behalf). Without \`oboUserId\` it is
+   * "everything this agent did" (all OBO users); \`includeAutonomous\` adds
+   * rows with no human principal. Capped at 200 rows, never paginated. Needs
+   * audit.event.read. */
+  agentActivity(q: AuditAgentActivityQuery): Promise<Page<AuditEventDTO>> {
+    return this.http.get<Page<AuditEventDTO>>("/api/v1/audit/agent-activity", {
+      query: {
+        agent_id: q.agentId,
+        obo_user_id: q.oboUserId,
+        from: q.from,
+        to: q.to,
+        include_autonomous: q.includeAutonomous ? "true" : undefined,
+      },
+    });
+  }
+
+  /** GET /api/v1/audit/events/{event_id} — one event + its chain position.
+   * Cross-tenant and nonexistent are both 404 (MASTER-FR-003 masking). Needs
+   * audit.event.read. */
+  event(id: string): Promise<AuditEventDetailDTO> {
+    return this.http.get<AuditEventDetailDTO>(`/api/v1/audit/events/${encodeURIComponent(id)}`);
+  }
+
+  // NOTE: GET /api/v1/audit/export (audit.event.export) deliberately has no
+  // method here — it STREAMS a CSV/NDJSON file (up to 100k rows), which must
+  // never be buffered through the BFF as a GraphQL blob. The file is served by
+  // ui-web's same-origin proxy (src/app/api/audit-export/route.ts, mirroring
+  // case-export); the BFF only exposes the descriptor (Query.auditExportFile).
+
+  /** GET /api/v1/exports — previously generated (sealed) WORM export batches,
+   * optionally narrowed to one YYYY-MM-DD day. Bounded list, never paginated.
+   * Needs audit.export.read. */
+  listExports(date?: string): Promise<Page<AuditExportBatchDTO>> {
+    return this.http.get<Page<AuditExportBatchDTO>>("/api/v1/exports", { query: { date } });
   }
 
   /** POST /api/v1/audit/verify — real chain-integrity check for one tenant-day.

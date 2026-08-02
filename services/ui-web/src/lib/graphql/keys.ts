@@ -160,6 +160,10 @@ export const qk = {
   // Tier 4b: identity/rbac admin — effective access lookup per resource URN.
   contentGrants: (resourceUrn: string) => ["admin", "contentGrants", resourceUrn] as const,
   auditEvents: (filters: unknown) => ["admin", "auditEvents", filters] as const,
+  auditAgentActivity: (filters: unknown) => ["admin", "auditAgentActivity", filters] as const,
+  auditEvent: (id: string) => ["admin", "auditEvent", id] as const,
+  auditExports: (date?: string) => ["admin", "auditExports", date ?? null] as const,
+  auditExportFile: (vars: unknown) => ["admin", "auditExportFile", vars] as const,
   agentKillSwitches: () => ["admin", "agentKillSwitches"] as const,
   toolKillSwitches: () => ["admin", "toolKillSwitches"] as const,
   memories: (filters: unknown) => ["admin", "memories", filters] as const,

@@ -41,6 +41,7 @@ import {
   mapSemanticModel,
   mapDatasetSchema, mapSemanticModelSummary, mapSemanticModelVersion, mapSemanticCompileResult,
   mapWorkspace, mapGroup, mapGroupMember, mapRole, mapAuthzExplanation, mapServiceAccount, mapTenant, mapAuditEvent,
+  mapAuditEventDetail, mapAuditExportBatch,
   mapTenantCommercial, EMPTY_TENANT_COMMERCIAL,
   // Tier 4b: identity/rbac admin (lifecycle, roles, grants, bulk membership).
   mapCreatedServiceAccount, mapEffectiveAccessEntry, mapContentGrant, mapBulkGroupMembershipResult,
@@ -892,6 +893,74 @@ export const resolvers = {
         limit, cursor,
       });
       return toConnection(page, (d) => mapAuditEvent(ctx, d));
+    },
+
+    // Dual attribution (AUD-FR-033): everything one agent did, on whose behalf.
+    // The downstream caps at 200 rows and never paginates (has_more:false).
+    auditAgentActivity: async (
+      _p: unknown,
+      a: { agentId: string; oboUserId?: string; from?: string; to?: string; includeAutonomous?: boolean },
+      ctx: GraphQLContext,
+    ) => {
+      const page = await ctx.clients.audit.agentActivity({
+        agentId: a.agentId, oboUserId: a.oboUserId, from: a.from, to: a.to,
+        includeAutonomous: a.includeAutonomous ?? false,
+      });
+      return toConnection(page, (d) => mapAuditEvent(ctx, d));
+    },
+
+    auditEvent: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.audit.event(a.id).then((d) => mapAuditEventDetail(ctx, d))),
+
+    auditExports: async (_p: unknown, a: { date?: string }, ctx: GraphQLContext) => {
+      const page = await ctx.clients.audit.listExports(a.date);
+      return page.data.map(mapAuditExportBatch);
+    },
+
+    // Raw CSV/NDJSON export descriptor. The file itself streams downstream →
+    // ui-web (/api/audit-export proxy) and never traverses the BFF; this
+    // resolver only validates the window against audit-service's REAL rules
+    // (parseSearch: from/to required, ≤92 days) and builds the querystring the
+    // proxy forwards verbatim (snake_case, matching GET /audit/export).
+    auditExportFile: (
+      _p: unknown,
+      a: {
+        from?: string; to?: string; eventType?: string; action?: string;
+        actorId?: string; actorType?: string; resourceUrn?: string; format?: string;
+      },
+      _ctx: GraphQLContext,
+    ) => {
+      const to = a.to ?? new Date().toISOString();
+      const from = a.from ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const fromMs = Date.parse(from);
+      const toMs = Date.parse(to);
+      if (Number.isNaN(fromMs) || Number.isNaN(toMs)) {
+        throw gqlError(ErrorCode.VALIDATION_FAILED, "auditExportFile: from/to must be RFC3339");
+      }
+      if (toMs < fromMs) {
+        throw gqlError(ErrorCode.VALIDATION_FAILED, "auditExportFile: to must be >= from");
+      }
+      if (toMs - fromMs > 92 * 24 * 60 * 60 * 1000) {
+        throw gqlError(ErrorCode.VALIDATION_FAILED, "auditExportFile: time range exceeds 92 days");
+      }
+      const format = a.format === "NDJSON" ? "NDJSON" : "CSV";
+      const qs = new URLSearchParams({ from, to, format: format.toLowerCase() });
+      if (a.eventType) qs.set("event_type", a.eventType);
+      if (a.action) qs.set("action", a.action);
+      if (a.actorId) qs.set("actor_id", a.actorId);
+      if (a.actorType) qs.set("actor_type", a.actorType);
+      if (a.resourceUrn) {
+        // Mirror auditEvents: resource filters are prefix matches in the UI.
+        qs.set("resource_urn", a.resourceUrn);
+        qs.set("resource_match", "prefix");
+      }
+      return {
+        __typename: "AuditExportFile" as const,
+        downloadPath: `/api/audit-export?${qs.toString()}`,
+        format,
+        from,
+        to,
+      };
     },
 
     complianceOperation: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>

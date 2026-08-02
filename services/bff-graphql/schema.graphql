@@ -703,6 +703,61 @@ type AuditEventConnection {
   pageInfo: PageInfo!
 }
 
+"""
+One audit event with its hash-chain position (audit-service GET
+/audit/events/{event_id}). `sealed` is true once the event's chain-day has
+been sealed by the daily WORM export — the record is then verifiable against
+its Object-Lock manifest.
+"""
+type AuditEventDetail {
+  event: AuditEvent!
+  """YYYY-MM-DD chain-day the event was sequenced into."""
+  chainDate: String!
+  chainSeq: Int!
+  sealed: Boolean!
+}
+
+"""
+One sealed WORM export batch (audit-service GET /exports, AUD-FR-023): a
+chain-day's tamper-evident manifest in Object-Lock storage. `downloadUrl`
+is a presigned manifest link (absent when signing was unavailable).
+"""
+type AuditExportBatch {
+  """YYYY-MM-DD chain-day the batch covers."""
+  date: String!
+  """
+  Manifest revision for the day (re-seals after supplements increment it).
+  """
+  revision: Int!
+  """The immutable s3:// object URI of the manifest."""
+  uri: String!
+  manifestSha256: String!
+  chainHead: String!
+  rowCount: Int!
+  sealedAt: DateTime
+  downloadUrl: String
+}
+
+enum AuditExportFormat {
+  CSV
+  NDJSON
+}
+
+"""
+Descriptor for a raw audit-trail file export (audit-service GET
+/audit/export, capability audit.event.export — a streaming CSV/NDJSON
+download of up to 100k rows). The file body never traverses GraphQL:
+`downloadPath` is the same-origin ui-web proxy route (/api/audit-export)
+that streams it from audit-service with the caller's session JWT. `from`/
+`to` echo the validated window the link will export.
+"""
+type AuditExportFile {
+  downloadPath: String!
+  format: AuditExportFormat!
+  from: DateTime!
+  to: DateTime!
+}
+
 enum SiemExportFormat {
   CEF
   LEEF
@@ -5104,6 +5159,41 @@ type Query {
   days (audit enforces a 92-day max window). Filters are exact-match.
   """
   auditEvents(from: DateTime, to: DateTime, eventType: String, action: String, actorId: String, actorType: String, resourceUrn: String, first: Int = 50, after: String): AuditEventConnection!
+  """
+  Dual-attribution activity for ONE agent (audit-service GET
+  /audit/agent-activity): every event the agent performed, each row carrying
+  who it acted on behalf of (viaAgentId = the agent, actorId = the human
+  principal on OBO rows). `oboUserId` narrows to a single on-behalf-of
+  user; `includeAutonomous` adds rows with no human principal. `from`/
+  `to` default to the backend's max 92-day window. Capped at 200 rows,
+  newest first — the downstream route never paginates, so pageInfo.hasMore
+  is always false. Needs audit.event.read.
+  """
+  auditAgentActivity(agentId: ID!, oboUserId: String, from: DateTime, to: DateTime, includeAutonomous: Boolean = false): AuditEventConnection!
+  """
+  One audit event by id with its chain position (audit-service GET
+  /audit/events/{event_id}). Null for cross-tenant and nonexistent alike —
+  the downstream 404s both identically (MASTER-FR-003). Needs
+  audit.event.read.
+  """
+  auditEvent(id: ID!): AuditEventDetail
+  """
+  Previously generated WORM export batches (audit-service GET /exports):
+  the sealed per-day Object-Lock manifests, optionally narrowed to one
+  YYYY-MM-DD day. Bounded list — the downstream route never paginates.
+  Needs audit.export.read.
+  """
+  auditExports(date: String): [AuditExportBatch!]!
+  """
+  Descriptor for a raw audit-trail export download (audit-service GET
+  /audit/export — streaming CSV/NDJSON, capability audit.event.export). The
+  BFF validates the window against the downstream's real rules (from/to
+  required there, max 92 days; defaults to the last 7 days) and returns the
+  same-origin `downloadPath` that ui-web's zero-logic proxy
+  (/api/audit-export) streams the file through — the body itself is never
+  proxied through GraphQL. Filters mirror auditEvents.
+  """
+  auditExportFile(from: DateTime, to: DateTime, eventType: String, action: String, actorId: String, actorType: String, resourceUrn: String, format: AuditExportFormat = CSV): AuditExportFile!
   """
   Poll an async compliance-pack build job (audit-service GET
   /operations/{id}). Needs audit.compliance.read.
