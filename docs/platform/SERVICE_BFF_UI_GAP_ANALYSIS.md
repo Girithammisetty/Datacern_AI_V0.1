@@ -1,7 +1,7 @@
 # Service → BFF → UI gap analysis
 
 **Scope:** every HTTP route registered by the 21 domain services, classified by how — or whether —
-it reaches the user. **Generated:** 2026-08-02 against `claude/datacern-ai-capabilities-p7q6a7`.
+it reaches the user. **Generated:** 2026-08-02 (rev 2, post-closures) against `claude/datacern-ai-capabilities-p7q6a7`.
 
 Companion to [`PLATFORM_ARCHITECTURE.md`](PLATFORM_ARCHITECTURE.md) §3. This is a *coverage* audit, not a
 defect list: an endpoint in the GAP column is built and tested downstream — it simply has no path to a user.
@@ -10,11 +10,11 @@ defect list: an endpoint in the GAP column is built and tested downstream — it
 
 ## 1. Summary
 
-**661 routes.** 459 reach the browser through the GraphQL BFF, 18 through a
+**663 routes.** 464 reach the browser through the GraphQL BFF, 18 through a
 same-origin Next.js route handler, 65 are service-to-service or machine surfaces that
-*should* not be fronted — and **119 have no path to a user at all.**
+*should* not be fronted — and **116 have no path to a user at all.**
 
-Of the 596 user-facing routes, **80% are reachable.**
+Of the 598 user-facing routes, **81% are reachable.**
 
 The gap is not spread evenly. It clusters almost entirely in **write, lifecycle and admin control planes**;
 read paths are well covered. Three services carry over half of it: agent-runtime, identity-service and
@@ -22,8 +22,8 @@ memory-service. The recurring shape is: **the read is exposed, the control is no
 
 | Service | BFF | UI-direct | Internal | **Gap** | User-facing coverage |
 |---|---:|---:|---:|---:|---:|
-| `agent-runtime` | 28 | 1 | 6 | **26** | 53% |
 | `identity-service` | 28 | 8 | 20 | **26** | 58% |
+| `agent-runtime` | 32 | 1 | 6 | **23** | 59% |
 | `memory-service` | 5 | 0 | 1 | **13** | 28% |
 | `chart-service` | 17 | 0 | 1 | **7** | 71% |
 | `usage-service` | 20 | 0 | 0 | **6** | 77% |
@@ -35,7 +35,7 @@ memory-service. The recurring shape is: **the read is exposed, the control is no
 | `pipeline-orchestrator` | 25 | 0 | 2 | **4** | 86% |
 | `ingestion-service` | 39 | 1 | 2 | **3** | 93% |
 | `semantic-service` | 26 | 0 | 4 | **3** | 90% |
-| `case-service` | 36 | 3 | 2 | **2** | 95% |
+| `case-service` | 37 | 3 | 2 | **2** | 95% |
 | `dataset-service` | 22 | 0 | 8 | **2** | 92% |
 | `rbac-service` | 31 | 0 | 6 | **2** | 94% |
 | `tool-plane` | 16 | 0 | 0 | **2** | 89% |
@@ -43,7 +43,7 @@ memory-service. The recurring shape is: **the read is exposed, the control is no
 | `eval-service` | 33 | 0 | 1 | **0** | 100% |
 | `inference-service` | 18 | 0 | 1 | **0** | 100% |
 | `realtime-hub` | 0 | 5 | 3 | **0** | 100% |
-| **total** | **459** | **18** | **65** | **119** | **80%** |
+| **total** | **464** | **18** | **65** | **116** | **81%** |
 
 ---
 
@@ -90,7 +90,7 @@ mint goes through a Next route (`src/app/api/rt/ticket/route.ts`).
 
 ---
 
-## 4. The gap: 119 endpoints with no path to a user
+## 4. The gap: 116 endpoints with no path to a user
 
 Ordered by product impact. Each row is an endpoint that exists, is authorized, and is tested downstream.
 
@@ -130,18 +130,6 @@ The Control Tower can kill an agent but cannot publish, canary, promote or roll 
 | `POST /api/v1/registry/rollouts` | agent-runtime | Start a canary/shadow/pinned rollout. |
 | `POST /api/v1/registry/rollouts/{}/promote` | agent-runtime | Promote a canary to stable. |
 | `POST /api/v1/registry/rollouts/{}/rollback` | agent-runtime | Roll a rollout back. |
-
-### Decision outcome monitoring — 3 endpoints
-
-*BRD 55 — marked `increment 1 BUILT + live-verified`*
-
-A built, verified capability with no BFF field and no UI. Outcome labelling and decision-effectiveness KPIs are unreachable.
-
-| Endpoint | Service | What it does |
-|---|---|---|
-| `GET /api/v1/decision-effectiveness` | agent-runtime | Decided-vs-realized agreement sliced by decision type / producer. |
-| `GET /api/v1/decisions/{}/outcome` | agent-runtime | Read the realized outcome attached to one decision. |
-| `POST /api/v1/decisions/{}/outcome` | agent-runtime | Attach a realized outcome (the human-labelling path BRD 55 inc-1 built). |
 
 ### Decision-table evaluation — 1 endpoint
 
@@ -377,8 +365,8 @@ Individually small; listed for completeness.
 
 ## 5. Layer B — schema fields with no UI consumer
 
-The BFF exposes **184 queries** and **263 mutations**. Sixteen root fields are never selected by any of the
-431 UI operations:
+The BFF exposes **187 queries** and **264 mutations**. Sixteen root fields are never selected by the
+UI operation set:
 
 **Queries (14)** — `workspace`, `group`, `chart`, `verifiedQuery`, `pipelineRun`, `evalDataset`, `evalCase`,
 `evalGatesByDigest`, `caseStream`, `ingestionSchedule`, `inferenceSchedule`, `reportSubscription`, `budget`,
@@ -392,30 +380,27 @@ different: both are real capabilities with no button.
 
 ---
 
-## 6. Layer C — reverse gaps: the BFF wants data the services do not expose
+## 6. Layer C — reverse gaps: CLOSED
 
-Two, both documented honestly in the schema rather than papered over. These are the cheapest fixes in this
-document — one downstream route each, unblocking UI that already exists.
+The first revision of this audit found two reverse gaps — places where the BFF wanted data no downstream
+route provided, both documented honestly in the schema rather than papered over. Both are now closed:
 
-1. **No route for live rollout state** (`schema.graphql:4806`). `AgentFleetRollout` carries a deliberate
-   `UNKNOWN` member because only `PINNED` is derivable, from `TenantAgentConfig.pinnedVersion`. `CANARY` and
-   `SHADOW` cannot be told apart from `STABLE`. The Control Tower's rollout column is structurally unable to
-   tell the truth until agent-runtime adds `GET /registry/rollouts`. *(Note the symmetry with §4: the three
-   rollout **writes** exist and are unexposed; the **read** does not exist at all.)*
-2. **No list-comments route** (`schema.graphql:2231`, `src/clients/case.ts:47`). case-service exposes
-   `POST /cases/{id}/comments` but no list; a comment body is available only on the create response and the
-   timeline carries ids only. `caseId`, `authorId` and `createdAt` are null on the update response because
-   `PATCH /comments/{cid}` echoes just `{id, body}`.
+1. **Live rollout state** — agent-runtime gained `GET /registry/rollouts`; the fleet resolver derives
+   `PINNED`/`CANARY`/`SHADOW`/`STABLE` from the pin plus the active rollout record. `UNKNOWN` remains only
+   as an honest degradation when the rollouts read itself fails.
+2. **List comments** — case-service gained `GET /cases/{id}/comments`, and `PATCH /comments/{cid}` now
+   echoes the full comment. `Query.caseComments` feeds the case detail page; the session-local body cache
+   and its placeholder are gone.
 
 ---
 
 ## 7. Suggested sequence
 
-| # | Work | Why first |
+| # | Work | Status / why |
 |---|---|---|
-| 1 | `GET /registry/rollouts` | One route; removes a self-documented `UNKNOWN` from the Control Tower. |
-| 2 | `GET /cases/{id}/comments` | One route; fixes a null-riddled type the UI already renders. |
-| 3 | Decision outcome monitoring → BFF + UI | A built, live-verified BRD with zero surface — the cheapest *new* capability in the repo. |
+| 1 | `GET /registry/rollouts` | **DONE** — Control Tower derives real rollout state. |
+| 2 | `GET /cases/{id}/comments` | **DONE** — comments listable; PATCH echoes the full comment. |
+| 3 | Decision outcome monitoring → BFF + UI | **DONE** — effectiveness panel on Decision Tables; outcome recording on decided proposals. |
 | 4 | Memory corpora + policy admin | The erasure/PII/retention governance story is only half-clickable. |
 | 5 | Agent registry lifecycle | The Control Tower can kill but not publish, canary or roll back. |
 | 6 | Learning-loop cockpit | The largest gap and the closest to the product thesis. Worth sequencing after the GPU leg lands — promote/demote without a trainer is a half-page. |
