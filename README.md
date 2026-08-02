@@ -1,6 +1,6 @@
 # Datacern
 
-Multi-tenant, multi-cloud, **agentic-AI-native** ML platform for governed decisioning. Built as ~23 independently-deployable services
+Multi-tenant, multi-cloud, **agentic-AI-native** ML platform for governed decisioning. Built as ~24 independently-deployable services
 behind one GraphQL BFF and one web app, with a governance fabric (RLS tenancy,
 RBAC/OPA, four-eyes proposals, immutable audit) woven through every plane.
 
@@ -52,7 +52,8 @@ single source of truth for the CI build/test matrix and the Helm chart.
 | [agent-runtime](services/agent-runtime/README.md) | Py | 8306 | Agent graphs, runs, proposal emission |
 | [ai-gateway](services/ai-gateway/README.md) | Py | 8312 | The single choke point for every LLM/embedding call |
 | [memory-service](services/memory-service/README.md) | Py | 8307 | Governed, scoped agent memory + retrieval |
-| [tool-plane](services/tool-plane/README.md) | Go | 8310/8311 | Tool registry + MCP gateway (two deployables, one context) |
+| [tool-registry](services/tool-plane/README.md) | Go | 8310 | Tool catalog, versions, tenant enablement, BYO submissions |
+| [mcp-gateway](services/tool-plane/README.md) | Go | 8311 | The MCP server every agent tool call passes through (spec `2025-06-18`) |
 
 ### Casework, packs & edge
 
@@ -76,7 +77,8 @@ Datacern_AI_V0.1/
     local/                  up.sh / down.sh — boot the full stack locally
     e2e/                    end-to-end journey driver
     terraform/, helm/       per-cloud (AWS/GCP/Azure) deploy
-  docs/           brd/ (service specs), design/ (feature notes), platform/ (architecture)
+  docs/           brd/ (service specs) · architecture/ · platform/ · design/
+                  initiatives/ (full-lifecycle change docs) · security/ · demo/
   Makefile
 ```
 
@@ -102,12 +104,19 @@ pagination, outbox events, and OTel. Repo-specific rules live in
 
 ## Build status
 
-The platform has grown well past the original 22 Core services (BRDs 01–22): all
-23 services above are built, and capability delivery now extends through the
-vertical packs and later BRDs (24–56 — ML-engineer agent, custom agents, decision
-modeling, outcome monitoring, entity resolution, and the pack ecosystem). See
-[`docs/brd/`](docs/brd/) for the current spec set and [`docs/design/`](docs/design/)
+The platform has grown past the original 22 Core services specified in BRDs 01–22:
+**24 deployables** are built (the 22 above plus `tool-plane`'s two binaries), and
+capability delivery now runs through **72 BRDs** and the vertical pack fleet —
+ML-engineer agent, custom agents, decision modeling, outcome monitoring, entity
+resolution, the pack ecosystem, and the GTM/commercial increments (BRDs 66–72).
+See [`docs/brd/`](docs/brd/) for the spec set and [`docs/design/`](docs/design/)
 for feature design notes.
+
+**What is not built** is stated with the same precision: no customers, no
+production cloud deployment, no SOC 2 / HITRUST, and no third-party penetration
+test. The full list lives in
+[`docs/DATACERN_PARTNER_BRIEFING.md`](docs/DATACERN_PARTNER_BRIEFING.md) §3 and
+[`docs/security/SECURITY_POSTURE.md`](docs/security/SECURITY_POSTURE.md).
 
 The release-gating end-to-end journey lives in [`deploy/e2e/`](deploy/e2e/) and
 the live-stack Playwright suite in `services/ui-web/tests-live/` — both exercise

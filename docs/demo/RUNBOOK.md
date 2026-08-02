@@ -2,7 +2,7 @@
 
 **What this is:** every step a real person performs, from a cold laptop to a
 closed governed decision, verified live on 2026-07-24 against the real stack
-(23 services, real Postgres/Kafka/Iceberg/OpenSearch, real Ollama LLM — no
+(24 services, real Postgres/Kafka/Iceberg/OpenSearch, real Ollama LLM — no
 mocks, no stubs).
 
 **Hero use case:** `card-disputes` — Reg E / Reg Z dispute operations.

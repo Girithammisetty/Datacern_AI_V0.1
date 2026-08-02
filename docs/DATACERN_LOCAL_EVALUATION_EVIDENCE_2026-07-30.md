@@ -12,7 +12,7 @@ which tiers could run (see §5); it does not soften any claim in §1–§4.
 
 ---
 
-## 1. Full test sweep — all 23 services
+## 1. Full test sweep — all 24 services
 
 **3,029 tests passed; zero product-code failures.**
 
@@ -194,7 +194,7 @@ Stated plainly, because a diligence reader will ask:
 
 ## 6. Bottom line
 
-- 3,029 tests green across 23 services in three languages; the only failures
+- 3,029 tests green across 24 services in three languages; the only failures
   anywhere are 3 environment-blocked tests with a proven external cause.
 - The three demo-critical workflows — **train-to-registry**, **intent
   routing**, and **pack fleet coherence** — were proven by *execution* in this

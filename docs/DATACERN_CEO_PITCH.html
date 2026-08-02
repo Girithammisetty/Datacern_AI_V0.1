@@ -1,0 +1,348 @@
+<title>Datacern AI — the governed half of healthcare AI</title>
+
+<style>
+  :root{
+    --paper:#F4F6F1; --bar:#E7EDE2; --rule:#CBD4C6;
+    --ink:#171C17; --ink-2:#5A6559; --ink-3:#828C80;
+    --accent:#1B4D3E; --accent-soft:#DCE8DF;
+    --gap:#8C4A2F; --gap-soft:#F0E3DC;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ui-serif,serif;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+    --measure:66ch;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#12160F; --bar:#191E15; --rule:#2E362A;
+      --ink:#E8EDE4; --ink-2:#9CA898; --ink-3:#6E7A6A;
+      --accent:#8CC7A4; --accent-soft:#1C2A21;
+      --gap:#D9A283; --gap-soft:#2A1F19;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#12160F; --bar:#191E15; --rule:#2E362A;
+    --ink:#E8EDE4; --ink-2:#9CA898; --ink-3:#6E7A6A;
+    --accent:#8CC7A4; --accent-soft:#1C2A21;
+    --gap:#D9A283; --gap-soft:#2A1F19;
+  }
+  :root[data-theme="light"]{
+    --paper:#F4F6F1; --bar:#E7EDE2; --rule:#CBD4C6;
+    --ink:#171C17; --ink-2:#5A6559; --ink-3:#828C80;
+    --accent:#1B4D3E; --accent-soft:#DCE8DF;
+    --gap:#8C4A2F; --gap-soft:#F0E3DC;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--serif); font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding:0 24px 96px}
+
+  /* ---- gutter + column grid ---- */
+  .row{display:grid; grid-template-columns:150px minmax(0,1fr); gap:36px; align-items:start}
+  .mark{
+    font-family:var(--sans); font-size:11.5px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--ink-3); line-height:1.5;
+    padding-top:.55em; border-top:1px solid var(--rule);
+  }
+  .col{max-width:var(--measure)}
+  .col.wide{max-width:none}
+  @media (max-width:820px){
+    .row{grid-template-columns:1fr; gap:12px}
+    .mark{border-top:none; padding-top:0}
+  }
+
+  /* ---- masthead ---- */
+  .head{padding:72px 0 40px; border-bottom:2px solid var(--ink)}
+  .eyebrow{
+    font-family:var(--sans); font-size:11.5px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 22px;
+  }
+  h1{
+    font-size:clamp(2.1rem,5.2vw,3.35rem); line-height:1.1; margin:0 0 .5em;
+    font-weight:600; letter-spacing:-.015em; text-wrap:balance; max-width:18ch;
+  }
+  .standfirst{font-size:1.2rem; color:var(--ink-2); max-width:52ch; margin:0}
+
+  section{padding:56px 0; border-bottom:1px solid var(--rule)}
+  h2{
+    font-size:1.55rem; font-weight:600; line-height:1.22; letter-spacing:-.01em;
+    margin:0 0 .7em; text-wrap:balance;
+  }
+  h3{
+    font-family:var(--sans); font-size:12px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-2); margin:34px 0 12px; font-weight:600;
+  }
+  p{margin:0 0 1.05em}
+  a{color:var(--accent)}
+  strong{font-weight:600}
+
+  .lede{font-size:1.28rem; line-height:1.5; color:var(--ink)}
+  .pull{
+    font-size:1.42rem; line-height:1.38; margin:1.4em 0; padding-left:20px;
+    border-left:3px solid var(--accent); color:var(--ink); text-wrap:balance;
+  }
+  .note{font-size:.94rem; color:var(--ink-2)}
+
+  /* ---- greenbar tables ---- */
+  .scroll{overflow-x:auto; margin:1.5em 0; border-block:1px solid var(--rule)}
+  table{border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.45}
+  th{
+    font-family:var(--sans); font-size:10.5px; letter-spacing:.11em; text-transform:uppercase;
+    color:var(--ink-2); text-align:left; font-weight:600;
+    padding:12px 16px; border-bottom:1px solid var(--ink-3); white-space:nowrap;
+  }
+  td{padding:12px 16px; vertical-align:top; border-bottom:1px solid var(--rule)}
+  tbody tr:nth-child(odd){background:var(--bar)}
+  tbody tr:last-child td{border-bottom:none}
+  td.num{font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+  code,.code{
+    font-family:var(--mono); font-size:.86em; background:var(--bar);
+    padding:.12em .38em; border:1px solid var(--rule); border-radius:2px;
+  }
+
+  /* ---- status marks ---- */
+  .tag{
+    font-family:var(--sans); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    font-weight:600; padding:.28em .6em; border-radius:2px; white-space:nowrap; display:inline-block;
+  }
+  .tag.built{background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent)}
+  .tag.absent{background:var(--gap-soft); color:var(--gap); border:1px solid var(--gap)}
+
+  ul{margin:0 0 1.05em; padding-left:1.15em}
+  li{margin-bottom:.5em}
+  li::marker{color:var(--ink-3)}
+
+  /* ---- ask cards ---- */
+  .asks{display:grid; gap:0; margin:1.6em 0; border-top:1px solid var(--ink-3)}
+  .ask{padding:22px 0; border-bottom:1px solid var(--rule); display:grid;
+       grid-template-columns:auto minmax(0,1fr); gap:28px; align-items:baseline}
+  .ask .letter{
+    font-family:var(--mono); font-size:1.5rem; color:var(--accent);
+    font-variant-numeric:tabular-nums; line-height:1;
+  }
+  .ask h4{margin:0 0 .35em; font-size:1.12rem; font-weight:600}
+  .ask p{margin:0; color:var(--ink-2); font-size:.97rem}
+  .ask.lead h4::after{
+    content:"start here"; font-family:var(--sans); font-size:9.5px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--accent); margin-left:10px; vertical-align:.22em;
+    border:1px solid var(--accent); padding:.25em .5em; border-radius:2px; font-weight:600;
+  }
+  @media (max-width:560px){ .ask{grid-template-columns:1fr; gap:8px} }
+
+  .foot{padding:44px 0 0; font-size:.88rem; color:var(--ink-3); font-family:var(--sans)}
+  .foot p{margin:0 0 .6em; max-width:70ch}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:3px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header class="head">
+    <p class="eyebrow">Datacern AI &middot; partnership brief</p>
+    <h1>Your agents answer the call. Nobody governs what happens next.</h1>
+    <p class="standfirst">A governed decision layer for prior auth, appeals and denials — with an audit trail a payer's compliance team will accept.</p>
+  </header>
+
+  <section>
+    <div class="row">
+      <p class="mark">The seam</p>
+      <div class="col">
+        <p class="lede">Every healthcare call that matters ends in a case. A prior auth to adjudicate. An appeal to review. A denial to work.</p>
+        <p>Today that case falls off the end of a voice platform into a human queue — no governance, no evidence trail, no learning loop. The conversation is automated. The decision behind it is exactly as expensive as it was before.</p>
+        <p class="pull">Your product stops when the call ends. This one starts there.</p>
+        <p>The two halves don't overlap. There is no telephony anywhere in this platform, deliberately. The integration seam is a webhook: your agent finishes a call and posts the outcome, and a governed case exists on the other side.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="row">
+      <p class="mark">Why it fits</p>
+      <div class="col wide">
+        <h2>Four assets, four gaps, one map</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>You have</th><th>This has</th><th>What that closes</th></tr></thead>
+            <tbody>
+              <tr><td>Healthcare customers, onsite GTM</td><td>Nine healthcare packs, zero customers</td><td>Design partners and a route to market</td></tr>
+              <tr><td>An offshore engineering team</td><td>A written, scoped gap list</td><td>Work that is spec-driven, not exploratory</td></tr>
+              <tr><td>A compliance function</td><td>No SOC&nbsp;2, no HITRUST</td><td>The blocker to a regulated deployment</td></tr>
+              <tr><td>Voice — the front office</td><td>The back office, no voice surface</td><td>A second product line, same buyer</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Voice agents are commoditising — every CCaaS vendor ships one. Governed back-office decisioning is the opposite: hard to build, hard to copy, and sold into accounts you already own.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="row">
+      <p class="mark">How it works</p>
+      <div class="col">
+        <h2>The AI drafts. A named human signs. The correction teaches the next one.</h2>
+        <p>It isn't AI that decides. It's <strong>AI decisions that can be audited</strong> — evidence, proposer, approver, effect, on a tamper-evident record. Three things make that real rather than aspirational:</p>
+        <ul>
+          <li><strong>Self-approval is rejected by the server.</strong> Not a UI convention. The proposer cannot be the approver, and high-risk, destructive or admin actions require a second, distinct human with no tenant opt-out.</li>
+          <li><strong>A pack refuses to install</strong> against a tenant with no real data, naming every missing field. The platform will not half-work to make a demo look good.</li>
+          <li><strong>Budget caps fail closed</strong> — platform, tenant, workspace, principal, key. When the ceiling is reached, it stops.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="row">
+      <p class="mark">Verified state<br>1 Aug 2026</p>
+      <div class="col wide">
+        <h2>What is built</h2>
+        <p class="note" style="max-width:var(--measure)">Every row is checkable in the repository. Hand this to your engineers.</p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Area</th><th style="width:96px">Count</th><th>State</th></tr></thead>
+            <tbody>
+              <tr><td>Services</td><td class="num">24</td><td>Go, Python, GraphQL BFF, Next.js UI</td></tr>
+              <tr><td>Vertical packs</td><td class="num">28</td><td>27 verticals + 1 shared library; <strong>9 healthcare / life sciences</strong></td></tr>
+              <tr><td>Agents</td><td class="num">9</td><td>All nine passing a live real-LLM roster test</td></tr>
+              <tr><td>Requirement docs</td><td class="num">72</td><td>Written before the code</td></tr>
+              <tr><td>Tests</td><td class="num">~2,560</td><td>Strict count: 985 Go, 996 TypeScript, 578 Python</td></tr>
+              <tr><td>X12 transaction sets</td><td class="num">9</td><td><span class="code">837</span> <span class="code">835</span> <span class="code">834</span> <span class="code">270/271</span> <span class="code">276/277</span> <span class="code">999</span> <span class="code">TA1</span></td></tr>
+              <tr><td>Data connectors</td><td class="num">19</td><td>Databricks, Snowflake, Redshift, BigQuery, Synapse, S3, SFTP and more</td></tr>
+              <tr><td>Multi-tenancy</td><td class="num">—</td><td>Postgres row-level security, forced; tenant pinned from the verified token only</td></tr>
+              <tr><td>Audit</td><td class="num">—</td><td>Hash-chained log per tenant, plus write-once object-lock export</td></tr>
+              <tr><td>Infrastructure-as-code</td><td class="num">3</td><td>AWS, GCP, Azure — <strong>written and CI-built, never applied to a production cloud</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="row">
+      <p class="mark">Healthcare</p>
+      <div class="col wide">
+        <h2>Nine packs already aimed at this market</h2>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Pack</th><th>What it governs</th></tr></thead>
+            <tbody>
+              <tr><td><span class="code">insurance-claims-payer</span></td><td>Prior-auth review, appeal analysis, denial analytics — X12 837 intake, claim-status sync</td></tr>
+              <tr><td><span class="code">payer-fwa-siu</span></td><td>Fraud, waste and abuse screening; SIU investigation workflow</td></tr>
+              <tr><td><span class="code">healthcare-provider-rcm</span></td><td>Provider-side revenue cycle and denials</td></tr>
+              <tr><td><span class="code">benefits-appeals</span></td><td>Eligibility adjudication and appeals</td></tr>
+              <tr><td><span class="code">care-management-medicare</span></td><td>CCM, PCM, TCM, BHI, CoCM, RPM, RTM, APCM</td></tr>
+              <tr><td><span class="code">pharmacy-benefit-mgmt</span></td><td>PBM and Medicare Part D</td></tr>
+              <tr><td><span class="code">post-acute-care</span></td><td>Home health, SNF, hospice — PDGM and PDPM episodes</td></tr>
+              <tr><td><span class="code">device-complaints</span></td><td>Complaint handling and MDR reportability</td></tr>
+              <tr><td><span class="code">pharmacovigilance</span></td><td>21 CFR 314.80 / 312.32, ICH E2A / E2D</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">The first is the point: prior auth, appeals and denials are what healthcare contact-centre calls are <em>about</em>. Your agents are already having these conversations.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="row">
+      <p class="mark">Integration</p>
+      <div class="col">
+        <h2>Standard MCP, inbound, today</h2>
+        <p>The platform is an MCP server: one JSON-RPC endpoint, spec version <span class="code">2025-06-18</span>, with <span class="code">initialize</span>, <span class="code">tools/list</span> and <span class="code">tools/call</span>. All nine agents route their tool calls through that single chokepoint, and a backend is only reached once every gate has passed.</p>
+        <p>Your voice agent can drive it as a standard MCP client. Every call is authorised, tiered, kill-switchable and audited.</p>
+        <p class="note"><strong>The limit, stated plainly:</strong> outbound federation uses our own facade contract, not MCP — so this platform cannot consume a third-party MCP server today. That is an adapter behind an existing interface, and it is not yet built.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="row">
+      <p class="mark">Not built</p>
+      <div class="col wide">
+        <h2>What is not true yet</h2>
+        <p style="max-width:var(--measure)">This section is here because a competent engineer will find all of it. Better it comes from us, framed as scoped work.</p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th style="width:110px">Status</th><th>Item</th><th>Consequence</th></tr></thead>
+            <tbody>
+              <tr><td><span class="tag absent">None</span></td><td>Customers, pilots, revenue</td><td>You would be the first. The platform has run only on development machines and CI.</td></tr>
+              <tr><td><span class="tag absent">None</span></td><td>SOC 2, HITRUST, HIPAA certification</td><td>Not started. The primary blocker to a regulated production deployment.</td></tr>
+              <tr><td><span class="tag absent">None</span></td><td>Production cloud deployment</td><td>Terraform and Helm exist and build in CI; never applied to a real account.</td></tr>
+              <tr><td><span class="tag absent">None</span></td><td>Third-party penetration test</td><td>Internal cross-tenant probes pass, but cover a minority of services.</td></tr>
+              <tr><td><span class="tag absent">None</span></td><td>T-MSIS, HEDIS, CMS-64, NCPDP</td><td>The Medicaid reporting standards are absent entirely. Spec-driven work.</td></tr>
+              <tr><td><span class="tag built">Built</span></td><td>Databricks connector</td><td>Real, SDK-backed, catalog-aware, incremental — but <strong>never run against a live workspace</strong>.</td></tr>
+              <tr><td><span class="tag built">Built</span></td><td>Four-eyes approval</td><td>Default everywhere; tenants may enable auto-execution for low-risk, non-destructive writes. High-risk cannot bypass.</td></tr>
+              <tr><td><span class="tag absent">One</span></td><td>The team</td><td>Built by one engineer. Mitigated by 72 requirement docs and ~2,560 tests — not eliminated.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note" style="max-width:var(--measure)">Every line above is a scoped work item, and most of them read like a backlog for a team you already have.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="row">
+      <p class="mark">The pilot</p>
+      <div class="col">
+        <h2>Ninety days, in shadow mode, on one account</h2>
+        <p>Nothing the AI produces reaches a member or a claim. It drafts; your customer's people decide exactly as they do today; we compare agreement rates on real files.</p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>You provide</th><th>You get</th></tr></thead>
+            <tbody>
+              <tr><td>One existing healthcare account and an executive introduction</td><td>A governed workflow live behind your voice agent</td></tr>
+              <tr><td>One subject-matter expert</td><td>An ROI report from the platform's own meters</td></tr>
+              <tr><td>Two or three offshore engineers, part-time</td><td>A reference you own, and first look at everything after</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>No licence money changes hands. If the agreement rate isn't good enough, you have spent a quarter and some engineering time, and your customer's process is untouched.</p>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-bottom:2px solid var(--ink)">
+    <div class="row">
+      <p class="mark">The ask</p>
+      <div class="col">
+        <h2>Four ways this works</h2>
+        <p>Not a fundraise. In increasing order of commitment — any of them is a good outcome.</p>
+        <div class="asks">
+          <div class="ask lead">
+            <span class="letter">A</span>
+            <div><h4>One joint pilot</h4><p>An account, an intro, an SME, a few engineers. The smallest yes, and the natural test of everything below it.</p></div>
+          </div>
+          <div class="ask">
+            <span class="letter">B</span>
+            <div><h4>Channel or OEM partner</h4><p>Resell or white-label into your healthcare base. Margin and the services pool yours; subscription mine.</p></div>
+          </div>
+          <div class="ask">
+            <span class="letter">C</span>
+            <div><h4>A new product line</h4><p>You capitalise it as your back-office venture. Preferential internal licence, meaningful stake, services revenue.</p></div>
+          </div>
+          <div class="ask">
+            <span class="letter">D</span>
+            <div><h4>Acquisition</h4><p>The platform and the engineer who built it, on terms that reflect the asset.</p></div>
+          </div>
+        </div>
+        <p class="pull">One real healthcare operation to prove this in — preferably one that already knows how to sell to a payer.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div class="row">
+      <p class="mark">Provenance</p>
+      <div class="col">
+        <p>Every figure on this page was measured against the repository on 1 August 2026, or traces to an internal briefing verified against code and CI. Capabilities with limits carry the limit next to the claim.</p>
+        <p>Where this page and the codebase disagree, the codebase is correct and this page is a defect.</p>
+      </div>
+    </div>
+  </footer>
+
+</div>
