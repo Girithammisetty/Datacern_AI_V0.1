@@ -6010,8 +6010,19 @@ export const typeDefs = gql`
 
   "One attribute of a domain entity type (a named, typed field)."
   type OntologyAttribute { name: String! dataType: String }
-  "A typed relationship from one entity type to another (e.g. Vendor has_many Invoice)."
-  type OntologyRelationship { name: String! target: String! cardinality: String }
+  """A typed relationship from one entity type to another (e.g. Vendor has_many
+  Invoice). \`targetExists\` is true when \`target\` resolves to a real entity
+  type in the same result set — the ontology becomes a NAVIGABLE graph, and a
+  dangling target (a relationship to a type that was never declared) is flagged
+  instead of silently inert. \`targetName\` is that type's display name when it
+  resolves."""
+  type OntologyRelationship {
+    name: String!
+    target: String!
+    cardinality: String
+    targetExists: Boolean!
+    targetName: String
+  }
   """A governed domain ontology entity TYPE: a named type with attributes and
   typed relationships to other types. Distinct from dataset-derived semantic
   entities and from entity RESOLUTION (which resolves instances of these types)."""

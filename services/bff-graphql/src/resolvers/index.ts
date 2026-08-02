@@ -76,6 +76,7 @@ import {
   mapAgentRollout, mapRetrainWatch,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapOntologyEntityVersion, mapModelArchetype,
+
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
   mapPackDrift, mapPackTransition,
   // BRD 14 §6.5: SLM distillation cockpit (transcripts/SFT/training/adapters).
@@ -2537,7 +2538,7 @@ export const resolvers = {
     ontologyEntities: (_p: unknown, a: { workspaceId?: string }, ctx: GraphQLContext) =>
       ctx.clients.dataset
         .ontologyEntities(a.workspaceId ?? undefined)
-        .then((rows) => rows.map(mapOntologyEntity)),
+        .then((rows) => linkOntologyGraph(rows.map(mapOntologyEntity))),
 
     ontologyVersions: (
       _p: unknown, a: { entityKey: string; workspaceId: string }, ctx: GraphQLContext,
