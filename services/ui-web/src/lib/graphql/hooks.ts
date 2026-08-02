@@ -496,6 +496,26 @@ export function usePocProgress(tenantId: string, enabled = true) {
   });
 }
 
+export function usePocReports(tenantId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.pocReports(tenantId),
+    queryFn: () => graphqlRequest<ops.PocReportsResult>(ops.POC_REPORTS, { tenantId })
+      .then((r) => r.pocReports),
+    enabled: enabled && !!tenantId,
+  });
+}
+
+export function useExportPocReport() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (tenantId: string) =>
+      graphqlRequest<ops.ExportPocReportResult>(ops.EXPORT_POC_REPORT, {
+        tenantId, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.exportPocReport),
+    onSuccess: (_d, tenantId) => client.invalidateQueries({ queryKey: qk.pocReports(tenantId) }),
+  });
+}
+
 export function useCreateDemoTenant() {
   const client = useQueryClient();
   return useMutation({

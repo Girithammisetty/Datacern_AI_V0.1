@@ -169,6 +169,7 @@ import type {
   AiSpendFreeze,
   ProvisioningStep,
   PocProgress,
+  PocReportExport,
   ResolutionRun,
   ResolutionRunDetail,
   MergeCandidate,
@@ -556,6 +557,22 @@ export const POC_PROGRESS = /* GraphQL */ `
   }
 `;
 export interface PocProgressResult { pocProgress: PocProgress }
+
+export const POC_REPORTS = /* GraphQL */ `
+  query PocReports($tenantId: ID!) {
+    pocReports(tenantId: $tenantId) { id version jsonSha256 generatedBy createdAt jsonUrl }
+  }
+`;
+export interface PocReportsResult { pocReports: PocReportExport[] }
+
+export const EXPORT_POC_REPORT = /* GraphQL */ `
+  mutation ExportPocReport($tenantId: ID!, $idempotencyKey: String!) {
+    exportPocReport(tenantId: $tenantId, idempotencyKey: $idempotencyKey) {
+      id version jsonSha256 createdAt jsonUrl
+    }
+  }
+`;
+export interface ExportPocReportResult { exportPocReport: PocReportExport }
 
 export const CREATE_DEMO_TENANT = /* GraphQL */ `
   mutation CreateDemoTenant($input: CreateDemoTenantInput!, $idempotencyKey: String!) {

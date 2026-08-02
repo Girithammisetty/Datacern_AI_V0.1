@@ -68,7 +68,7 @@ import {
   mapDecisionModel, mapBatchEvaluate, mapOutcomeLabel, mapDecisionEffectiveness,
   mapAgentChatSession, mapDecisionEvaluation,
   mapAiSpendFreeze,
-  mapProvisioningStep, mapPocCriterion, mapPocProgress,
+  mapProvisioningStep, mapPocCriterion, mapPocProgress, mapPocReportExport,
   mapAgentRollout, mapRetrainWatch,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
@@ -825,6 +825,12 @@ export const resolvers = {
 
     pocProgress: (_p: unknown, a: { tenantId: string }, ctx: GraphQLContext) =>
       ctx.clients.identity.pocProgress(a.tenantId).then(mapPocProgress),
+
+    pocReports: async (_p: unknown, a: { tenantId: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.identity.pocReports(a.tenantId);
+      const rows = Array.isArray(d) ? d : (d.data ?? []);
+      return rows.map(mapPocReportExport);
+    },
 
     tenants: (_p: unknown, a: { limit?: number }, ctx: GraphQLContext) =>
       ctx.clients.identity
@@ -2545,6 +2551,12 @@ export const resolvers = {
     convertTrial: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
       await ctx.clients.identity.convertTrial(a.id);
       return true;
+    },
+
+    exportPocReport: async (_p: unknown, a: { tenantId: string; idempotencyKey?: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.identity.exportPocReport(a.tenantId, a.idempotencyKey);
+      const row = (d as { data?: unknown }).data ?? d;
+      return mapPocReportExport(row as never);
     },
 
     setTenantIdp: async (

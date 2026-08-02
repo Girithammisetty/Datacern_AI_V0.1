@@ -70,7 +70,7 @@ import type {
   ExternalAgentKeyDTO, CreatedExternalAgentKeyDTO,
   // BRD 66 slice 3 (CPL-FR-033): commercial plane (plan/trial/entitlements).
   TenantEntitlementsDTO,
- ProvisioningStepDTO, PocCriterionDTO, PocProgressDTO,} from "../clients/identity.js";
+ ProvisioningStepDTO, PocCriterionDTO, PocProgressDTO, PocReportExportDTO,} from "../clients/identity.js";
 import type {
   WorkspaceDTO, GroupDTO, MemberDTO, RoleDTO, ExplainAuthzDTO,
   // Tier 4b: identity/rbac admin (content grants + bulk membership).
@@ -303,6 +303,18 @@ export function mapPocCriterion(d: PocCriterionDTO) {
     target: d.target ?? null,
     direction: d.direction ?? null,
     manualValue: d.manual_value ?? null,
+  };
+}
+
+export function mapPocReportExport(d: PocReportExportDTO) {
+  return {
+    __typename: "PocReportExport" as const,
+    id: d.id,
+    version: d.version ?? null,
+    jsonSha256: d.json_sha256 ?? null,
+    generatedBy: d.generated_by ?? null,
+    createdAt: d.created_at ?? null,
+    jsonUrl: d.json_url ?? null,
   };
 }
 

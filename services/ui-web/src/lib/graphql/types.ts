@@ -2069,6 +2069,15 @@ export interface PocProgress {
   criteria: PocCriterionProgress[];
 }
 
+export interface PocReportExport {
+  id: ID;
+  version?: number | null;
+  jsonSha256?: string | null;
+  generatedBy?: string | null;
+  createdAt?: string | null;
+  jsonUrl?: string | null;
+}
+
 export interface ProvisioningStep {
   id: ID;
   stepIndex: number;

@@ -89,6 +89,16 @@ export interface PocCriterionDTO {
   manual_value?: number | null;
 }
 
+/** One POC report export (identity pocExportView): json_url is presigned. */
+export interface PocReportExportDTO {
+  id: string;
+  version?: number;
+  json_sha256?: string;
+  generated_by?: string;
+  created_at?: string;
+  json_url?: string;
+}
+
 /** GET /tenants/{id}/poc/progress (identity domain.PocProgress). */
 export interface PocProgressDTO {
   tenant_id: string;
@@ -432,6 +442,17 @@ export class IdentityClient {
       `/api/v1/tenants/${encodeURIComponent(id)}/poc/criteria/${encodeURIComponent(key)}/manual-value`,
       { body: { value } },
     );
+  }
+
+  /** GET /tenants/{id}/poc-reports — prior report exports; json_url is a
+   * presigned (24h) artifact link minted downstream. */
+  pocReports(id: string): Promise<{ data?: PocReportExportDTO[] } | PocReportExportDTO[]> {
+    return this.http.get(`/api/v1/tenants/${encodeURIComponent(id)}/poc-reports`);
+  }
+
+  /** POST /tenants/{id}/poc-reports — generate a poc-report.v1 export. */
+  exportPocReport(id: string, idempotencyKey?: string): Promise<{ data?: PocReportExportDTO } | PocReportExportDTO> {
+    return this.http.post(`/api/v1/tenants/${encodeURIComponent(id)}/poc-reports`, { idempotencyKey });
   }
 
   /** POST /tenants/{id}/trial (CPL-FR-021) — start a trial; 409 on an illegal

@@ -511,6 +511,15 @@ export const typeDefs = gql`
     asOf: String
     criteria: [PocCriterionProgress!]!
   }
+  """One generated poc-report.v1 export; jsonUrl is presigned (24h)."""
+  type PocReportExport {
+    id: ID!
+    version: Int
+    jsonSha256: String
+    generatedBy: String
+    createdAt: String
+    jsonUrl: String
+  }
   input PocCriterionInput {
     key: String!
     description: String
@@ -4697,6 +4706,9 @@ export const typeDefs = gql`
     """Live actual-vs-target per criterion (GET /tenants/{id}/poc/progress) —
     the POC sponsor dashboard of BRD 70 US-5. Never fabricates an actual."""
     pocProgress(tenantId: ID!): PocProgress!
+    """Prior POC report exports (GET /tenants/{id}/poc-reports); jsonUrl is a
+    24h presigned artifact link minted downstream. Tenant admin."""
+    pocReports(tenantId: ID!): [PocReportExport!]!
 
     """BRD 66 slice 3 (CPL-FR-033): the tenant's commercial plane (plan,
     trial, effective entitlements) for gating + upsell UI. Reachable by ANY
@@ -5886,6 +5898,9 @@ export const typeDefs = gql`
     extendTrial(id: ID!, trialDays: Int): Boolean!
     """Convert a trial to paid (POST /tenants/{id}/convert). Operator only."""
     convertTrial(id: ID!): Boolean!
+    """Generate a poc-report.v1 export (POST /tenants/{id}/poc-reports) — the
+    decision-meeting artifact, checksummed and audited. Tenant admin."""
+    exportPocReport(tenantId: ID!, idempotencyKey: String): PocReportExport!
 
     """Register/update the caller tenant's OIDC IdP (BYO-P4, PUT /tenants/self/
     idp). The issuer must be globally unique. Needs the tenant-admin scope."""

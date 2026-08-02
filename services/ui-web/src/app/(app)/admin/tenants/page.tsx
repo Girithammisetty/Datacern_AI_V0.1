@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, Input, Label
 import { useTenants, useCreateTenant, usePublishTenant, useSuspendTenant,
   useReactivateTenant, useTenantProvisioning, useRetryTenantProvisioning,
   usePocProgress, useCreateDemoTenant, useResetDemoTenant, useCreatePocTenant,
-  useSetPocManualValue, useStartTrial, useConvertTrial } from "@/lib/graphql/hooks";
+  useSetPocManualValue, useStartTrial, useConvertTrial,
+  usePocReports, useExportPocReport } from "@/lib/graphql/hooks";
 import { useToasts } from "@/stores/ui";
 import type { Tenant } from "@/lib/graphql/types";
 import { formatLocal } from "@/lib/utils";
@@ -255,6 +256,8 @@ function SandboxForm({ kind, onDone }: { kind: "demo" | "poc"; onDone: () => voi
 function PocPanel({ tenant }: { tenant: Tenant }) {
   const progress = usePocProgress(tenant.id);
   const setManual = useSetPocManualValue();
+  const reports = usePocReports(tenant.id);
+  const exportReport = useExportPocReport();
   const push = useToasts((s) => s.push);
 
   return (
@@ -310,6 +313,29 @@ function PocPanel({ tenant }: { tenant: Tenant }) {
             ))}
           </ul>
         </AsyncBoundary>
+
+        <div className="mt-4 flex items-center gap-3 border-t pt-3">
+          <Button size="sm" variant="outline" disabled={exportReport.isPending}
+            title="Generate the checksummed poc-report.v1 decision-meeting artifact"
+            onClick={() => exportReport.mutate(tenant.id, {
+              onSuccess: () => push({ title: "Report generated", variant: "success" }),
+              onError: (e) => push({ title: "Report failed", description: e instanceof Error ? e.message : String(e), variant: "error" }),
+            })}>
+            {exportReport.isPending ? "Generating…" : "Generate report"}
+          </Button>
+          <div className="flex flex-wrap gap-2 text-xs">
+            {(reports.data ?? []).map((r) => (
+              <a key={r.id} className="underline underline-offset-2"
+                href={r.jsonUrl ?? undefined} target="_blank" rel="noreferrer"
+                title={r.jsonSha256 ? `sha256 ${r.jsonSha256}` : undefined}>
+                v{r.version ?? "?"} · {r.createdAt ? formatLocal(r.createdAt) : r.id.slice(0, 8)}
+              </a>
+            ))}
+            {!reports.isLoading && (reports.data?.length ?? 0) === 0 && (
+              <span className="text-muted-foreground">No reports yet.</span>
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
