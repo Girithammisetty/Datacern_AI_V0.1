@@ -22,7 +22,9 @@ import { useToasts } from "@/stores/ui";
 import { downloadCsv } from "@/lib/export/csv";
 import { buildChargebackCsv, chargebackFilename } from "@/lib/export/chargeback";
 import { buildAgentInventoryCsv, agentInventoryFilename } from "@/lib/export/agentInventory";
-import type { ChargebackLine, AgentFleetRow } from "@/lib/graphql/types";
+import { buildValueReportCsv, valueReportFilename } from "@/lib/export/value";
+import { CaseExportButton } from "@/components/cases/CaseExportButton";
+import type { ChargebackLine, AgentFleetRow, ValueSummary } from "@/lib/graphql/types";
 
 /** Previous calendar month (UTC) — chargeback is only served for finalized
  * months, so the current month is never useful (mirrors admin/usage). */
@@ -122,11 +124,66 @@ function InlineAgentInventoryDownload() {
   );
 }
 
+function InlineValueDownload() {
+  const qc = useQueryClient();
+  const toast = useDownloadToast();
+  const [busy, setBusy] = useState(false);
+  const [month, setMonth] = useState(prevMonth());
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      // Tenant-wide summary for the period (no workspace filter).
+      const summary = await qc.fetchQuery<ValueSummary>({
+        queryKey: qk.valueSummary(month),
+        queryFn: () =>
+          graphqlRequest<ops.ValueSummaryResult>(ops.VALUE_SUMMARY, { period: month }).then((r) => r.valueSummary),
+      });
+      if (!summary) {
+        toast.empty(`No value figures for ${month}.`);
+        return;
+      }
+      downloadCsv(valueReportFilename(month), buildValueReportCsv(summary, month));
+    } catch (e) {
+      toast.failed(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="month"
+        value={month}
+        onChange={(e) => e.target.value && setMonth(e.target.value)}
+        aria-label="Value report month"
+        className="h-8 w-32 rounded-md border border-border/70 bg-background px-2 text-xs tabular-nums outline-none focus:ring-2 focus:ring-primary/40"
+      />
+      <Button variant="outline" size="sm" className="h-8 flex-1" disabled={busy} onClick={run}>
+        {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Download className="size-3.5" aria-hidden />}
+        Download CSV
+      </Button>
+    </div>
+  );
+}
+
+/** Case export reuses the existing async export operation (kick off → poll →
+ * download via the authed proxy) — the same control the /cases page uses, run
+ * here without a status filter (the whole worklist). */
+function InlineCaseExport() {
+  return <CaseExportButton />;
+}
+
 /** Report ids that support hub-native inline run + download, mapped to the
- * control that runs them. A report not listed here keeps its deep link. */
+ * control that runs them. A report not listed here keeps its deep link.
+ * chart-export is intentionally absent — it needs a specific chart selected, so
+ * it stays a deep link to the dashboard the chart lives on. */
 export const INLINE_RUNNERS: Record<string, React.ComponentType> = {
   chargeback: InlineChargebackDownload,
   "agent-inventory": InlineAgentInventoryDownload,
+  "value-roi": InlineValueDownload,
+  "case-export": InlineCaseExport,
 };
 
 /** True when a report can be run + downloaded inline from the hub. */
