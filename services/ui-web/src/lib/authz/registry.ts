@@ -161,7 +161,7 @@ export const NAV_GROUP_LABEL: Record<NavGroup, MessageKey> = {
  * section header shows only when ≥1 of its items is visible:
  *   adjuster      → Home · Casework(Cases, Approvals) · Insights(Dashboards) · Copilot · Notifications
  *   manager       → + Insights(Reports)
- *   datascientist → Home · Data(Datasets, Sources, Ingestions, Queries, Pipelines, Semantic Models) · ML(ML, Eval) · Insights(Dashboards, Reports) · Copilot · Notifications
+ *   datascientist → Home · Insights(Dashboards, Reports) · Data(Datasets, Sources, Ingestions, Queries, Pipelines, Semantic Models) · ML(ML, Eval) · Copilot · Notifications
  *   admin         → everything incl. Admin
  * Items sharing a group MUST stay contiguous here — the Sidebar emits a header
  * whenever the group changes between adjacent visible items.
@@ -173,6 +173,15 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "cases", href: "/cases", icon: Briefcase, label: "nav.cases", gate: cap("case.case.read"), group: "casework" },
   { key: "decisions", href: "/decisions", icon: TableProperties, label: "nav.decisions", gate: cap("case.disposition.read"), group: "casework" },
   { key: "inbox", href: "/inbox", icon: Inbox, label: "nav.inbox", gate: cap("ai.proposal.read"), group: "casework" },
+
+  // ── Insights ── (placed right after Casework so the people who work cases
+  // reach their dashboards and reports without scrolling past Data/ML)
+  { key: "dashboards", href: "/dashboards", icon: BarChart3, label: "nav.dashboards", gate: cap("chart.dashboard.read"), group: "insights" },
+  /** Scheduled dashboard report subscriptions (NOTIF-FR-060, "Team Reports").
+   * Gated on notification.report.read (Case Manager / Insights User / Model
+   * Builder), not usage.report.read (that's the unrelated cost-oversight
+   * capability, surfaced instead via CostPanel on Home / Admin > Usage). */
+  { key: "reports", href: "/dashboards/reports", icon: LineChart, label: "nav.reports", gate: cap("notification.report.read"), group: "insights" },
 
   // ── Data ── (ordered by the data lifecycle: bring it in → shape it → explore it)
   { key: "sources", href: "/data/connections", icon: Plug, label: "nav.sources", gate: cap("ingestion.connection.read"), group: "data" },
@@ -199,14 +208,6 @@ export const NAV_ITEMS: NavItem[] = [
    * read capability (ai.agent.read), matching viewAgentFleet's reconciliation.
    * Write actions gate on ai.agent.admin below (FEATURE_GATES). */
   { key: "mlDistillation", href: "/ml/distillation", icon: GraduationCap, label: "nav.mlDistillation", gate: cap("ai.agent.read"), group: "ml" },
-
-  // ── Insights ──
-  { key: "dashboards", href: "/dashboards", icon: BarChart3, label: "nav.dashboards", gate: cap("chart.dashboard.read"), group: "insights" },
-  /** Scheduled dashboard report subscriptions (NOTIF-FR-060, "Team Reports").
-   * Gated on notification.report.read (Case Manager / Insights User / Model
-   * Builder), not usage.report.read (that's the unrelated cost-oversight
-   * capability, surfaced instead via CostPanel on Home / Admin > Usage). */
-  { key: "reports", href: "/dashboards/reports", icon: LineChart, label: "nav.reports", gate: cap("notification.report.read"), group: "insights" },
 
   // ── Ungrouped anchors ──
   { key: "copilot", href: "/copilot", icon: Bot, label: "nav.copilot", gate: publicGate },

@@ -2144,6 +2144,48 @@ type ReportSubscriptionConnection {
   pageInfo: PageInfo!
 }
 
+"Grouping for the report catalog — what a report is about."
+enum ReportDomain {
+  financial
+  governance
+  operations
+}
+
+"A downloadable/exportable format a report offers."
+enum ReportFormat {
+  csv
+  json
+  artifact
+}
+
+"How often a report is meaningfully produced."
+enum ReportCadence {
+  on_demand
+  monthly
+  point_in_time
+}
+
+"""
+One entry in the report catalog (Insights › Reports). Server-authoritative:
+the BFF owns the catalog and returns only the reports the caller's
+capabilities can reach, so the UI renders a filtered list rather than deciding
+visibility client-side. Each entry deep-links (href) to where the report runs.
+"""
+type ReportDefinition {
+  id: ID!
+  title: String!
+  description: String!
+  domain: ReportDomain!
+  formats: [ReportFormat!]!
+  cadence: ReportCadence!
+  "In-app route where the report runs/downloads."
+  href: String!
+  "True when the report can also be scheduled for email delivery."
+  schedulable: Boolean!
+  "A real constraint disclosed on the card (e.g. finalized months only)."
+  note: String
+}
+
 """
 A measure in a semantic model's published definition (semantic-service).
 """
@@ -6186,6 +6228,14 @@ type Query {
   notification.report.read.
   """
   reportSubscriptions(dashboardId: ID, first: Int = 50, after: String): ReportSubscriptionConnection!
+  """
+  The report catalog for Insights › Reports — every report the CALLER can
+  reach, filtered server-side by their rbac capabilities. The UI renders this
+  list directly instead of deciding visibility client-side. Empty (never an
+  error) when capabilities can't be resolved, so the hub degrades to just its
+  scheduled-delivery section.
+  """
+  reportCatalog: [ReportDefinition!]!
   """
   The chart-type catalog (chart-service GET /chart-types). Powers the editor's type picker.
   """

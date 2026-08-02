@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
-import { LineChart, Plus, Loader2 } from "lucide-react";
+import { LineChart, Plus, Loader2, ArrowRight, FileText, CalendarClock } from "lucide-react";
+import Link from "next/link";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
@@ -17,6 +18,77 @@ import type { ReportSubscription } from "@/lib/graphql/types";
 import { useSession } from "@/lib/session/SessionContext";
 import { formatLocal } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n/messages";
+import { useReportCatalog } from "@/lib/graphql/hooks";
+import { reportsByDomain, REPORT_DOMAINS, type ReportFormat } from "@/lib/reports/catalog";
+
+const FORMAT_LABEL: Record<ReportFormat, string> = { csv: "CSV", json: "JSON", artifact: "File" };
+
+/**
+ * Report catalog (docs/initiatives/reports-hub.md) — the discovery layer that
+ * turns "Reports" from a subscription list into a hub. A capability-filtered,
+ * domain-grouped index of every report the platform produces, each linking to
+ * where it already runs/downloads. Purely additive above the existing
+ * scheduled-delivery list; no report is listed a viewer can't reach.
+ */
+function ReportCatalogSection() {
+  const { data, isLoading } = useReportCatalog();
+  const groups = useMemo(() => reportsByDomain(data ?? []), [data]);
+  if (isLoading || groups.length === 0) return null;
+
+  return (
+    <section aria-label="Report catalog" className="mb-8">
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold">Report catalog</h2>
+        <p className="text-sm text-muted-foreground">
+          Every report you can run, in one place. Open one to run and download it.
+        </p>
+      </div>
+      <div className="space-y-5">
+        {groups.map(({ domain, reports }) => (
+          <div key={domain}>
+            <div className="mb-2 flex items-baseline gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {REPORT_DOMAINS[domain].label}
+              </h3>
+              <span className="text-xs text-muted-foreground/80">{REPORT_DOMAINS[domain].blurb}</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {reports.map((r) => (
+                <Card key={r.id} className="flex flex-col">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                      {r.title}
+                    </CardTitle>
+                    <CardDescription className="text-xs leading-relaxed">{r.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-1 flex-col gap-2 pt-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {r.formats.map((f) => (
+                        <Badge key={f} variant="secondary" className="text-[10px]">{FORMAT_LABEL[f]}</Badge>
+                      ))}
+                      {r.schedulable && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          <CalendarClock className="mr-1 size-3" aria-hidden />Schedulable
+                        </Badge>
+                      )}
+                    </div>
+                    {r.note && <p className="text-[11px] leading-snug text-muted-foreground">{r.note}</p>}
+                    <div className="mt-auto pt-1">
+                      <Button asChild variant="outline" size="sm" className="h-8 w-full">
+                        <Link href={r.href}>Open report <ArrowRight className="size-3.5" /></Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function cadenceLabel(sub: ReportSubscription): string {
   const hour = String(sub.sendHour).padStart(2, "0") + ":00 UTC";
@@ -95,6 +167,15 @@ export default function DashboardReportsPage() {
           {banner}
         </div>
       )}
+
+      <ReportCatalogSection />
+
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold">Scheduled delivery</h2>
+        <p className="text-sm text-muted-foreground">
+          Reports emailed on a cadence to the people who need them.
+        </p>
+      </div>
 
       <AsyncBoundary
         isLoading={query.isLoading}

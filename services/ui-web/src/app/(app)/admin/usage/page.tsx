@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Wallet, Receipt, X, TrendingUp, FileSpreadsheet, Scale, BookOpen } from "lucide-react";
+import { Wallet, Receipt, X, TrendingUp, FileSpreadsheet, Scale, BookOpen, Download } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { CostPanel } from "@/components/usage/CostPanel";
 import { QueryLimitsCard } from "@/components/admin/QueryLimitsCard";
@@ -32,6 +32,8 @@ import type {
   Budget, RateCard, Anomaly, UsageMeter, ChargebackLine, Reconciliation, UsageAdjustment,
 } from "@/lib/graphql/types";
 import { formatUsd, formatLocal, formatNumber } from "@/lib/utils";
+import { buildChargebackCsv, chargebackFilename } from "@/lib/export/chargeback";
+import { downloadCsv } from "@/lib/export/csv";
 
 const WINDOWS = ["calendar_month", "calendar_day", "rolling_7d"];
 const ACTIONS = ["alert_only", "hard_stop"];
@@ -110,16 +112,27 @@ function ChargebackCard() {
             <FileSpreadsheet className="size-4" aria-hidden />Chargeback
             {rows.length > 0 && <Badge variant="secondary">{formatUsd(totalUsd)} total</Badge>}
           </CardTitle>
-          <label className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">Month</span>
-            <Input
-              type="month"
-              value={month}
-              onChange={(e) => e.target.value && setMonth(e.target.value)}
-              aria-label="Chargeback month"
-              className="h-8 w-36 text-xs"
-            />
-          </label>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              disabled={rows.length === 0}
+              onClick={() => downloadCsv(chargebackFilename(month), buildChargebackCsv(rows, month))}
+            >
+              <Download className="mr-1.5 size-3.5" aria-hidden />Download CSV
+            </Button>
+            <label className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Month</span>
+              <Input
+                type="month"
+                value={month}
+                onChange={(e) => e.target.value && setMonth(e.target.value)}
+                aria-label="Chargeback month"
+                className="h-8 w-36 text-xs"
+              />
+            </label>
+          </div>
         </CardHeader>
         <CardContent>
           <p className="mb-2 text-xs text-muted-foreground">
