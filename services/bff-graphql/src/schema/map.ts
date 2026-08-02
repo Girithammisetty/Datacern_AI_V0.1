@@ -3198,9 +3198,35 @@ export function mapOntologyEntity(d: OntologyEntityDTO) {
       name: r.name,
       target: r.target,
       cardinality: r.cardinality ?? null,
+      // Enriched across the full result set by linkOntologyGraph; the safe
+      // default (unresolved) holds for a single-entity map (e.g. a create echo).
+      targetExists: false,
+      targetName: null as string | null,
     })),
     createdAt: d.created_at ?? null,
   };
+}
+
+/** Resolve each relationship's `target` against the entity types present in the
+ * SAME result set, so the ontology reads as a navigable graph and a dangling
+ * target (a relationship to an undeclared type) is flagged, not silently inert
+ * (Knowledge Spine WS4 — "relationships are inert" gap). Mutates + returns the
+ * mapped entities. */
+export function linkOntologyGraph<
+  T extends {
+    entityKey: string;
+    name: string;
+    relationships: { target: string; targetExists: boolean; targetName: string | null }[];
+  },
+>(entities: T[]): T[] {
+  const nameByKey = new Map(entities.map((e) => [e.entityKey, e.name]));
+  for (const e of entities) {
+    for (const r of e.relationships) {
+      r.targetExists = nameByKey.has(r.target);
+      r.targetName = nameByKey.get(r.target) ?? null;
+    }
+  }
+  return entities;
 }
 
 /** A governed model archetype (experiment-service inc9 registry). */

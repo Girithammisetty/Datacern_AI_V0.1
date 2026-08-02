@@ -5744,6 +5744,8 @@ export interface OntologyRelationship {
   name: string;
   target: string;
   cardinality: string | null;
+  targetExists: boolean;
+  targetName: string | null;
 }
 export interface OntologyEntity {
   id: string;
@@ -5775,7 +5777,7 @@ export const ONTOLOGY_ENTITIES = /* GraphQL */ `
       description
       createdAt
       attributes { name dataType }
-      relationships { name target cardinality }
+      relationships { name target cardinality targetExists targetName }
     }
   }
 `;
