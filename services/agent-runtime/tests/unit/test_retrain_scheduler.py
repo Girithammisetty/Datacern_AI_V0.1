@@ -94,3 +94,20 @@ async def test_drift_ratio_triggers_even_below_min_corrections(monkeypatch):
     n = await mod.RetrainScheduler(SimpleNamespace(store=store)).tick(now=_NOW)
     assert n == 1
     assert recorded[0]["inputs"]["signals"]["drift_score"] == 1.0
+
+
+async def test_claim_is_replica_safe(monkeypatch):
+    # Two scheduler ticks in the SAME cadence window (as two replicas would):
+    # the first claims the watch, the second must see nothing to claim, so
+    # governance is invoked exactly once -- no duplicate retrain proposal.
+    watch = RetrainWatch(id="w4", tenant_id=TENANT_A, model_urn="wr:t:experiment:model/m",
+                         watched_agent_key="case-triage", min_corrections=1, drift_threshold=0.99,
+                         cadence_seconds=86400)
+    store = await _store_with(watch, [_prop("rejected")])
+    recorded: list = []
+    _patched_orch(monkeypatch, recorded)
+
+    n1 = await mod.RetrainScheduler(SimpleNamespace(store=store)).tick(now=_NOW)
+    n2 = await mod.RetrainScheduler(SimpleNamespace(store=store)).tick(now=_NOW)
+    assert n1 == 1 and n2 == 0        # claimed once, second tick found nothing due
+    assert len(recorded) == 1         # governance invoked exactly once

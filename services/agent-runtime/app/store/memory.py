@@ -144,6 +144,15 @@ class InMemoryStore:
                 due.append(w)
         return due[:limit]
 
+    async def claim_due_retrain_watches(self, now_ts, limit: int = 100) -> list:
+        # Single-threaded fake: claiming == list + stamp last_checked_at now, so
+        # a second call in the same cadence window returns nothing (mirrors the
+        # SQL FOR UPDATE SKIP LOCKED claim contract).
+        claimed = await self.list_due_retrain_watches(now_ts, limit)
+        for w in claimed:
+            w.last_checked_at = now_ts
+        return claimed
+
     async def touch_retrain_watch(self, watch_id: str, checked_at, signal: dict) -> None:
         w = self._retrain_watches.get(watch_id)
         if w is not None:
