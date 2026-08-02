@@ -42,7 +42,7 @@ import type {
   AgentSessionDTO, DecisionEvaluationDTO,
   // BRD 14 §6.5: SLM distillation cockpit (transcripts/SFT/training/adapters).
   TranscriptDTO, SftDatasetDTO, SftExampleDTO, TrainingJobDTO, SlmAdapterDTO,
-} from "../clients/agent.js";
+ DecisionDriftDTO,} from "../clients/agent.js";
 import type {
   PackSummaryDTO, PackDetailDTO, PlanOpDTO, LedgerRowDTO, InstallDTO,
   InstallPlanDTO, InstallResultDTO, UninstallResultDTO, CompleteResultDTO,
@@ -3120,6 +3120,19 @@ export function mapOutcomeLabel(d: OutcomeLabelDTO) {
     labelSource: d.label_source ?? null,
     note: d.note ?? null,
     labeledBy: d.labeled_by ?? null,
+  };
+}
+
+export function mapDecisionDrift(d: DecisionDriftDTO) {
+  return {
+    __typename: "DecisionDrift" as const,
+    by: (d.by === "producer" ? "PRODUCER" : "DECISION_TYPE"),
+    minDrop: d.min_drop,
+    signals: (d.signals ?? []).map((s) => ({
+      __typename: "DecisionDriftSignal" as const,
+      key: s.key, baselineRate: s.baseline_rate, recentRate: s.recent_rate,
+      drop: s.drop, baselineScored: s.baseline_scored, recentScored: s.recent_scored,
+    })),
   };
 }
 

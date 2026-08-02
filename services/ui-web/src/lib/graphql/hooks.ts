@@ -759,6 +759,15 @@ export function useDecisionEffectiveness(by: "DECISION_TYPE" | "PRODUCER", decis
   });
 }
 
+export function useDecisionDrift(by: "DECISION_TYPE" | "PRODUCER", minDrop?: number) {
+  return useQuery({
+    queryKey: qk.decisionDrift(by, minDrop),
+    queryFn: () => graphqlRequest<ops.DecisionDriftResult>(
+      ops.DECISION_DRIFT, { by, minDrop: minDrop ?? null },
+    ).then((r) => r.decisionDrift),
+  });
+}
+
 /** Record the realized outcome of a decision (annotates, never mutates it). */
 export function useMarkDecisionOutcome() {
   const client = useQueryClient();

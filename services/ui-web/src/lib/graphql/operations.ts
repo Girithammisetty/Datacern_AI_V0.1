@@ -274,7 +274,8 @@ import type {
   TenantAgentConfig,
   AgentRunListItem,
   TenantBranding,
-} from "./types";
+
+  DecisionDrift,} from "./types";
 
 export const ME = /* GraphQL */ `
   query Me {
@@ -762,6 +763,16 @@ export const DECISION_EFFECTIVENESS = /* GraphQL */ `
   }
 `;
 export interface DecisionEffectivenessResult { decisionEffectiveness: DecisionEffectiveness }
+
+export const DECISION_DRIFT = /* GraphQL */ `
+  query DecisionDrift($by: DecisionEffectivenessBy!, $minDrop: Float) {
+    decisionDrift(by: $by, minDrop: $minDrop) {
+      by minDrop
+      signals { key baselineRate recentRate drop baselineScored recentScored }
+    }
+  }
+`;
+export interface DecisionDriftResult { decisionDrift: DecisionDrift }
 
 export const MARK_DECISION_OUTCOME = /* GraphQL */ `
   mutation MarkDecisionOutcome($decisionRef: ID!, $input: MarkDecisionOutcomeInput!, $idempotencyKey: String!) {

@@ -89,9 +89,12 @@ class InMemoryStore:
         self._outcome_labels[(lab.tenant_id, lab.decision_ref)] = _c.copy(lab)
 
     async def list_outcome_labels(self, tenant_id: str, *, decision_type=None) -> list:
+        # Newest-first, matching the SQL store's `ORDER BY labeled_at DESC`
+        # contract (dict preserves insertion order = chronological, so reverse).
         out = [lbl for (t, _), lbl in self._outcome_labels.items() if t == tenant_id]
         if decision_type:
             out = [lbl for lbl in out if lbl.decision_type == decision_type]
+        out.reverse()
         return out
 
     async def get_outcome_label(self, tenant_id: str, decision_ref: str):

@@ -3,8 +3,8 @@ import { useState } from "react";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/primitives";
-import { useDecisionEffectiveness } from "@/lib/graphql/hooks";
-import type { DecisionEffectivenessGroup } from "@/lib/graphql/types";
+import { useDecisionEffectiveness, useDecisionDrift } from "@/lib/graphql/hooks";
+import type { DecisionEffectivenessGroup, DecisionDriftSignal } from "@/lib/graphql/types";
 
 /**
  * Decision-effectiveness KPIs (BRD 55): decided-vs-realized agreement per
@@ -15,7 +15,9 @@ import type { DecisionEffectivenessGroup } from "@/lib/graphql/types";
 export function EffectivenessPanel() {
   const [by, setBy] = useState<"DECISION_TYPE" | "PRODUCER">("DECISION_TYPE");
   const query = useDecisionEffectiveness(by);
+  const drift = useDecisionDrift(by);
   const data = query.data;
+  const signals = drift.data?.signals ?? [];
 
   return (
     <Card className="mt-6">
@@ -35,6 +37,28 @@ export function EffectivenessPanel() {
         </div>
       </CardHeader>
       <CardContent>
+        {signals.length > 0 && (
+          <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/40"
+            role="status" aria-label="Decision drift">
+            <p className="mb-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+              Decision drift — effectiveness has dropped materially; a review is warranted (OM-FR-030).
+            </p>
+            <ul className="space-y-0.5 text-xs text-amber-900/90 dark:text-amber-200/90">
+              {signals.map((sig: DecisionDriftSignal) => (
+                <li key={sig.key} className="flex flex-wrap gap-2">
+                  <span className="font-mono">{sig.key}</span>
+                  <span>
+                    {Math.round(sig.baselineRate * 100)}% → {Math.round(sig.recentRate * 100)}%
+                    {" "}(−{Math.round(sig.drop * 100)} pts over {sig.recentScored} recent decisions)
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-300/70">
+              This is a signal, not a change — the governance agent opens a proposal-mode review; a human decides.
+            </p>
+          </div>
+        )}
         <AsyncBoundary
           isLoading={query.isLoading}
           isError={query.isError}
