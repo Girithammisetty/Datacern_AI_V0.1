@@ -9,7 +9,7 @@
  * enforce every action. Fail-safe: a capability the client cannot confirm HIDES
  * the feature (absent capability → not shown).
  */
-import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties, Fingerprint, Network, HelpCircle } from "lucide-react";
+import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties, Fingerprint, Network, HelpCircle, GraduationCap } from "lucide-react";
 import type { MessageKey } from "@/lib/i18n/messages";
 
 /** The tenant-admin role short-circuits every action check (rbac BR-7). */
@@ -192,6 +192,13 @@ export const NAV_ITEMS: NavItem[] = [
    * write scope even to GET a suite, so run-read is the more representative
    * "can this persona see eval results at all" signal). */
   { key: "mlEval", href: "/ml/eval", icon: FlaskConical, label: "nav.mlEval", gate: cap("eval.run.read"), group: "ml" },
+  /** SLM distillation cockpit (agent-runtime BRD 14 §6.5 M1-M4): transcript
+   * corpus -> curated SFT datasets -> LoRA training jobs -> eval-gated adapter
+   * promotion. The downstream routes are authN-only (tenant-RLS) — no
+   * distillation-specific rbac action exists — so this reuses the agent-catalog
+   * read capability (ai.agent.read), matching viewAgentFleet's reconciliation.
+   * Write actions gate on ai.agent.admin below (FEATURE_GATES). */
+  { key: "mlDistillation", href: "/ml/distillation", icon: GraduationCap, label: "nav.mlDistillation", gate: cap("ai.agent.read"), group: "ml" },
 
   // ── Insights ──
   { key: "dashboards", href: "/dashboards", icon: BarChart3, label: "nav.dashboards", gate: cap("chart.dashboard.read"), group: "insights" },
@@ -260,6 +267,9 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/ml/eval", gate: cap("eval.run.read") },
   // Model-archetype editor (inc16) needs the archetype read cap, not the base one.
   { prefix: "/ml/archetypes", gate: cap("experiment.archetype.read") },
+  // SLM distillation cockpit also sits under /ml but is an agent-runtime
+  // surface — gated like the agent catalog (ai.agent.read), not experiments.
+  { prefix: "/ml/distillation", gate: cap("ai.agent.read") },
   { prefix: "/ml", gate: cap("experiment.experiment.read") },
   { prefix: "/dashboards/reports", gate: cap("notification.report.read") },
   { prefix: "/dashboards", gate: cap("chart.dashboard.read") },
@@ -664,6 +674,29 @@ export const FEATURE_GATES = {
   /** Drift retrain watches (GET/POST/DELETE /registry/retrain-watches —
    * ai.agent.admin downstream, BRD 52 inc3). */
   manageRetrainWatches: cap("ai.agent.admin"),
+
+  // ==========================================================================
+  // BRD 14 §6.5: SLM distillation cockpit (/ml/distillation). agent-runtime's
+  // transcripts/sft-datasets/training-jobs/slm-adapters routes are authN-only
+  // downstream (verified bearer JWT + tenant RLS — no per-action rbac check),
+  // so no distillation-specific action exists to gate on. Reads ride the
+  // agent-catalog read capability (ai.agent.read, same reconciliation as
+  // viewAgentCatalog/viewAgentFleet); the training-loop WRITE controls —
+  // curation, training submission, promotion/rollback of what the tenant's
+  // model ladder serves — are tenant agent-administration in substance, so
+  // they ride ai.agent.admin (matching manageTenantAgentConfig). UX-only, as
+  // ever: the server enforces what it enforces.
+  // ==========================================================================
+  /** Browse transcripts / SFT datasets / training jobs / adapters. */
+  viewDistillation: cap("ai.agent.read"),
+  /** Curate a new versioned SFT dataset (agent-runtime POST /sft-datasets). */
+  curateSftDataset: cap("ai.agent.admin"),
+  /** Submit a LoRA distillation run (agent-runtime POST /training-jobs). */
+  submitTrainingJob: cap("ai.agent.admin"),
+  /** Eval-gated adapter promotion (POST /slm-adapters/{id}/promote). */
+  promoteSlmAdapter: cap("ai.agent.admin"),
+  /** Roll back a promoted adapter rung (POST /slm-adapters/{id}/demote). */
+  demoteSlmAdapter: cap("ai.agent.admin"),
 
   // ==========================================================================
   // BRD 68 slice 1: Agent Control Tower fleet table (docs/initiatives/

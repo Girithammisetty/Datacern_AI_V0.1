@@ -2676,6 +2676,127 @@ export const typeDefs = gql`
     """True when a count hit the service's 200-row page cap (display as 200+)."""
     capped: Boolean!
   }
+
+  # ============================ SLM distillation (agent-runtime, BRD 14 §6.5) ==
+  # The learning-loop cockpit surfaces: M1 transcript corpus -> M2 curated SFT
+  # datasets -> M3 LoRA training jobs -> M4 eval-gated adapter promotion. All of
+  # these routes authorize by verified bearer JWT only (transcripts/sft/
+  # training routes call principal_of, no per-action rbac check today) and are
+  # tenant-scoped by RLS on the token's tenant_id.
+
+  """One captured agent-run transcript in the governed distillation corpus
+  (agent-runtime GET /transcripts/{id}, M1). Sensitive fields are PII-redacted
+  at capture. \`decision\` is the human verdict (approved | rejected | edited |
+  responded, null while undecided); \`correctedOutput\` is the human-edited gold
+  output — together with \`inputs\`/\`finalText\` this is the raw training
+  signal SFT curation reads."""
+  type Transcript {
+    transcriptId: ID!
+    runId: String
+    sessionId: String
+    agentKey: String
+    agentVersion: String
+    principalType: String
+    oboSub: String
+    inputs: JSON
+    grounding: JSON
+    finalText: String
+    proposedAction: JSON
+    proposalId: String
+    model: String
+    usage: JSON
+    consent: JSON
+    decision: String
+    correctedOutput: JSON
+    decidedBy: String
+    decidedAt: DateTime
+    createdAt: DateTime
+  }
+
+  """One immutable, versioned SFT dataset curated from the consented transcript
+  corpus for a single archetype (agent_key) — agent-runtime sft.py _ds_view.
+  \`consentVerified\` reflects the curator's real consent check; \`checksum\`
+  fingerprints the frozen rows."""
+  type SftDataset {
+    datasetId: ID!
+    agentKey: String
+    version: Int
+    status: String
+    rowCount: Int
+    sourceCount: Int
+    curationParams: JSON
+    checksum: String
+    consentVerified: Boolean
+    createdBy: String
+    createdAt: DateTime
+  }
+
+  """One frozen SFT training row: a chat-format example ({role, content}
+  message list) whose final assistant message is the gold, human-corrected
+  output — the exact artifact the LoRA trainer consumes. Passed through
+  verbatim; the UI derives the input/output split, never the BFF."""
+  type SftExample {
+    messages: JSON!
+  }
+
+  """One SLM distillation training job (agent-runtime training.py _job_view).
+  \`status\` is running | succeeded | failed. \`error\` is the HONEST failure
+  object {reason, detail} verbatim — notably reason
+  "gpu_trainer_not_configured" when no GPU executor is wired (the job is
+  recorded and failed rather than a fabricated adapter). The UI must render it
+  verbatim, never soften it."""
+  type TrainingJob {
+    jobId: ID!
+    archetype: String
+    sftDatasetId: String
+    baseModel: String
+    status: String
+    params: JSON
+    mlflowRunRef: String
+    adapterId: String
+    error: JSON
+    createdBy: String
+    createdAt: DateTime
+    finishedAt: DateTime
+  }
+
+  """One distilled SLM adapter (agent-runtime training.py _adapter_view).
+  \`promotionStatus\` is candidate | gated | promoted | demoted;
+  \`evalResultRef\` is the eval-gate evidence recorded at promotion;
+  \`targetRungAlias\` is the tenant's cheapest ladder rung the promoted adapter
+  serves as (slm-<archetype>)."""
+  type SlmAdapter {
+    adapterId: ID!
+    trainingJobId: String
+    archetype: String
+    baseModel: String
+    adapterUri: String
+    checksum: String
+    modelAlias: String
+    promotionStatus: String
+    evalResultRef: String
+    targetRungAlias: String
+    createdAt: DateTime
+  }
+
+  """Input for createSftDataset (agent-runtime POST /sft-datasets).
+  \`params\` is passed through verbatim as the curation params."""
+  input CreateSftDatasetInput {
+    agentKey: String!
+    params: JSON
+  }
+
+  """Input for submitTrainingJob (agent-runtime POST /training-jobs).
+  \`baseModel\` must be one of the service's KNOWN_BASE_MODELS allowlist
+  (domain/archetypes.py) or the submit fails closed; omitted = the default
+  student base."""
+  input SubmitTrainingJobInput {
+    agentKey: String!
+    sftDatasetId: ID!
+    baseModel: String
+    params: JSON
+  }
+
   input DecisionInput { kind: DecisionKind! reason: String editedArgs: JSON responseText: String }
 
   # ============================ kill switches (agent-runtime + tool-plane) =====
@@ -5214,6 +5335,43 @@ export const typeDefs = gql`
     at 200 — capped is true when the underlying page was full."""
     learningLoop: LearningLoopStats!
 
+    # ---- SLM distillation cockpit (agent-runtime, BRD 14 §6.5 M1-M4). All of
+    # ---- these routes authorize by verified bearer JWT only (principal_of; no
+    # ---- per-action rbac check today) and are tenant-scoped by RLS. ----------
+    """One captured transcript from the governed corpus (agent-runtime GET
+    /transcripts/{id}, M1). AuthN-only downstream; tenant-scoped by RLS.
+    404 (incl. cross-tenant masking) resolves to null."""
+    transcript(id: ID!): Transcript
+    """Curated, versioned SFT datasets, newest-capped (agent-runtime GET
+    /sft-datasets, M2; service page cap 200 — a full page means 200+).
+    \`agentKey\` filters to one archetype. AuthN-only downstream; tenant-scoped
+    by RLS."""
+    sftDatasets(agentKey: String, limit: Int = 50): [SftDataset!]!
+    """One curated SFT dataset (agent-runtime GET /sft-datasets/{id}).
+    AuthN-only downstream; tenant-scoped by RLS. 404 resolves to null."""
+    sftDataset(id: ID!): SftDataset
+    """The dataset's frozen gold input->corrected-output training rows
+    (agent-runtime GET /sft-datasets/{id}/examples — an application/x-ndjson
+    export, parsed line-wise; downstream caps limit at 10000). AuthN-only
+    downstream; tenant-scoped by RLS."""
+    sftDatasetExamples(id: ID!, limit: Int = 200): [SftExample!]!
+    """SLM distillation training jobs (agent-runtime GET /training-jobs, M3;
+    page cap 200). \`archetype\` filters to one agent_key. AuthN-only
+    downstream; tenant-scoped by RLS."""
+    trainingJobs(archetype: String, limit: Int = 50): [TrainingJob!]!
+    """One training job WITH its verbatim failure reason (agent-runtime GET
+    /training-jobs/{id}). AuthN-only downstream; tenant-scoped by RLS. 404
+    resolves to null."""
+    trainingJob(id: ID!): TrainingJob
+    """Distilled SLM adapters (agent-runtime GET /slm-adapters, M4; page cap
+    200). \`archetype\` filters to one agent_key. AuthN-only downstream;
+    tenant-scoped by RLS."""
+    slmAdapters(archetype: String, limit: Int = 50): [SlmAdapter!]!
+    """One distilled adapter with its eval-gate evidence (agent-runtime GET
+    /slm-adapters/{id}). AuthN-only downstream; tenant-scoped by RLS. 404
+    resolves to null."""
+    slmAdapter(id: ID!): SlmAdapter
+
     experiments(first: Int = 50, after: String): ExperimentConnection!
     experiment(id: ID!): Experiment
     """Archived-only experiments (experiment-service GET /experiments/list_archived
@@ -7276,6 +7434,30 @@ export const typeDefs = gql`
     """Delete a retrain watch (DELETE /registry/retrain-watches/{id}; 404 if it
     is not the caller-tenant's). Needs ai.agent.admin downstream."""
     deleteRetrainWatch(id: ID!): RetrainWatchDeleteResult!
+    # ---- SLM distillation cockpit (agent-runtime, BRD 14 §6.5 M2-M4). These
+    # ---- routes authorize by verified bearer JWT only (principal_of; no
+    # ---- per-action rbac check today); tenant + created_by come from the
+    # ---- verified token, and rows are tenant-scoped by RLS. -------------------
+    """Curate the consented transcript corpus for one archetype (agentKey) into
+    a NEW immutable, versioned SFT dataset (agent-runtime POST /sft-datasets,
+    201, M2). AuthN-only downstream; created_by is the verified JWT sub."""
+    createSftDataset(input: CreateSftDatasetInput!, idempotencyKey: String): SftDataset!
+    """Submit a LoRA distillation run against a versioned SFT dataset
+    (agent-runtime POST /training-jobs, 201, M3). Returns the FINISHED job row:
+    with no GPU executor wired the job lands failed with the honest verbatim
+    reason error.reason="gpu_trainer_not_configured" — never a fabricated
+    adapter. AuthN-only downstream."""
+    submitTrainingJob(input: SubmitTrainingJobInput!, idempotencyKey: String): TrainingJob!
+    """Eval-gated promotion of a distilled adapter to the tenant's cheapest
+    ladder rung (agent-runtime POST /slm-adapters/{id}/promote, M4). Downstream
+    requires a candidate/gated adapter WITH a real trained artifact
+    (adapter_uri) — else 409 Conflict; \`evalResultRef\` (the eval-gate result
+    that cleared it) is recorded on the row. AuthN-only downstream."""
+    promoteSlmAdapter(id: ID!, evalResultRef: String, idempotencyKey: String): SlmAdapter!
+    """Roll back a PROMOTED adapter rung (agent-runtime POST
+    /slm-adapters/{id}/demote; 409 unless currently promoted). AuthN-only
+    downstream."""
+    demoteSlmAdapter(id: ID!, idempotencyKey: String): SlmAdapter!
 
     # ---- BRD 54 inc2: governed decision tables --------------------------------
     """Author + publish a decision table (agent-runtime POST /decision-models).

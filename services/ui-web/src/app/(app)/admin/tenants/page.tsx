@@ -11,7 +11,8 @@ import { useTenants, useCreateTenant, usePublishTenant, useSuspendTenant,
   useReactivateTenant, useTenantProvisioning, useRetryTenantProvisioning,
   usePocProgress, useCreateDemoTenant, useResetDemoTenant, useCreatePocTenant,
   useSetPocManualValue, useStartTrial, useConvertTrial,
-  usePocReports, useExportPocReport } from "@/lib/graphql/hooks";
+  usePocReports, useExportPocReport,
+  useSetPocCriteria, useCloneDemoTenant, useExtendTrial } from "@/lib/graphql/hooks";
 import { useToasts } from "@/stores/ui";
 import type { Tenant } from "@/lib/graphql/types";
 import { formatLocal } from "@/lib/utils";
@@ -37,7 +38,9 @@ export default function TenantsPage() {
   const [provisioningOf, setProvisioningOf] = useState<Tenant | null>(null);
   const [pocOf, setPocOf] = useState<Tenant | null>(null);
   const resetDemo = useResetDemoTenant();
+  const cloneDemo = useCloneDemoTenant();
   const startTrial = useStartTrial();
+  const extendTrial = useExtendTrial();
   const convertTrial = useConvertTrial();
 
   const toastErr = (title: string) => (e: unknown) =>
@@ -146,6 +149,16 @@ export default function TenantsPage() {
                           Reset
                         </Button>
                       )}
+                      {t.tier === "demo" && (
+                        <Button size="sm" variant="ghost" disabled={cloneDemo.isPending}
+                          title="Clone a fresh sibling sandbox with new persona credentials"
+                          onClick={() => cloneDemo.mutate(t.id, {
+                            onSuccess: () => push({ title: "Sandbox cloned", variant: "success" }),
+                            onError: toastErr("Clone failed"),
+                          })}>
+                          Clone
+                        </Button>
+                      )}
                       {t.status === "active" && t.tier !== "demo" && (
                         <Button size="sm" variant="ghost" disabled={startTrial.isPending}
                           title="Start a trial (409 if this tenant's commercial state has no edge into trial)"
@@ -154,6 +167,16 @@ export default function TenantsPage() {
                             onError: toastErr("Trial start failed"),
                           })}>
                           Trial
+                        </Button>
+                      )}
+                      {t.status === "trial" && (
+                        <Button size="sm" variant="ghost" disabled={extendTrial.isPending}
+                          title="Extend the running trial by 30 days"
+                          onClick={() => extendTrial.mutate({ id: t.id, trialDays: 30 }, {
+                            onSuccess: () => push({ title: "Trial extended", variant: "success" }),
+                            onError: toastErr("Extend failed"),
+                          })}>
+                          Extend
                         </Button>
                       )}
                       {t.status === "trial" && (
@@ -256,9 +279,14 @@ function SandboxForm({ kind, onDone }: { kind: "demo" | "poc"; onDone: () => voi
 function PocPanel({ tenant }: { tenant: Tenant }) {
   const progress = usePocProgress(tenant.id);
   const setManual = useSetPocManualValue();
+  const setCriteria = useSetPocCriteria();
   const reports = usePocReports(tenant.id);
   const exportReport = useExportPocReport();
   const push = useToasts((s) => s.push);
+  const [critKey, setCritKey] = useState("");
+  const [critTarget, setCritTarget] = useState("");
+  const [critDir, setCritDir] = useState<"gte" | "lte">("gte");
+  const noCriteria = !progress.isLoading && (progress.data?.criteria.length ?? 0) === 0;
 
   return (
     <Card className="mt-4" data-testid="poc-panel">
@@ -271,12 +299,55 @@ function PocPanel({ tenant }: { tenant: Tenant }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        <form
+          className="mb-3 flex flex-wrap items-end gap-2 border-b pb-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const key = critKey.trim();
+            const target = Number(critTarget);
+            if (!key || !Number.isFinite(target) || setCriteria.isPending) return;
+            // Append to the existing agreed set (targets are the sponsor contract).
+            const existing = (progress.data?.criteria ?? []).map((c) => ({
+              key: c.key, description: c.description ?? undefined,
+              metricRef: c.metricRef ?? undefined, target: c.target ?? 0, direction: c.direction ?? "gte",
+            }));
+            setCriteria.mutate(
+              { tenantId: tenant.id, criteria: [...existing, { key, target, direction: critDir }] },
+              {
+                onSuccess: () => { setCritKey(""); setCritTarget(""); progress.refetch(); push({ title: "Criterion added", variant: "success" }); },
+                onError: (err) => push({ title: "Set criteria failed", description: err instanceof Error ? err.message : String(err), variant: "error" }),
+              },
+            );
+          }}
+        >
+          <div>
+            <Label htmlFor="crit-key">Criterion key</Label>
+            <Input id="crit-key" value={critKey} onChange={(e) => setCritKey(e.target.value)}
+              placeholder="e.g. governed_decisions" className="h-8 w-48 font-mono text-xs" />
+          </div>
+          <div>
+            <Label htmlFor="crit-dir">Direction</Label>
+            <select id="crit-dir" value={critDir} onChange={(e) => setCritDir(e.target.value as "gte" | "lte")}
+              className="h-8 rounded-md border bg-background px-2 text-sm">
+              <option value="gte">≥ target</option>
+              <option value="lte">≤ target</option>
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="crit-target">Target</Label>
+            <Input id="crit-target" type="number" step="any" value={critTarget}
+              onChange={(e) => setCritTarget(e.target.value)} className="h-8 w-28 text-xs" />
+          </div>
+          <Button type="submit" size="sm" variant="outline" disabled={!critKey.trim() || !critTarget || setCriteria.isPending}>
+            {setCriteria.isPending ? "Adding…" : noCriteria ? "Set first criterion" : "Add criterion"}
+          </Button>
+        </form>
         <AsyncBoundary
           isLoading={progress.isLoading}
           isError={progress.isError}
           error={progress.error}
-          isEmpty={!progress.isLoading && (progress.data?.criteria.length ?? 0) === 0}
-          emptyTitle="No POC criteria agreed for this tenant."
+          isEmpty={noCriteria}
+          emptyTitle="No POC criteria agreed yet — add the first above."
           onRetry={() => progress.refetch()}
         >
           <ul className="space-y-1 text-sm">

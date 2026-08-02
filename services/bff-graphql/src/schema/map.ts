@@ -40,6 +40,8 @@ import type {
   OutcomeLabelDTO, DecisionEffectivenessDTO,
   // Sessions + decision-table evaluate.
   AgentSessionDTO, DecisionEvaluationDTO,
+  // BRD 14 §6.5: SLM distillation cockpit (transcripts/SFT/training/adapters).
+  TranscriptDTO, SftDatasetDTO, SftExampleDTO, TrainingJobDTO, SlmAdapterDTO,
 } from "../clients/agent.js";
 import type {
   PackSummaryDTO, PackDetailDTO, PlanOpDTO, LedgerRowDTO, InstallDTO,
@@ -1310,6 +1312,101 @@ export function mapAgentRun(ctx: GraphQLContext, d: AgentRunDTO) {
       inputTokens: d.usage?.input_tokens ?? d.token_usage?.input_tokens ?? null,
       outputTokens: d.usage?.output_tokens ?? d.token_usage?.output_tokens ?? null,
     },
+  };
+}
+
+// ==== SLM distillation cockpit (agent-runtime, BRD 14 §6.5 M1-M4) ===========
+
+/** transcripts.py _view -> Transcript (snake->camel; JSON fields verbatim). */
+export function mapTranscript(d: TranscriptDTO) {
+  return {
+    __typename: "Transcript" as const,
+    transcriptId: d.transcript_id,
+    runId: d.run_id ?? null,
+    sessionId: d.session_id ?? null,
+    agentKey: d.agent_key ?? null,
+    agentVersion: d.agent_version != null ? String(d.agent_version) : null,
+    principalType: d.principal_type ?? null,
+    oboSub: d.obo_sub ?? null,
+    inputs: d.inputs ?? null,
+    grounding: d.grounding ?? null,
+    finalText: d.final_text ?? null,
+    proposedAction: d.proposed_action ?? null,
+    proposalId: d.proposal_id ?? null,
+    model: d.model ?? null,
+    usage: d.usage ?? null,
+    consent: d.consent ?? null,
+    decision: d.decision ?? null,
+    correctedOutput: d.corrected_output ?? null,
+    decidedBy: d.decided_by ?? null,
+    decidedAt: d.decided_at ?? null,
+    createdAt: d.created_at ?? null,
+  };
+}
+
+/** sft.py _ds_view -> SftDataset. */
+export function mapSftDataset(d: SftDatasetDTO) {
+  return {
+    __typename: "SftDataset" as const,
+    datasetId: d.dataset_id,
+    agentKey: d.agent_key ?? null,
+    version: d.version ?? null,
+    status: d.status ?? null,
+    rowCount: d.row_count ?? null,
+    sourceCount: d.source_count ?? null,
+    curationParams: d.curation_params ?? null,
+    checksum: d.checksum ?? null,
+    consentVerified: d.consent_verified ?? null,
+    createdBy: d.created_by ?? null,
+    createdAt: d.created_at ?? null,
+  };
+}
+
+/** One NDJSON export row -> SftExample. `messages` passes through VERBATIM —
+ * the gold input/corrected-output split is derived by the UI from the chat
+ * roles, never invented here. */
+export function mapSftExample(d: SftExampleDTO) {
+  return {
+    __typename: "SftExample" as const,
+    messages: d.messages ?? [],
+  };
+}
+
+/** training.py _job_view -> TrainingJob. `error` passes through VERBATIM (the
+ * honest failure reason, e.g. gpu_trainer_not_configured) — never reworded. */
+export function mapTrainingJob(d: TrainingJobDTO) {
+  return {
+    __typename: "TrainingJob" as const,
+    jobId: d.job_id,
+    archetype: d.archetype ?? null,
+    sftDatasetId: d.sft_dataset_id ?? null,
+    baseModel: d.base_model ?? null,
+    status: d.status ?? null,
+    params: d.params ?? null,
+    mlflowRunRef: d.mlflow_run_ref ?? null,
+    adapterId: d.adapter_id ?? null,
+    error: d.error ?? null,
+    createdBy: d.created_by ?? null,
+    createdAt: d.created_at ?? null,
+    finishedAt: d.finished_at ?? null,
+  };
+}
+
+/** training.py _adapter_view -> SlmAdapter. */
+export function mapSlmAdapter(d: SlmAdapterDTO) {
+  return {
+    __typename: "SlmAdapter" as const,
+    adapterId: d.adapter_id,
+    trainingJobId: d.training_job_id ?? null,
+    archetype: d.archetype ?? null,
+    baseModel: d.base_model ?? null,
+    adapterUri: d.adapter_uri ?? null,
+    checksum: d.checksum ?? null,
+    modelAlias: d.model_alias ?? null,
+    promotionStatus: d.promotion_status ?? null,
+    evalResultRef: d.eval_result_ref ?? null,
+    targetRungAlias: d.target_rung_alias ?? null,
+    createdAt: d.created_at ?? null,
   };
 }
 

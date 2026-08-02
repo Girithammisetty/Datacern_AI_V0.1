@@ -13,6 +13,9 @@ export interface CapturedRequest {
 export interface MockResponse {
   status?: number;
   body?: unknown;
+  /** Raw NON-JSON body (e.g. an NDJSON export) sent verbatim, bypassing the
+   * JSON.stringify below. Mutually exclusive with `body`. */
+  text?: string;
   headers?: Record<string, string>;
 }
 
@@ -39,6 +42,12 @@ export function mockFetch(handler: Handler): {
     requests.push(captured);
     const r = await handler(captured);
     const status = r.status ?? 200;
+    if (r.text !== undefined && ![204, 205, 304].includes(status)) {
+      return new Response(r.text, {
+        status,
+        headers: { "content-type": "text/plain", ...(r.headers ?? {}) },
+      });
+    }
     // 204/205/304 are null-body statuses — a non-null body is a TypeError.
     const nullBody = r.body === undefined || [204, 205, 304].includes(status);
     return new Response(nullBody ? null : JSON.stringify(r.body), {

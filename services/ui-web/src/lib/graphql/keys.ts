@@ -92,6 +92,17 @@ export const qk = {
   agentRun: (id: string) => ["agentic", "run", id] as const,
   learningLoop: () => ["agentic", "learningLoop"] as const,
 
+  // SLM distillation cockpit (agent-runtime M1-M4, BRD 14 §6.5)
+  sftDatasets: (filters: unknown) => ["distillation", "sftDatasets", filters] as const,
+  sftDataset: (id: string) => ["distillation", "sftDataset", id] as const,
+  sftDatasetExamples: (id: string, limit: number) =>
+    ["distillation", "sftDatasetExamples", id, limit] as const,
+  transcript: (id: string) => ["distillation", "transcript", id] as const,
+  trainingJobs: (filters: unknown) => ["distillation", "trainingJobs", filters] as const,
+  trainingJob: (id: string) => ["distillation", "trainingJob", id] as const,
+  slmAdapters: (filters: unknown) => ["distillation", "slmAdapters", filters] as const,
+  slmAdapter: (id: string) => ["distillation", "slmAdapter", id] as const,
+
   experiments: (filters: unknown) => ["ml", "experiments", filters] as const,
   experiment: (id: string) => ["ml", "experiment", id] as const,
   archivedExperiments: (filters: unknown) => ["ml", "archivedExperiments", filters] as const,

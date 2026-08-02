@@ -32,6 +32,7 @@ export const en = {
   "nav.ingestions": "Ingestions",
   "nav.queries": "Queries",
   "nav.mlEval": "Eval",
+  "nav.mlDistillation": "Distillation",
   // Sidebar section headers (nav grouping). A section renders only when the
   // viewer can see at least one item inside it.
   "nav.group.casework": "Casework",

@@ -625,6 +625,25 @@ export const CREATE_POC_TENANT = /* GraphQL */ `
 `;
 export interface CreatePocTenantResult { createPocTenant: { tenant: Tenant; operationId: string | null } }
 
+export const SET_POC_CRITERIA = /* GraphQL */ `
+  mutation SetPocCriteria($tenantId: ID!, $criteria: [PocCriterionInput!]!) {
+    setPocCriteria(tenantId: $tenantId, criteria: $criteria)
+  }
+`;
+export interface SetPocCriteriaResult { setPocCriteria: boolean }
+
+export const CLONE_DEMO_TENANT = /* GraphQL */ `
+  mutation CloneDemoTenant($id: ID!) {
+    cloneDemoTenant(id: $id) { tenant { ${TENANT_LIFECYCLE_FIELDS} } operationId }
+  }
+`;
+export interface CloneDemoTenantResult { cloneDemoTenant: { tenant: Tenant; operationId: string | null } }
+
+export const EXTEND_TRIAL = /* GraphQL */ `
+  mutation ExtendTrial($id: ID!, $trialDays: Int) { extendTrial(id: $id, trialDays: $trialDays) }
+`;
+export interface ExtendTrialResult { extendTrial: boolean }
+
 export const SET_POC_MANUAL_VALUE = /* GraphQL */ `
   mutation SetPocManualValue($tenantId: ID!, $key: String!, $value: Float!) {
     setPocManualValue(tenantId: $tenantId, key: $key, value: $value)
@@ -5898,4 +5917,203 @@ export interface EvidencePack {
 
 export interface EvidencePackResult {
   evidencePack: EvidencePack;
+}
+
+// ---- SLM distillation cockpit (agent-runtime M1-M4, BRD 14 §6.5) ------------
+// Downstream routes are authN-only (verified bearer JWT) + tenant-RLS; the
+// page gate (ai.agent.read / ai.agent.admin) is UX-only, per registry.ts.
+
+export interface SftDataset {
+  datasetId: string;
+  agentKey: string | null;
+  version: number | null;
+  status: string | null;
+  rowCount: number | null;
+  sourceCount: number | null;
+  curationParams: Record<string, unknown> | null;
+  checksum: string | null;
+  consentVerified: boolean | null;
+  createdBy: string | null;
+  createdAt: string | null;
+}
+
+/** One frozen chat-format training row; the final assistant message is the
+ * gold (human-corrected) output. Rendered verbatim, split by role in the UI. */
+export interface SftExample {
+  messages: { role?: string; content?: unknown }[];
+}
+
+export interface TranscriptDetail {
+  transcriptId: string;
+  runId: string | null;
+  sessionId: string | null;
+  agentKey: string | null;
+  agentVersion: string | null;
+  inputs: unknown;
+  finalText: string | null;
+  model: string | null;
+  consent: unknown;
+  decision: string | null;
+  correctedOutput: unknown;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  createdAt: string | null;
+}
+
+/** `error` is the honest downstream failure object {reason, detail} — e.g.
+ * reason "gpu_trainer_not_configured" — shown VERBATIM, never softened. */
+export interface TrainingJob {
+  jobId: string;
+  archetype: string | null;
+  sftDatasetId: string | null;
+  baseModel: string | null;
+  status: string | null;
+  mlflowRunRef: string | null;
+  adapterId: string | null;
+  error: { reason?: string; detail?: string } | null;
+  createdBy: string | null;
+  createdAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface SlmAdapter {
+  adapterId: string;
+  trainingJobId: string | null;
+  archetype: string | null;
+  baseModel: string | null;
+  adapterUri: string | null;
+  checksum: string | null;
+  modelAlias: string | null;
+  promotionStatus: string | null;
+  evalResultRef: string | null;
+  targetRungAlias: string | null;
+  createdAt: string | null;
+}
+
+const SFT_DATASET_FIELDS = /* GraphQL */ `
+  datasetId agentKey version status rowCount sourceCount curationParams
+  checksum consentVerified createdBy createdAt
+`;
+
+const TRAINING_JOB_FIELDS = /* GraphQL */ `
+  jobId archetype sftDatasetId baseModel status mlflowRunRef adapterId error
+  createdBy createdAt finishedAt
+`;
+
+const SLM_ADAPTER_FIELDS = /* GraphQL */ `
+  adapterId trainingJobId archetype baseModel adapterUri checksum modelAlias
+  promotionStatus evalResultRef targetRungAlias createdAt
+`;
+
+export const SFT_DATASETS = /* GraphQL */ `
+  query SftDatasets($agentKey: String, $limit: Int) {
+    sftDatasets(agentKey: $agentKey, limit: $limit) { ${SFT_DATASET_FIELDS} }
+  }
+`;
+export interface SftDatasetsResult {
+  sftDatasets: SftDataset[];
+}
+
+export const SFT_DATASET = /* GraphQL */ `
+  query SftDataset($id: ID!) {
+    sftDataset(id: $id) { ${SFT_DATASET_FIELDS} }
+  }
+`;
+export interface SftDatasetResult {
+  sftDataset: SftDataset | null;
+}
+
+export const SFT_DATASET_EXAMPLES = /* GraphQL */ `
+  query SftDatasetExamples($id: ID!, $limit: Int) {
+    sftDatasetExamples(id: $id, limit: $limit) { messages }
+  }
+`;
+export interface SftDatasetExamplesResult {
+  sftDatasetExamples: SftExample[];
+}
+
+export const TRANSCRIPT = /* GraphQL */ `
+  query Transcript($id: ID!) {
+    transcript(id: $id) {
+      transcriptId runId sessionId agentKey agentVersion inputs finalText model
+      consent decision correctedOutput decidedBy decidedAt createdAt
+    }
+  }
+`;
+export interface TranscriptResult {
+  transcript: TranscriptDetail | null;
+}
+
+export const TRAINING_JOBS = /* GraphQL */ `
+  query TrainingJobs($archetype: String, $limit: Int) {
+    trainingJobs(archetype: $archetype, limit: $limit) { ${TRAINING_JOB_FIELDS} }
+  }
+`;
+export interface TrainingJobsResult {
+  trainingJobs: TrainingJob[];
+}
+
+export const TRAINING_JOB = /* GraphQL */ `
+  query TrainingJob($id: ID!) {
+    trainingJob(id: $id) { ${TRAINING_JOB_FIELDS} }
+  }
+`;
+export interface TrainingJobResult {
+  trainingJob: TrainingJob | null;
+}
+
+export const SLM_ADAPTERS = /* GraphQL */ `
+  query SlmAdapters($archetype: String, $limit: Int) {
+    slmAdapters(archetype: $archetype, limit: $limit) { ${SLM_ADAPTER_FIELDS} }
+  }
+`;
+export interface SlmAdaptersResult {
+  slmAdapters: SlmAdapter[];
+}
+
+export const SLM_ADAPTER = /* GraphQL */ `
+  query SlmAdapter($id: ID!) {
+    slmAdapter(id: $id) { ${SLM_ADAPTER_FIELDS} }
+  }
+`;
+export interface SlmAdapterResult {
+  slmAdapter: SlmAdapter | null;
+}
+
+export const CREATE_SFT_DATASET = /* GraphQL */ `
+  mutation CreateSftDataset($input: CreateSftDatasetInput!, $idempotencyKey: String) {
+    createSftDataset(input: $input, idempotencyKey: $idempotencyKey) { ${SFT_DATASET_FIELDS} }
+  }
+`;
+export interface CreateSftDatasetResult {
+  createSftDataset: SftDataset;
+}
+
+export const SUBMIT_TRAINING_JOB = /* GraphQL */ `
+  mutation SubmitTrainingJob($input: SubmitTrainingJobInput!, $idempotencyKey: String) {
+    submitTrainingJob(input: $input, idempotencyKey: $idempotencyKey) { ${TRAINING_JOB_FIELDS} }
+  }
+`;
+export interface SubmitTrainingJobResult {
+  submitTrainingJob: TrainingJob;
+}
+
+export const PROMOTE_SLM_ADAPTER = /* GraphQL */ `
+  mutation PromoteSlmAdapter($id: ID!, $evalResultRef: String, $idempotencyKey: String) {
+    promoteSlmAdapter(id: $id, evalResultRef: $evalResultRef, idempotencyKey: $idempotencyKey) {
+      ${SLM_ADAPTER_FIELDS}
+    }
+  }
+`;
+export interface PromoteSlmAdapterResult {
+  promoteSlmAdapter: SlmAdapter;
+}
+
+export const DEMOTE_SLM_ADAPTER = /* GraphQL */ `
+  mutation DemoteSlmAdapter($id: ID!, $idempotencyKey: String) {
+    demoteSlmAdapter(id: $id, idempotencyKey: $idempotencyKey) { ${SLM_ADAPTER_FIELDS} }
+  }
+`;
+export interface DemoteSlmAdapterResult {
+  demoteSlmAdapter: SlmAdapter;
 }
