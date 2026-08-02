@@ -459,6 +459,14 @@ jobs:
       - name: Action verb grammar (fleet)
         run: python3 tools/authz/check_action_verbs.py
 
+      # Documented counts vs the repository. On 2026-08-01 seven documents at
+      # once named the wrong number of services, BRDs or packs — nothing
+      # dishonest, just prose that stopped tracking a moving repo. Correcting
+      # them fixed that day; this keeps them correct, deriving each figure from
+      # deploy/services.yaml, packs/, docs/brd/ and deploy/demo/ on every run.
+      - name: Doc facts match the repository
+        run: python3 tools/docs/check_doc_facts.py
+
   # ---------------------------------------------------------------------------
   # e2e-contract — ui-web's fast, hermetic Playwright suite (tests-e2e/) drives
   # the real UI against a lightweight contract-server stand-in for the BFF

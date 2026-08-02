@@ -30,7 +30,7 @@ The core platform primitive — a **case** needing a **defensible decision** wit
 
 ## 2. Reality checkpoint (what the vision stands on)
 
-Verified today (see partner briefing for evidence anchors): 23 services, 28 installable packs with real install ledgers, enforced four-eyes with self-approval rejection, RLS multi-tenancy across 21 stateful services, real MLflow learning loop, hierarchical hard budget caps, MCP/A2A interop, self-host/multi-cloud IaC. **Not true yet:** zero customers, zero production cloud deployments, no certifications, per-decision cost attribution and ER merge approval unbuilt, scale proven at demo volume only.
+Verified today (see partner briefing for evidence anchors): 24 services, 28 installable packs with real install ledgers, enforced four-eyes with self-approval rejection, RLS multi-tenancy across 21 stateful services, real MLflow learning loop, hierarchical hard budget caps, MCP/A2A interop, self-host/multi-cloud IaC. **Not true yet:** zero customers, zero production cloud deployments, no certifications, per-decision cost attribution and ER merge approval unbuilt, scale proven at demo volume only.
 
 The vision below is therefore a *direction*, not a claim. The credibility rule for using this doc with investors: every future-tense statement must be introduced as a bet, and every present-tense statement must trace to the partner briefing.
 
