@@ -4,26 +4,36 @@
 
 /* Design tokens — light + dark (UI-FR-016). Charts and AI surfaces read these. */
 @layer base {
+  /*
+   * Brand accent — deep teal (UI-FR-016). Chosen over the previous stock blue
+   * (221 83% 53%, Tailwind blue-500) to give the platform a considered,
+   * institutional identity that reads "precision / trusted data / governance",
+   * and to sit clear of every reserved hue: the compliance-mandated AI violet
+   * (--ai, 265°, Art. 50), semantic success-green (142°), warning-amber (38°)
+   * and destructive-red (0°). Neutrals carry a slight teal-cool bias (~200°)
+   * so the greys read picked, not inherited. Semantic and --ai tokens are
+   * deliberately UNCHANGED — only the brand accent + neutrals were retuned.
+   */
   :root {
     --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --foreground: 200 33% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 94%;
-    --accent-foreground: 222 47% 11%;
+    --card-foreground: 200 33% 12%;
+    --primary: 190 80% 34%;
+    --primary-foreground: 190 40% 98%;
+    --secondary: 197 32% 95%;
+    --secondary-foreground: 200 33% 15%;
+    --muted: 197 30% 95%;
+    --muted-foreground: 200 12% 42%;
+    --accent: 190 44% 92%;
+    --accent-foreground: 200 33% 15%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
     --success: 142 71% 40%;
     --warning: 38 92% 50%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 221 83% 53%;
+    --border: 200 24% 89%;
+    --input: 200 24% 89%;
+    --ring: 190 80% 38%;
     /* AI surfaces get a distinct, non-suppressible violet identity (Art. 50). */
     --ai: 265 84% 58%;
     --ai-foreground: 0 0% 100%;
@@ -31,25 +41,25 @@
   }
 
   .dark {
-    --background: 222 47% 8%;
-    --foreground: 210 40% 96%;
-    --card: 222 45% 11%;
-    --card-foreground: 210 40% 96%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 18%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 217 33% 16%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 20%;
-    --accent-foreground: 210 40% 96%;
+    --background: 205 33% 8%;
+    --foreground: 195 28% 92%;
+    --card: 205 30% 11%;
+    --card-foreground: 195 28% 92%;
+    --primary: 187 72% 50%;
+    --primary-foreground: 200 45% 10%;
+    --secondary: 202 26% 18%;
+    --secondary-foreground: 195 28% 92%;
+    --muted: 202 24% 16%;
+    --muted-foreground: 200 16% 64%;
+    --accent: 200 28% 20%;
+    --accent-foreground: 195 28% 92%;
     --destructive: 0 63% 45%;
     --destructive-foreground: 210 40% 98%;
     --success: 142 65% 45%;
     --warning: 38 92% 55%;
-    --border: 217 33% 20%;
-    --input: 217 33% 22%;
-    --ring: 224 76% 60%;
+    --border: 202 24% 20%;
+    --input: 202 24% 22%;
+    --ring: 187 74% 55%;
     --ai: 265 89% 70%;
     --ai-foreground: 222 47% 11%;
   }

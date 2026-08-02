@@ -3,15 +3,17 @@ import { hexToHsl, hslToHex } from "./color";
 
 describe("hexToHsl / hslToHex", () => {
   it("round-trips the platform default primary color", () => {
-    // globals.css --primary: 221 83% 53%
-    const hex = hslToHex("221 83% 53%", "#000000");
-    expect(hexToHsl(hex)).toBe("221 83% 53%");
+    // globals.css --primary: 190 80% 34% (brand teal)
+    const hex = hslToHex("190 80% 34%", "#000000");
+    expect(hexToHsl(hex)).toBe("190 80% 34%");
   });
 
-  it("round-trips the platform default accent color", () => {
-    // globals.css --accent: 210 40% 94%
-    const hex = hslToHex("210 40% 94%", "#000000");
-    expect(hexToHsl(hex)).toBe("210 40% 94%");
+  it("round-trips a light low-saturation color within hex quantization", () => {
+    // globals.css --accent (190 44% 92%) is light and low-saturation; 8-bit hex
+    // has too few steps there to preserve the exact triple, so the round-trip
+    // lands within ~1 unit of saturation — a property of hex, not a bug.
+    const hex = hslToHex("190 44% 92%", "#000000");
+    expect(hexToHsl(hex)).toBe("190 45% 92%");
   });
 
   it("hexToHsl handles pure grayscale (s=0 branch)", () => {
