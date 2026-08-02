@@ -37,6 +37,8 @@ export const qk = {
   resolutionRun: (id: string) => ["data", "resolutionRun", id] as const,
   mergeCandidates: (runId: string) => ["data", "mergeCandidates", runId] as const,
   ontologyEntities: (workspaceId: string) => ["data", "ontologyEntities", workspaceId] as const,
+  ontologyVersions: (entityKey: string, workspaceId: string) =>
+    ["data", "ontologyVersions", entityKey, workspaceId] as const,
   modelArchetypes: (workspaceId: string) => ["ml", "modelArchetypes", workspaceId] as const,
   packs: () => ["packs", "catalog"] as const,
   pack: (name: string) => ["packs", "pack", name] as const,
@@ -148,6 +150,7 @@ export const qk = {
   anomalies: (status?: string) => ["usage", "anomalies", status ?? null] as const,
   usageMeters: () => ["usage", "meters"] as const,
   chargebackReport: (month: string) => ["usage", "chargeback", month] as const,
+  billingPeriods: (period?: string) => ["usage", "billingPeriods", period ?? null] as const,
   reconciliations: () => ["usage", "reconciliations"] as const,
 
   valueSummary: (period: string, workspaceId?: string) =>

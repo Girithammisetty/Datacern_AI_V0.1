@@ -56,7 +56,7 @@ import {
   // BRD 60 WS2: external-agent credentials (register carries the key once).
   mapExternalAgent, mapRegisteredExternalAgent,
   mapBudget, mapRateCard, mapAnomaly, mapReportSubscription,
-  mapMeter, mapChargebackLine, mapReconciliation, mapUsageAdjustment,
+  mapMeter, mapChargebackLine, mapBillingPeriod, mapReconciliation, mapUsageAdjustment,
   mapValueSummary, mapValueTrend, mapValueAssumptions, mapValueExport,
   mapChainVerifyResult, mapComplianceJob, mapEvidencePack, mapSiemConfig, mapSiemConfigState,
   decisionAction, urnId,
@@ -75,7 +75,8 @@ import {
   mapProvisioningStep, mapPocCriterion, mapPocProgress, mapPocReportExport, mapToolDiscoveryHit, mapRbacAction,
   mapAgentRollout, mapRetrainWatch,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
-  mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, linkOntologyGraph, mapModelArchetype,
+  mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapOntologyEntityVersion, mapModelArchetype,
+
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
   mapPackDrift, mapPackTransition,
   // BRD 14 §6.5: SLM distillation cockpit (transcripts/SFT/training/adapters).
@@ -782,6 +783,13 @@ const REPORT_CATALOG: ReportCatalogEntry[] = [
     description: "Any governed chart's underlying rows as a file, straight from the dashboard it lives on.",
     domain: "operations", formats: ["csv"], cadence: "on_demand", href: "/dashboards",
     schedulable: true, note: null, requiredCapability: "chart.chart.export",
+  },
+  {
+    id: "billing-periods", title: "Billing periods",
+    description: "Closed monthly billing periods with their gross and net-billable totals and export/push status — the finance-close view behind the invoice.",
+    domain: "financial", formats: ["csv"], cadence: "monthly", href: "/admin/usage",
+    schedulable: false, note: "Populated by the monthly close job; empty until a month is closed. Push status is surfaced verbatim (pushed / not-configured / failed).",
+    requiredCapability: "usage.report.read",
   },
 ];
 
@@ -2134,6 +2142,15 @@ export const resolvers = {
       return (page.data ?? []).map(mapChargebackLine);
     },
 
+    billingPeriods: async (
+      _p: unknown,
+      a: { period?: string; first?: number },
+      ctx: GraphQLContext,
+    ) => {
+      const page = await ctx.clients.usage.billingPeriods(a.period ?? undefined, a.first ?? undefined);
+      return (page.data ?? []).map((d) => mapBillingPeriod(ctx, d));
+    },
+
     reconciliations: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
       const page = await ctx.clients.usage.reconciliations();
       return (page.data ?? []).map((d) => mapReconciliation(ctx, d));
@@ -2523,6 +2540,13 @@ export const resolvers = {
         .ontologyEntities(a.workspaceId ?? undefined)
         .then((rows) => linkOntologyGraph(rows.map(mapOntologyEntity))),
 
+    ontologyVersions: (
+      _p: unknown, a: { entityKey: string; workspaceId: string }, ctx: GraphQLContext,
+    ) =>
+      ctx.clients.dataset
+        .ontologyVersions(a.entityKey, a.workspaceId)
+        .then((rows) => rows.map(mapOntologyEntityVersion)),
+
     // ---- inc16: model-archetype registry (governed blueprint editor) --------
     modelArchetypes: (_p: unknown, a: { workspaceId?: string }, ctx: GraphQLContext) =>
       ctx.clients.experiment
@@ -2575,6 +2599,61 @@ export const resolvers = {
     deleteOntologyEntity: (
       _p: unknown, a: { entityKey: string; workspaceId: string }, ctx: GraphQLContext,
     ) => ctx.clients.dataset.deleteOntologyEntity(a.entityKey, a.workspaceId),
+
+    // ---- WS3: ontology versioning + four-eyes update ------------------------
+    proposeOntologyUpdate: async (
+      _p: unknown,
+      a: {
+        input: {
+          workspaceId: string; entityKey: string; name?: string; description?: string;
+          attributes?: { name: string; dataType?: string }[];
+          relationships?: { name: string; target: string; cardinality?: string }[];
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const { input } = a;
+      const body: {
+        workspace_id: string; name?: string; description?: string;
+        attributes?: { name: string; data_type?: string }[];
+        relationships?: { name: string; target: string; cardinality?: string }[];
+      } = { workspace_id: input.workspaceId };
+      // Only forward fields the caller actually set, so unspecified fields keep
+      // the live definition (the downstream overlays only what's present).
+      if (input.name !== undefined) body.name = input.name;
+      if (input.description !== undefined) body.description = input.description;
+      if (input.attributes !== undefined) {
+        body.attributes = input.attributes.map((x) => ({ name: x.name, data_type: x.dataType }));
+      }
+      if (input.relationships !== undefined) {
+        body.relationships = input.relationships.map((x) => ({
+          name: x.name, target: x.target, cardinality: x.cardinality,
+        }));
+      }
+      return mapOntologyEntityVersion(await ctx.clients.dataset.proposeOntologyUpdate(input.entityKey, body));
+    },
+
+    approveOntologyUpdate: async (
+      _p: unknown,
+      a: { entityKey: string; workspaceId: string; versionNo: number; note?: string },
+      ctx: GraphQLContext,
+    ) =>
+      mapOntologyEntityVersion(
+        await ctx.clients.dataset.approveOntologyUpdate(a.entityKey, a.versionNo, {
+          workspace_id: a.workspaceId, note: a.note,
+        }),
+      ),
+
+    rejectOntologyUpdate: async (
+      _p: unknown,
+      a: { entityKey: string; workspaceId: string; versionNo: number; note?: string },
+      ctx: GraphQLContext,
+    ) =>
+      mapOntologyEntityVersion(
+        await ctx.clients.dataset.rejectOntologyUpdate(a.entityKey, a.versionNo, {
+          workspace_id: a.workspaceId, note: a.note,
+        }),
+      ),
 
     // ---- inc16: model-archetype registry writes -----------------------------
     createModelArchetype: async (
@@ -6314,7 +6393,7 @@ export const resolvers = {
           config: {
             entityType?: string;
             deterministicKeys?: string[][];
-            scoringFields?: Array<{ column: string; weight?: number }>;
+            scoringFields?: Array<{ column: string; weight?: number; comparator?: string }>;
             blockingFields?: string[];
             autoMergeThreshold?: number;
             reviewThreshold?: number;
@@ -6334,7 +6413,11 @@ export const resolvers = {
           config: {
             entity_type: cfg.entityType,
             deterministic_keys: cfg.deterministicKeys ?? [],
-            scoring_fields: (cfg.scoringFields ?? []).map((f) => ({ column: f.column, weight: f.weight })),
+            scoring_fields: (cfg.scoringFields ?? []).map((f) => ({
+              column: f.column,
+              weight: f.weight,
+              comparator: f.comparator,
+            })),
             blocking_fields: cfg.blockingFields ?? [],
             auto_merge_threshold: cfg.autoMergeThreshold,
             review_threshold: cfg.reviewThreshold,

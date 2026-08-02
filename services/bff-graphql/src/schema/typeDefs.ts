@@ -3508,6 +3508,44 @@ export const typeDefs = gql`
     totalUsd: Float!
   }
 
+  """The persisted export artifact for a closed billing period (object-store
+  keys + content hashes, plus the push outcome). \`pushedStatus\` is one of
+  pushed | billing_push_not_configured | push_failed — surfaced verbatim so a
+  not-configured push is never read as a success."""
+  type BillingExport {
+    csvKey: String
+    csvSha256: String
+    jsonlKey: String
+    jsonlSha256: String
+    pushedStatus: String
+    pushedReference: String
+    pushedAt: DateTime
+    createdAt: DateTime!
+  }
+
+  """A closed billing period joined with its export record (usage-service GET
+  /billing/periods, BRD 67 slice 3). \`grossUsd\` is the priced total;
+  \`netBillableUsd\` folds in adjustments. \`export\` is null until the close
+  job records the period's artifacts. Empty for a tenant until B2's monthly
+  close runs — no period is fabricated."""
+  type BillingPeriod implements Node {
+    id: ID!
+    urn: String!
+    """YYYY-MM."""
+    period: String!
+    """Close version; a re-close bumps this."""
+    version: Int!
+    rateCardId: String
+    rateCardVersion: Int!
+    grossUsd: Float!
+    netBillableUsd: Float!
+    """closed | exported | export_failed."""
+    status: String!
+    closedAt: DateTime!
+    closedBy: String
+    export: BillingExport
+  }
+
   """A monthly metered-vs-provider-bill reconciliation (usage-service GET
   /reconciliations, USG-FR-070). \`status\`: pending | matched | variance |
   adjusted | acknowledged. Chargeback for a month is blocked (409) while its
@@ -5511,6 +5549,11 @@ export const typeDefs = gql`
     with reason reconciliation_variance while that month's reconciliation
     variance is unresolved (AC-9). Needs usage.report.read."""
     chargebackReport(month: String!): [ChargebackLine!]!
+    """A tenant's closed billing periods, newest first, each joined with its
+    export record (usage-service GET /billing/periods, BRD 67 slice 3). Optional
+    \`period\` (YYYY-MM) filter; \`first\` caps rows (default 50, max 200
+    downstream). Empty until B2's monthly close runs. Needs usage.report.read."""
+    billingPeriods(period: String, first: Int): [BillingPeriod!]!
     """Monthly metered-vs-provider-bill reconciliations (usage-service GET
     /reconciliations, USG-FR-070) — not server-paginated (fixed 100-row cap
     downstream). Platform-only — needs usage.reconciliation.read AND a
@@ -5786,6 +5829,10 @@ export const typeDefs = gql`
     relationships (dataset-service GET /ontology/entities). Omit workspaceId to
     list the whole tenant. Needs dataset.ontology.read."""
     ontologyEntities(workspaceId: ID): [OntologyEntity!]!
+    """One ontology type's revision history + any in-review proposal, newest
+    first (dataset-service GET /ontology/entities/{key}/versions). Needs
+    dataset.ontology.read."""
+    ontologyVersions(entityKey: ID!, workspaceId: ID!): [OntologyEntityVersion!]!
     """The governed model archetypes — intended-model blueprints a vertical
     declares (experiment-service GET /archetypes). Omit workspaceId to list the
     whole tenant. Needs experiment.archetype.read."""
@@ -5987,7 +6034,28 @@ export const typeDefs = gql`
     description: String!
     attributes: [OntologyAttribute!]!
     relationships: [OntologyRelationship!]!
+    """The currently-published version this live type mirrors (WS3)."""
+    versionNo: Int
     createdAt: String
+  }
+  """One versioned revision of an ontology type + its four-eyes review state
+  (WS3). \`status\`: in_review | published | superseded | rejected. \`diff\` is
+  the machine diff vs the prior published definition (filled at approve)."""
+  type OntologyEntityVersion {
+    entityKey: ID!
+    workspaceId: ID!
+    versionNo: Int!
+    status: String!
+    name: String!
+    description: String!
+    attributes: [OntologyAttribute!]!
+    relationships: [OntologyRelationship!]!
+    diff: JSON
+    submittedBy: String!
+    approvedBy: String
+    decisionNote: String
+    createdAt: String
+    decidedAt: String
   }
   input OntologyAttributeInput { name: String! dataType: String }
   input OntologyRelationshipInput { name: String! target: String! cardinality: String }
@@ -5995,6 +6063,17 @@ export const typeDefs = gql`
     workspaceId: ID!
     entityKey: ID!
     name: String!
+    description: String
+    attributes: [OntologyAttributeInput!]
+    relationships: [OntologyRelationshipInput!]
+  }
+  """A proposed update to an ontology type's definition (WS3). Only the provided
+  fields are overlaid on the live definition; the live type is unchanged until a
+  DISTINCT approver publishes the proposal."""
+  input ProposeOntologyUpdateInput {
+    workspaceId: ID!
+    entityKey: ID!
+    name: String
     description: String
     attributes: [OntologyAttributeInput!]
     relationships: [OntologyRelationshipInput!]
@@ -6112,7 +6191,11 @@ export const typeDefs = gql`
     versionNo: Int!
     icebergTable: String!
   }
-  input ScoringFieldInput { column: String! weight: Float = 1.0 }
+  """A field compared during probabilistic scoring. \`comparator\`: dice
+  (default, free text) | jaro_winkler (short names + transpositions) | phonetic
+  (Soundex sounds-alike) | exact (normalized equality) | numeric (magnitude).
+  An unknown value falls back to dice downstream — never rejected."""
+  input ScoringFieldInput { column: String! weight: Float = 1.0 comparator: String = "dice" }
   "A resolution config the steward runs (deterministic keys + probabilistic scoring)."
   input ResolutionConfigInput {
     entityType: String = "entity"
@@ -6245,6 +6328,17 @@ export const typeDefs = gql`
     createOntologyEntity(input: CreateOntologyEntityInput!): OntologyEntity!
     "Remove a domain ontology entity type. Needs dataset.ontology.delete."
     deleteOntologyEntity(entityKey: ID!, workspaceId: ID!): Boolean!
+    """Open a four-eyes update to an ontology type's definition (WS3). Lands
+    in_review; the live type is unchanged until a DISTINCT approver publishes it.
+    Needs dataset.ontology.update."""
+    proposeOntologyUpdate(input: ProposeOntologyUpdateInput!): OntologyEntityVersion!
+    """Publish an in-review ontology update (four-eyes: approver ≠ submitter,
+    enforced downstream). Supersedes the prior version + updates the live type.
+    Needs dataset.ontology.approve."""
+    approveOntologyUpdate(entityKey: ID!, workspaceId: ID!, versionNo: Int!, note: String): OntologyEntityVersion!
+    """Reject an in-review ontology update; the live type is unchanged. Needs
+    dataset.ontology.approve."""
+    rejectOntologyUpdate(entityKey: ID!, workspaceId: ID!, versionNo: Int!, note: String): OntologyEntityVersion!
     """Register a governed model archetype (idempotent by archetypeKey within the
     workspace). Needs experiment.archetype.create."""
     createModelArchetype(input: CreateModelArchetypeInput!): ModelArchetype!

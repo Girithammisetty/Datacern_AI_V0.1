@@ -62,6 +62,23 @@ function usage() {
         },
       };
     }
+    if (req.path === "/api/v1/billing/periods" && req.method === "GET") {
+      const period = req.search.get("period");
+      const all = [
+        { id: "bp-1", tenant_id: "t-42", period: "2026-06", version: 1,
+          rate_card_id: "rc-1", rate_card_version: 3, gross_usd: 1200.5, net_billable_usd: 1150.25,
+          status: "exported", closed_at: "2026-07-01T00:00:00Z", closed_by: "u-close",
+          export: { jsonl_key: "s3://bill/2026-06.jsonl", jsonl_sha256: "aa", csv_key: "s3://bill/2026-06.csv",
+            csv_sha256: "bb", pushed_status: "pushed", pushed_reference: "in_123", pushed_at: "2026-07-01T01:00:00Z",
+            created_at: "2026-07-01T00:30:00Z" } },
+        { id: "bp-2", tenant_id: "t-42", period: "2026-05", version: 1,
+          rate_card_id: "", rate_card_version: 2, gross_usd: 0, net_billable_usd: 0,
+          status: "closed", closed_at: "2026-06-01T00:00:00Z", closed_by: "",
+          export: null },
+      ];
+      const rows = period ? all.filter((r) => r.period === period) : all;
+      return { status: 200, body: { data: rows, page: { has_more: false } } };
+    }
     if (req.path === "/api/v1/reconciliations" && req.method === "GET") {
       const rows = acked
         ? RECON_ROWS.map((r) => (r.id === "r-1" ? { ...r, status: "acknowledged" } : r))
@@ -141,6 +158,46 @@ describe("usage: chargeback report", () => {
     );
     expect(body?.errors?.[0]?.extensions?.code).toBe("CONFLICT");
     expect((body?.errors?.[0]?.extensions as any)?.details).toEqual({ reason: "reconciliation_variance" });
+  });
+});
+
+describe("usage: billing periods", () => {
+  it("lists closed periods newest-first with totals, status and export/push detail", async () => {
+    const { body, requests } = await run(
+      `{ billingPeriods {
+        id period version rateCardId rateCardVersion grossUsd netBillableUsd status closedAt closedBy
+        export { csvKey csvSha256 pushedStatus pushedReference pushedAt createdAt }
+      } }`,
+    );
+    expect(body?.errors).toBeUndefined();
+    const rows = (body?.data as any).billingPeriods;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      id: "bp-1", period: "2026-06", grossUsd: 1200.5, netBillableUsd: 1150.25, status: "exported",
+      closedBy: "u-close",
+    });
+    // Push status surfaced verbatim, not inferred.
+    expect(rows[0].export).toMatchObject({ csvKey: "s3://bill/2026-06.csv", pushedStatus: "pushed", pushedReference: "in_123" });
+    // A closed-but-not-yet-exported period: empty rate card -> null, export null.
+    expect(rows[1]).toMatchObject({ id: "bp-2", period: "2026-05", rateCardId: null, closedBy: null });
+    expect(rows[1].export).toBeNull();
+    // No period filter -> no query param.
+    const get = requests.find((r) => r.method === "GET" && r.path === "/api/v1/billing/periods");
+    expect(get?.search.get("period")).toBeNull();
+  });
+
+  it("passes period + first through to the downstream query", async () => {
+    const { body, requests } = await run(
+      `query($p: String, $n: Int) { billingPeriods(period: $p, first: $n) { id period } }`,
+      { p: "2026-06", n: 10 },
+    );
+    expect(body?.errors).toBeUndefined();
+    const rows = (body?.data as any).billingPeriods;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].period).toBe("2026-06");
+    const get = requests.find((r) => r.method === "GET" && r.path === "/api/v1/billing/periods");
+    expect(get?.search.get("period")).toBe("2026-06");
+    expect(get?.search.get("limit")).toBe("10");
   });
 });
 
