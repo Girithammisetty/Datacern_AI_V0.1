@@ -198,8 +198,13 @@ jobs:
           fi
           pkgs=$(grep -rl "CASE_TEST_DATABASE_URL" --include=*_test.go . | xargs -n1 dirname | sort -u)
           echo "re-running uncached: $pkgs"
+          # -v is LOad-BEARING, not noise. `go test` prints a t.Skip's message
+          # only in verbose mode: a package whose every test skipped reports
+          # exactly `ok <pkg> 0.003s`, identical to one where they all ran. The
+          # grep below therefore could never match without it, and the guard was
+          # a placebo asserting on text that is not in its own input.
           # shellcheck disable=SC2086
-          out=$(go test -count=1 $pkgs 2>&1) || { echo "$out"; exit 1; }
+          out=$(go test -count=1 -v $pkgs 2>&1) || { echo "$out"; exit 1; }
           echo "$out"
           # The env var is set, so these tests MUST have run. If they still
           # report skipped, the wiring is broken and reporting green would be
@@ -248,12 +253,18 @@ jobs:
             echo "::warning title=No integration tier::${{ matrix.name }} ships no test/integration — Tier 2 NOT run"
             exit 0
           fi
-          # -count=1: a cached result prints only "ok ... (cached)" with none of
-          # the test's own output, so the grep below found nothing and the
-          # warning never fired — the skip stayed silent, which is precisely
-          # what this step was added to stop. The cache cannot see whether the
-          # dev stack is up, so its verdict here is meaningless anyway.
-          out=$(go test -count=1 -tags integration -timeout 600s ./test/integration/... 2>&1) || {
+          # -count=1 AND -v, for two independent reasons — the first fix alone
+          # left this guard just as blind:
+          #   -count=1: a cached result prints only "ok ... (cached)" with none
+          #     of the test's own output. The cache also cannot see whether the
+          #     dev stack is up, so its verdict here is meaningless anyway.
+          #   -v: `go test` prints a t.Skip's message ONLY in verbose mode. A
+          #     package where every test skipped reports exactly `ok <pkg>
+          #     0.030s` — byte-identical to one where they all ran. Measured on
+          #     main 3119f2b: `ok .../test/integration 0.030s`, no warning, and
+          #     no way to tell from the log which of the two had happened. The
+          #     grep was asserting on text that could not be in its own input.
+          out=$(go test -count=1 -v -tags integration -timeout 600s ./test/integration/... 2>&1) || {
             echo "$out"; exit 1;
           }
           echo "$out"

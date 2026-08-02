@@ -290,7 +290,21 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
     # the first time by luck of ordering and failed here. Reconcile is still
     # called each round (it is the repair path being exercised); the assertion
     # is now that the run is mirrored and registrable.
+    # WAIT FOR `finished`, NOT MERELY FOR PRESENCE. The register endpoint's
+    # precondition is `run.status == RUN_STATUS["finished"]` (services.py:985,
+    # EXP-FR-031) — a mirrored run whose status is still `running` is visible
+    # and NOT registrable. This loop used to accept the first row whose
+    # mlflow_run_id matched and then call register immediately, so the two
+    # steps disagreed about what "registrable" meant. Main went red on
+    # 2026-08-02 with the readiness check passing and the very next call
+    # returning 422 RUN_NOT_FINISHED. The label said registrable; the loop only
+    # checked mirrored.
+    #
+    # `failed` and `killed` are terminal too, and no amount of polling turns
+    # them into `finished` — break out and say so rather than burning 60s to
+    # report a timeout that was decided in the first two seconds.
     exp_run_id = None
+    last_status = None
     for _ in range(30):
         try:
             requests.post(f"{c.EXPERIMENT}/internal/reconcile",
@@ -304,14 +318,17 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
         if g.status_code == 200:
             for run in g.json().get("data", []):
                 if run.get("mlflow_run_id") == mlflow_run_id:
-                    exp_run_id = run.get("id")
+                    last_status = run.get("status")
+                    if last_status == "finished":
+                        exp_run_id = run.get("id")
                     break
-        if exp_run_id:
+        if exp_run_id or last_status in ("failed", "killed"):
             break
         time.sleep(2)
     if not check(bool(exp_run_id),
-                 "the REAL MLflow run is mirrored into experiment-service (registrable)",
-                 f"mlflow_run_id={mlflow_run_id} never appeared within 60s"):
+                 "the REAL MLflow run is mirrored into experiment-service AND finished (registrable)",
+                 f"mlflow_run_id={mlflow_run_id} status={last_status!r} "
+                 f"(never reached 'finished' within 60s)"):
         return bail("mirror")
 
     reg_name = f"learn-model-{RUN}"
