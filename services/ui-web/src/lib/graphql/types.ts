@@ -1919,6 +1919,25 @@ export interface BatchEvaluateResult {
   results: BatchEvaluateRow[];
 }
 
+export interface DecisionEvaluation {
+  matched: boolean;
+  ruleIndex?: number | null;
+  explanation?: string | null;
+  outcome?: DecisionOutcome | null;
+  proposalId?: string | null;
+  dryRun: boolean;
+}
+export interface AgentChatSession {
+  id: ID;
+  agentKey?: string | null;
+  agentVersion?: number | null;
+  contextUrn?: string | null;
+  status?: string | null;
+  createdAt?: string | null;
+  lastActivityAt?: string | null;
+  expiresHardAt?: string | null;
+}
+
 // ---- BRD 55: decision outcome monitoring -----------------------------------
 /** A realized-outcome label on a decision. `correct` is null when there was no
  * decided outcome to compare against (agreement unknowable, never guessed). */

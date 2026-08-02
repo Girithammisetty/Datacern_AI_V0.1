@@ -447,6 +447,25 @@ export function useNewDecisionModelVersion() {
   });
 }
 
+/** Dry-run (or propose from) a published decision table against one case. */
+export function useEvaluateDecisionModel() {
+  return useMutation({
+    mutationFn: (vars: { id: string; caseId: string; dryRun: boolean }) =>
+      graphqlRequest<ops.EvaluateDecisionModelResult>(ops.EVALUATE_DECISION_MODEL, {
+        ...vars, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.evaluateDecisionModel),
+  });
+}
+
+/** Terminate an agent chat session — the conversation refuses further turns. */
+export function useTerminateAgentChatSession() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.TerminateAgentChatSessionResult>(
+        ops.TERMINATE_AGENT_CHAT_SESSION, { id }).then((r) => r.terminateAgentChatSession),
+  });
+}
+
 // ---- BRD 55: decision outcome monitoring -----------------------------------
 
 /** The realized-outcome label on one decision (null until someone records it). */

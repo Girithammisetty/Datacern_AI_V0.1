@@ -30,6 +30,8 @@ import type {
   DecisionModelDTO, DecisionOutcomeDTO, BatchEvaluateDTO, EntityMergeProposalDTO,
   // BRD 55: decision outcome monitoring.
   OutcomeLabelDTO, DecisionEffectivenessDTO,
+  // Sessions + decision-table evaluate.
+  AgentSessionDTO, DecisionEvaluationDTO,
 } from "../clients/agent.js";
 import type {
   PackSummaryDTO, PackDetailDTO, PlanOpDTO, LedgerRowDTO, InstallDTO,
@@ -2545,6 +2547,32 @@ export function mapDecisionModel(d: DecisionModelDTO) {
       note: r.note ?? null,
     })),
     defaultOutcome: mapDecisionOutcome(d.default_outcome),
+  };
+}
+
+export function mapAgentChatSession(d: AgentSessionDTO) {
+  return {
+    __typename: "AgentChatSession" as const,
+    id: d.id,
+    agentKey: d.agent_key ?? null,
+    agentVersion: d.agent_version ?? null,
+    contextUrn: d.context_urn ?? null,
+    status: d.status ?? null,
+    createdAt: d.created_at ?? null,
+    lastActivityAt: d.last_activity_at ?? null,
+    expiresHardAt: d.expires_hard_at ?? null,
+  };
+}
+
+export function mapDecisionEvaluation(d: DecisionEvaluationDTO) {
+  return {
+    __typename: "DecisionEvaluation" as const,
+    matched: d.matched,
+    ruleIndex: d.rule_index ?? null,
+    explanation: d.explanation ?? null,
+    outcome: mapDecisionOutcome(d.outcome),
+    proposalId: d.proposal_id ?? null,
+    dryRun: Boolean(d.dry_run),
   };
 }
 

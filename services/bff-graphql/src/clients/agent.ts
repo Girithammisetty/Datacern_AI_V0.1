@@ -564,6 +564,34 @@ export class AgentClient {
     return unwrap<BatchEvaluateDTO>(r);
   }
 
+  /** POST /sessions/{id}/terminate — end an agent chat session (404 cross-
+   * tenant/unknown). The copilot creates sessions implicitly via chat; this is
+   * the explicit kill for a runaway/finished conversation. */
+  async terminateSession(sessionId: string): Promise<AgentSessionDTO> {
+    const r = await this.http.post<{ data: AgentSessionDTO } | AgentSessionDTO>(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/terminate`,
+      {},
+    );
+    return unwrap<AgentSessionDTO>(r);
+  }
+
+  /** POST /decision-models/{id}/evaluate?dry_run= — evaluate a PUBLISHED table
+   * against one case. dry_run=true returns outcome + fired rule with NO side
+   * effect (DM-FR-030); dry_run=false mints a governed four-eyes proposal on
+   * match (DM-FR-020). */
+  async evaluateDecisionModel(
+    id: string,
+    body: { case_id: string; fields?: Record<string, unknown> },
+    dryRun: boolean,
+    idempotencyKey?: string,
+  ): Promise<DecisionEvaluationDTO> {
+    const r = await this.http.post<{ data: DecisionEvaluationDTO } | DecisionEvaluationDTO>(
+      `/api/v1/decision-models/${encodeURIComponent(id)}/evaluate`,
+      { body, query: { dry_run: dryRun }, idempotencyKey },
+    );
+    return unwrap<DecisionEvaluationDTO>(r);
+  }
+
   // ---- BRD 55: decision outcome monitoring (realized outcomes on decisions) --
 
   /** GET /decisions/{ref}/outcome — the realized-outcome label, or 404. */
@@ -608,6 +636,29 @@ export class AgentClient {
     );
     return unwrap<DecisionEffectivenessDTO>(r);
   }
+}
+
+/** One agent chat session (agent-runtime session_view). */
+export interface AgentSessionDTO {
+  id: string;
+  agent_key?: string;
+  agent_version?: number;
+  context_urn?: string | null;
+  status?: string; // active | idle | expired | terminated
+  created_at?: string;
+  last_activity_at?: string;
+  expires_hard_at?: string;
+}
+
+/** POST /decision-models/{id}/evaluate result: the fired rule (or no match)
+ * and, when not a dry run, the minted proposal id. */
+export interface DecisionEvaluationDTO {
+  matched: boolean;
+  rule_index?: number | null;
+  explanation?: string;
+  outcome?: { disposition_code: string; severity: string } | null;
+  proposal_id?: string | null;
+  dry_run?: boolean;
 }
 
 /** One realized-outcome label on a decision (agent-runtime outcome_labels,

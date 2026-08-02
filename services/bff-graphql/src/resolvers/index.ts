@@ -58,6 +58,7 @@ import {
   mapTool, mapToolVersion, mapToolHealth, mapTenantToolSettings, mapByoSubmission,
   mapAgentDefinition, mapAgentVersionInfo, mapTenantAgentConfig, mapAgentRunListItem,
   mapDecisionModel, mapBatchEvaluate, mapOutcomeLabel, mapDecisionEffectiveness,
+  mapAgentChatSession, mapDecisionEvaluation,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
@@ -5220,6 +5221,23 @@ export const resolvers = {
       );
       return mapDecisionModel(d);
     },
+
+    evaluateDecisionModel: async (
+      _p: unknown,
+      a: { id: string; caseId: string; dryRun?: boolean; fields?: Record<string, unknown> | null; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.evaluateDecisionModel(
+        a.id,
+        { case_id: a.caseId, fields: a.fields ?? undefined },
+        a.dryRun ?? true,
+        a.idempotencyKey,
+      );
+      return mapDecisionEvaluation(d);
+    },
+
+    terminateAgentChatSession: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapAgentChatSession(await ctx.clients.agent.terminateSession(a.id)),
 
     // ---- BRD 55: decision outcome monitoring --------------------------------
     markDecisionOutcome: async (

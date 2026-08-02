@@ -4849,6 +4849,35 @@ export const typeDefs = gql`
     results: [BatchEvaluateRow!]!
   }
 
+  """One decision-table evaluation against a case (agent-runtime POST
+  /decision-models/{id}/evaluate). dryRun=true is a pure preview — the fired
+  rule and outcome with NO side effect (DM-FR-030); dryRun=false mints the
+  governed four-eyes proposal on a match (proposalId set, DM-FR-020)."""
+  type DecisionEvaluation {
+    matched: Boolean!
+    "Index of the fired rule; null when the default outcome (or nothing) fired."
+    ruleIndex: Int
+    "Plain-language explanation naming the fired rule — the explainability leg."
+    explanation: String
+    outcome: DecisionOutcome
+    proposalId: ID
+    dryRun: Boolean!
+  }
+
+  """An agent chat session (agent-runtime). Sessions are CREATED implicitly by
+  the chat path; this type exists for the explicit terminate control."""
+  type AgentChatSession {
+    id: ID!
+    agentKey: String
+    agentVersion: Int
+    contextUrn: String
+    "active | idle | expired | terminated"
+    status: String
+    createdAt: String
+    lastActivityAt: String
+    expiresHardAt: String
+  }
+
   # ---- BRD 55: decision outcome monitoring ----------------------------------
 
   enum DecisionEffectivenessBy { DECISION_TYPE PRODUCER }
@@ -6212,6 +6241,20 @@ export const typeDefs = gql`
     """Edit a table as a new DRAFT version (POST /decision-models/{id}/versions);
     the prior version is never mutated. Needs case.disposition.create."""
     newDecisionModelVersion(id: ID!, input: CreateDecisionModelInput!, idempotencyKey: String): DecisionModel!
+
+    """Evaluate a PUBLISHED decision table against one case (agent-runtime POST
+    /decision-models/{id}/evaluate). dryRun=true (default) previews the fired
+    rule + outcome with no side effect; dryRun=false opens the four-eyes
+    proposal on a match — never an autonomous execution. Needs
+    case.disposition.read (evaluate) / the proposal path's own gates on
+    dryRun=false."""
+    evaluateDecisionModel(id: ID!, caseId: ID!, dryRun: Boolean = true, fields: JSON, idempotencyKey: String): DecisionEvaluation!
+
+    """Terminate an agent chat session (agent-runtime POST
+    /sessions/{id}/terminate; 404 on unknown/cross-tenant). Ends a runaway or
+    finished copilot conversation immediately — the session refuses further
+    turns."""
+    terminateAgentChatSession(id: ID!): AgentChatSession!
 
     # ---- BRD 55: decision outcome monitoring ----------------------------------
     """Record the REALIZED outcome of a decision (agent-runtime POST

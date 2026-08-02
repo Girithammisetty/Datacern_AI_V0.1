@@ -152,6 +152,8 @@ import type {
   BatchEvaluateResult,
   DecisionOutcomeLabel,
   DecisionEffectiveness,
+  DecisionEvaluation,
+  AgentChatSession,
   ResolutionRun,
   ResolutionRunDetail,
   MergeCandidate,
@@ -497,6 +499,22 @@ export const NEW_DECISION_MODEL_VERSION = /* GraphQL */ `
   }
 `;
 export interface NewDecisionModelVersionResult { newDecisionModelVersion: DecisionModel }
+
+export const EVALUATE_DECISION_MODEL = /* GraphQL */ `
+  mutation EvaluateDecisionModel($id: ID!, $caseId: ID!, $dryRun: Boolean!, $idempotencyKey: String!) {
+    evaluateDecisionModel(id: $id, caseId: $caseId, dryRun: $dryRun, idempotencyKey: $idempotencyKey) {
+      matched ruleIndex explanation outcome { dispositionCode severity } proposalId dryRun
+    }
+  }
+`;
+export interface EvaluateDecisionModelResult { evaluateDecisionModel: DecisionEvaluation }
+
+export const TERMINATE_AGENT_CHAT_SESSION = /* GraphQL */ `
+  mutation TerminateAgentChatSession($id: ID!) {
+    terminateAgentChatSession(id: $id) { id status agentKey }
+  }
+`;
+export interface TerminateAgentChatSessionResult { terminateAgentChatSession: AgentChatSession }
 
 // ---- BRD 55: decision outcome monitoring -----------------------------------
 const OUTCOME_LABEL_FIELDS = `

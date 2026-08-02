@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openHubStream, type HubStream } from "@/lib/realtime/connection";
+import { graphqlRequest } from "@/lib/graphql/client";
+import * as ops from "@/lib/graphql/operations";
 
 /** Bound the retained thread so a very long-lived conversation can't grow the
  * message array (and its per-render re-scroll/re-map cost) without limit. */
@@ -197,5 +199,20 @@ export function useCopilotThread(
     setStreaming(false);
   }, []);
 
-  return { messages, streaming, send, reset };
+  /** End the conversation for real: terminate every tracked agent-runtime
+   * session (the server refuses further turns on them), then clear local
+   * state. Best-effort per session — a session the server already expired
+   * 404s, which is the desired end state, not a failure. */
+  const endSession = useCallback(async () => {
+    const ids = [...sessionsRef.current.values()];
+    await Promise.allSettled(
+      ids.map((id) =>
+        graphqlRequest<ops.TerminateAgentChatSessionResult>(
+          ops.TERMINATE_AGENT_CHAT_SESSION, { id }),
+      ),
+    );
+    reset();
+  }, [reset]);
+
+  return { messages, streaming, send, reset, endSession, hasSession: messages.length > 0 };
 }
