@@ -130,7 +130,28 @@ deep-linking:
   path, and the agent-fleet fetch + empty path. `tsc`/lint clean, full ui-web
   suite green.
 
-**Still deferred (slice 3+):** inline run for the remaining reports (value/ROI,
-case export, chart export — each needs its own fetch+build wiring); scheduling
-arbitrary reports beyond dashboards; PDF board packs; an entitlement-gated
-catalog (capability filter is server-side today).
+### Slice 3 — inline run for value/ROI + case export (2026-08-02)
+
+Two more inline runners, plus an honest exclusion:
+
+- **ROI / value** — a new client-side CSV builder (`lib/export/value.ts`,
+  `buildValueReportCsv`) flattens the `ValueSummary` the hub fetches into a file,
+  preserving /admin/value's honesty: measured figures are exact, estimates
+  disclose their `assumptionVersion`, and an unset assumption exports the literal
+  `not available` (never a fabricated 0). A month-picker runner fetches the
+  summary on click and downloads it.
+- **Case export** — reuses the existing `CaseExportButton` (the same async
+  export operation the `/cases` page uses: kick off → poll → download via the
+  authed proxy), run unfiltered from the hub. No re-implementation.
+- **Chart export — intentionally NOT inline.** A chart export needs a specific
+  chart selected, so there's no meaningful "run all charts" hub action; it stays
+  a deep link to the dashboard the chart lives on. Recorded so the omission
+  reads as a decision, not a gap.
+
+`InlineReportDownload.tsx` now has four runners (chargeback, agent inventory,
+value/ROI, case export); tests cover the value builder + the value runner
+fetch→build→download. `tsc`/lint clean, full ui-web suite green.
+
+**Still deferred:** scheduling arbitrary reports beyond dashboards; PDF board
+packs; an entitlement-gated catalog (the capability filter is server-side
+today); a signed download endpoint for the B2 billing-periods artifacts.
