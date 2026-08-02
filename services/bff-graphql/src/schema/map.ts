@@ -68,7 +68,7 @@ import type {
   ExternalAgentKeyDTO, CreatedExternalAgentKeyDTO,
   // BRD 66 slice 3 (CPL-FR-033): commercial plane (plan/trial/entitlements).
   TenantEntitlementsDTO,
- ProvisioningStepDTO,} from "../clients/identity.js";
+ ProvisioningStepDTO, PocCriterionDTO, PocProgressDTO,} from "../clients/identity.js";
 import type {
   WorkspaceDTO, GroupDTO, MemberDTO, RoleDTO, ExplainAuthzDTO,
   // Tier 4b: identity/rbac admin (content grants + bulk membership).
@@ -289,6 +289,40 @@ export function mapRegisteredExternalAgent(ctx: GraphQLContext, d: CreatedExtern
     __typename: "RegisteredExternalAgent" as const,
     externalAgent: mapExternalAgent(ctx, d.key),
     apiKey: d.plaintext,
+  };
+}
+
+export function mapPocCriterion(d: PocCriterionDTO) {
+  return {
+    __typename: "PocCriterion" as const,
+    key: d.key,
+    description: d.description ?? null,
+    metricRef: d.metric_ref ?? null,
+    target: d.target ?? null,
+    direction: d.direction ?? null,
+    manualValue: d.manual_value ?? null,
+  };
+}
+
+export function mapPocProgress(d: PocProgressDTO) {
+  return {
+    __typename: "PocProgress" as const,
+    tenantId: d.tenant_id,
+    windowStart: d.window_start ?? null,
+    windowEnd: d.window_end ?? null,
+    asOf: d.as_of ?? null,
+    criteria: (d.criteria ?? []).map((c) => ({
+      __typename: "PocCriterionProgress" as const,
+      key: c.key,
+      description: c.description ?? null,
+      metricRef: c.metric_ref ?? null,
+      target: c.target ?? null,
+      direction: c.direction ?? null,
+      manualValue: c.manual_value ?? null,
+      actualValue: c.actual_value ?? null,
+      outcome: c.outcome ?? null,
+      dataSource: c.data_source ?? null,
+    })),
   };
 }
 

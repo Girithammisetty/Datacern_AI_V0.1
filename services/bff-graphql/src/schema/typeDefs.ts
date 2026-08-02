@@ -475,6 +475,65 @@ export const typeDefs = gql`
   """reactivateTenant result: the tenant plus any config drift detected while
   it was suspended (passthrough JSON; null when clean)."""
   type ReactivateTenantResult { tenant: Tenant! drift: JSON }
+  """One POC success criterion (identity SuccessCriterion, DSP-FR-020).
+  manualValue is only meaningful when metricRef is manual — null means "not
+  yet reported", rendered inconclusive, never a fabricated 0."""
+  type PocCriterion {
+    key: String!
+    description: String
+    metricRef: String
+    target: Float
+    "gte | lte"
+    direction: String
+    manualValue: Float
+  }
+  """One criterion's live actual-vs-target (identity CriterionProgress),
+  computed from real BRD 69 value data. outcome: met|missed|inconclusive;
+  dataSource records where the actual came from — or the explicit gap reason
+  when it is genuinely absent."""
+  type PocCriterionProgress {
+    key: String!
+    description: String
+    metricRef: String
+    target: Float
+    direction: String
+    manualValue: Float
+    actualValue: Float
+    outcome: String
+    dataSource: String
+  }
+  """The live POC success dashboard data (identity GET
+  /tenants/{id}/poc/progress, BRD 70 US-5)."""
+  type PocProgress {
+    tenantId: ID!
+    windowStart: String
+    windowEnd: String
+    asOf: String
+    criteria: [PocCriterionProgress!]!
+  }
+  input PocCriterionInput {
+    key: String!
+    description: String
+    metricRef: String
+    target: Float!
+    direction: String!
+  }
+  input CreateDemoTenantInput {
+    name: String!
+    displayName: String
+    ownerEmail: String
+    "Names the deploy/demo/(pack)/ bundle to seed. Required (DSP-FR-011)."
+    pack: String!
+    tier: String
+  }
+  input CreatePocTenantInput {
+    name: String!
+    displayName: String
+    ownerEmail: String
+    "Optional demo bundle to seed walkable content (DSP-FR-020)."
+    pack: String
+  }
+
   input CreateTenantInput {
     name: String!
     displayName: String
@@ -4541,6 +4600,12 @@ export const typeDefs = gql`
     (identity-service GET /tenants/{id}/provisioning). Platform operator only
     (identity requireSuperAdmin downstream)."""
     tenantProvisioning(id: ID!): [ProvisioningStep!]!
+    """The POC's agreed success criteria (identity GET /tenants/{id}/poc/
+    criteria, DSP-FR-020). Tenant-admin (cross-tenant guarded) or operator."""
+    pocCriteria(tenantId: ID!): [PocCriterion!]!
+    """Live actual-vs-target per criterion (GET /tenants/{id}/poc/progress) —
+    the POC sponsor dashboard of BRD 70 US-5. Never fabricates an actual."""
+    pocProgress(tenantId: ID!): PocProgress!
 
     """BRD 66 slice 3 (CPL-FR-033): the tenant's commercial plane (plan,
     trial, effective entitlements) for gating + upsell UI. Reachable by ANY
@@ -5693,6 +5758,35 @@ export const typeDefs = gql`
     """Re-activate a deactivated user (identity-service POST
     /users/{id}/activate). Needs identity.user.admin."""
     activateUser(id: ID!): User!
+
+    # ---- BRD 70 demo/POC + BRD 66 trials --------------------------------------
+    """Provision + seed a demo sandbox from a deploy/demo pack bundle
+    (identity POST /demo-tenants, 202; DSP-FR-010). Always publishes; demo
+    tenants are TTL-reaped and excluded from billing. Operator only."""
+    createDemoTenant(input: CreateDemoTenantInput!, idempotencyKey: String): CreateTenantResult!
+    """Reset a demo sandbox to its post-seed snapshot (POST /demo-tenants/{id}/
+    reset, DSP-FR-012 — idempotent re-seed). Operator only."""
+    resetDemoTenant(id: ID!): Tenant!
+    """Clone a fresh sibling sandbox with fresh persona credentials (POST
+    /demo-tenants/{id}/clone). Operator only."""
+    cloneDemoTenant(id: ID!): CreateTenantResult!
+    """Provision a POC tenant (identity POST /poc-tenants, DSP-FR-020; pack
+    optional). Operator only."""
+    createPocTenant(input: CreatePocTenantInput!, idempotencyKey: String): CreateTenantResult!
+    """Set the POC's agreed success criteria (PUT /poc-tenants/{id}/criteria).
+    Operator only."""
+    setPocCriteria(tenantId: ID!, criteria: [PocCriterionInput!]!): Boolean!
+    """Record a manually-measured criterion value (PATCH /tenants/{id}/poc/
+    criteria/{key}/manual-value; audited, DSP-FR-021). Tenant admin."""
+    setPocManualValue(tenantId: ID!, key: String!, value: Float!): Boolean!
+    """Start a trial (identity POST /tenants/{id}/trial, CPL-FR-021). 409 on an
+    illegal commercial transition — demo/poc tenants have no edge into trial.
+    Operator only."""
+    startTrial(id: ID!, trialDays: Int): Boolean!
+    """Extend a running trial (POST /tenants/{id}/trial/extend). Operator only."""
+    extendTrial(id: ID!, trialDays: Int): Boolean!
+    """Convert a trial to paid (POST /tenants/{id}/convert). Operator only."""
+    convertTrial(id: ID!): Boolean!
 
     """Register/update the caller tenant's OIDC IdP (BYO-P4, PUT /tenants/self/
     idp). The issuer must be globally unique. Needs the tenant-admin scope."""

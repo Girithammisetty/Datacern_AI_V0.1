@@ -486,6 +486,73 @@ export function useClearAiCache() {
   });
 }
 
+/** Live POC actual-vs-target (the BRD 70 US-5 sponsor dashboard data). */
+export function usePocProgress(tenantId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.pocProgress(tenantId),
+    queryFn: () => graphqlRequest<ops.PocProgressResult>(ops.POC_PROGRESS, { tenantId })
+      .then((r) => r.pocProgress),
+    enabled: enabled && !!tenantId,
+  });
+}
+
+export function useCreateDemoTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; displayName?: string; ownerEmail?: string; pack: string }) =>
+      graphqlRequest<ops.CreateDemoTenantResult>(ops.CREATE_DEMO_TENANT, {
+        input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createDemoTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useResetDemoTenant() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ResetDemoTenantResult>(ops.RESET_DEMO_TENANT, { id }).then((r) => r.resetDemoTenant),
+  });
+}
+
+export function useCreatePocTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; displayName?: string; ownerEmail?: string; pack?: string }) =>
+      graphqlRequest<ops.CreatePocTenantResult>(ops.CREATE_POC_TENANT, {
+        input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createPocTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useSetPocManualValue() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { tenantId: string; key: string; value: number }) =>
+      graphqlRequest<ops.SetPocManualValueResult>(ops.SET_POC_MANUAL_VALUE, vars)
+        .then((r) => r.setPocManualValue),
+    onSuccess: (_d, vars) => client.invalidateQueries({ queryKey: qk.pocProgress(vars.tenantId) }),
+  });
+}
+
+export function useStartTrial() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; trialDays?: number }) =>
+      graphqlRequest<ops.StartTrialResult>(ops.START_TRIAL, vars).then((r) => r.startTrial),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useConvertTrial() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ConvertTrialResult>(ops.CONVERT_TRIAL, { id }).then((r) => r.convertTrial),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
 /** Provisioning-saga steps for one tenant (operator only). */
 export function useTenantProvisioning(id: string, enabled = true) {
   return useQuery({

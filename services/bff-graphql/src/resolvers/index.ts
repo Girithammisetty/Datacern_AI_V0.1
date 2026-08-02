@@ -68,7 +68,7 @@ import {
   mapDecisionModel, mapBatchEvaluate, mapOutcomeLabel, mapDecisionEffectiveness,
   mapAgentChatSession, mapDecisionEvaluation,
   mapAiSpendFreeze,
-  mapProvisioningStep,
+  mapProvisioningStep, mapPocCriterion, mapPocProgress,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
@@ -815,6 +815,15 @@ export const resolvers = {
     // requireSuperAdmin gate enforces (a tenant admin's JWT is rejected there).
     tenantProvisioning: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       ctx.clients.identity.provisioningStatus(a.id).then((rows) => rows.map(mapProvisioningStep)),
+
+    pocCriteria: async (_p: unknown, a: { tenantId: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.identity.pocCriteria(a.tenantId);
+      const rows = Array.isArray(d) ? d : (d.criteria ?? []);
+      return rows.map(mapPocCriterion);
+    },
+
+    pocProgress: (_p: unknown, a: { tenantId: string }, ctx: GraphQLContext) =>
+      ctx.clients.identity.pocProgress(a.tenantId).then(mapPocProgress),
 
     tenants: (_p: unknown, a: { limit?: number }, ctx: GraphQLContext) =>
       ctx.clients.identity
@@ -2454,6 +2463,79 @@ export const resolvers = {
 
     activateUser: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       mapUser(ctx, await ctx.clients.identity.activateUser(a.id)),
+
+    // ---- BRD 70 demo/POC + BRD 66 trials ------------------------------------
+    createDemoTenant: async (
+      _p: unknown,
+      a: { input: { name: string; displayName?: string | null; ownerEmail?: string | null; pack: string; tier?: string | null }; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.identity.createDemoTenant({
+        name: a.input.name,
+        display_name: a.input.displayName ?? undefined,
+        owner_email: a.input.ownerEmail ?? undefined,
+        pack: a.input.pack,
+        tier: a.input.tier ?? undefined,
+      }, a.idempotencyKey);
+      return { __typename: "CreateTenantResult" as const, tenant: mapTenant(ctx, d.tenant), operationId: d.operation_id ?? null };
+    },
+
+    resetDemoTenant: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapTenant(ctx, await ctx.clients.identity.resetDemoTenant(a.id)),
+
+    cloneDemoTenant: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.identity.cloneDemoTenant(a.id);
+      const t = (d as { tenant?: unknown }).tenant ? (d as { tenant: never }).tenant : (d as never);
+      const op = (d as { operation_id?: string }).operation_id ?? null;
+      return { __typename: "CreateTenantResult" as const, tenant: mapTenant(ctx, t), operationId: op };
+    },
+
+    createPocTenant: async (
+      _p: unknown,
+      a: { input: { name: string; displayName?: string | null; ownerEmail?: string | null; pack?: string | null }; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.identity.createPocTenant({
+        name: a.input.name,
+        display_name: a.input.displayName ?? undefined,
+        owner_email: a.input.ownerEmail ?? undefined,
+        pack: a.input.pack ?? undefined,
+      }, a.idempotencyKey);
+      const t = (d as { tenant?: unknown }).tenant ? (d as { tenant: never }).tenant : (d as never);
+      const op = (d as { operation_id?: string }).operation_id ?? null;
+      return { __typename: "CreateTenantResult" as const, tenant: mapTenant(ctx, t), operationId: op };
+    },
+
+    setPocCriteria: async (_p: unknown, a: { tenantId: string; criteria: Array<{ key: string; description?: string | null; metricRef?: string | null; target: number; direction: string }> }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.setPocCriteria(a.tenantId, a.criteria.map((c) => ({
+        key: c.key,
+        description: c.description ?? undefined,
+        metric_ref: c.metricRef ?? undefined,
+        target: c.target,
+        direction: c.direction,
+      })));
+      return true;
+    },
+
+    setPocManualValue: async (_p: unknown, a: { tenantId: string; key: string; value: number }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.setPocManualValue(a.tenantId, a.key, a.value);
+      return true;
+    },
+
+    startTrial: async (_p: unknown, a: { id: string; trialDays?: number | null }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.startTrial(a.id, a.trialDays ?? undefined);
+      return true;
+    },
+
+    extendTrial: async (_p: unknown, a: { id: string; trialDays?: number | null }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.extendTrial(a.id, a.trialDays ?? undefined);
+      return true;
+    },
+
+    convertTrial: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.convertTrial(a.id);
+      return true;
+    },
 
     setTenantIdp: async (
       _p: unknown,

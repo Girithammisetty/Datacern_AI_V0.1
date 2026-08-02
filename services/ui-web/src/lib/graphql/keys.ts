@@ -6,6 +6,7 @@ export const qk = {
   me: () => ["platform", "me"] as const,
   tenants: () => ["platform", "tenants"] as const,
   tenantProvisioning: (id: string) => ["platform", "tenantProvisioning", id] as const,
+  pocProgress: (id: string) => ["platform", "pocProgress", id] as const,
   user: (id: string) => ["platform", "user", id] as const,
   evidencePack: (proposalId: string) => ["governance", "evidencePack", proposalId] as const,
 

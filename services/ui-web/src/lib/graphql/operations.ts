@@ -168,6 +168,7 @@ import type {
   AgentChatSession,
   AiSpendFreeze,
   ProvisioningStep,
+  PocProgress,
   ResolutionRun,
   ResolutionRunDetail,
   MergeCandidate,
@@ -541,6 +542,56 @@ export const CLEAR_AI_CACHE = /* GraphQL */ `
 export interface ClearAiCacheResult { clearAiCache: number }
 
 const TENANT_LIFECYCLE_FIELDS = `id name displayName status tier cloud ownerEmail`;
+
+export const POC_PROGRESS = /* GraphQL */ `
+  query PocProgress($tenantId: ID!) {
+    pocProgress(tenantId: $tenantId) {
+      tenantId windowStart windowEnd asOf
+      criteria { key description metricRef target direction manualValue actualValue outcome dataSource }
+    }
+  }
+`;
+export interface PocProgressResult { pocProgress: PocProgress }
+
+export const CREATE_DEMO_TENANT = /* GraphQL */ `
+  mutation CreateDemoTenant($input: CreateDemoTenantInput!, $idempotencyKey: String!) {
+    createDemoTenant(input: $input, idempotencyKey: $idempotencyKey) {
+      tenant { ${TENANT_LIFECYCLE_FIELDS} } operationId
+    }
+  }
+`;
+export interface CreateDemoTenantResult { createDemoTenant: { tenant: Tenant; operationId: string | null } }
+
+export const RESET_DEMO_TENANT = /* GraphQL */ `
+  mutation ResetDemoTenant($id: ID!) { resetDemoTenant(id: $id) { ${TENANT_LIFECYCLE_FIELDS} } }
+`;
+export interface ResetDemoTenantResult { resetDemoTenant: Tenant }
+
+export const CREATE_POC_TENANT = /* GraphQL */ `
+  mutation CreatePocTenant($input: CreatePocTenantInput!, $idempotencyKey: String!) {
+    createPocTenant(input: $input, idempotencyKey: $idempotencyKey) {
+      tenant { ${TENANT_LIFECYCLE_FIELDS} } operationId
+    }
+  }
+`;
+export interface CreatePocTenantResult { createPocTenant: { tenant: Tenant; operationId: string | null } }
+
+export const SET_POC_MANUAL_VALUE = /* GraphQL */ `
+  mutation SetPocManualValue($tenantId: ID!, $key: String!, $value: Float!) {
+    setPocManualValue(tenantId: $tenantId, key: $key, value: $value)
+  }
+`;
+export interface SetPocManualValueResult { setPocManualValue: boolean }
+
+export const START_TRIAL = /* GraphQL */ `
+  mutation StartTrial($id: ID!, $trialDays: Int) { startTrial(id: $id, trialDays: $trialDays) }
+`;
+export interface StartTrialResult { startTrial: boolean }
+
+export const CONVERT_TRIAL = /* GraphQL */ `
+  mutation ConvertTrial($id: ID!) { convertTrial(id: $id) }
+`;
+export interface ConvertTrialResult { convertTrial: boolean }
 
 export const TENANT_PROVISIONING = /* GraphQL */ `
   query TenantProvisioning($id: ID!) {

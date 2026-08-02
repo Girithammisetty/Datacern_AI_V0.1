@@ -79,6 +79,29 @@ export interface TenantDTO {
   updated_at?: string | null;
 }
 
+/** One POC success criterion (identity domain.SuccessCriterion). */
+export interface PocCriterionDTO {
+  key: string;
+  description?: string;
+  metric_ref?: string;
+  target?: number;
+  direction?: string; // gte|lte
+  manual_value?: number | null;
+}
+
+/** GET /tenants/{id}/poc/progress (identity domain.PocProgress). */
+export interface PocProgressDTO {
+  tenant_id: string;
+  window_start?: string;
+  window_end?: string;
+  as_of?: string;
+  criteria: (PocCriterionDTO & {
+    actual_value?: number | null;
+    outcome?: string; // met|missed|inconclusive
+    data_source?: string;
+  })[];
+}
+
 /** One provisioning-saga step (identity domain.ProvisioningStep). */
 export interface ProvisioningStepDTO {
   id: string;
@@ -350,6 +373,85 @@ export class IdentityClient {
       `/api/v1/tenants/${encodeURIComponent(id)}/provisioning/retry`, {},
     );
     return r.operation_id;
+  }
+
+  // ---- BRD 70 demo/POC + BRD 66 trials (identity requireSuperAdmin unless
+  // noted; POC reads are tenant-admin with cross-tenant guard) --------------
+
+  /** POST /api/v1/demo-tenants (202) — provision + seed a demo sandbox from a
+   * deploy/demo/<pack>/ bundle (DSP-FR-010). Always publishes. */
+  createDemoTenant(
+    body: { name: string; display_name?: string; owner_email?: string; pack: string; tier?: string },
+    idempotencyKey?: string,
+  ): Promise<{ operation_id: string; tenant: TenantDTO }> {
+    return this.http.post<{ operation_id: string; tenant: TenantDTO }>("/api/v1/demo-tenants", { body, idempotencyKey });
+  }
+
+  /** POST /api/v1/demo-tenants/{id}/reset — idempotent re-seed (DSP-FR-012). */
+  resetDemoTenant(id: string): Promise<TenantDTO> {
+    return this.http.post<TenantDTO>(`/api/v1/demo-tenants/${encodeURIComponent(id)}/reset`, {});
+  }
+
+  /** POST /api/v1/demo-tenants/{id}/clone — fresh sibling sandbox. */
+  cloneDemoTenant(id: string): Promise<{ operation_id?: string; tenant: TenantDTO } | TenantDTO> {
+    return this.http.post<{ operation_id?: string; tenant: TenantDTO } | TenantDTO>(
+      `/api/v1/demo-tenants/${encodeURIComponent(id)}/clone`, {},
+    );
+  }
+
+  /** POST /api/v1/poc-tenants — provision a POC tenant (pack optional). */
+  createPocTenant(
+    body: { name: string; display_name?: string; owner_email?: string; pack?: string },
+    idempotencyKey?: string,
+  ): Promise<{ operation_id?: string; tenant: TenantDTO } | TenantDTO> {
+    return this.http.post<{ operation_id?: string; tenant: TenantDTO } | TenantDTO>(
+      "/api/v1/poc-tenants", { body, idempotencyKey },
+    );
+  }
+
+  /** GET /tenants/{id}/poc/criteria — the agreed success criteria. */
+  pocCriteria(id: string): Promise<{ criteria?: PocCriterionDTO[] } | PocCriterionDTO[]> {
+    return this.http.get(`/api/v1/tenants/${encodeURIComponent(id)}/poc/criteria`);
+  }
+
+  /** PUT /api/v1/poc-tenants/{id}/criteria — set the agreed criteria. */
+  setPocCriteria(id: string, criteria: PocCriterionDTO[]): Promise<unknown> {
+    return this.http.put(`/api/v1/poc-tenants/${encodeURIComponent(id)}/criteria`, { body: { criteria } });
+  }
+
+  /** GET /tenants/{id}/poc/progress — actual-vs-target per criterion from real
+   * BRD 69 value data; inconclusive when the data is genuinely absent. */
+  pocProgress(id: string): Promise<PocProgressDTO> {
+    return this.http.get<PocProgressDTO>(`/api/v1/tenants/${encodeURIComponent(id)}/poc/progress`);
+  }
+
+  /** PATCH /tenants/{id}/poc/criteria/{key}/manual-value — sponsor-updated
+   * manual metric (audited, DSP-FR-021). */
+  setPocManualValue(id: string, key: string, value: number): Promise<unknown> {
+    return this.http.patch(
+      `/api/v1/tenants/${encodeURIComponent(id)}/poc/criteria/${encodeURIComponent(key)}/manual-value`,
+      { body: { value } },
+    );
+  }
+
+  /** POST /tenants/{id}/trial (CPL-FR-021) — start a trial; 409 on an illegal
+   * commercial transition (demo/poc tenants have no edge into trial). */
+  startTrial(id: string, trialDays?: number): Promise<unknown> {
+    return this.http.post(`/api/v1/tenants/${encodeURIComponent(id)}/trial`, {
+      body: trialDays ? { trial_days: trialDays } : {},
+    });
+  }
+
+  /** POST /tenants/{id}/trial/extend — extend a running trial. */
+  extendTrial(id: string, trialDays?: number): Promise<unknown> {
+    return this.http.post(`/api/v1/tenants/${encodeURIComponent(id)}/trial/extend`, {
+      body: trialDays ? { trial_days: trialDays } : {},
+    });
+  }
+
+  /** POST /tenants/{id}/convert — trial → paid. */
+  convertTrial(id: string): Promise<unknown> {
+    return this.http.post(`/api/v1/tenants/${encodeURIComponent(id)}/convert`, {});
   }
 
   /** POST /api/v1/users/{id}/activate — re-activate a deactivated user. */

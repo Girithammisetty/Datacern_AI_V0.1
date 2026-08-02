@@ -2050,6 +2050,25 @@ export interface BatchEvaluateResult {
   results: BatchEvaluateRow[];
 }
 
+export interface PocCriterionProgress {
+  key: string;
+  description?: string | null;
+  metricRef?: string | null;
+  target?: number | null;
+  direction?: string | null;
+  manualValue?: number | null;
+  actualValue?: number | null;
+  outcome?: string | null;
+  dataSource?: string | null;
+}
+export interface PocProgress {
+  tenantId: ID;
+  windowStart?: string | null;
+  windowEnd?: string | null;
+  asOf?: string | null;
+  criteria: PocCriterionProgress[];
+}
+
 export interface ProvisioningStep {
   id: ID;
   stepIndex: number;

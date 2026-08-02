@@ -8,7 +8,9 @@ import { StatusChip } from "@/components/primitives/StatusChip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Input, Label } from "@/components/ui/primitives";
 import { useTenants, useCreateTenant, usePublishTenant, useSuspendTenant,
-  useReactivateTenant, useTenantProvisioning, useRetryTenantProvisioning } from "@/lib/graphql/hooks";
+  useReactivateTenant, useTenantProvisioning, useRetryTenantProvisioning,
+  usePocProgress, useCreateDemoTenant, useResetDemoTenant, useCreatePocTenant,
+  useSetPocManualValue, useStartTrial, useConvertTrial } from "@/lib/graphql/hooks";
 import { useToasts } from "@/stores/ui";
 import type { Tenant } from "@/lib/graphql/types";
 import { formatLocal } from "@/lib/utils";
@@ -30,7 +32,12 @@ export default function TenantsPage() {
   const suspend = useSuspendTenant();
   const reactivate = useReactivateTenant();
   const [creating, setCreating] = useState(false);
+  const [sandboxKind, setSandboxKind] = useState<"demo" | "poc" | null>(null);
   const [provisioningOf, setProvisioningOf] = useState<Tenant | null>(null);
+  const [pocOf, setPocOf] = useState<Tenant | null>(null);
+  const resetDemo = useResetDemoTenant();
+  const startTrial = useStartTrial();
+  const convertTrial = useConvertTrial();
 
   const toastErr = (title: string) => (e: unknown) =>
     push({ title, description: e instanceof Error ? e.message : String(e), variant: "error" });
@@ -44,14 +51,25 @@ export default function TenantsPage() {
         title="Tenants"
         description="Every tenant on the platform, with lifecycle controls. Platform administration does not cross the tenant data wall."
         actions={
-          <Button size="sm" onClick={() => setCreating((v) => !v)}>
-            {creating ? "Cancel" : "New tenant"}
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setSandboxKind(sandboxKind === "demo" ? null : "demo")}>
+              {sandboxKind === "demo" ? "Cancel" : "New demo sandbox"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setSandboxKind(sandboxKind === "poc" ? null : "poc")}>
+              {sandboxKind === "poc" ? "Cancel" : "New POC tenant"}
+            </Button>
+            <Button size="sm" onClick={() => setCreating((v) => !v)}>
+              {creating ? "Cancel" : "New tenant"}
+            </Button>
+          </div>
         }
       />
 
       {creating && (
         <CreateTenantForm onDone={() => { setCreating(false); tenants.refetch(); }} />
+      )}
+      {sandboxKind && (
+        <SandboxForm kind={sandboxKind} onDone={() => { setSandboxKind(null); tenants.refetch(); }} />
       )}
 
       <AsyncBoundary
@@ -117,6 +135,38 @@ export default function TenantsPage() {
                           Reactivate
                         </Button>
                       )}
+                      {t.tier === "demo" && (
+                        <Button size="sm" variant="ghost" disabled={resetDemo.isPending}
+                          title="Reset to the post-seed snapshot (idempotent re-seed)"
+                          onClick={() => resetDemo.mutate(t.id, {
+                            onSuccess: () => push({ title: "Sandbox reset", variant: "success" }),
+                            onError: toastErr("Reset failed"),
+                          })}>
+                          Reset
+                        </Button>
+                      )}
+                      {t.status === "active" && t.tier !== "demo" && (
+                        <Button size="sm" variant="ghost" disabled={startTrial.isPending}
+                          title="Start a trial (409 if this tenant's commercial state has no edge into trial)"
+                          onClick={() => startTrial.mutate({ id: t.id }, {
+                            onSuccess: () => push({ title: "Trial started", variant: "success" }),
+                            onError: toastErr("Trial start failed"),
+                          })}>
+                          Trial
+                        </Button>
+                      )}
+                      {t.status === "trial" && (
+                        <Button size="sm" variant="ghost" disabled={convertTrial.isPending}
+                          onClick={() => convertTrial.mutate(t.id, {
+                            onSuccess: () => push({ title: "Converted to paid", variant: "success" }),
+                            onError: toastErr("Convert failed"),
+                          })}>
+                          Convert
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={() => setPocOf(pocOf?.id === t.id ? null : t)}>
+                        {pocOf?.id === t.id ? "Hide POC" : "POC"}
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => setProvisioningOf(provisioningOf?.id === t.id ? null : t)}>
                         {provisioningOf?.id === t.id ? "Hide provisioning" : "Provisioning"}
                       </Button>
@@ -131,7 +181,137 @@ export default function TenantsPage() {
       </AsyncBoundary>
 
       {provisioningOf && <ProvisioningPanel tenant={provisioningOf} />}
+      {pocOf && <PocPanel tenant={pocOf} />}
     </div>
+  );
+}
+
+/** Provision a demo sandbox (pack bundle required) or a POC tenant. */
+function SandboxForm({ kind, onDone }: { kind: "demo" | "poc"; onDone: () => void }) {
+  const push = useToasts((s) => s.push);
+  const demo = useCreateDemoTenant();
+  const poc = useCreatePocTenant();
+  const [name, setName] = useState("");
+  const [pack, setPack] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const pending = demo.isPending || poc.isPending;
+
+  return (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle>{kind === "demo" ? "New demo sandbox" : "New POC tenant"}</CardTitle>
+        <CardDescription>
+          {kind === "demo"
+            ? "Seeded from a deploy/demo pack bundle; TTL-reaped and excluded from billing (DSP-FR-001/002)."
+            : "A POC tenant with agreed success criteria and a live progress dashboard (DSP-FR-020)."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!name.trim() || pending) return;
+            const done = {
+              onSuccess: (r: { operationId: string | null }) => {
+                push({ title: "Provisioning started", description: r.operationId ? `operation ${r.operationId}` : undefined, variant: "success" as const });
+                onDone();
+              },
+              onError: (err: unknown) => push({ title: "Create failed", description: err instanceof Error ? err.message : String(err), variant: "error" }),
+            };
+            if (kind === "demo") {
+              if (!pack.trim()) return;
+              demo.mutate({ name: name.trim(), pack: pack.trim(), ownerEmail: ownerEmail.trim() || undefined }, done);
+            } else {
+              poc.mutate({ name: name.trim(), pack: pack.trim() || undefined, ownerEmail: ownerEmail.trim() || undefined }, done);
+            }
+          }}
+        >
+          <div>
+            <Label htmlFor="sb-name">Name (slug)</Label>
+            <Input id="sb-name" value={name} onChange={(e) => setName(e.target.value)} className="font-mono text-xs" />
+          </div>
+          <div>
+            <Label htmlFor="sb-pack">Pack bundle{kind === "poc" ? " (optional)" : ""}</Label>
+            <Input id="sb-pack" value={pack} onChange={(e) => setPack(e.target.value)}
+              placeholder="e.g. insurance-claims-payer" className="font-mono text-xs" />
+          </div>
+          <div>
+            <Label htmlFor="sb-owner">Owner email</Label>
+            <Input id="sb-owner" type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} />
+          </div>
+          <Button type="submit" size="sm" disabled={!name.trim() || (kind === "demo" && !pack.trim()) || pending}>
+            {pending ? "Provisioning…" : "Create"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** The live POC success dashboard (BRD 70 US-5): actual-vs-target per agreed
+ * criterion from real BRD 69 value data — inconclusive when data is genuinely
+ * absent, never fabricated. Manual criteria are sponsor-updatable here. */
+function PocPanel({ tenant }: { tenant: Tenant }) {
+  const progress = usePocProgress(tenant.id);
+  const setManual = useSetPocManualValue();
+  const push = useToasts((s) => s.push);
+
+  return (
+    <Card className="mt-4" data-testid="poc-panel">
+      <CardHeader>
+        <CardTitle>POC progress — {tenant.displayName || tenant.name}</CardTitle>
+        <CardDescription>
+          {progress.data?.windowStart && progress.data?.windowEnd
+            ? `Window ${formatLocal(progress.data.windowStart)} → ${formatLocal(progress.data.windowEnd)}`
+            : "Agreed success criteria vs live value data."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <AsyncBoundary
+          isLoading={progress.isLoading}
+          isError={progress.isError}
+          error={progress.error}
+          isEmpty={!progress.isLoading && (progress.data?.criteria.length ?? 0) === 0}
+          emptyTitle="No POC criteria agreed for this tenant."
+          onRetry={() => progress.refetch()}
+        >
+          <ul className="space-y-1 text-sm">
+            {(progress.data?.criteria ?? []).map((c) => (
+              <li key={c.key} className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-1.5">
+                <span className="font-mono text-xs">{c.key}</span>
+                {c.description && <span className="text-xs text-muted-foreground">{c.description}</span>}
+                <span className="text-xs tabular-nums">
+                  target {c.direction === "lte" ? "≤" : "≥"} {c.target ?? "—"} ·
+                  actual {c.actualValue ?? "—"}
+                </span>
+                <StatusChip status={c.outcome ?? "inconclusive"} />
+                {c.dataSource && <span className="text-xs text-muted-foreground">({c.dataSource})</span>}
+                {c.metricRef === "manual" && (
+                  <form
+                    className="ml-auto flex items-center gap-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const v = Number((new FormData(e.currentTarget)).get("mv"));
+                      if (Number.isFinite(v)) {
+                        setManual.mutate({ tenantId: tenant.id, key: c.key, value: v }, {
+                          onSuccess: () => push({ title: "Value recorded", variant: "success" }),
+                          onError: (err) => push({ title: "Record failed", description: err instanceof Error ? err.message : String(err), variant: "error" }),
+                        });
+                      }
+                    }}
+                  >
+                    <Input name="mv" type="number" step="any" defaultValue={c.manualValue ?? undefined}
+                      aria-label={`Manual value for ${c.key}`} className="h-7 w-24 text-xs" />
+                    <Button type="submit" size="sm" variant="outline" disabled={setManual.isPending}>Record</Button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        </AsyncBoundary>
+      </CardContent>
+    </Card>
   );
 }
 
