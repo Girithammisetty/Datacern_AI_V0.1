@@ -64,8 +64,12 @@ type Request struct {
 	ProposalGrant string
 	// Eval is honoured only when the gateway derived it from a trusted caller
 	// claim (BR-16); a plain agent cannot self-declare eval mode.
-	Eval    bool
-	TraceID string
+	Eval bool
+	// WritesSuspended is the tenant's commercial gate (BRD 66 CPL-FR-022): when
+	// true (commercial_state=suspended_commercial), an immediate write-direct
+	// tool call is refused. Derived by the gateway from the VERIFIED token claim.
+	WritesSuspended bool
+	TraceID         string
 }
 
 // Outcome is the enforcement result the MCP layer renders.
@@ -176,6 +180,19 @@ func (p *Pipeline) run(ctx context.Context, req Request) Outcome {
 		tier = settings.MaxTierOverride
 	}
 	oc.Tier = tier
+
+	// Commercial gate (BRD 66 CPL-FR-022, AC-2): a suspended_commercial tenant is
+	// refused an immediate write-direct call — the one value-delivering write
+	// tool-plane executes that the proposal path doesn't already cover (a
+	// write-proposal without a grant falls to PROPOSAL_REQUIRED, and its human
+	// approval is gated at case-service / agent-runtime, so no grant is ever
+	// minted for a suspended tenant). Reads pass; the code is distinct from a
+	// policy denial so the surface can offer "convert".
+	if req.WritesSuspended && tier == domain.TierWriteDirect {
+		oc.Decision, oc.Code, oc.HTTP = events.DecisionDeniedPolicy, domain.CodeTrialExpired, 403
+		oc.Message = "trial has expired; direct writes are suspended until the tenant converts"
+		return oc
+	}
 
 	// Verify the signed proposal-execution grant (TPL-FR-035). A grant only
 	// counts if it is a valid RS256 token from agent-runtime bound to THIS

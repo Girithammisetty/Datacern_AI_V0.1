@@ -1,21 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { fileLeadStore } from "@/lib/leads/fileStore";
+import { captureLead, validateLead, type Lead } from "@/lib/leads/leads";
+
 /**
- * Public (unauthenticated) demo-request intake for the pre-login marketing page.
+ * Public (unauthenticated) demo-request intake for the pre-login marketing page
+ * (GTM B4). Every valid submission is captured DURABLY and IDEMPOTENTLY:
  *
- * It does something real with every valid submission: forwards the lead to a
- * configured webhook (Slack / CRM / Zapier / n8n — set DEMO_WEBHOOK_URL) and
- * always writes a structured server log so nothing is lost even if the webhook
- * is unset or down. A hidden honeypot field drops obvious bots. To wire a real
- * inbox, point DEMO_WEBHOOK_URL at your endpoint (no code change needed).
+ *   validate + honeypot  →  dedupe + persist (LEAD_STORE_PATH JSONL, when set)
+ *                        →  forward to a webhook (DEMO_WEBHOOK_URL, when set)
+ *                        →  confirm to the prospect (LEAD_CONFIRM_WEBHOOK_URL)
+ *
+ * No single sink is required to KEEP a lead — the durable store and the webhook
+ * are independent, and a duplicate email is a no-op. When nothing is
+ * configured the lead is still logged and the response is honest (`captured`
+ * reflects whether a durable/forwarding sink actually accepted it), so an
+ * operator can see that intake is unwired rather than silently losing leads.
+ *
+ * Wiring: set LEAD_STORE_PATH (durable file), DEMO_WEBHOOK_URL (Slack/CRM/
+ * Zapier/n8n), and optionally LEAD_CONFIRM_WEBHOOK_URL (a prospect
+ * confirmation relay — e.g. an email-sending webhook) — no code change needed.
  */
 
 export const runtime = "nodejs";
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-
-function clean(v: unknown, max = 300): string {
-  return typeof v === "string" ? v.trim().slice(0, max) : "";
+function webhookSink(url: string | undefined, shape: (lead: Lead) => unknown) {
+  if (!url) return null;
+  return async (lead: Lead): Promise<boolean> => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(shape(lead)),
+    });
+    return res.ok;
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -26,55 +44,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
 
-  // Honeypot: real users never fill a hidden "website" field; bots do.
-  if (clean(body.website)) {
-    return NextResponse.json({ ok: true });
+  const v = validateLead(body, new Date().toISOString());
+  if (!v.ok) {
+    if (v.reason === "honeypot") return NextResponse.json({ ok: true }); // benign to bots
+    return NextResponse.json({ ok: false, error: "validation", fields: v.fields }, { status: 422 });
   }
+  const lead = v.lead;
 
-  const name = clean(body.name, 200);
-  const email = clean(body.email, 200);
-  const company = clean(body.company, 200);
-  const teamSize = clean(body.teamSize, 40);
-  const message = clean(body.message, 2000);
+  const result = await captureLead(lead, {
+    store: fileLeadStore(),
+    webhook: webhookSink(process.env.DEMO_WEBHOOK_URL, (l) => ({
+      text: `New demo request — ${l.name} · ${l.company} · ${l.email}`,
+      lead: l,
+    })),
+    confirm: webhookSink(process.env.LEAD_CONFIRM_WEBHOOK_URL, (l) => ({
+      to: l.email,
+      subject: "Thanks for your interest in Datacern",
+      template: "demo_request_confirmation",
+      vars: { name: l.name, company: l.company },
+    })),
+  });
 
-  const fields: string[] = [];
-  if (name.length < 2) fields.push("name");
-  if (!EMAIL_RE.test(email)) fields.push("email");
-  if (company.length < 1) fields.push("company");
-  if (fields.length) {
-    return NextResponse.json({ ok: false, error: "validation", fields }, { status: 422 });
-  }
+  // Structured log regardless — a missing/broken sink never loses the record,
+  // and `captured:false` flags an entirely-unconfigured intake for the operator.
+  const { dedupeKey: _k, ...safe } = lead;
+  console.info("[request-demo] lead", JSON.stringify({ ...safe, ...result }));
 
-  const lead = {
-    name,
-    email,
-    company,
-    teamSize: teamSize || null,
-    message: message || null,
-    source: "welcome",
-    receivedAt: new Date().toISOString(),
-  };
-
-  let delivered = false;
-  const hook = process.env.DEMO_WEBHOOK_URL;
-  if (hook) {
-    try {
-      const res = await fetch(hook, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          text: `New demo request — ${lead.name} · ${lead.company} · ${lead.email}`,
-          lead,
-        }),
-      });
-      delivered = res.ok;
-    } catch {
-      delivered = false;
-    }
-  }
-
-  // Capture server-side regardless, so a missing/broken webhook never loses a lead.
-  console.info("[request-demo] lead", JSON.stringify({ ...lead, delivered }));
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, duplicate: result.duplicate });
 }

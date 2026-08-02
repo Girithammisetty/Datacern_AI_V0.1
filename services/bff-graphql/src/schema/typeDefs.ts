@@ -5735,6 +5735,11 @@ export const typeDefs = gql`
     OM-FR-020): decided-vs-realized agreement grouped by DECISION_TYPE or
     PRODUCER. Correlational only (BR-3). Needs case.case.read."""
     decisionEffectiveness(by: DecisionEffectivenessBy! = DECISION_TYPE, decisionType: String): DecisionEffectiveness!
+    """Decision-drift signals (agent-runtime GET /decision-drift, OM-FR-030): a
+    material effectiveness drop per decision type / producer between a baseline
+    and recent window. A REVIEW signal only — never an auto-change. Needs
+    case.case.read."""
+    decisionDrift(by: DecisionEffectivenessBy! = DECISION_TYPE, minDrop: Float = 0.15): DecisionDrift!
 
     # ---- BRD 56: entity resolution (steward surface) --------------------------
     """Prior entity-resolution runs for a dataset, newest first (dataset-service
@@ -5889,6 +5894,21 @@ export const typeDefs = gql`
     by: DecisionEffectivenessBy!
     labeledDecisions: Int!
     groups: [DecisionEffectivenessGroup!]!
+  }
+  "One decision-drift signal — an effectiveness drop worth a human review."
+  type DecisionDriftSignal {
+    key: String!
+    baselineRate: Float!
+    recentRate: Float!
+    "baselineRate - recentRate; positive means it got worse."
+    drop: Float!
+    baselineScored: Int!
+    recentScored: Int!
+  }
+  type DecisionDrift {
+    by: DecisionEffectivenessBy!
+    minDrop: Float!
+    signals: [DecisionDriftSignal!]!
   }
   input MarkDecisionOutcomeInput {
     realizedOutcome: String!

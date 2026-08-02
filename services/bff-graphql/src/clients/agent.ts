@@ -911,6 +911,20 @@ export class AgentClient {
     );
     return unwrap<DecisionEffectivenessDTO>(r);
   }
+
+  /** GET /decision-drift — material effectiveness drops per decision type /
+   * producer (OM-FR-030). A review SIGNAL only; the governance agent turns a
+   * flag into a proposal-mode review. */
+  async decisionDrift(
+    by: "decision_type" | "producer",
+    minDrop?: number,
+  ): Promise<DecisionDriftDTO> {
+    const r = await this.http.get<{ data: DecisionDriftDTO } | DecisionDriftDTO>(
+      "/api/v1/decision-drift",
+      { query: { by, min_drop: minDrop } },
+    );
+    return unwrap<DecisionDriftDTO>(r);
+  }
 }
 
 /** One agent chat session (agent-runtime session_view). */
@@ -949,6 +963,20 @@ export interface OutcomeLabelDTO {
   label_source?: string;
   note?: string | null;
   labeled_by?: string | null;
+}
+
+/** GET /decision-drift response (signals sorted by drop desc; OM-FR-030). */
+export interface DecisionDriftDTO {
+  by: string;
+  min_drop: number;
+  signals: {
+    key: string;
+    baseline_rate: number;
+    recent_rate: number;
+    drop: number;
+    baseline_scored: number;
+    recent_scored: number;
+  }[];
 }
 
 /** GET /decision-effectiveness response (groups sorted by total desc). */

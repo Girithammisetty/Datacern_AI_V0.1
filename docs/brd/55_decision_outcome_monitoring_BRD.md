@@ -1,7 +1,7 @@
 # BRD 55 — Decision Outcome Monitoring
 
 **Deliverable type:** Core capability (case-service + eval-service + chart-service + agent-runtime)
-**Publisher:** Datacern · **Initial version:** 1.0.0 · **Status:** authored; increment 1 BUILT + live-verified (human-labeled outcomes + effectiveness); SoR inbound capture, drift review, and SFT enrichment remain unbuilt
+**Publisher:** Datacern · **Initial version:** 1.0.0 · **Status:** authored; increment 1 BUILT + live-verified (human-labeled outcomes + effectiveness); **OM-FR-030 decision-drift detection + OM-FR-040 SFT enrichment BUILT (2026-08-02, unit-verified)** — `GET /decision-drift` + `GET /decisions/{ref}/sft-enrichment` on agent-runtime, wired through the BFF to the effectiveness panel (drift flag) with the `detect_drift`/`sft_enrichment` pure domain functions and tests; SoR inbound outcome capture remains unbuilt
 **Closes:** the partial Decision-Monitoring capability. See `docs/design/di-completeness-roadmap.md`.
 
 ---
@@ -77,8 +77,8 @@ Tenant Admin (TA).
 ## 5. Acceptance criteria
 - **AC-1** A resolved decision receives an outcome label (human + SoR paths) joined on provenance. **(inc1: human path only — SoR/event capture paths (a)/(c) of OM-FR-010 not yet built)**
 - **AC-2** An effectiveness dashboard trends decided-vs-realized by decision type + model version over time. **(inc1: `GET /decision-effectiveness?by=` API sliced by decision_type/producer, live-verified — no semantic-model/dashboard surfacing yet)**
-- **AC-3** A drop in effectiveness raises a proposal-mode review, not an auto-change. **(not built — OM-FR-030 drift detection remains future work)**
-- **AC-4** Outcome-labeled examples appear in the SFT curation surface. **(not built — OM-FR-040 remains future work)**
+- **AC-3** A drop in effectiveness raises a proposal-mode review, not an auto-change. **(BUILT 2026-08-02 — `detect_drift` + `GET /decision-drift`, unit-verified; the drift flag renders on the effectiveness panel and states it is a review signal, not an auto-change)**
+- **AC-4** Outcome-labeled examples appear in the SFT curation surface. **(BUILT 2026-08-02 — `sft_enrichment` + `GET /decisions/{ref}/sft-enrichment` maps each outcome label to a sample_weight + outcome tag for SFT curation, unit-verified)**
 - **AC-5** Full audit + tenant isolation; labels annotate, never mutate. **(inc1, live-verified)**
 
 ## 5a. Increment 1 — what shipped (task #21)

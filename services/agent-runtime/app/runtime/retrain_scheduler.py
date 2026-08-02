@@ -55,7 +55,12 @@ class RetrainScheduler:
         """Process all due watches once. Returns the number of watches that
         triggered a governance run (drift over threshold)."""
         now = now or _now()
-        due = await self._c.store.list_due_retrain_watches(now)
+        # CLAIM (not just list): atomically stamps last_checked_at under a row
+        # lock so a second scheduler replica can't process the same watch in the
+        # same cadence window and double-open a retrain proposal. This is what
+        # makes agent-runtime's retrain loop safe to run at >1 replica (the
+        # blocker docs/initiatives/clickhouse-ha-and-ops-resilience.md flagged).
+        due = await self._c.store.claim_due_retrain_watches(now)
         triggered = 0
         for w in due:
             signal = await self._signal_for(w, now)

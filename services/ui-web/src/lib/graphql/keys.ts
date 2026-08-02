@@ -30,6 +30,8 @@ export const qk = {
   decisionOutcome: (ref: string) => ["data", "decisionOutcome", ref] as const,
   decisionEffectiveness: (by: string, decisionType?: string) =>
     ["data", "decisionEffectiveness", by, decisionType ?? ""] as const,
+  decisionDrift: (by: string, minDrop?: number) =>
+    ["data", "decisionDrift", by, minDrop ?? 0.15] as const,
   aiSpendFreezes: () => ["usage", "aiSpendFreezes"] as const,
   resolutionRuns: (datasetId: string) => ["data", "resolutionRuns", datasetId] as const,
   resolutionRun: (id: string) => ["data", "resolutionRun", id] as const,

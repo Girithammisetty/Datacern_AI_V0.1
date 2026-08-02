@@ -18,7 +18,9 @@ from app.domain.outcomes import (
     LABEL_SOURCES,
     OutcomeLabel,
     compute_correct,
+    detect_drift,
     effectiveness,
+    sft_enrichment,
 )
 
 router = APIRouter(prefix="/api/v1")
@@ -117,3 +119,44 @@ async def decision_effectiveness(request: Request,
                                                decision_type=decision_type)
     return {"data": {"by": by, "labeled_decisions": len(labels),
                      "groups": effectiveness(labels, by=by)}}
+
+
+@router.get("/decision-drift")
+async def decision_drift(request: Request,
+                         by: str = Query(default="decision_type"),
+                         min_drop: float = Query(default=0.15, ge=0.0, le=1.0),
+                         min_scored: int = Query(default=10, ge=1)):
+    """Decision-drift signals (OM-FR-030): per decision type (or producer), a
+    material drop in effectiveness between an earlier baseline window and the
+    recent window. A REVIEW signal only — the governance agent turns a flag into
+    a proposal-mode review (AC-3); nothing here auto-retires a model or table.
+    Correlational (BR-3), RLS-scoped, deterministic."""
+    principal = await principal_of(request)
+    await _require(request, principal, "case.case.read")
+    if by not in ("decision_type", "producer"):
+        raise ValidationFailed("by must be 'decision_type' or 'producer'")
+    # The store lists newest-first; detect_drift wants chronological order so the
+    # baseline is the EARLIER window.
+    labels = await c_store_labels_chrono(request, principal)
+    signals = detect_drift(labels, by=by, min_drop=min_drop, min_scored_per_window=min_scored)
+    return {"data": {"by": by, "min_drop": min_drop, "signals": signals}}
+
+
+async def c_store_labels_chrono(request: Request, principal) -> list[OutcomeLabel]:
+    labels = await request.app.state.container.store.list_outcome_labels(principal.tenant_id)
+    return list(reversed(labels))  # DESC -> chronological (ASC)
+
+
+@router.get("/decisions/{decision_ref}/sft-enrichment")
+async def decision_sft_enrichment(request: Request, decision_ref: str):
+    """The SFT curation annotation for a decision's transcript (OM-FR-040):
+    sample_weight + outcome tag derived from its realized-correctness label, so
+    curation can weight/filter by outcome (extends BRD 12 M2). 404 when the
+    decision has no outcome label yet."""
+    principal = await principal_of(request)
+    await _require(request, principal, "case.case.read")
+    lab = await request.app.state.container.store.get_outcome_label(
+        principal.tenant_id, decision_ref)
+    if lab is None:
+        raise NotFound("no outcome label for this decision")
+    return {"data": sft_enrichment(lab)}

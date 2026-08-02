@@ -79,3 +79,37 @@ async def test_erasure_removes_from_retrieval(container):
         scopes=[("user", USER_A)], corpora=[], top_k=8, min_confidence=None, tags=None,
         snapshot_ver=None, include_debug=False)
     assert results == []
+
+
+async def test_ac7_verification_gate_fails_on_incomplete_delete(container, monkeypatch):
+    """The verification gate is the trust anchor: if a delete step misses rows,
+    the request must be marked FAILED (report.verified=false), NEVER completed.
+    Simulate a chunk delete that reports success but leaves the row behind — the
+    post-delete probe still finds it, so the whole erasure must fail rather than
+    fabricate a clean report."""
+    ctx = _ctx()
+    await container.store.upsert_chunk(RagChunk(
+        chunk_id="c-orphan", tenant_id=TENANT_A, corpus_key="resolved_cases",
+        source_urn="wr:t:case:case/9", chunk_seq=0, content="stubborn chunk by alice",
+        embedding=[0.1] * 768, embedding_model_ver="v1", snapshot_ver="2026-07-08",
+        source_updated_at=None, user_linkage=USER_A))
+
+    # Delete lies (returns a count but removes nothing) -> the probe still finds it.
+    async def _delete_nothing(tenant_id, user_id):
+        return 1
+    monkeypatch.setattr(container.deps.store, "delete_chunks_by_user", _delete_nothing)
+
+    req = await container.erasure_service.start(ctx, "user", USER_A)
+    import asyncio
+    final = None
+    for _ in range(50):
+        final = await container.deps.store.get_erasure(TENANT_A, req.request_id)
+        if final and final.status in ("completed", "failed"):
+            break
+        await asyncio.sleep(0.01)
+
+    assert final.status == "failed", "an incomplete erasure must not report completed"
+    assert final.report["verified"] is False
+    assert final.report["verification_queries"]["rag_chunks"] >= 1  # the probe caught it
+    # a fabricated 'erasure.completed' event must NOT be emitted for a failed sweep
+    assert not any(e["event_type"] == "erasure.completed" for _, e in container.store.outbox)

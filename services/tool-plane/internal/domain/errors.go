@@ -22,6 +22,9 @@ const (
 	CodeToolBackendError = "TOOL_BACKEND_ERROR"
 	CodePolicyUnavailable = "POLICY_UNAVAILABLE"
 	CodeTokenInvalid     = "TOKEN_INVALID"
+	// CodeTrialExpired is the commercial gate (BRD 66 CPL-FR-022, AC-2): a
+	// suspended_commercial tenant is refused an immediate write-direct tool call.
+	CodeTrialExpired = "TRIAL_EXPIRED"
 )
 
 // Error is a coded error carrying an HTTP analog and optional per-field details.

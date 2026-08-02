@@ -208,9 +208,10 @@ func (g *GatewayServer) handleToolsCall(w http.ResponseWriter, r *http.Request, 
 		// Eval mode is honoured only for callers holding the trusted eval scope
 		// (eval-service / agent-runtime replay), never on a plain agent's say-so
 		// via _meta or a header (BR-16).
-		Eval:          evalAuthorized(cl, r),
-		ProposalGrant: params.Meta.ProposalGrant,
-		TraceID:       TraceID(r.Context()),
+		Eval:            evalAuthorized(cl, r),
+		WritesSuspended: cl.WritesSuspended(),
+		ProposalGrant:   params.Meta.ProposalGrant,
+		TraceID:         TraceID(r.Context()),
 	}
 	oc := g.Pipeline.Run(r.Context(), er)
 

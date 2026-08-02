@@ -69,7 +69,7 @@ import {
   mapWebhookEndpoint, mapWebhookDelivery, mapNotificationTemplate, mapEmailSuppression,
   mapTool, mapToolVersion, mapToolHealth, mapTenantToolSettings, mapByoSubmission,
   mapAgentDefinition, mapAgentVersionInfo, mapTenantAgentConfig, mapAgentRunListItem,
-  mapDecisionModel, mapBatchEvaluate, mapOutcomeLabel, mapDecisionEffectiveness,
+  mapDecisionModel, mapBatchEvaluate, mapOutcomeLabel, mapDecisionEffectiveness, mapDecisionDrift,
   mapAgentChatSession, mapDecisionEvaluation,
   mapAiSpendFreeze,
   mapProvisioningStep, mapPocCriterion, mapPocProgress, mapPocReportExport, mapToolDiscoveryHit, mapRbacAction,
@@ -2405,6 +2405,15 @@ export const resolvers = {
       ctx.clients.agent
         .decisionEffectiveness(a.by === "PRODUCER" ? "producer" : "decision_type", a.decisionType ?? undefined)
         .then(mapDecisionEffectiveness),
+    decisionDrift: (
+      _p: unknown,
+      a: { by?: "DECISION_TYPE" | "PRODUCER"; minDrop?: number | null },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.agent
+        .decisionDrift(a.by === "PRODUCER" ? "producer" : "decision_type", a.minDrop ?? undefined)
+        .then(mapDecisionDrift),
+
 
     // ---- BRD 56: entity resolution (steward surface) ------------------------
     resolutionRuns: (_p: unknown, a: { datasetId: string; limit?: number }, ctx: GraphQLContext) =>

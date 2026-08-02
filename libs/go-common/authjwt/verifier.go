@@ -39,8 +39,23 @@ type Claims struct {
 	OboSub       string   `json:"obo_sub,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
 	SessionID    string   `json:"session_id,omitempty"`
+	// CommercialState (BRD 66 CPL-FR-022): none|trial|active|
+	// suspended_commercial|churned, minted by identity-service on every token.
+	// Empty on tokens issued before the commercial plane shipped — treated as
+	// "not suspended", so pre-commercial tenants are never blocked.
+	CommercialState string `json:"commercial_state,omitempty"`
 	jwt.RegisteredClaims
 }
+
+// SuspendedCommercial is the one commercial_state that refuses value-delivering
+// writes (CPL-FR-022, AC-2). Kept in sync with libs/py-common authjwt and the
+// identity-service commercial state machine.
+const SuspendedCommercial = "suspended_commercial"
+
+// WritesSuspended reports whether the tenant's commercial state refuses
+// value-delivering writes. Reads stay open — the caller has the capability, the
+// tenant just has no live entitlement to spend.
+func (c *Claims) WritesSuspended() bool { return c.CommercialState == SuspendedCommercial }
 
 // Tenant parses the tenant_id claim.
 func (c *Claims) Tenant() (uuid.UUID, error) { return uuid.Parse(c.TenantID) }

@@ -273,6 +273,32 @@ class SqlStore:
                 {"now": now_ts, "lim": limit})).mappings().all()
         return [_retrain_watch(r) for r in rows]
 
+    async def claim_due_retrain_watches(self, now_ts, limit: int = 100) -> list:
+        """Atomically CLAIM due watches for the scheduler (replica-safe): in one
+        transaction, lock the due rows with ``FOR UPDATE SKIP LOCKED`` and stamp
+        ``last_checked_at=now`` before releasing — so a second scheduler replica
+        polling concurrently skips the claimed rows and cannot double-open a
+        retrain proposal for the same watch in the same cadence window. The slow
+        per-watch work (signal computation, governance invocation) then runs
+        OUTSIDE the lock. Same claim pattern the outbox relay uses below."""
+        async with self._plain() as s:
+            rows = (await s.execute(text(
+                """SELECT * FROM retrain_watches
+                   WHERE enabled = true
+                     AND (last_checked_at IS NULL
+                          OR last_checked_at + (cadence_seconds || ' seconds')::interval <= :now)
+                   ORDER BY last_checked_at ASC NULLS FIRST
+                   LIMIT :lim
+                   FOR UPDATE SKIP LOCKED"""),
+                {"now": now_ts, "lim": limit})).mappings().all()
+            claimed = [_retrain_watch(r) for r in rows]
+            if claimed:
+                await s.execute(text(
+                    "UPDATE retrain_watches SET last_checked_at=:now, updated_at=now() "
+                    "WHERE id = ANY(cast(:ids as uuid[]))"),
+                    {"now": now_ts, "ids": [w.id for w in claimed]})
+        return claimed
+
     async def touch_retrain_watch(self, watch_id: str, checked_at, signal: dict) -> None:
         async with self._plain() as s:
             await s.execute(text(

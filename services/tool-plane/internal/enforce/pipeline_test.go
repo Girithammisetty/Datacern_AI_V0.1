@@ -368,3 +368,44 @@ func TestPipeline_AuditCompleteness(t *testing.T) {
 		t.Fatalf("expected exactly 1 audit record per attempt, got %d", len(audit.logs))
 	}
 }
+
+func writeDirectVersion() *domain.ToolVersion {
+	v := readVersion()
+	v.ToolID = "case.autoresolve"
+	v.PermissionTier = domain.TierWriteDirect
+	v.SideEffects = domain.SideEffectReversible
+	return v
+}
+
+// BRD 66 CPL-FR-022 (AC-2): a suspended_commercial tenant is refused an
+// immediate write-direct call with TRIAL_EXPIRED; the same call passes when the
+// tenant is not suspended, and a suspended tenant's READ is never blocked.
+func TestPipeline_CommercialGate_WriteDirect(t *testing.T) {
+	p, _ := basePipeline()
+	p.Catalog = &fakeCatalog{version: writeDirectVersion(), backend: mcp.BackendTarget{URL: "http://backend"}}
+
+	req := baseReq()
+	req.ToolID = "case.autoresolve"
+	req.WritesSuspended = true
+	oc := p.Run(context.Background(), req)
+	if oc.Code != domain.CodeTrialExpired || oc.HTTP != 403 {
+		t.Fatalf("suspended write-direct: want TRIAL_EXPIRED/403, got %s/%d (%s)", oc.Code, oc.HTTP, oc.Message)
+	}
+
+	// Not suspended → the gate is inert (call proceeds past it).
+	req.WritesSuspended = false
+	oc = p.Run(context.Background(), req)
+	if oc.Code == domain.CodeTrialExpired {
+		t.Fatalf("non-suspended write-direct must not hit the commercial gate: %s", oc.Message)
+	}
+
+	// A suspended tenant's READ is never blocked by the commercial gate.
+	rreq := baseReq()
+	rreq.WritesSuspended = true
+	if oc := p.Run(context.Background(), rreq); oc.Code == domain.CodeTrialExpired {
+		p2, _ := basePipeline() // read tool via the read catalog
+		if oc := p2.Run(context.Background(), rreq); oc.Code == domain.CodeTrialExpired {
+			t.Fatalf("a suspended tenant's read must not be gated: %s", oc.Message)
+		}
+	}
+}

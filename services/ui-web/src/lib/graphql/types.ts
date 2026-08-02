@@ -2275,6 +2275,19 @@ export interface DecisionEffectiveness {
   labeledDecisions: number;
   groups: DecisionEffectivenessGroup[];
 }
+export interface DecisionDriftSignal {
+  key: string;
+  baselineRate: number;
+  recentRate: number;
+  drop: number;
+  baselineScored: number;
+  recentScored: number;
+}
+export interface DecisionDrift {
+  by: string;
+  minDrop: number;
+  signals: DecisionDriftSignal[];
+}
 export interface MarkDecisionOutcomeInput {
   realizedOutcome: string;
   labelSource?: string;

@@ -623,11 +623,18 @@ class ErasureService:
         req.report = report
         req.status = "completed" if all_green else "failed"
         req.completed_at = self.d.clock.now()
+        # Emit the event that matches the ACTUAL outcome. A failed verification
+        # sweep must NOT announce erasure.completed — that would tell the audit
+        # trail and downstream consumers the subject's data is gone when a probe
+        # still found it. A failed sweep emits erasure.failed instead, so an
+        # operator (and the compliance record) sees the truth and can retry.
         env = make_envelope(
-            event_type="erasure.completed", tenant_id=tid, actor=ctx.actor,
+            event_type="erasure.completed" if all_green else "erasure.failed",
+            tenant_id=tid, actor=ctx.actor,
             resource_urn=erasure_urn(tid, req.request_id),
             payload={"subject_digest": _digest(sid), "counts": counts,
-                     "report_ref": req.request_id, "verified": all_green},
+                     "report_ref": req.request_id, "verified": all_green,
+                     "verification_queries": probes},
             trace_id=ctx.trace_id,
         )
         await self.d.store.update_erasure(req)

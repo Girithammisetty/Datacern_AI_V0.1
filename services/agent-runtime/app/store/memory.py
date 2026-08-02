@@ -89,9 +89,12 @@ class InMemoryStore:
         self._outcome_labels[(lab.tenant_id, lab.decision_ref)] = _c.copy(lab)
 
     async def list_outcome_labels(self, tenant_id: str, *, decision_type=None) -> list:
+        # Newest-first, matching the SQL store's `ORDER BY labeled_at DESC`
+        # contract (dict preserves insertion order = chronological, so reverse).
         out = [lbl for (t, _), lbl in self._outcome_labels.items() if t == tenant_id]
         if decision_type:
             out = [lbl for lbl in out if lbl.decision_type == decision_type]
+        out.reverse()
         return out
 
     async def get_outcome_label(self, tenant_id: str, decision_ref: str):
@@ -140,6 +143,15 @@ class InMemoryStore:
                     w.last_checked_at + timedelta(seconds=w.cadence_seconds) <= now_ts):
                 due.append(w)
         return due[:limit]
+
+    async def claim_due_retrain_watches(self, now_ts, limit: int = 100) -> list:
+        # Single-threaded fake: claiming == list + stamp last_checked_at now, so
+        # a second call in the same cadence window returns nothing (mirrors the
+        # SQL FOR UPDATE SKIP LOCKED claim contract).
+        claimed = await self.list_due_retrain_watches(now_ts, limit)
+        for w in claimed:
+            w.last_checked_at = now_ts
+        return claimed
 
     async def touch_retrain_watch(self, watch_id: str, checked_at, signal: dict) -> None:
         w = self._retrain_watches.get(watch_id)

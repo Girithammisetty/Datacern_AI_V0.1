@@ -141,6 +141,25 @@ func (s *Server) RequireAction(action string) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireCommercialActive is the COMMERCIAL gate (BRD 66 CPL-FR-022, AC-2):
+// once the trial sweep moves a tenant to suspended_commercial, the value-
+// delivering writes it wraps are refused with a stable TRIAL_EXPIRED code,
+// while every read and non-value transition keeps working. This is the Go
+// parallel of agent-runtime's proposal-decide gate — it closes the gap where
+// case-service's disposition writes bypassed the commercial plane. Runs AFTER
+// RequireAction so an unauthorized caller still gets the authz 403 first (the
+// caller must both be permitted AND have a live entitlement to spend).
+func (s *Server) RequireCommercialActive(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := ClaimsFrom(r.Context())
+		if claims != nil && claims.WritesSuspended() {
+			writeErr(w, r, domain.ETrialExpired("trial has expired; value-delivering writes are suspended until the tenant converts"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) auditDenial(r *http.Request, action string) {
 	op, ok := opFrom(r)
 	if !ok {
