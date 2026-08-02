@@ -78,6 +78,8 @@ import {
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
   mapPackDrift, mapPackTransition,
+  // BRD 14 §6.5: SLM distillation cockpit (transcripts/SFT/training/adapters).
+  mapTranscript, mapSftDataset, mapSftExample, mapTrainingJob, mapSlmAdapter,
 } from "../schema/map.js";
 
 /** GraphQL ChartSourceInput (camel) -> chart-service source body (snake). */
@@ -1706,6 +1708,63 @@ export const resolvers = {
         capped: (all.data ?? []).length >= CAP,
       };
     },
+
+    // ---- SLM distillation cockpit (agent-runtime, BRD 14 §6.5 M1-M4). The
+    // routes are authN-only downstream (verified bearer JWT, tenant RLS) —
+    // the BFF adds no authz of its own, per its README.
+    transcript: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.agent.transcript(a.id).then(mapTranscript)),
+
+    sftDatasets: async (
+      _p: unknown,
+      a: { agentKey?: string; limit?: number },
+      ctx: GraphQLContext,
+    ) => {
+      const page = await ctx.clients.agent.sftDatasets({
+        agentKey: a.agentKey, limit: a.limit ?? 50,
+      });
+      return (page.data ?? []).map(mapSftDataset);
+    },
+
+    sftDataset: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.agent.sftDataset(a.id).then(mapSftDataset)),
+
+    sftDatasetExamples: async (
+      _p: unknown,
+      a: { id: string; limit?: number },
+      ctx: GraphQLContext,
+    ) => {
+      const rows = await ctx.clients.agent.sftDatasetExamples(a.id, a.limit ?? 200);
+      return rows.map(mapSftExample);
+    },
+
+    trainingJobs: async (
+      _p: unknown,
+      a: { archetype?: string; limit?: number },
+      ctx: GraphQLContext,
+    ) => {
+      const page = await ctx.clients.agent.trainingJobs({
+        archetype: a.archetype, limit: a.limit ?? 50,
+      });
+      return (page.data ?? []).map(mapTrainingJob);
+    },
+
+    trainingJob: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.agent.trainingJob(a.id).then(mapTrainingJob)),
+
+    slmAdapters: async (
+      _p: unknown,
+      a: { archetype?: string; limit?: number },
+      ctx: GraphQLContext,
+    ) => {
+      const page = await ctx.clients.agent.slmAdapters({
+        archetype: a.archetype, limit: a.limit ?? 50,
+      });
+      return (page.data ?? []).map(mapSlmAdapter);
+    },
+
+    slmAdapter: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.agent.slmAdapter(a.id).then(mapSlmAdapter)),
 
     agentKillSwitches: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
       const rows = await ctx.clients.agent.killSwitches();
@@ -3473,6 +3532,61 @@ export const resolvers = {
         a.idempotencyKey,
       );
       return mapProposal(ctx, d);
+    },
+
+    // ---- SLM distillation cockpit (agent-runtime, BRD 14 §6.5 M2-M4).
+    // AuthN-only downstream (verified bearer JWT; tenant + created_by from the
+    // token, rows tenant-scoped by RLS).
+    createSftDataset: async (
+      _p: unknown,
+      a: { input: { agentKey: string; params?: Record<string, unknown> }; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.createSftDataset(
+        { agent_key: a.input.agentKey, params: a.input.params },
+        a.idempotencyKey,
+      );
+      return mapSftDataset(d);
+    },
+
+    submitTrainingJob: async (
+      _p: unknown,
+      a: {
+        input: { agentKey: string; sftDatasetId: string; baseModel?: string; params?: Record<string, unknown> };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.submitTrainingJob(
+        {
+          agent_key: a.input.agentKey,
+          sft_dataset_id: a.input.sftDatasetId,
+          base_model: a.input.baseModel,
+          params: a.input.params,
+        },
+        a.idempotencyKey,
+      );
+      // The row comes back FINISHED (succeeded, or failed with the honest
+      // verbatim error, e.g. gpu_trainer_not_configured) — passed through as-is.
+      return mapTrainingJob(d);
+    },
+
+    promoteSlmAdapter: async (
+      _p: unknown,
+      a: { id: string; evalResultRef?: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.promoteSlmAdapter(a.id, a.evalResultRef, a.idempotencyKey);
+      return mapSlmAdapter(d);
+    },
+
+    demoteSlmAdapter: async (
+      _p: unknown,
+      a: { id: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.demoteSlmAdapter(a.id, a.idempotencyKey);
+      return mapSlmAdapter(d);
     },
 
     // ---- kill switches (agent-runtime + tool-plane, emergency stop) ---------

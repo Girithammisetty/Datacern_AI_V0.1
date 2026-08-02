@@ -128,6 +128,47 @@ export class ServiceClient {
     return this.request<T>("DELETE", path, opts);
   }
 
+  /** GET a NON-JSON success body (e.g. an NDJSON export) as raw text. Same
+   * auth/trace/timeout/error-envelope behavior as get() — only the SUCCESS body
+   * is returned verbatim instead of JSON-parsed (errors still parse the master
+   * envelope). Needed for agent-runtime's /sft-datasets/{id}/examples, which
+   * streams application/x-ndjson (one chat example per line). */
+  async getText(path: string, opts: RequestOptions = {}): Promise<string> {
+    const url = this.buildUrl(path, opts.query);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? this.timeoutMs);
+    let res: Response;
+    try {
+      res = await this.fetchImpl(url, {
+        method: "GET",
+        headers: this.headers(opts),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      const msg = (e as Error)?.name === "AbortError" ? `${this.service} timed out` : `${this.service} unreachable`;
+      throw new DownstreamError(this.service, 0, undefined, msg, undefined, this.ctx.traceId);
+    } finally {
+      clearTimeout(timer);
+    }
+    const traceId = res.headers.get("x-trace-id") ?? this.ctx.traceId;
+    if (res.status === 204) return "";
+    const text = await readBodyCapped(res, this.service, traceId ?? undefined);
+    if (!res.ok) {
+      const envelope = (text ? safeJson(text) : undefined) as DownstreamEnvelope | undefined;
+      const de = envelope?.error;
+      throw new DownstreamError(
+        this.service,
+        res.status,
+        de?.code,
+        de?.message ?? `${this.service} returned ${res.status}`,
+        de?.details,
+        de?.trace_id ?? traceId ?? undefined,
+        envelope,
+      );
+    }
+    return text;
+  }
+
   private buildUrl(path: string, query?: RequestOptions["query"]): string {
     const url = new URL(this.baseUrl + path);
     if (query) {

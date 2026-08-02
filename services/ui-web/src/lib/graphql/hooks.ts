@@ -5999,3 +5999,160 @@ export function useDeleteModelArchetype() {
     onSuccess: () => client.invalidateQueries({ queryKey: ["ml", "modelArchetypes"] }),
   });
 }
+
+// ---- SLM distillation cockpit (agent-runtime M1-M4, BRD 14 §6.5) ------------
+
+export function useSftDatasets(filters: { agentKey?: string; limit?: number } = {}) {
+  return useQuery({
+    queryKey: qk.sftDatasets(filters),
+    queryFn: () =>
+      graphqlRequest<ops.SftDatasetsResult>(ops.SFT_DATASETS, {
+        agentKey: filters.agentKey,
+        limit: filters.limit ?? 50,
+      }).then((r) => r.sftDatasets),
+  });
+}
+
+export function useSftDataset(id: string) {
+  return useQuery({
+    queryKey: qk.sftDataset(id),
+    queryFn: () =>
+      graphqlRequest<ops.SftDatasetResult>(ops.SFT_DATASET, { id }).then((r) => r.sftDataset),
+    enabled: !!id,
+  });
+}
+
+/** The dataset's frozen gold input->corrected-output rows (NDJSON export,
+ * parsed by the BFF). */
+export function useSftDatasetExamples(id: string, limit = 50) {
+  return useQuery({
+    queryKey: qk.sftDatasetExamples(id, limit),
+    queryFn: () =>
+      graphqlRequest<ops.SftDatasetExamplesResult>(ops.SFT_DATASET_EXAMPLES, { id, limit }).then(
+        (r) => r.sftDatasetExamples,
+      ),
+    enabled: !!id,
+  });
+}
+
+export function useTranscript(id: string) {
+  return useQuery({
+    queryKey: qk.transcript(id),
+    queryFn: () =>
+      graphqlRequest<ops.TranscriptResult>(ops.TRANSCRIPT, { id }).then((r) => r.transcript),
+    enabled: !!id,
+  });
+}
+
+export function useTrainingJobs(filters: { archetype?: string; limit?: number } = {}) {
+  return useQuery({
+    queryKey: qk.trainingJobs(filters),
+    queryFn: () =>
+      graphqlRequest<ops.TrainingJobsResult>(ops.TRAINING_JOBS, {
+        archetype: filters.archetype,
+        limit: filters.limit ?? 50,
+      }).then((r) => r.trainingJobs),
+  });
+}
+
+export function useTrainingJob(id: string) {
+  return useQuery({
+    queryKey: qk.trainingJob(id),
+    queryFn: () =>
+      graphqlRequest<ops.TrainingJobResult>(ops.TRAINING_JOB, { id }).then((r) => r.trainingJob),
+    enabled: !!id,
+  });
+}
+
+export function useSlmAdapters(filters: { archetype?: string; limit?: number } = {}) {
+  return useQuery({
+    queryKey: qk.slmAdapters(filters),
+    queryFn: () =>
+      graphqlRequest<ops.SlmAdaptersResult>(ops.SLM_ADAPTERS, {
+        archetype: filters.archetype,
+        limit: filters.limit ?? 50,
+      }).then((r) => r.slmAdapters),
+  });
+}
+
+export function useSlmAdapter(id: string) {
+  return useQuery({
+    queryKey: qk.slmAdapter(id),
+    queryFn: () =>
+      graphqlRequest<ops.SlmAdapterResult>(ops.SLM_ADAPTER, { id }).then((r) => r.slmAdapter),
+    enabled: !!id,
+  });
+}
+
+/** Curate a NEW immutable, versioned SFT dataset from the consented transcript
+ * corpus for one archetype (agent-runtime POST /sft-datasets). */
+export function useCreateSftDataset() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { agentKey: string; params?: Record<string, unknown> }) =>
+      graphqlRequest<ops.CreateSftDatasetResult>(ops.CREATE_SFT_DATASET, {
+        input,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createSftDataset),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["distillation", "sftDatasets"] });
+      client.invalidateQueries({ queryKey: qk.learningLoop() });
+    },
+  });
+}
+
+/** Submit a LoRA distillation run. The returned job is already FINISHED —
+ * failed jobs carry the honest verbatim error (e.g. gpu_trainer_not_configured). */
+export function useSubmitTrainingJob() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      agentKey: string;
+      sftDatasetId: string;
+      baseModel?: string;
+      params?: Record<string, unknown>;
+    }) =>
+      graphqlRequest<ops.SubmitTrainingJobResult>(ops.SUBMIT_TRAINING_JOB, {
+        input,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.submitTrainingJob),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["distillation", "trainingJobs"] });
+      client.invalidateQueries({ queryKey: ["distillation", "slmAdapters"] });
+    },
+  });
+}
+
+/** Eval-gated promotion to the tenant's cheapest ladder rung (409 downstream
+ * unless the adapter is candidate/gated WITH a real trained artifact). */
+export function usePromoteSlmAdapter() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; evalResultRef?: string }) =>
+      graphqlRequest<ops.PromoteSlmAdapterResult>(ops.PROMOTE_SLM_ADAPTER, {
+        id: v.id,
+        evalResultRef: v.evalResultRef,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.promoteSlmAdapter),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["distillation", "slmAdapters"] });
+      client.invalidateQueries({ queryKey: ["distillation", "slmAdapter"] });
+    },
+  });
+}
+
+/** Roll back a promoted rung (409 downstream unless currently promoted). */
+export function useDemoteSlmAdapter() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string }) =>
+      graphqlRequest<ops.DemoteSlmAdapterResult>(ops.DEMOTE_SLM_ADAPTER, {
+        id: v.id,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.demoteSlmAdapter),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["distillation", "slmAdapters"] });
+      client.invalidateQueries({ queryKey: ["distillation", "slmAdapter"] });
+    },
+  });
+}

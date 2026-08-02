@@ -649,6 +649,133 @@ export class AgentClient {
     });
   }
 
+  /** GET /transcripts/{id} — one captured transcript (routes/transcripts.py
+   * _view: full row incl. inputs/grounding/final_text/corrected_output).
+   * AuthN-only downstream (bearer JWT); tenant-scoped by RLS. */
+  async transcript(id: string): Promise<TranscriptDTO> {
+    const r = await this.http.get<{ data: TranscriptDTO } | TranscriptDTO>(
+      `/api/v1/transcripts/${encodeURIComponent(id)}`,
+    );
+    return unwrap<TranscriptDTO>(r);
+  }
+
+  /** GET /sft-datasets/{id} — one curated, versioned SFT dataset (routes/sft.py
+   * _ds_view). AuthN-only downstream; tenant-scoped by RLS. */
+  async sftDataset(id: string): Promise<SftDatasetDTO> {
+    const r = await this.http.get<{ data: SftDatasetDTO } | SftDatasetDTO>(
+      `/api/v1/sft-datasets/${encodeURIComponent(id)}`,
+    );
+    return unwrap<SftDatasetDTO>(r);
+  }
+
+  /** GET /sft-datasets/{id}/examples — the frozen training rows. The route
+   * streams application/x-ndjson (one {"messages": [...]} chat example per
+   * line — the exact artifact the LoRA trainer consumes), NOT the JSON
+   * envelope, so this parses line-wise. Lines that fail to parse are dropped
+   * (never fabricated). */
+  async sftDatasetExamples(id: string, limit: number): Promise<SftExampleDTO[]> {
+    const text = await this.http.getText(
+      `/api/v1/sft-datasets/${encodeURIComponent(id)}/examples`,
+      { query: { limit } },
+    );
+    const rows: SftExampleDTO[] = [];
+    for (const line of text.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        rows.push(JSON.parse(line) as SftExampleDTO);
+      } catch {
+        // A malformed line is dropped, never guessed at.
+      }
+    }
+    return rows;
+  }
+
+  /** POST /sft-datasets — curate the consented transcript corpus for one
+   * archetype (agent_key) into a NEW immutable, versioned SFT dataset (201).
+   * AuthN-only downstream; created_by is taken from the verified JWT sub. */
+  async createSftDataset(
+    body: { agent_key: string; params?: Record<string, unknown> },
+    idempotencyKey?: string,
+  ): Promise<SftDatasetDTO> {
+    const r = await this.http.post<{ data: SftDatasetDTO } | SftDatasetDTO>(
+      "/api/v1/sft-datasets",
+      { body, idempotencyKey },
+    );
+    return unwrap<SftDatasetDTO>(r);
+  }
+
+  // ---- SLM distillation (BRD 12 M3/M4): training jobs + adapters ------------
+
+  /** POST /training-jobs — submit a LoRA distillation run against a versioned
+   * SFT dataset (201). The response is the FINISHED job row: with no GPU
+   * executor wired the job lands in status=failed with the honest reason
+   * error.reason="gpu_trainer_not_configured" (never a fabricated adapter). */
+  async submitTrainingJob(
+    body: { agent_key: string; sft_dataset_id: string; base_model?: string; params?: Record<string, unknown> },
+    idempotencyKey?: string,
+  ): Promise<TrainingJobDTO> {
+    const r = await this.http.post<{ data: TrainingJobDTO } | TrainingJobDTO>(
+      "/api/v1/training-jobs",
+      { body, idempotencyKey },
+    );
+    return unwrap<TrainingJobDTO>(r);
+  }
+
+  /** GET /training-jobs (routes/training.py _job_view; page cap 200). */
+  trainingJobs(params: { archetype?: string; limit: number }): Promise<Page<TrainingJobDTO>> {
+    return this.http.get<Page<TrainingJobDTO>>("/api/v1/training-jobs", {
+      query: { "filter[archetype]": params.archetype, limit: params.limit },
+    });
+  }
+
+  /** GET /training-jobs/{id} — carries the verbatim failure `error`. */
+  async trainingJob(id: string): Promise<TrainingJobDTO> {
+    const r = await this.http.get<{ data: TrainingJobDTO } | TrainingJobDTO>(
+      `/api/v1/training-jobs/${encodeURIComponent(id)}`,
+    );
+    return unwrap<TrainingJobDTO>(r);
+  }
+
+  /** GET /slm-adapters (routes/training.py _adapter_view). */
+  slmAdapters(params: { archetype?: string; limit: number }): Promise<Page<SlmAdapterDTO>> {
+    return this.http.get<Page<SlmAdapterDTO>>("/api/v1/slm-adapters", {
+      query: { "filter[archetype]": params.archetype, limit: params.limit },
+    });
+  }
+
+  /** GET /slm-adapters/{id}. */
+  async slmAdapter(id: string): Promise<SlmAdapterDTO> {
+    const r = await this.http.get<{ data: SlmAdapterDTO } | SlmAdapterDTO>(
+      `/api/v1/slm-adapters/${encodeURIComponent(id)}`,
+    );
+    return unwrap<SlmAdapterDTO>(r);
+  }
+
+  /** POST /slm-adapters/{id}/promote — eval-gated promotion to the tenant's
+   * cheapest ladder rung (M4). Downstream requires a candidate/gated adapter
+   * WITH a real trained artifact (adapter_uri), else 409 Conflict; the
+   * eval_result_ref that cleared it is recorded on the row. */
+  async promoteSlmAdapter(
+    id: string,
+    evalResultRef?: string | null,
+    idempotencyKey?: string,
+  ): Promise<SlmAdapterDTO> {
+    const r = await this.http.post<{ data: SlmAdapterDTO } | SlmAdapterDTO>(
+      `/api/v1/slm-adapters/${encodeURIComponent(id)}/promote`,
+      { body: evalResultRef ? { eval_result_ref: evalResultRef } : {}, idempotencyKey },
+    );
+    return unwrap<SlmAdapterDTO>(r);
+  }
+
+  /** POST /slm-adapters/{id}/demote — roll back a PROMOTED rung (else 409). */
+  async demoteSlmAdapter(id: string, idempotencyKey?: string): Promise<SlmAdapterDTO> {
+    const r = await this.http.post<{ data: SlmAdapterDTO } | SlmAdapterDTO>(
+      `/api/v1/slm-adapters/${encodeURIComponent(id)}/demote`,
+      { idempotencyKey },
+    );
+    return unwrap<SlmAdapterDTO>(r);
+  }
+
   // ---- BRD 54 inc2: governed decision tables (authoring + batch) ------------
 
   async decisionModels(): Promise<DecisionModelDTO[]> {
@@ -838,13 +965,30 @@ export interface DecisionEffectivenessDTO {
   }[];
 }
 
-/** One captured agent-run transcript (only the fields the loop stats need). */
+/** One captured agent-run transcript (routes/transcripts.py _view). The list
+ * route serializes the SAME full row; the loop-stats caller only reads the
+ * first few fields, the transcript(id) detail reads them all. */
 export interface TranscriptDTO {
   transcript_id: string;
   agent_key?: string;
   decision?: string | null;
   corrected_output?: unknown;
   created_at?: string | null;
+  run_id?: string | null;
+  session_id?: string | null;
+  agent_version?: string | number | null;
+  principal_type?: string | null;
+  obo_sub?: string | null;
+  inputs?: unknown;
+  grounding?: unknown;
+  final_text?: string | null;
+  proposed_action?: unknown;
+  proposal_id?: string | null;
+  model?: string | null;
+  usage?: unknown;
+  consent?: unknown;
+  decided_by?: string | null;
+  decided_at?: string | null;
 }
 
 /** One curated, versioned SFT dataset (agent-runtime sft_datasets). */
@@ -855,5 +999,50 @@ export interface SftDatasetDTO {
   status?: string;
   row_count?: number;
   source_count?: number;
+  created_at?: string | null;
+  curation_params?: Record<string, unknown> | null;
+  checksum?: string | null;
+  consent_verified?: boolean;
+  created_by?: string | null;
+}
+
+/** One frozen SFT training row — a chat-format example whose final assistant
+ * message is the gold (human-corrected) output (sft.py export, one per NDJSON
+ * line). */
+export interface SftExampleDTO {
+  messages: { role?: string; content?: unknown }[];
+}
+
+/** One SLM distillation training job (routes/training.py _job_view). `error`
+ * is the honest failure object {reason, detail} — e.g.
+ * reason="gpu_trainer_not_configured" when no GPU executor is wired. */
+export interface TrainingJobDTO {
+  job_id: string;
+  archetype?: string;
+  sft_dataset_id?: string;
+  base_model?: string | null;
+  status?: string; // running|succeeded|failed
+  params?: Record<string, unknown> | null;
+  mlflow_run_ref?: string | null;
+  adapter_id?: string | null;
+  error?: { reason?: string; detail?: string } | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  finished_at?: string | null;
+}
+
+/** One distilled SLM adapter (routes/training.py _adapter_view).
+ * promotion_status: candidate|gated|promoted|demoted. */
+export interface SlmAdapterDTO {
+  adapter_id: string;
+  training_job_id?: string | null;
+  archetype?: string;
+  base_model?: string | null;
+  adapter_uri?: string | null;
+  checksum?: string | null;
+  model_alias?: string | null;
+  promotion_status?: string;
+  eval_result_ref?: string | null;
+  target_rung_alias?: string | null;
   created_at?: string | null;
 }
