@@ -1,0 +1,254 @@
+# Datacern SOC 2 (Type II) control register — machine-readable readiness map.
+#
+# NOT an attestation. SOC 2 is not started or certified (see
+# docs/security/SECURITY_POSTURE.md "What's not yet true"). This register maps
+# the 2017 Trust Services Criteria to the controls ACTUALLY implemented in this
+# repository, each cited to a real file, with an honest status — so a Vanta/
+# Drata onboarding (or an auditor's readiness assessment) starts from verified
+# ground instead of a wish list.
+#
+# STATUS vocabulary (enforced by tools/compliance/check_soc2_evidence.py):
+#   implemented   — a technical control exists in code/config and is cited.
+#   partial       — a control exists but is scoped, default-off, or missing a
+#                   process/observation half.
+#   gap           — no implementation; typically an organizational control a
+#                   codebase cannot provide (HR, board, vendor mgmt, policy).
+#
+# owner vocabulary is free text (the team/function accountable for closing it).
+#
+# EVIDENCE `path` entries MUST be real repository paths — the validator fails if
+# any is missing, so this map cannot silently rot as the code moves. `manual`
+# evidence (a policy doc, a signed vendor list, a pen-test report) has no path
+# and is listed under `external_evidence` as a collection TODO, never faked.
+
+meta:
+  framework: "SOC 2 (2017 Trust Services Criteria)"
+  report_type_target: "Type II"
+  status: "readiness — not started with an auditor; no observation window open"
+  source_of_truth: "docs/security/SECURITY_POSTURE.md (code-verified snapshot)"
+  disclaimer: >
+    This is an internal readiness scaffold, not a SOC 2 report, a Statement of
+    Applicability, or a third-party attestation. Every `implemented`/`partial`
+    row cites source; every `gap` names what must be created. Type II
+    additionally requires an OBSERVATION WINDOW (typically 3–12 months) of
+    operating-effectiveness evidence that does not yet exist.
+
+# ---------------------------------------------------------------------------
+# Common Criteria (CC1–CC9) — required for every SOC 2 report.
+# ---------------------------------------------------------------------------
+criteria:
+  - id: CC1
+    name: "Control Environment (integrity, board oversight, org structure)"
+    status: gap
+    summary: >
+      Organizational controls — code of conduct, board/independent oversight,
+      defined org structure, background checks, HR onboarding/offboarding — are
+      people-and-policy controls a codebase cannot evidence. None exist as
+      artifacts in this repository.
+    evidence: []
+    external_evidence:
+      - "Code of conduct + acceptable-use policy (write)"
+      - "Org chart + defined security roles/responsibilities"
+      - "Background-check policy + records (HR)"
+      - "Board/advisor security-oversight cadence"
+    owner: "Founders / People ops"
+
+  - id: CC2
+    name: "Communication & Information (internal/external security comms)"
+    status: partial
+    summary: >
+      Engineering-facing security information is documented and code-verified;
+      external customer-facing comms (trust center, security whitepaper) and
+      internal policy communication are not yet published.
+    evidence:
+      - path: "docs/security/SECURITY_POSTURE.md"
+        note: "Code-verified control snapshot — the internal security-information baseline."
+    external_evidence:
+      - "Public trust center + security whitepaper (GTM B10 deliverable)"
+      - "Policy acknowledgement records (employees attest to policies)"
+    owner: "Security / GTM"
+
+  - id: CC3
+    name: "Risk Assessment (identify, analyze, respond to risk)"
+    status: gap
+    summary: >
+      No formal, documented risk-assessment process or risk register exists.
+      Threat modeling is present informally in code comments (e.g. the BYO-OIDC
+      forged-`iss` threat model) but is not a maintained risk artifact.
+    evidence: []
+    external_evidence:
+      - "Documented annual risk assessment + risk register"
+      - "Fraud-risk consideration; change-in-environment risk review"
+    owner: "Security"
+
+  - id: CC4
+    name: "Monitoring Activities (evaluate controls; detect deficiencies)"
+    status: partial
+    summary: >
+      Automated, gating security scanning runs in CI on every PR + weekly, and
+      an immutable audit log records security-relevant events. Missing: a
+      continuous-controls-monitoring vendor (Vanta/Drata) and periodic
+      management review of control operation.
+    evidence:
+      - path: ".github/workflows/security-scan.yml"
+        note: "semgrep/gosec/bandit/trivy/gitleaks gate merges at HIGH; weekly full sweep."
+      - path: "security/run_baseline_scan.sh"
+        note: "Local equivalent of the CI security baseline for pre-push checks."
+      - path: "services/audit-service/internal/api/handlers.go"
+        note: "handleSOC2Pack — tenant+range SOC 2 evidence pack endpoint."
+    external_evidence:
+      - "Continuous-controls-monitoring tool onboarded (Vanta/Drata)"
+      - "Documented periodic management review of control effectiveness"
+    owner: "Security / Platform"
+
+  - id: CC5
+    name: "Control Activities (policies & procedures over technology)"
+    status: partial
+    summary: >
+      Technology control activities are codified — RLS, OPA/RBAC authorization,
+      four-eyes proposal execution — but the written policies that govern them
+      (access-control policy, SDLC policy) are not documented artifacts.
+    evidence:
+      - path: "services/usage-service/internal/api/middleware.go"
+        note: "RequireAction — every guarded action authorized via OPA before proceeding."
+      - path: "services/case-service/migrations/000002_rls.up.sql"
+        note: "ENABLE/FORCE ROW LEVEL SECURITY tenant_isolation policy (pattern in 12+ services)."
+    external_evidence:
+      - "Written access-control policy; SDLC policy; data-handling policy"
+    owner: "Security / Engineering"
+
+  - id: CC6
+    name: "Logical & Physical Access Controls"
+    status: implemented
+    summary: >
+      The strongest area. Multi-tenant isolation via Postgres FORCE RLS bound to
+      the verified JWT tenant; route authorization via OPA/RBAC with audited
+      denials; bearer-JWT auth with real per-tenant BYO-OIDC (forged-`iss` safe);
+      encryption at rest (RDS/S3/MSK KMS in the AWS reference). Physical controls
+      inherit from the cloud provider (a subservice-org / CUEC in a real report).
+    evidence:
+      - path: "services/case-service/migrations/000002_rls.up.sql"
+        note: "FORCE RLS tenant_isolation — binds the table owner too."
+      - path: "services/usage-service/internal/store/pg.go"
+        note: "withTenant pins app.tenant_id from the verified JWT, never request input."
+      - path: "services/usage-service/internal/api/middleware.go"
+        note: "AuthMiddleware (JWT verify) + RequireAction (OPA authorize) + audited denial."
+      - path: "services/identity-service/internal/domain/idp_config.go"
+        note: "TenantIdpConfig — per-tenant BYO-OIDC, rejects non-HTTPS issuers."
+      - path: "services/rbac-service/internal/integration/opa_parity_test.go"
+        note: "In-process authorizer and real OPA sidecar proven to agree."
+      - path: "deploy/terraform/aws/rds.tf"
+        note: "RDS storage_encrypted = true (encryption at rest, AWS reference)."
+      - path: "deploy/terraform/aws/s3.tf"
+        note: "S3 default SSE-KMS encryption."
+    external_evidence:
+      - "SAML SSO (only OIDC today); SCIM provisioning (currently 501 stub)"
+      - "Documented access-provisioning/deprovisioning procedure + review cadence"
+    owner: "Security / Platform"
+
+  - id: CC7
+    name: "System Operations (detect, respond to, recover from incidents)"
+    status: partial
+    summary: >
+      Detection tooling (CI scans, immutable audit chain with re-verification)
+      and per-service operational runbooks exist, including a documented P1
+      audit-chain-integrity procedure. Missing: a company-wide security
+      incident-response policy (breach notification, customer-comms SLAs,
+      regulatory escalation).
+    evidence:
+      - path: "services/audit-service/RUNBOOK.md"
+        note: "Includes an Integrity-violation incident-response P1 procedure."
+      - path: "services/audit-service/internal/compliance/evidence.go"
+        note: "Evidence pack re-verifies the SHA-256 hash chain + sealed WORM manifest."
+    external_evidence:
+      - "Company-wide incident-response plan (breach notification, comms SLAs, escalation)"
+      - "Tabletop exercise records; on-call/alerting runbook rollup"
+    owner: "Security / Platform"
+
+  - id: CC8
+    name: "Change Management (authorize, design, test, approve changes)"
+    status: partial
+    summary: >
+      Changes flow through pull requests with CI gates (security scans, tests)
+      and versioned, forward-only DB migrations. Missing: a written change-
+      management policy and evidence of enforced review approvals (branch
+      protection settings) as a collected artifact.
+    evidence:
+      - path: ".github/workflows/security-scan.yml"
+        note: "Security scans gate merges to main; weekly full sweep."
+      - path: "services/usage-service/migrations"
+        note: "Numbered forward/rollback migrations — controlled schema change."
+    external_evidence:
+      - "Written change-management policy"
+      - "Branch-protection / required-review settings exported as evidence"
+    owner: "Engineering"
+
+  - id: CC9
+    name: "Risk Mitigation (vendor management, business disruption)"
+    status: gap
+    summary: >
+      No vendor/subprocessor risk-management process or business-continuity /
+      disaster-recovery plan is documented. HA building blocks exist technically
+      (see Availability) but a BC/DR *program* does not.
+    evidence: []
+    external_evidence:
+      - "Subprocessor inventory + vendor security-review process"
+      - "Business-continuity + disaster-recovery plan with RTO/RPO targets"
+      - "Vendor DPAs / BAAs on file"
+    owner: "Security / Legal"
+
+# ---------------------------------------------------------------------------
+# Additional categories (in scope for Datacern's regulated posture).
+# ---------------------------------------------------------------------------
+  - id: A1
+    name: "Availability (capacity, backup, recovery)"
+    status: partial
+    summary: >
+      Capacity/load evidence exists as a runnable harness and HA design work is
+      done for the data tier; formal backup/restore testing and a recovery
+      program (RTO/RPO, restore drills) are not evidenced.
+    evidence:
+      - path: "deploy/local/load_test.py"
+        note: "Concurrent-VU load harness (self-testable) for capacity evidence."
+      - path: "deploy/terraform/aws/rds.tf"
+        note: "Managed RDS (automated backups configurable in the reference IaC)."
+    external_evidence:
+      - "Documented backup schedule + tested restore drill records"
+      - "RTO/RPO targets; monitored availability SLOs in production"
+    owner: "Platform"
+
+  - id: C1
+    name: "Confidentiality (identify, protect, dispose of confidential data)"
+    status: partial
+    summary: >
+      Confidential data is protected by tenant RLS + encryption at rest/in
+      transit (ingress TLS supported but default-off), and erasure exists in
+      memory-service. A formal data-classification + retention/disposal policy
+      is not documented.
+    evidence:
+      - path: "services/case-service/migrations/000002_rls.up.sql"
+        note: "Tenant isolation on confidential case data."
+      - path: "deploy/helm/datacern/values.yaml"
+        note: "Ingress TLS supported (tls block) — default-off; operator must enable."
+    external_evidence:
+      - "Data-classification policy; retention & secure-disposal policy"
+      - "Ingress TLS enabled by default in the shipped deployment"
+    owner: "Security / Platform"
+
+  - id: PI1
+    name: "Processing Integrity (complete, valid, accurate, authorized processing)"
+    status: partial
+    summary: >
+      Strong technical integrity controls: four-eyes governed proposals (a named
+      human approves; no self-approval), an immutable SHA-256 audit hash chain
+      with WORM export and independent re-verification, and usage/billing
+      reconciliation. Missing: a documented processing-integrity control
+      narrative tying these to a policy.
+    evidence:
+      - path: "services/audit-service/internal/compliance/evidence.go"
+        note: "Single-decision evidence pack: proposer + DISTINCT approver + chain proof."
+      - path: "services/audit-service/migrations/000002_rls.up.sql"
+        note: "Audit store tenant isolation."
+    external_evidence:
+      - "Processing-integrity control narrative + data-quality monitoring policy"
+    owner: "Security / Engineering"

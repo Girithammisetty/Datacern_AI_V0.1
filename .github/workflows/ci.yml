@@ -478,6 +478,14 @@ jobs:
       - name: Doc facts match the repository
         run: python3 tools/docs/check_doc_facts.py
 
+      # SOC 2 control register: every evidence citation must resolve to a real
+      # file, every gap must name what to collect. A control-to-evidence map
+      # rots the moment a cited file moves; this keeps the readiness scaffold
+      # honest instead of pointing an auditor at a dead path.
+      - name: SOC 2 evidence citations resolve
+        run: python3 tools/compliance/check_soc2_evidence.py
+
+
   # ---------------------------------------------------------------------------
   # e2e-contract — ui-web's fast, hermetic Playwright suite (tests-e2e/) drives
   # the real UI against a lightweight contract-server stand-in for the BFF

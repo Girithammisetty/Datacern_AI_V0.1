@@ -404,8 +404,8 @@ function DisplayLabelsCard() {
   );
 }
 
-const DEFAULT_PRIMARY_HEX = "#2563eb"; // globals.css --primary: 221 83% 53%
-const DEFAULT_ACCENT_HEX = "#e8edf5"; // globals.css --accent: 210 40% 94%
+const DEFAULT_PRIMARY_HEX = "#11859c"; // globals.css --primary: 190 80% 34% (brand teal)
+const DEFAULT_ACCENT_HEX = "#e2f1f4"; // globals.css --accent: 190 44% 92%
 
 /**
  * White-label branding (BRD 59 WS3): a logo (MinIO-backed, uploaded via the
