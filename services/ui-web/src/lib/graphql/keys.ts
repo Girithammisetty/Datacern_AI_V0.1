@@ -215,6 +215,9 @@ export const qk = {
   agentVersions: (agentKey: string) => ["agentic", "versions", agentKey] as const,
   tenantAgentConfig: (agentKey: string) => ["agentic", "tenantConfig", agentKey] as const,
   agentRuns: (filters: unknown) => ["agentic", "runs", filters] as const,
+  // BRD 14/68: agent lifecycle controls (rollouts + retrain watches)
+  agentRollouts: (filters: unknown) => ["agentic", "rollouts", filters] as const,
+  retrainWatches: () => ["agentic", "retrainWatches"] as const,
 
   // BRD 68 slice 1: Agent Control Tower fleet aggregation
   agentFleet: (filters: unknown) => ["agentic", "fleet", filters] as const,

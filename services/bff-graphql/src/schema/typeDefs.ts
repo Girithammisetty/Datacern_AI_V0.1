@@ -4387,6 +4387,97 @@ export const typeDefs = gql`
     updatedBy: String
   }
 
+  # ---- BRD 14/68: agent lifecycle controls (register/version/rollout/watch) --
+  """The thin register response ({agent_key, status: "draft"})."""
+  type AgentDefinitionRegisterResult { agentKey: ID! status: String! }
+  input RegisterAgentDefinitionInput {
+    agentKey: String!
+    displayName: String!
+    description: String
+    """Defaults to "platform-ai" downstream."""
+    ownerTeam: String
+    """Defaults to "proposal" downstream."""
+    defaultWriteMode: String
+  }
+
+  """The thin create-version response ({agent_key, version, status: "draft"})."""
+  type AgentVersionCreateResult { agentKey: ID! version: Int! status: String! }
+  input CreateAgentVersionInput {
+    version: Int!
+    graphRef: String!
+    promptRefs: JSON
+    toolset: JSON
+    modelConfig: JSON
+    evalGate: JSON
+    evalGateResultId: String
+  }
+
+  """One rollout record (agent-runtime rollouts table). \`mode\` is
+  direct | canary | shadow; \`status\` is active | promoted | rolled_back.
+  \`pct\` is the canary traffic percentage (0 for direct/shadow)."""
+  type AgentRollout {
+    rolloutId: ID!
+    agentKey: ID!
+    cell: String
+    mode: String!
+    candidateVersion: Int!
+    baselineVersion: Int!
+    pct: Int!
+    tenantFilter: JSON
+    status: String!
+  }
+  """The thin rollout write response ({rollout_id, status})."""
+  type AgentRolloutActionResult { rolloutId: ID! status: String! }
+  input StartAgentRolloutInput {
+    agentKey: String!
+    """direct | canary | shadow."""
+    mode: String!
+    candidateVersion: Int!
+    baselineVersion: Int!
+    """Canary traffic percentage; defaults to 0 downstream."""
+    pct: Int
+    """Defaults to the runtime's own cell/env downstream."""
+    cell: String
+    tenantFilter: JSON
+  }
+
+  """A standing drift watch on a deployed model (BRD 52 inc3): the scheduler
+  counts human corrections to watchedAgentKey's proposals over the window on
+  the cadence and, past driftThreshold, opens a four-eyes retrain proposal via
+  the governance agent."""
+  type RetrainWatch {
+    id: ID!
+    modelUrn: String!
+    watchedAgentKey: String!
+    workspaceId: ID
+    cadenceSeconds: Int!
+    correctionWindowHours: Int!
+    """Correction ratio in [0,1] that trips the watch."""
+    driftThreshold: Float!
+    minCorrections: Int!
+    enabled: Boolean!
+    lastCheckedAt: String
+    """The scheduler's last computed signal (opaque passthrough)."""
+    lastSignal: JSON
+    createdBy: String
+  }
+  input CreateRetrainWatchInput {
+    modelUrn: String!
+    watchedAgentKey: String!
+    workspaceId: ID
+    """Defaults to 86400 (daily) downstream; minimum 60."""
+    cadenceSeconds: Int
+    """Defaults to 168 (7 days) downstream."""
+    correctionWindowHours: Int
+    """0..1; defaults to 0.3 downstream."""
+    driftThreshold: Float
+    """Defaults to 20 downstream."""
+    minCorrections: Int
+    enabled: Boolean
+  }
+  """The thin delete response ({id, deleted: true})."""
+  type RetrainWatchDeleteResult { id: ID! deleted: Boolean! }
+
   """One row in the tenant run history (agent-runtime GET /runs, Tier 2b).
   Deliberately lighter than AgentRun — no per-row trace/tokenStream fan-out;
   open the run detail (Query.agentRun) for those."""
@@ -5235,6 +5326,14 @@ export const typeDefs = gql`
     """Run history for the caller's tenant (agent-runtime GET /runs), newest
     first. Any tenant principal; tenant-scoped downstream by RLS."""
     agentRuns(agentKey: String, first: Int = 50): AgentRunListItemConnection!
+    """Rollout records, newest first (agent-runtime GET /registry/rollouts),
+    optionally filtered by agentKey/status. Control-plane read gated like the
+    kill-switch list (ai.agent.read downstream) — the writes (start/promote/
+    rollback mutations) are operator-only."""
+    agentRollouts(agentKey: String, status: String): [AgentRollout!]!
+    """The caller-tenant's scheduled drift/retrain watches (agent-runtime GET
+    /registry/retrain-watches, BRD 52 inc3). Needs ai.agent.admin downstream."""
+    retrainWatches: [RetrainWatch!]!
 
     # ---- BRD 68 slice 1: Agent Control Tower fleet aggregation -----------------
     """ACT-FR-001. Requires agent.registry.read downstream (enforced as
@@ -6874,6 +6973,34 @@ export const typeDefs = gql`
 
     """Operator-only: set the platform ceilings that clamp every custom agent."""
     setAgentCeilings(maxBudgetTokens: Int!, maxTier: String!): AgentCeilings!
+
+    # ---- BRD 14/68: agent lifecycle controls (Control Tower management side) --
+    """Register an agent definition, status "draft" (agent-runtime POST
+    /registry/agents). Platform-OPERATOR-only downstream (registry.py
+    _require_operator) — a tenant admin cannot pass this one."""
+    registerAgentDefinition(input: RegisterAgentDefinitionInput!, idempotencyKey: String): AgentDefinitionRegisterResult!
+    """Create an IMMUTABLE draft version of an agent (POST /registry/agents/
+    {key}/versions; 409 if the version exists). Publish it afterwards via
+    publishAgentVersion (eval-gate-guarded). Operator-only downstream
+    (_require_operator)."""
+    createAgentVersion(agentKey: String!, input: CreateAgentVersionInput!, idempotencyKey: String): AgentVersionCreateResult!
+    """Start a direct|canary|shadow rollout of a candidate version against a
+    baseline (POST /registry/rollouts). Operator-only downstream
+    (_require_operator)."""
+    startAgentRollout(input: StartAgentRolloutInput!, idempotencyKey: String): AgentRolloutActionResult!
+    """Promote an active rollout — the candidate wins (POST /registry/rollouts/
+    {id}/promote). Operator-only downstream (_require_operator)."""
+    promoteAgentRollout(rolloutId: ID!, idempotencyKey: String): AgentRolloutActionResult!
+    """Roll a rollout back to its baseline (POST /registry/rollouts/{id}/
+    rollback). Operator-only downstream (_require_operator)."""
+    rollbackAgentRollout(rolloutId: ID!, idempotencyKey: String): AgentRolloutActionResult!
+    """Register a scheduled drift watch that opens four-eyes retrain proposals
+    past the threshold (POST /registry/retrain-watches, BRD 52 inc3). Returns
+    the full stored watch. Needs ai.agent.admin downstream."""
+    createRetrainWatch(input: CreateRetrainWatchInput!, idempotencyKey: String): RetrainWatch!
+    """Delete a retrain watch (DELETE /registry/retrain-watches/{id}; 404 if it
+    is not the caller-tenant's). Needs ai.agent.admin downstream."""
+    deleteRetrainWatch(id: ID!): RetrainWatchDeleteResult!
 
     # ---- BRD 54 inc2: governed decision tables --------------------------------
     """Author + publish a decision table (agent-runtime POST /decision-models).

@@ -653,6 +653,17 @@ export const FEATURE_GATES = {
    * principal downstream; the browse page reuses the proposal-inbox read
    * gate so it appears exactly for personas who work with agent activity. */
   viewAgentRunHistory: cap("ai.proposal.read"),
+  // BRD 14/68: agent lifecycle controls (Control Tower management side).
+  /** Rollout records list (agent-runtime GET /registry/rollouts —
+   * ai.agent.read downstream, same bar as the kill-switch/fleet reads). */
+  viewAgentRollouts: cap("ai.agent.read"),
+  /** Start/promote/rollback a rollout (POST /registry/rollouts* — platform
+   * OPERATOR scope downstream, registry.py _require_operator; same UI bar as
+   * publishAgentVersion above). */
+  manageAgentRollouts: role(ADMIN_ROLE),
+  /** Drift retrain watches (GET/POST/DELETE /registry/retrain-watches —
+   * ai.agent.admin downstream, BRD 52 inc3). */
+  manageRetrainWatches: cap("ai.agent.admin"),
 
   // ==========================================================================
   // BRD 68 slice 1: Agent Control Tower fleet table (docs/initiatives/

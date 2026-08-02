@@ -252,6 +252,10 @@ import type {
   AgentDefinition,
   AgentVersionInfo,
   AgentVersionPublishResult,
+  AgentRollout,
+  AgentRolloutActionResult,
+  RetrainWatch,
+  RetrainWatchDeleteResult,
   TenantAgentConfig,
   AgentRunListItem,
   TenantBranding,
@@ -5418,6 +5422,94 @@ export const SET_AGENT_CEILINGS = /* GraphQL */ `
   }
 `;
 export interface SetAgentCeilingsResult { setAgentCeilings: AgentCeilings }
+
+// BRD 14/68: agent lifecycle controls — rollouts (start/promote/rollback are
+// operator-only downstream) + drift retrain watches (ai.agent.admin).
+export const AGENT_ROLLOUTS = /* GraphQL */ `
+  query AgentRollouts($agentKey: String, $status: String) {
+    agentRollouts(agentKey: $agentKey, status: $status) {
+      rolloutId agentKey cell mode candidateVersion baselineVersion pct tenantFilter status
+    }
+  }
+`;
+export interface AgentRolloutsResult {
+  agentRollouts: AgentRollout[];
+}
+
+export const START_AGENT_ROLLOUT = /* GraphQL */ `
+  mutation StartAgentRollout($input: StartAgentRolloutInput!, $idempotencyKey: String) {
+    startAgentRollout(input: $input, idempotencyKey: $idempotencyKey) { rolloutId status }
+  }
+`;
+export interface StartAgentRolloutInput {
+  agentKey: string;
+  mode: string;
+  candidateVersion: number;
+  baselineVersion: number;
+  pct?: number;
+  cell?: string;
+  tenantFilter?: JSONValue;
+}
+export interface StartAgentRolloutResult {
+  startAgentRollout: AgentRolloutActionResult;
+}
+
+export const PROMOTE_AGENT_ROLLOUT = /* GraphQL */ `
+  mutation PromoteAgentRollout($rolloutId: ID!, $idempotencyKey: String) {
+    promoteAgentRollout(rolloutId: $rolloutId, idempotencyKey: $idempotencyKey) { rolloutId status }
+  }
+`;
+export interface PromoteAgentRolloutResult {
+  promoteAgentRollout: AgentRolloutActionResult;
+}
+
+export const ROLLBACK_AGENT_ROLLOUT = /* GraphQL */ `
+  mutation RollbackAgentRollout($rolloutId: ID!, $idempotencyKey: String) {
+    rollbackAgentRollout(rolloutId: $rolloutId, idempotencyKey: $idempotencyKey) { rolloutId status }
+  }
+`;
+export interface RollbackAgentRolloutResult {
+  rollbackAgentRollout: AgentRolloutActionResult;
+}
+
+const RETRAIN_WATCH_FIELDS = /* GraphQL */ `id modelUrn watchedAgentKey workspaceId cadenceSeconds correctionWindowHours driftThreshold minCorrections enabled lastCheckedAt lastSignal createdBy`;
+
+export const RETRAIN_WATCHES = /* GraphQL */ `
+  query RetrainWatches {
+    retrainWatches { ${RETRAIN_WATCH_FIELDS} }
+  }
+`;
+export interface RetrainWatchesResult {
+  retrainWatches: RetrainWatch[];
+}
+
+export const CREATE_RETRAIN_WATCH = /* GraphQL */ `
+  mutation CreateRetrainWatch($input: CreateRetrainWatchInput!, $idempotencyKey: String) {
+    createRetrainWatch(input: $input, idempotencyKey: $idempotencyKey) { ${RETRAIN_WATCH_FIELDS} }
+  }
+`;
+export interface CreateRetrainWatchInput {
+  modelUrn: string;
+  watchedAgentKey: string;
+  workspaceId?: string;
+  cadenceSeconds?: number;
+  correctionWindowHours?: number;
+  driftThreshold?: number;
+  minCorrections?: number;
+  enabled?: boolean;
+}
+export interface CreateRetrainWatchResult {
+  createRetrainWatch: RetrainWatch;
+}
+
+export const DELETE_RETRAIN_WATCH = /* GraphQL */ `
+  mutation DeleteRetrainWatch($id: ID!) {
+    deleteRetrainWatch(id: $id) { id deleted }
+  }
+`;
+export interface DeleteRetrainWatchResult {
+  deleteRetrainWatch: RetrainWatchDeleteResult;
+}
 
 export const AGENT_RUNS = /* GraphQL */ `
   query AgentRuns($agentKey: String, $first: Int) {

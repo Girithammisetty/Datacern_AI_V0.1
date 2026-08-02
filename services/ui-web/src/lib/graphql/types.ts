@@ -3666,6 +3666,50 @@ export interface AgentVersionPublishResult {
   status: string;
 }
 
+// ---- BRD 14/68: agent lifecycle controls (rollouts + retrain watches) ------
+
+/** One rollout record (agent-runtime GET /registry/rollouts). mode is
+ * direct|canary|shadow; status is active|promoted|rolled_back. */
+export interface AgentRollout {
+  rolloutId: ID;
+  agentKey: ID;
+  cell?: string | null;
+  mode: string;
+  candidateVersion: number;
+  baselineVersion: number;
+  pct: number;
+  tenantFilter?: JSONValue;
+  status: string;
+}
+
+/** Thin rollout write response ({rolloutId, status}). */
+export interface AgentRolloutActionResult {
+  rolloutId: ID;
+  status: string;
+}
+
+/** A standing drift watch on a deployed model (BRD 52 inc3): past the
+ * threshold it opens a four-eyes retrain proposal via the governance agent. */
+export interface RetrainWatch {
+  id: ID;
+  modelUrn: string;
+  watchedAgentKey: string;
+  workspaceId?: ID | null;
+  cadenceSeconds: number;
+  correctionWindowHours: number;
+  driftThreshold: number;
+  minCorrections: number;
+  enabled: boolean;
+  lastCheckedAt?: string | null;
+  lastSignal?: JSONValue;
+  createdBy?: string | null;
+}
+
+export interface RetrainWatchDeleteResult {
+  id: ID;
+  deleted: boolean;
+}
+
 export interface TenantAgentConfig {
   agentKey: ID;
   configured: boolean;

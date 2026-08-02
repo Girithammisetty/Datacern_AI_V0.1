@@ -9,7 +9,9 @@ import { Can } from "@/components/authz/Can";
 import { AgentCatalogCard } from "@/components/admin/AgentCatalogCard";
 import { AgentFleetTiles, AgentFleetTable } from "@/components/admin/AgentFleetTable";
 import { ExternalAgentsCard } from "@/components/admin/ExternalAgentsCard";
+import { AgentRolloutsCard } from "@/components/admin/AgentRolloutsCard";
 import { OperatorCeilingsCard } from "@/components/admin/OperatorCeilingsCard";
+import { RetrainWatchesCard } from "@/components/admin/RetrainWatchesCard";
 import { Badge, Card, CardHeader, CardTitle, CardContent, Input } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { FEATURE_GATES, type Gate } from "@/lib/authz/registry";
@@ -44,6 +46,19 @@ export default function AdminAgentsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <AgentKillSwitchesCard />
         <ToolKillSwitchesCard />
+      </div>
+      {/* BRD 14/68: rollout MANAGEMENT (start/promote/rollback) — the fleet
+          table's rollout chip above reflects the live state; this panel is the
+          write side (writes are operator-only downstream). */}
+      <Can gate={FEATURE_GATES.viewAgentRollouts}>
+        <div className="mt-4">
+          <AgentRolloutsCard />
+        </div>
+      </Can>
+      {/* BRD 52 inc3: drift thresholds that open four-eyes retrain proposals
+          (card self-gates on ai.agent.admin — the list itself needs it). */}
+      <div className="mt-4">
+        <RetrainWatchesCard />
       </div>
       {/* Tier 2b: agent catalog browse + per-tenant agent config (agent-runtime
           registry). Lives with the kill switches — one agent control plane page. */}

@@ -26,6 +26,8 @@ import type {
   ProposalDTO, AgentRunDTO, AgentKillSwitchDTO,
   // Tier 2b: agent-runtime catalog/registry.
   AgentDefinitionDTO, AgentVersionDTO, TenantAgentConfigDTO, AgentRunListItemDTO,
+  // BRD 14/68: lifecycle controls (rollouts + retrain watches).
+  AgentRolloutDTO, RetrainWatchDTO,
   // BRD 54 inc2: governed decision tables.
   DecisionModelDTO, DecisionOutcomeDTO, BatchEvaluateDTO, EntityMergeProposalDTO,
   // BRD 55: decision outcome monitoring.
@@ -2778,6 +2780,39 @@ export function mapTenantAgentConfig(d: TenantAgentConfigDTO) {
     promptParams: d.prompt_params ?? null,
     autoExecutePolicy: d.auto_execute_policy ?? null,
     selfApproval: d.self_approval ?? false,
+  };
+}
+
+export function mapAgentRollout(d: AgentRolloutDTO) {
+  return {
+    __typename: "AgentRollout" as const,
+    rolloutId: d.rollout_id,
+    agentKey: d.agent_key,
+    cell: d.cell ?? null,
+    mode: d.mode,
+    candidateVersion: d.candidate_version,
+    baselineVersion: d.baseline_version,
+    pct: d.pct ?? 0,
+    tenantFilter: d.tenant_filter ?? null,
+    status: d.status,
+  };
+}
+
+export function mapRetrainWatch(d: RetrainWatchDTO) {
+  return {
+    __typename: "RetrainWatch" as const,
+    id: d.id,
+    modelUrn: d.model_urn,
+    watchedAgentKey: d.watched_agent_key,
+    workspaceId: d.workspace_id ?? null,
+    cadenceSeconds: d.cadence_seconds,
+    correctionWindowHours: d.correction_window_hours,
+    driftThreshold: d.drift_threshold,
+    minCorrections: d.min_corrections,
+    enabled: d.enabled,
+    lastCheckedAt: d.last_checked_at ?? null,
+    lastSignal: d.last_signal ?? null,
+    createdBy: d.created_by ?? null,
   };
 }
 

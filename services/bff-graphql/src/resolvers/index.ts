@@ -69,6 +69,7 @@ import {
   mapAgentChatSession, mapDecisionEvaluation,
   mapAiSpendFreeze,
   mapProvisioningStep, mapPocCriterion, mapPocProgress,
+  mapAgentRollout, mapRetrainWatch,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
@@ -2221,6 +2222,15 @@ export const resolvers = {
       const page = await ctx.clients.agent.agentRuns({ agentKey: a.agentKey, limit });
       return toConnection(page, (d) => mapAgentRunListItem(ctx, d));
     },
+
+    // ---- BRD 14/68: agent lifecycle controls --------------------------------
+    agentRollouts: (_p: unknown, a: { agentKey?: string; status?: string }, ctx: GraphQLContext) =>
+      ctx.clients.agent
+        .rollouts({ agentKey: a.agentKey, status: a.status })
+        .then((rows) => rows.map(mapAgentRollout)),
+
+    retrainWatches: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      ctx.clients.agent.retrainWatches().then((rows) => rows.map(mapRetrainWatch)),
 
     // ---- BRD 68 slice 1: Agent Control Tower fleet aggregation --------------
     agentFleet: (
@@ -5635,6 +5645,146 @@ export const resolvers = {
         updatedAt: d.updated_at ?? null,
         updatedBy: d.updated_by ?? null,
       })),
+
+    // ---- BRD 14/68: agent lifecycle controls (operator/ai.agent.admin) ------
+    registerAgentDefinition: async (
+      _p: unknown,
+      a: {
+        input: { agentKey: string; displayName: string; description?: string; ownerTeam?: string; defaultWriteMode?: string };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.registerAgentDefinition(
+        {
+          agent_key: a.input.agentKey,
+          display_name: a.input.displayName,
+          description: a.input.description,
+          owner_team: a.input.ownerTeam,
+          default_write_mode: a.input.defaultWriteMode,
+        },
+        a.idempotencyKey,
+      );
+      return { agentKey: d.agent_key, status: d.status };
+    },
+
+    createAgentVersion: async (
+      _p: unknown,
+      a: {
+        agentKey: string;
+        input: {
+          version: number;
+          graphRef: string;
+          promptRefs?: unknown[];
+          toolset?: unknown[];
+          modelConfig?: Record<string, unknown>;
+          evalGate?: Record<string, unknown>;
+          evalGateResultId?: string;
+        };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.createAgentVersion(
+        a.agentKey,
+        {
+          version: a.input.version,
+          graph_ref: a.input.graphRef,
+          prompt_refs: a.input.promptRefs,
+          toolset: a.input.toolset,
+          model_config: a.input.modelConfig,
+          eval_gate: a.input.evalGate,
+          eval_gate_result_id: a.input.evalGateResultId,
+        },
+        a.idempotencyKey,
+      );
+      return { agentKey: d.agent_key, version: d.version, status: d.status };
+    },
+
+    startAgentRollout: async (
+      _p: unknown,
+      a: {
+        input: {
+          agentKey: string;
+          mode: string;
+          candidateVersion: number;
+          baselineVersion: number;
+          pct?: number;
+          cell?: string;
+          tenantFilter?: Record<string, unknown>;
+        };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.startRollout(
+        {
+          agent_key: a.input.agentKey,
+          mode: a.input.mode,
+          candidate_version: a.input.candidateVersion,
+          baseline_version: a.input.baselineVersion,
+          pct: a.input.pct,
+          cell: a.input.cell,
+          tenant_filter: a.input.tenantFilter,
+        },
+        a.idempotencyKey,
+      );
+      return { rolloutId: d.rollout_id, status: d.status };
+    },
+
+    promoteAgentRollout: (
+      _p: unknown,
+      a: { rolloutId: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.agent
+        .promoteRollout(a.rolloutId, a.idempotencyKey)
+        .then((d) => ({ rolloutId: d.rollout_id, status: d.status })),
+
+    rollbackAgentRollout: (
+      _p: unknown,
+      a: { rolloutId: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.agent
+        .rollbackRollout(a.rolloutId, a.idempotencyKey)
+        .then((d) => ({ rolloutId: d.rollout_id, status: d.status })),
+
+    createRetrainWatch: async (
+      _p: unknown,
+      a: {
+        input: {
+          modelUrn: string;
+          watchedAgentKey: string;
+          workspaceId?: string;
+          cadenceSeconds?: number;
+          correctionWindowHours?: number;
+          driftThreshold?: number;
+          minCorrections?: number;
+          enabled?: boolean;
+        };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.createRetrainWatch(
+        {
+          model_urn: a.input.modelUrn,
+          watched_agent_key: a.input.watchedAgentKey,
+          workspace_id: a.input.workspaceId,
+          cadence_seconds: a.input.cadenceSeconds,
+          correction_window_hours: a.input.correctionWindowHours,
+          drift_threshold: a.input.driftThreshold,
+          min_corrections: a.input.minCorrections,
+          enabled: a.input.enabled,
+        },
+        a.idempotencyKey,
+      );
+      return mapRetrainWatch(d);
+    },
+
+    deleteRetrainWatch: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.agent.deleteRetrainWatch(a.id).then((d) => ({ id: d.id, deleted: d.deleted })),
 
     // ---- BRD 54 inc2: governed decision tables ------------------------------
     createDecisionModel: async (

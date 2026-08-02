@@ -5556,6 +5556,85 @@ export function useSetAgentCeilings() {
   });
 }
 
+/* -- BRD 14/68: agent lifecycle controls (rollouts + retrain watches) ------ */
+export function useAgentRollouts(filters?: { agentKey?: string; status?: string }) {
+  return useQuery({
+    queryKey: qk.agentRollouts(filters ?? {}),
+    queryFn: () =>
+      graphqlRequest<ops.AgentRolloutsResult>(ops.AGENT_ROLLOUTS, {
+        agentKey: filters?.agentKey,
+        status: filters?.status,
+      }).then((r) => r.agentRollouts),
+  });
+}
+
+export function useStartAgentRollout() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ops.StartAgentRolloutInput) =>
+      graphqlRequest<ops.StartAgentRolloutResult>(ops.START_AGENT_ROLLOUT, {
+        input,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.startAgentRollout),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["agentic", "rollouts"] }),
+  });
+}
+
+export function usePromoteAgentRollout() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (rolloutId: string) =>
+      graphqlRequest<ops.PromoteAgentRolloutResult>(ops.PROMOTE_AGENT_ROLLOUT, {
+        rolloutId,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.promoteAgentRollout),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["agentic", "rollouts"] }),
+  });
+}
+
+export function useRollbackAgentRollout() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (rolloutId: string) =>
+      graphqlRequest<ops.RollbackAgentRolloutResult>(ops.ROLLBACK_AGENT_ROLLOUT, {
+        rolloutId,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.rollbackAgentRollout),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["agentic", "rollouts"] }),
+  });
+}
+
+export function useRetrainWatches() {
+  return useQuery({
+    queryKey: qk.retrainWatches(),
+    queryFn: () =>
+      graphqlRequest<ops.RetrainWatchesResult>(ops.RETRAIN_WATCHES).then((r) => r.retrainWatches),
+  });
+}
+
+export function useCreateRetrainWatch() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ops.CreateRetrainWatchInput) =>
+      graphqlRequest<ops.CreateRetrainWatchResult>(ops.CREATE_RETRAIN_WATCH, {
+        input,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createRetrainWatch),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.retrainWatches() }),
+  });
+}
+
+export function useDeleteRetrainWatch() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.DeleteRetrainWatchResult>(ops.DELETE_RETRAIN_WATCH, { id }).then(
+        (r) => r.deleteRetrainWatch,
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.retrainWatches() }),
+  });
+}
+
 export function useAgentVersions(agentKey: string | null) {
   return useQuery({
     queryKey: qk.agentVersions(agentKey ?? ""),
