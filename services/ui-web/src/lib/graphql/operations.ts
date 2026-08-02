@@ -191,6 +191,11 @@ import type {
   KillSwitchLiftResult,
   MemoryRecord,
   ErasureRequest,
+  MemoryRetrievalResult,
+  CorpusStatus,
+  RagCorpus,
+  CorpusRebuildReport,
+  MemoryPolicy,
   AuthzExplanation,
   ChainVerifyResult,
   ComplianceJob,
@@ -4144,6 +4149,111 @@ export const REQUEST_MEMORY_ERASURE = /* GraphQL */ `
 `;
 export interface RequestMemoryErasureResult {
   requestMemoryErasure: ErasureRequest;
+}
+
+// ---- memory governance console (BRD 15): row actions, retrieval tester, ----
+// ---- corpora, tenant policy ------------------------------------------------
+export const UPDATE_MEMORY = /* GraphQL */ `
+  mutation UpdateMemory($id: ID!, $content: String!) {
+    updateMemory(id: $id, content: $content) { ${MEMORY_RECORD_FIELDS} provenance mergedFrom revalidateAt }
+  }
+`;
+export interface UpdateMemoryResult {
+  updateMemory: MemoryRecord;
+}
+
+export const DELETE_MEMORY = /* GraphQL */ `
+  mutation DeleteMemory($id: ID!) {
+    deleteMemory(id: $id)
+  }
+`;
+export interface DeleteMemoryResult {
+  deleteMemory: boolean;
+}
+
+export const UNQUARANTINE_MEMORY = /* GraphQL */ `
+  mutation UnquarantineMemory($id: ID!, $reason: String!) {
+    unquarantineMemory(id: $id, reason: $reason) { ${MEMORY_RECORD_FIELDS} provenance mergedFrom revalidateAt }
+  }
+`;
+export interface UnquarantineMemoryResult {
+  unquarantineMemory: MemoryRecord;
+}
+
+export const MEMORY_RETRIEVAL_TEST = /* GraphQL */ `
+  query MemoryRetrievalTest($input: MemoryRetrievalTestInput!) {
+    memoryRetrievalTest(input: $input) {
+      degraded
+      hits { kind content score contentDisposition scope memoryId corpus chunkId sourceUrn snapshotVer }
+    }
+  }
+`;
+export interface MemoryRetrievalTestResult {
+  memoryRetrievalTest: MemoryRetrievalResult;
+}
+
+const RAG_CORPUS_FIELDS = /* GraphQL */ `
+  corpusKey source chunking activeEmbeddingVer refresh anonymizationProfile status
+`;
+
+export const CORPUS_STATUS = /* GraphQL */ `
+  query CorpusStatus($corpusKey: String!) {
+    corpusStatus(corpusKey: $corpusKey) { corpusKey status activeEmbeddingVer chunkCount }
+  }
+`;
+export interface CorpusStatusResult {
+  corpusStatus: CorpusStatus | null;
+}
+
+export const REGISTER_CORPUS = /* GraphQL */ `
+  mutation RegisterCorpus($input: RegisterCorpusInput!) {
+    registerCorpus(input: $input) { ${RAG_CORPUS_FIELDS} }
+  }
+`;
+export interface RegisterCorpusResult {
+  registerCorpus: RagCorpus;
+}
+
+export const UPDATE_CORPUS = /* GraphQL */ `
+  mutation UpdateCorpus($corpusKey: String!, $patch: CorpusPatchInput!) {
+    updateCorpus(corpusKey: $corpusKey, patch: $patch) { ${RAG_CORPUS_FIELDS} }
+  }
+`;
+export interface UpdateCorpusResult {
+  updateCorpus: RagCorpus;
+}
+
+export const REBUILD_CORPUS = /* GraphQL */ `
+  mutation RebuildCorpus($corpusKey: String!, $embeddingModelVer: String!) {
+    rebuildCorpus(corpusKey: $corpusKey, embeddingModelVer: $embeddingModelVer) {
+      corpusKey activeEmbeddingVer chunksReembedded oldChunksDropped
+    }
+  }
+`;
+export interface RebuildCorpusResult {
+  rebuildCorpus: CorpusRebuildReport;
+}
+
+const MEMORY_POLICY_FIELDS = /* GraphQL */ `
+  ttlOverrides piiClasses injectionProfile corpusFlags
+`;
+
+export const MEMORY_POLICY = /* GraphQL */ `
+  query MemoryPolicy {
+    memoryPolicy { ${MEMORY_POLICY_FIELDS} }
+  }
+`;
+export interface MemoryPolicyResult {
+  memoryPolicy: MemoryPolicy;
+}
+
+export const SET_MEMORY_POLICY = /* GraphQL */ `
+  mutation SetMemoryPolicy($input: MemoryPolicyInput!) {
+    setMemoryPolicy(input: $input) { ${MEMORY_POLICY_FIELDS} }
+  }
+`;
+export interface SetMemoryPolicyResult {
+  setMemoryPolicy: MemoryPolicy;
 }
 
 // ---- rbac authz explain (debug) ---------------------------------------------

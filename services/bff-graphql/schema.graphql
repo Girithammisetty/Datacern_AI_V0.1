@@ -3009,6 +3009,182 @@ type ErasureRequest {
   completedAt: DateTime
 }
 
+"""
+Result of a governed memory write (memory-service WriteResult). `status`:
+active | quarantined | queued (embedding degraded, write pended) — batch rows
+may also be rejected, carrying `code`/`message` instead of failing the
+whole batch. `memoryId` is null for session-scope and queued writes.
+"""
+type MemoryWriteResult {
+  memoryId: ID
+  status: String!
+  """True when the write deduplicated into an existing similar record."""
+  merged: Boolean
+  """True for session-scope writes (Redis only, no durable record)."""
+  session: Boolean
+  """Rejection error code (batch rows only)."""
+  code: String
+  """Rejection error message (batch rows only)."""
+  message: String
+}
+
+"""
+Provenance of a memory write (memory-service ProvenanceIn). `sourceType`:
+agent_run | user_explicit | tool_output | admin.
+"""
+input MemoryProvenanceInput {
+  sourceType: String!
+  runId: String
+  agentKey: String
+  agentVersion: String
+  userId: String
+  toolId: String
+}
+
+input WriteMemoryInput {
+  """
+  session | user | workspace | tenant. Users may write only their own
+  user/session scope; tenant scope needs memory.corpus.admin.
+  """
+  scope: String!
+  scopeRef: String!
+  content: String!
+  provenance: MemoryProvenanceInput!
+  confidence: Float
+  tags: [String!]
+}
+
+input MemoryRetrievalTestInput {
+  queryText: String
+  """
+  Scopes to search: user | workspace | tenant (session is a separate
+  downstream path and is ignored here).
+  """
+  scopes: [String!]!
+  """
+  scope -> scope_ref map. Only `workspace` needs one (and the caller must
+  be a member); user/tenant refs are server-resolved from the principal.
+  """
+  scopeRefs: JSON
+  """RAG corpus keys to search alongside memory scopes."""
+  corpora: [String!]
+  topK: Int
+  minConfidence: Float
+  tags: [String!]
+  snapshotVer: String
+  includeDebug: Boolean
+}
+
+"""
+One ranked retrieval hit (memory-service POST /retrieve). `kind` is
+memory (scope/memoryId/provenance populated) or chunk (corpus/chunkId/
+sourceUrn/snapshotVer populated). `content` is UNTRUSTED model input
+(BR-12) — the downstream marks every hit contentDisposition "untrusted".
+"""
+type MemoryRetrievalHit {
+  kind: String!
+  content: String!
+  score: Float!
+  contentDisposition: String!
+  scope: String
+  memoryId: ID
+  provenance: JSON
+  corpus: String
+  chunkId: ID
+  sourceUrn: String
+  snapshotVer: String
+  """Ranking internals, only when includeDebug was set."""
+  debug: JSON
+}
+
+"""
+Retrieval tester result. `degraded` is the downstream envelope flag —
+true when ANN search ran in a degraded mode.
+"""
+type MemoryRetrievalResult {
+  hits: [MemoryRetrievalHit!]!
+  degraded: Boolean!
+}
+
+"""
+A tenant RAG corpus (memory-service _corpus_view). `status`: active |
+paused | rebuilding. `source`/`chunking`/`refresh`/`anonymizationProfile`
+are downstream config dicts passed through as JSON.
+"""
+type RagCorpus {
+  corpusKey: ID!
+  source: JSON
+  chunking: JSON
+  activeEmbeddingVer: String!
+  refresh: JSON
+  anonymizationProfile: JSON
+  status: String!
+}
+
+"""Corpus health (memory-service GET /corpora/{key}/status)."""
+type CorpusStatus {
+  corpusKey: ID!
+  status: String!
+  activeEmbeddingVer: String!
+  chunkCount: Int!
+}
+
+"""
+Report from a corpus re-embed (memory-service POST /corpora/{key}/rebuild).
+"""
+type CorpusRebuildReport {
+  corpusKey: ID!
+  activeEmbeddingVer: String!
+  chunksReembedded: Int!
+  oldChunksDropped: Int!
+}
+
+"""Result of pushing a document into the docs corpus."""
+type CorpusDocumentPushResult {
+  sourceUrn: String!
+  chunks: Int!
+}
+
+input RegisterCorpusInput {
+  corpusKey: String!
+  source: JSON
+  chunking: JSON
+  embeddingModelVer: String
+  refresh: JSON
+  anonymizationProfile: JSON
+}
+
+input CorpusPatchInput {
+  source: JSON
+  chunking: JSON
+  refresh: JSON
+  anonymizationProfile: JSON
+  """
+  active | paused (rebuilding is set by the rebuild flow, not patchable in
+  practice).
+  """
+  status: String
+}
+
+"""
+The tenant memory PII/retention policy (memory-service GET/PUT
+/policies/self). `ttlOverrides` maps scope -> ISO-8601 duration;
+`corpusFlags` maps corpus_key -> enabled.
+"""
+type MemoryPolicy {
+  ttlOverrides: JSON!
+  piiClasses: [String!]!
+  injectionProfile: String!
+  corpusFlags: JSON!
+}
+
+input MemoryPolicyInput {
+  ttlOverrides: JSON
+  piiClasses: [String!]
+  injectionProfile: String
+  corpusFlags: JSON
+}
+
 """An ML experiment (experiment-service GET /experiments/{id})."""
 type Experiment implements Node {
   id: ID!
@@ -5813,6 +5989,23 @@ type Query {
   """
   memoryStats: JSON!
   """
+  Retrieval tester — "what would the agent recall for this query" (memory-service
+  POST /retrieve; read-only despite the POST). Scope refs are server-verified:
+  user/tenant resolve from the caller, workspace requires membership. Needs
+  memory.memory.read.
+  """
+  memoryRetrievalTest(input: MemoryRetrievalTestInput!): MemoryRetrievalResult!
+  """
+  Corpus health: status + active embedding version + chunk count
+  (memory-service GET /corpora/{key}/status). Needs memory.corpus.admin.
+  """
+  corpusStatus(corpusKey: String!): CorpusStatus
+  """
+  The caller's tenant memory PII/retention policy (memory-service GET
+  /policies/self). Needs memory.policy.read.
+  """
+  memoryPolicy: MemoryPolicy!
+  """
   A suite by id (+optional version; latest when omitted). Needs eval.suite.update
   (eval-service requires the write scope even to read a suite).
   """
@@ -7687,6 +7880,64 @@ type Mutation {
   `erasure(id)` query. Needs memory.erasure.create.
   """
   requestMemoryErasure(subjectId: String!, subjectType: String): ErasureRequest!
+  """
+  Governed memory write (memory-service POST /memories). Scope rules are
+  enforced downstream: users may write only their own user/session scope;
+  tenant-scope grounding additionally needs memory.corpus.admin. Needs
+  memory.memory.create.
+  """
+  writeMemory(input: WriteMemoryInput!): MemoryWriteResult!
+  """
+  Batch memory write (memory-service POST /memories/batch) — per-item
+  results; rejected items carry code/message instead of failing the batch.
+  Needs memory.memory.create.
+  """
+  writeMemoryBatch(items: [WriteMemoryInput!]!): [MemoryWriteResult!]!
+  """
+  Edit a memory record's content (memory-service PATCH /memories/{id});
+  returns the full updated record. Needs memory.memory.update.
+  """
+  updateMemory(id: ID!, content: String!): MemoryRecord!
+  """
+  Delete a memory record (memory-service DELETE /memories/{id}, 204).
+  Needs memory.memory.delete.
+  """
+  deleteMemory(id: ID!): Boolean!
+  """
+  Release a quarantined memory record back to active (memory-service POST
+  /memories/{id}/unquarantine). `reason` is REQUIRED downstream and audited.
+  Needs memory.memory.update.
+  """
+  unquarantineMemory(id: ID!, reason: String!): MemoryRecord!
+  """
+  Register a tenant RAG corpus (memory-service POST /corpora, 201).
+  Needs memory.corpus.admin.
+  """
+  registerCorpus(input: RegisterCorpusInput!): RagCorpus!
+  """
+  Patch a corpus' source/chunking/refresh/anonymization/status
+  (memory-service PATCH /corpora/{key}). Needs memory.corpus.admin.
+  """
+  updateCorpus(corpusKey: String!, patch: CorpusPatchInput!): RagCorpus!
+  """
+  Re-embed a corpus under a NEW embedding model version (memory-service POST
+  /corpora/{key}/rebuild, 202) — runs synchronously downstream and 409s when
+  the version is unchanged or a rebuild is already in progress. Needs
+  memory.corpus.admin.
+  """
+  rebuildCorpus(corpusKey: String!, embeddingModelVer: String!): CorpusRebuildReport!
+  """
+  Push a document into the "docs" corpus (memory-service POST
+  /corpora/docs/documents, 201) — replaces any prior chunks for the same
+  sourceUrn. Needs memory.corpus.admin.
+  """
+  pushCorpusDocument(sourceUrn: String!, content: String!): CorpusDocumentPushResult!
+  """
+  Replace the tenant memory PII/retention policy (memory-service PUT
+  /policies/self) — a full-document PUT, not a merge: omitted fields reset to
+  downstream defaults. Needs memory.policy.update.
+  """
+  setMemoryPolicy(input: MemoryPolicyInput!): MemoryPolicy!
   """
   Register a new eval suite version (eval-service POST /suites, 201).
   BR-1: the gate rule must reference >=1 deterministic scorer. Needs eval.suite.update.

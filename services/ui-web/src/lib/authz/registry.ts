@@ -466,6 +466,19 @@ export const FEATURE_GATES = {
    * compliance-sensitive, IRREVERSIBLE. Gated on memory.erasure.create.
    */
   requestMemoryErasure: cap("memory.erasure.create"),
+  /** Edit a memory record's content or release it from quarantine
+   * (memory-service PATCH /memories/{id}, POST /memories/{id}/unquarantine). */
+  editMemory: cap("memory.memory.update"),
+  /** Delete a memory record (memory-service DELETE /memories/{id}). */
+  deleteMemory: cap("memory.memory.delete"),
+  /** Administer tenant RAG corpora — register/edit/status/rebuild
+   * (memory-service /corpora*). */
+  manageMemoryCorpora: cap("memory.corpus.admin"),
+  /** View the tenant memory PII/retention policy (memory-service GET
+   * /policies/self). */
+  viewMemoryPolicy: cap("memory.policy.read"),
+  /** Replace the tenant memory policy (memory-service PUT /policies/self). */
+  editMemoryPolicy: cap("memory.policy.update"),
 
   /** Run the authz "why was I denied" debug trace (rbac-service POST
    * /authz/explain). Needs audit.log.read. */

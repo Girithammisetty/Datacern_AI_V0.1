@@ -82,6 +82,10 @@ import type {
   CreateSemanticModelInput,
   CompileSemanticModelInput,
   ErasureRequest,
+  MemoryRetrievalTestInput,
+  RegisterCorpusInput,
+  CorpusPatchInput,
+  MemoryPolicyInput,
   ExplainAuthzInput,
   ComplianceJob,
   CreateEvalSuiteInput,
@@ -4315,6 +4319,133 @@ export function useRequestMemoryErasure() {
       graphqlRequest<ops.RequestMemoryErasureResult>(ops.REQUEST_MEMORY_ERASURE, vars).then(
         (r) => r.requestMemoryErasure,
       ),
+  });
+}
+
+/* ------- memory governance console (BRD 15): row actions, retrieval tester,
+   corpora, tenant policy --------------------------------------------------- */
+/** Edit a memory record's content. Needs memory.memory.update. */
+export function useUpdateMemory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; content: string }) =>
+      graphqlRequest<ops.UpdateMemoryResult>(ops.UPDATE_MEMORY, vars).then((r) => r.updateMemory),
+    onSuccess: (_d, vars) => {
+      void client.invalidateQueries({ queryKey: qk.memory(vars.id) });
+      void client.invalidateQueries({ queryKey: ["admin", "memories"] });
+    },
+  });
+}
+
+/** Delete a memory record. Needs memory.memory.delete. */
+export function useDeleteMemory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.DeleteMemoryResult>(ops.DELETE_MEMORY, { id }).then((r) => r.deleteMemory),
+    onSuccess: (_d, id) => {
+      void client.invalidateQueries({ queryKey: qk.memory(id) });
+      void client.invalidateQueries({ queryKey: ["admin", "memories"] });
+    },
+  });
+}
+
+/** Release a quarantined memory record back to active — `reason` is required
+ * and audited downstream. Needs memory.memory.update. */
+export function useUnquarantineMemory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; reason: string }) =>
+      graphqlRequest<ops.UnquarantineMemoryResult>(ops.UNQUARANTINE_MEMORY, vars).then(
+        (r) => r.unquarantineMemory,
+      ),
+    onSuccess: (_d, vars) => {
+      void client.invalidateQueries({ queryKey: qk.memory(vars.id) });
+      void client.invalidateQueries({ queryKey: ["admin", "memories"] });
+    },
+  });
+}
+
+/** Run the retrieval tester on demand ("what would the agent recall" —
+ * memory-service POST /retrieve, a Query field server-side, no state changes).
+ * Needs memory.memory.read. */
+export function useMemoryRetrievalTest() {
+  return useMutation({
+    mutationFn: (input: MemoryRetrievalTestInput) =>
+      graphqlRequest<ops.MemoryRetrievalTestResult>(ops.MEMORY_RETRIEVAL_TEST, { input }).then(
+        (r) => r.memoryRetrievalTest,
+      ),
+  });
+}
+
+/** Corpus health: status + active embedding version + chunk count.
+ * Needs memory.corpus.admin. */
+export function useCorpusStatus(corpusKey: string | null) {
+  return useQuery({
+    queryKey: qk.corpusStatus(corpusKey ?? ""),
+    queryFn: () =>
+      graphqlRequest<ops.CorpusStatusResult>(ops.CORPUS_STATUS, { corpusKey }).then(
+        (r) => r.corpusStatus,
+      ),
+    enabled: !!corpusKey,
+  });
+}
+
+/** Register a tenant RAG corpus. Needs memory.corpus.admin. */
+export function useRegisterCorpus() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RegisterCorpusInput) =>
+      graphqlRequest<ops.RegisterCorpusResult>(ops.REGISTER_CORPUS, { input }).then(
+        (r) => r.registerCorpus,
+      ),
+    onSuccess: (d) => void client.invalidateQueries({ queryKey: qk.corpusStatus(String(d.corpusKey)) }),
+  });
+}
+
+/** Patch a corpus (source/chunking/refresh/anonymization/status).
+ * Needs memory.corpus.admin. */
+export function useUpdateCorpus() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { corpusKey: string; patch: CorpusPatchInput }) =>
+      graphqlRequest<ops.UpdateCorpusResult>(ops.UPDATE_CORPUS, vars).then((r) => r.updateCorpus),
+    onSuccess: (_d, vars) =>
+      void client.invalidateQueries({ queryKey: qk.corpusStatus(vars.corpusKey) }),
+  });
+}
+
+/** Re-embed a corpus under a NEW embedding model version (409s when unchanged
+ * or already rebuilding). Needs memory.corpus.admin. */
+export function useRebuildCorpus() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { corpusKey: string; embeddingModelVer: string }) =>
+      graphqlRequest<ops.RebuildCorpusResult>(ops.REBUILD_CORPUS, vars).then((r) => r.rebuildCorpus),
+    onSuccess: (_d, vars) =>
+      void client.invalidateQueries({ queryKey: qk.corpusStatus(vars.corpusKey) }),
+  });
+}
+
+/** The tenant memory PII/retention policy. Needs memory.policy.read. */
+export function useMemoryPolicy() {
+  return useQuery({
+    queryKey: qk.memoryPolicy(),
+    queryFn: () =>
+      graphqlRequest<ops.MemoryPolicyResult>(ops.MEMORY_POLICY).then((r) => r.memoryPolicy),
+  });
+}
+
+/** Replace the tenant memory policy (full-document PUT downstream — omitted
+ * fields reset to defaults). Needs memory.policy.update. */
+export function useSetMemoryPolicy() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MemoryPolicyInput) =>
+      graphqlRequest<ops.SetMemoryPolicyResult>(ops.SET_MEMORY_POLICY, { input }).then(
+        (r) => r.setMemoryPolicy,
+      ),
+    onSuccess: () => void client.invalidateQueries({ queryKey: qk.memoryPolicy() }),
   });
 }
 

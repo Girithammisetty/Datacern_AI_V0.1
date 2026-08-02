@@ -14,6 +14,7 @@ import type { ChartSourceInputBody } from "../clients/chart.js";
 import { budgetScopeString } from "../clients/usage.js";
 import type { AgentKillSwitchDTO, AgentDefinitionDTO, TenantAgentConfigDTO, AgentRolloutDTO } from "../clients/agent.js";
 import type { EvalGateResultDTO } from "../clients/eval.js";
+import type { WriteMemoryParams } from "../clients/memory.js";
 import {
   mapUser, mapDataset, mapProfile, mapCase, mapDashboard, mapChart,
   // Tier 4b: case ops (lifecycle, comments/timeline, export, catalog, SLA).
@@ -27,6 +28,9 @@ import {
   // Tier 4b: ml ops (register/notes/artifacts + validate/schedules).
   mapRegisterModelResult, mapRunNote, mapRunArtifact, mapCompatibilityReport, mapInferenceSchedule,
   mapMemoryRecord, mapErasureRequest,
+  // BRD 15 governance console: writes, retrieval tester, corpora, policy.
+  mapMemoryWriteResult, mapMemoryRetrievalResult, mapRagCorpus, mapCorpusStatus,
+  mapCorpusRebuildReport, mapMemoryPolicy,
   mapConnectorType, mapConnection, mapConnectionTest, mapWriteback,
   mapIngestion, mapUpload, mapLineage, mapSavedQuery, mapQueryResult,
   // Tier 4a: data-plane secondary CRUD/lifecycle.
@@ -417,6 +421,37 @@ function triggerBody(i: CaseTriggerInputShape) {
 // ============================================================================
 
 const DEFAULT_PERIOD_DAYS = 30;
+
+/** WriteMemoryInput (GraphQL camelCase) -> memory-service client params. */
+interface WriteMemoryArgs {
+  scope: string;
+  scopeRef: string;
+  content: string;
+  provenance: {
+    sourceType: string; runId?: string; agentKey?: string; agentVersion?: string;
+    userId?: string; toolId?: string;
+  };
+  confidence?: number;
+  tags?: string[];
+}
+
+function toWriteMemoryParams(i: WriteMemoryArgs): WriteMemoryParams {
+  return {
+    scope: i.scope,
+    scopeRef: i.scopeRef,
+    content: i.content,
+    provenance: {
+      source_type: i.provenance.sourceType,
+      run_id: i.provenance.runId,
+      agent_key: i.provenance.agentKey,
+      agent_version: i.provenance.agentVersion,
+      user_id: i.provenance.userId,
+      tool_id: i.provenance.toolId,
+    },
+    confidence: i.confidence,
+    tags: i.tags,
+  };
+}
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -1640,6 +1675,31 @@ export const resolvers = {
       nullOn404(ctx.clients.memory.erasure(a.id).then((d) => mapErasureRequest(ctx, d))),
 
     memoryStats: (_p: unknown, _a: unknown, ctx: GraphQLContext) => ctx.clients.memory.stats(),
+
+    memoryRetrievalTest: async (
+      _p: unknown,
+      a: {
+        input: {
+          queryText?: string; scopes: string[]; scopeRefs?: Record<string, string>;
+          corpora?: string[]; topK?: number; minConfidence?: number; tags?: string[];
+          snapshotVer?: string; includeDebug?: boolean;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.retrieve({
+        queryText: a.input.queryText, scopes: a.input.scopes, scopeRefs: a.input.scopeRefs,
+        corpora: a.input.corpora, topK: a.input.topK, minConfidence: a.input.minConfidence,
+        tags: a.input.tags, snapshotVer: a.input.snapshotVer, includeDebug: a.input.includeDebug,
+      });
+      return mapMemoryRetrievalResult(ctx, d);
+    },
+
+    corpusStatus: (_p: unknown, a: { corpusKey: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.memory.corpusStatus(a.corpusKey).then((d) => mapCorpusStatus(ctx, d))),
+
+    memoryPolicy: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      ctx.clients.memory.policy().then((d) => mapMemoryPolicy(ctx, d)),
 
     experiments: async (_p: unknown, a: ConnectionArgs, ctx: GraphQLContext) => {
       const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
@@ -3267,6 +3327,112 @@ export const resolvers = {
     ) => {
       const d = await ctx.clients.memory.startErasure(a.subjectId, a.subjectType ?? "user");
       return mapErasureRequest(ctx, d);
+    },
+
+    // ---- memory governance console (BRD 15) --------------------------------
+    writeMemory: async (
+      _p: unknown,
+      a: { input: WriteMemoryArgs },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.writeMemory(toWriteMemoryParams(a.input));
+      return mapMemoryWriteResult(ctx, d);
+    },
+
+    writeMemoryBatch: async (
+      _p: unknown,
+      a: { items: WriteMemoryArgs[] },
+      ctx: GraphQLContext,
+    ) => {
+      const rows = await ctx.clients.memory.writeMemoryBatch(a.items.map(toWriteMemoryParams));
+      return rows.map((d) => mapMemoryWriteResult(ctx, d));
+    },
+
+    updateMemory: (_p: unknown, a: { id: string; content: string }, ctx: GraphQLContext) =>
+      ctx.clients.memory.editMemory(a.id, a.content).then((d) => mapMemoryRecord(ctx, d)),
+
+    deleteMemory: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      await ctx.clients.memory.deleteMemory(a.id);
+      return true;
+    },
+
+    unquarantineMemory: (
+      _p: unknown,
+      a: { id: string; reason: string },
+      ctx: GraphQLContext,
+    ) => ctx.clients.memory.unquarantine(a.id, a.reason).then((d) => mapMemoryRecord(ctx, d)),
+
+    registerCorpus: async (
+      _p: unknown,
+      a: {
+        input: {
+          corpusKey: string; source?: Record<string, unknown>; chunking?: Record<string, unknown>;
+          embeddingModelVer?: string; refresh?: Record<string, unknown>;
+          anonymizationProfile?: Record<string, unknown>;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.registerCorpus({
+        corpusKey: a.input.corpusKey, source: a.input.source, chunking: a.input.chunking,
+        embeddingModelVer: a.input.embeddingModelVer, refresh: a.input.refresh,
+        anonymizationProfile: a.input.anonymizationProfile,
+      });
+      return mapRagCorpus(ctx, d);
+    },
+
+    updateCorpus: async (
+      _p: unknown,
+      a: {
+        corpusKey: string;
+        patch: {
+          source?: Record<string, unknown>; chunking?: Record<string, unknown>;
+          refresh?: Record<string, unknown>; anonymizationProfile?: Record<string, unknown>;
+          status?: string;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.patchCorpus(a.corpusKey, {
+        source: a.patch.source, chunking: a.patch.chunking, refresh: a.patch.refresh,
+        anonymizationProfile: a.patch.anonymizationProfile, status: a.patch.status,
+      });
+      return mapRagCorpus(ctx, d);
+    },
+
+    rebuildCorpus: (
+      _p: unknown,
+      a: { corpusKey: string; embeddingModelVer: string },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.memory
+        .rebuildCorpus(a.corpusKey, a.embeddingModelVer)
+        .then((d) => mapCorpusRebuildReport(ctx, d)),
+
+    pushCorpusDocument: async (
+      _p: unknown,
+      a: { sourceUrn: string; content: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.pushDocument(a.sourceUrn, a.content);
+      return { __typename: "CorpusDocumentPushResult" as const, sourceUrn: d.source_urn, chunks: d.chunks };
+    },
+
+    setMemoryPolicy: async (
+      _p: unknown,
+      a: {
+        input: {
+          ttlOverrides?: Record<string, string>; piiClasses?: string[];
+          injectionProfile?: string; corpusFlags?: Record<string, boolean>;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.setPolicy({
+        ttlOverrides: a.input.ttlOverrides, piiClasses: a.input.piiClasses,
+        injectionProfile: a.input.injectionProfile, corpusFlags: a.input.corpusFlags,
+      });
+      return mapMemoryPolicy(ctx, d);
     },
 
     // ==== Tier 2a: eval (eval-service) =======================================

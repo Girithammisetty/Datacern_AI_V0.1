@@ -173,6 +173,8 @@ export const qk = {
   memories: (filters: unknown) => ["admin", "memories", filters] as const,
   memory: (id: string) => ["admin", "memory", id] as const,
   memoryStats: () => ["admin", "memoryStats"] as const,
+  corpusStatus: (corpusKey: string) => ["admin", "corpusStatus", corpusKey] as const,
+  memoryPolicy: () => ["admin", "memoryPolicy"] as const,
   erasure: (id: string) => ["admin", "erasure", id] as const,
   complianceOperation: (id: string) => ["admin", "complianceOperation", id] as const,
 

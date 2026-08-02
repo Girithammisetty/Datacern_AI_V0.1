@@ -2855,6 +2855,103 @@ export interface ErasureRequest {
   completedAt?: string | null;
 }
 
+/** One ranked hit from the retrieval tester (bff `memoryRetrievalTest`). */
+export interface MemoryRetrievalHit {
+  /** memory | chunk */
+  kind: string;
+  /** UNTRUSTED model input (BR-12) — render as plain text, never execute. */
+  content: string;
+  score: number;
+  contentDisposition: string;
+  scope?: string | null;
+  memoryId?: ID | null;
+  provenance?: JSONValue | null;
+  corpus?: string | null;
+  chunkId?: ID | null;
+  sourceUrn?: string | null;
+  snapshotVer?: string | null;
+  debug?: JSONValue | null;
+}
+
+export interface MemoryRetrievalResult {
+  hits: MemoryRetrievalHit[];
+  degraded: boolean;
+}
+
+export interface MemoryRetrievalTestInput {
+  queryText?: string;
+  /** user | workspace | tenant */
+  scopes: string[];
+  /** scope -> scope_ref map; only `workspace` needs one. */
+  scopeRefs?: Record<string, string>;
+  corpora?: string[];
+  topK?: number;
+  minConfidence?: number;
+  tags?: string[];
+  includeDebug?: boolean;
+}
+
+/** A tenant RAG corpus (memory-service _corpus_view). */
+export interface RagCorpus {
+  corpusKey: ID;
+  source?: JSONValue | null;
+  chunking?: JSONValue | null;
+  activeEmbeddingVer: string;
+  refresh?: JSONValue | null;
+  anonymizationProfile?: JSONValue | null;
+  /** active | paused | rebuilding */
+  status: string;
+}
+
+export interface CorpusStatus {
+  corpusKey: ID;
+  status: string;
+  activeEmbeddingVer: string;
+  chunkCount: number;
+}
+
+export interface CorpusRebuildReport {
+  corpusKey: ID;
+  activeEmbeddingVer: string;
+  chunksReembedded: number;
+  oldChunksDropped: number;
+}
+
+export interface RegisterCorpusInput {
+  corpusKey: string;
+  source?: JSONValue;
+  chunking?: JSONValue;
+  embeddingModelVer?: string;
+  refresh?: JSONValue;
+  anonymizationProfile?: JSONValue;
+}
+
+export interface CorpusPatchInput {
+  source?: JSONValue;
+  chunking?: JSONValue;
+  refresh?: JSONValue;
+  anonymizationProfile?: JSONValue;
+  /** active | paused */
+  status?: string;
+}
+
+/** The tenant memory PII/retention policy (memory-service /policies/self). */
+export interface MemoryPolicy {
+  /** scope -> ISO-8601 duration */
+  ttlOverrides: Record<string, string>;
+  piiClasses: string[];
+  injectionProfile: string;
+  /** corpus_key -> enabled */
+  corpusFlags: Record<string, boolean>;
+}
+
+export interface MemoryPolicyInput {
+  ttlOverrides?: Record<string, string>;
+  piiClasses?: string[];
+  injectionProfile?: string;
+  corpusFlags?: Record<string, boolean>;
+}
+
 // ---- rbac authz explain (debug "why was I denied") -------------------------
 export interface AuthzChainStep {
   type: string;

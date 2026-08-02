@@ -43,7 +43,11 @@ import type {
   // Tier 2b: tool-plane registry admin.
   ToolDTO, ToolVersionDTO, ToolHealthDTO, TenantToolSettingsDTO, BYOSubmissionDTO,
 } from "../clients/toolplane.js";
-import type { MemoryRecordDTO, ErasureRequestDTO } from "../clients/memory.js";
+import type {
+  MemoryRecordDTO, ErasureRequestDTO, MemoryWriteResultDTO, RetrievalItemDTO,
+  RetrieveResultDTO, RagCorpusDTO, CorpusStatusDTO, CorpusRebuildReportDTO,
+  MemoryPolicyDTO,
+} from "../clients/memory.js";
 import type {
   ExperimentDTO, RunDTO, ModelDTO, MetricsDTO, RegistryModelDTO, ModelVersionDTO, PromotionDTO,
   // Tier 4b: ml ops (register/notes/artifacts).
@@ -1186,6 +1190,87 @@ export function mapErasureRequest(_ctx: GraphQLContext, d: ErasureRequestDTO) {
     status: d.status,
     report: d.report ?? null,
     completedAt: d.completed_at ?? null,
+  };
+}
+
+export function mapMemoryWriteResult(_ctx: GraphQLContext, d: MemoryWriteResultDTO) {
+  return {
+    __typename: "MemoryWriteResult" as const,
+    memoryId: d.memory_id ?? null,
+    status: d.status,
+    merged: d.merged ?? null,
+    session: d.session ?? null,
+    code: d.code ?? null,
+    message: d.message ?? null,
+  };
+}
+
+function mapMemoryRetrievalHit(d: RetrievalItemDTO) {
+  return {
+    __typename: "MemoryRetrievalHit" as const,
+    kind: d.kind,
+    content: d.content,
+    score: d.score,
+    contentDisposition: d.content_disposition,
+    scope: d.scope ?? null,
+    memoryId: d.memory_id ?? null,
+    provenance: d.provenance ?? null,
+    corpus: d.corpus ?? null,
+    chunkId: d.chunk_id ?? null,
+    sourceUrn: d.source_urn ?? null,
+    snapshotVer: d.snapshot_ver ?? null,
+    debug: d.debug ?? null,
+  };
+}
+
+export function mapMemoryRetrievalResult(_ctx: GraphQLContext, d: RetrieveResultDTO) {
+  return {
+    __typename: "MemoryRetrievalResult" as const,
+    hits: (d.data ?? []).map(mapMemoryRetrievalHit),
+    degraded: d.degraded ?? false,
+  };
+}
+
+export function mapRagCorpus(_ctx: GraphQLContext, d: RagCorpusDTO) {
+  return {
+    __typename: "RagCorpus" as const,
+    corpusKey: d.corpus_key,
+    source: d.source ?? null,
+    chunking: d.chunking ?? null,
+    activeEmbeddingVer: d.active_embedding_ver,
+    refresh: d.refresh ?? null,
+    anonymizationProfile: d.anonymization_profile ?? null,
+    status: d.status,
+  };
+}
+
+export function mapCorpusStatus(_ctx: GraphQLContext, d: CorpusStatusDTO) {
+  return {
+    __typename: "CorpusStatus" as const,
+    corpusKey: d.corpus_key,
+    status: d.status,
+    activeEmbeddingVer: d.active_embedding_ver,
+    chunkCount: d.chunk_count,
+  };
+}
+
+export function mapCorpusRebuildReport(_ctx: GraphQLContext, d: CorpusRebuildReportDTO) {
+  return {
+    __typename: "CorpusRebuildReport" as const,
+    corpusKey: d.corpus_key,
+    activeEmbeddingVer: d.active_embedding_ver,
+    chunksReembedded: d.chunks_reembedded,
+    oldChunksDropped: d.old_chunks_dropped,
+  };
+}
+
+export function mapMemoryPolicy(_ctx: GraphQLContext, d: MemoryPolicyDTO) {
+  return {
+    __typename: "MemoryPolicy" as const,
+    ttlOverrides: d.ttl_overrides ?? {},
+    piiClasses: d.pii_classes ?? [],
+    injectionProfile: d.injection_profile,
+    corpusFlags: d.corpus_flags ?? {},
   };
 }
 

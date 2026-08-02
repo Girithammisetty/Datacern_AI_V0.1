@@ -566,6 +566,12 @@ export const en = {
   "memory.erasure.confirmTitle": "Erase all memory for this subject?",
   "memory.erasure.confirmDescription": "This permanently deletes every stored memory record for the subject across all scopes. This action cannot be undone.",
   "memory.stats.title": "Memory stats",
+  "memory.retrieve.title": "Retrieval tester",
+  "memory.retrieve.empty": "No results — nothing would be recalled for this query.",
+  "memory.corpora.title": "RAG corpora",
+  "memory.policy.title": "Tenant memory policy",
+  "memory.delete.confirmTitle": "Delete this memory record?",
+  "memory.delete.confirmDescription": "This permanently deletes the record. The agent will no longer recall it. This action cannot be undone.",
 
   // ---- Tier 2b: notification inbox / preferences (notification-service) ----
   "nav.notifications": "Notifications",

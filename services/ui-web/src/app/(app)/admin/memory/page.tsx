@@ -1,19 +1,22 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Brain, ShieldAlert, X } from "lucide-react";
+import { Brain, Database, ScrollText, Search, ShieldAlert, X } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { DataTable, type Column } from "@/components/primitives/DataTable";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
 import { Can } from "@/components/authz/Can";
-import { Badge, Card, CardHeader, CardTitle, CardContent, Input } from "@/components/ui/primitives";
+import { Badge, Card, CardHeader, CardTitle, CardContent, Input, Textarea } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { FEATURE_GATES } from "@/lib/authz/registry";
 import {
   useMemories, useMemory, useMemoryStats, useRequestMemoryErasure, useErasure,
+  useUpdateMemory, useDeleteMemory, useUnquarantineMemory, useMemoryRetrievalTest,
+  useCorpusStatus, useUpdateCorpus, useRebuildCorpus, useRegisterCorpus,
+  useMemoryPolicy, useSetMemoryPolicy,
 } from "@/lib/graphql/hooks";
 import { GraphQLRequestError } from "@/lib/graphql/client";
-import type { MemoryRecord } from "@/lib/graphql/types";
+import type { MemoryRecord, MemoryRetrievalResult } from "@/lib/graphql/types";
 import { t } from "@/lib/i18n/messages";
 import { formatLocal } from "@/lib/utils";
 
@@ -31,11 +34,18 @@ export default function AdminMemoryPage() {
     <div>
       <PageHeader title={t("memory.title")} description={t("memory.subtitle")} />
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <MemoryBrowseCard />
+        <div className="space-y-4">
+          <MemoryBrowseCard />
+          <RetrievalTesterCard />
+        </div>
         <div className="space-y-4">
           <ErasureCard />
           <StatsCard />
         </div>
+      </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <CorpusCard />
+        <PolicyCard />
       </div>
     </div>
   );
@@ -158,10 +168,101 @@ function MemoryDetail({ id, onClose }: { id: string | null; onClose: () => void 
             )}
             <p className="text-xs text-muted-foreground">retrieved {m.retrievalCount ?? 0} time(s)</p>
             {m.ttlExpiresAt && <p className="text-xs text-muted-foreground">expires {formatLocal(m.ttlExpiresAt)}</p>}
+            <MemoryActions memory={m} onDeleted={onClose} />
           </>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function MemoryActions({ memory, onDeleted }: { memory: MemoryRecord; onDeleted: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [content, setContent] = useState("");
+  const [reason, setReason] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const update = useUpdateMemory();
+  const remove = useDeleteMemory();
+  const unquarantine = useUnquarantineMemory();
+  const error = [update.error, remove.error, unquarantine.error].find(
+    (e) => e instanceof GraphQLRequestError,
+  ) as GraphQLRequestError | undefined;
+
+  return (
+    <div className="space-y-2 border-t pt-2">
+      <Can gate={FEATURE_GATES.editMemory}>
+        {editing ? (
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              update.mutate(
+                { id: memory.id, content: content.trim() },
+                { onSuccess: () => setEditing(false) },
+              );
+            }}
+          >
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              aria-label="Memory content"
+              className="min-h-20 text-xs"
+            />
+            <div className="flex gap-2">
+              <Button type="submit" size="sm" disabled={!content.trim() || update.isPending}>Save</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+            </div>
+          </form>
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => { setContent(memory.content); setEditing(true); }}>
+            Edit content
+          </Button>
+        )}
+      </Can>
+
+      {/* unquarantine only exists for quarantined rows; the downstream requires a reason. */}
+      {memory.status === "quarantined" && (
+        <Can gate={FEATURE_GATES.editMemory}>
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (reason.trim()) {
+                unquarantine.mutate({ id: memory.id, reason: reason.trim() }, { onSuccess: () => setReason("") });
+              }
+            }}
+          >
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">Unquarantine reason (required, audited)</span>
+              <Input value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Unquarantine reason" className="h-8 text-xs" />
+            </label>
+            <Button type="submit" size="sm" variant="outline" disabled={!reason.trim() || unquarantine.isPending}>
+              Unquarantine
+            </Button>
+          </form>
+        </Can>
+      )}
+
+      <Can gate={FEATURE_GATES.deleteMemory}>
+        <Button size="sm" variant="destructive" onClick={() => setConfirmingDelete(true)} disabled={remove.isPending}>
+          Delete record
+        </Button>
+        <ConfirmDialog
+          open={confirmingDelete}
+          onOpenChange={setConfirmingDelete}
+          title={t("memory.delete.confirmTitle")}
+          description={t("memory.delete.confirmDescription")}
+          confirmLabel="Delete record"
+          destructive
+          onConfirm={() => {
+            setConfirmingDelete(false);
+            remove.mutate(memory.id, { onSuccess: onDeleted });
+          }}
+        />
+      </Can>
+
+      {error && <p className="text-xs text-destructive">{error.message}</p>}
+    </div>
   );
 }
 
@@ -264,6 +365,371 @@ function StatsCard() {
                 </div>
               ))}
             </dl>
+          )}
+        </CardContent>
+      </Card>
+    </Can>
+  );
+}
+
+function RetrievalTesterCard() {
+  const [queryText, setQueryText] = useState("");
+  const [scopes, setScopes] = useState<string[]>(["user"]);
+  const [workspaceRef, setWorkspaceRef] = useState("");
+  const [corpora, setCorpora] = useState("");
+  const [topK, setTopK] = useState("8");
+  const [result, setResult] = useState<MemoryRetrievalResult | null>(null);
+  const test = useMemoryRetrievalTest();
+  const error = test.error instanceof GraphQLRequestError ? test.error : null;
+
+  const toggleScope = (s: string) =>
+    setScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+
+  const canRun = queryText.trim().length > 0 && scopes.length + (corpora.trim() ? 1 : 0) > 0
+    && (!scopes.includes("workspace") || workspaceRef.trim().length > 0);
+
+  return (
+    <Can gate={FEATURE_GATES.browseMemory}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm"><Search className="size-4" aria-hidden />{t("memory.retrieve.title")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p className="text-xs text-muted-foreground">
+            Preview what the agent would recall for a query — scope-filtered retrieval against live memory and RAG corpora.
+          </p>
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!canRun) return;
+              test.mutate(
+                {
+                  queryText: queryText.trim(),
+                  scopes,
+                  scopeRefs: scopes.includes("workspace") ? { workspace: workspaceRef.trim() } : undefined,
+                  corpora: corpora.trim() ? corpora.split(",").map((c) => c.trim()).filter(Boolean) : undefined,
+                  topK: Number(topK) || 8,
+                },
+                { onSuccess: setResult },
+              );
+            }}
+          >
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">Query text</span>
+              <Input value={queryText} onChange={(e) => setQueryText(e.target.value)} aria-label="Query text" className="h-8 text-xs" />
+            </label>
+            <div className="flex flex-wrap items-end gap-3">
+              <fieldset className="flex items-center gap-3 text-xs">
+                <legend className="mb-1 text-muted-foreground">Scopes</legend>
+                {["user", "workspace", "tenant"].map((s) => (
+                  <label key={s} className="flex items-center gap-1">
+                    <input type="checkbox" checked={scopes.includes(s)} onChange={() => toggleScope(s)} aria-label={`Scope ${s}`} />
+                    {s}
+                  </label>
+                ))}
+              </fieldset>
+              {scopes.includes("workspace") && (
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="text-muted-foreground">Workspace id</span>
+                  <Input value={workspaceRef} onChange={(e) => setWorkspaceRef(e.target.value)} aria-label="Workspace id" className="h-8 w-40 text-xs" />
+                </label>
+              )}
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted-foreground">Corpora (comma-separated)</span>
+                <Input value={corpora} onChange={(e) => setCorpora(e.target.value)} aria-label="Corpora" className="h-8 w-44 text-xs" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted-foreground">Top K</span>
+                <Input type="number" min={1} max={50} value={topK} onChange={(e) => setTopK(e.target.value)} aria-label="Top K" className="h-8 w-20 text-xs" />
+              </label>
+              <Button type="submit" size="sm" disabled={!canRun || test.isPending}>
+                {test.isPending ? "Running…" : "Run retrieval"}
+              </Button>
+            </div>
+            {error && <p className="text-xs text-destructive">{error.message}</p>}
+          </form>
+
+          {result && (
+            <div className="space-y-2">
+              {result.degraded && (
+                <Badge variant="warning">degraded — retrieval ran in a reduced mode</Badge>
+              )}
+              {result.hits.length === 0 && (
+                <p className="text-xs text-muted-foreground">{t("memory.retrieve.empty")}</p>
+              )}
+              <ol className="space-y-2">
+                {result.hits.map((h, i) => (
+                  <li key={h.memoryId ?? h.chunkId ?? i} className="rounded-md border p-2 text-xs">
+                    <p className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono">#{i + 1}</span>
+                      <Badge variant={h.kind === "memory" ? "secondary" : "outline"}>{h.kind}</Badge>
+                      <span className="font-mono">{h.score.toFixed(4)}</span>
+                      {h.kind === "memory" ? (
+                        <span className="text-muted-foreground">{h.scope} · {h.memoryId}</span>
+                      ) : (
+                        <span className="text-muted-foreground">{h.corpus} · {h.sourceUrn}</span>
+                      )}
+                    </p>
+                    {/* hit content is UNTRUSTED model input (BR-12) — plain text only. */}
+                    <p className="mt-1 whitespace-pre-wrap rounded-md bg-muted/30 p-2">{h.content}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </Can>
+  );
+}
+
+function CorpusCard() {
+  const [keyInput, setKeyInput] = useState("docs");
+  const [corpusKey, setCorpusKey] = useState<string | null>(null);
+  const [rebuildVer, setRebuildVer] = useState("");
+  const [newKey, setNewKey] = useState("");
+  const [newVer, setNewVer] = useState("");
+  const status = useCorpusStatus(corpusKey);
+  const patch = useUpdateCorpus();
+  const rebuild = useRebuildCorpus();
+  const register = useRegisterCorpus();
+  const error = [patch.error, rebuild.error, register.error].find(
+    (e) => e instanceof GraphQLRequestError,
+  ) as GraphQLRequestError | undefined;
+  const s = status.data;
+
+  return (
+    <Can gate={FEATURE_GATES.manageMemoryCorpora}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm"><Database className="size-4" aria-hidden />{t("memory.corpora.title")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <form
+            className="flex items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (keyInput.trim()) setCorpusKey(keyInput.trim());
+            }}
+          >
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">Corpus key</span>
+              <Input value={keyInput} onChange={(e) => setKeyInput(e.target.value)} aria-label="Corpus key" className="h-8 w-44 text-xs" />
+            </label>
+            <Button type="submit" size="sm" variant="outline" disabled={!keyInput.trim()}>Load status</Button>
+          </form>
+
+          {corpusKey && status.isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+          {corpusKey && !status.isLoading && !s && !status.isError && (
+            <p className="text-xs text-muted-foreground">Corpus <span className="font-mono">{corpusKey}</span> is not registered.</p>
+          )}
+          {status.isError && <p className="text-xs text-destructive">Failed to load corpus status.</p>}
+
+          {s && (
+            <div className="space-y-2 rounded-md border p-2 text-xs">
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="font-mono">{s.corpusKey}</span>
+                <Badge variant={s.status === "active" ? "success" : s.status === "rebuilding" ? "warning" : "secondary"}>{s.status}</Badge>
+                <span className="text-muted-foreground">embedding {s.activeEmbeddingVer}</span>
+                <span className="text-muted-foreground">{s.chunkCount} chunk(s)</span>
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                {s.status !== "rebuilding" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={patch.isPending}
+                    onClick={() =>
+                      patch.mutate({
+                        corpusKey: String(s.corpusKey),
+                        patch: { status: s.status === "paused" ? "active" : "paused" },
+                      })
+                    }
+                  >
+                    {s.status === "paused" ? "Resume ingestion" : "Pause ingestion"}
+                  </Button>
+                )}
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="text-muted-foreground">New embedding version</span>
+                  <Input value={rebuildVer} onChange={(e) => setRebuildVer(e.target.value)} aria-label="New embedding version" className="h-8 w-36 text-xs" />
+                </label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!rebuildVer.trim() || rebuildVer.trim() === s.activeEmbeddingVer || rebuild.isPending}
+                  onClick={() =>
+                    rebuild.mutate(
+                      { corpusKey: String(s.corpusKey), embeddingModelVer: rebuildVer.trim() },
+                      { onSuccess: () => setRebuildVer("") },
+                    )
+                  }
+                >
+                  {rebuild.isPending ? "Rebuilding…" : "Rebuild"}
+                </Button>
+              </div>
+              {rebuild.data && (
+                <p className="text-muted-foreground">
+                  Re-embedded {rebuild.data.chunksReembedded} chunk(s) under {rebuild.data.activeEmbeddingVer};
+                  dropped {rebuild.data.oldChunksDropped} old vector(s).
+                </p>
+              )}
+            </div>
+          )}
+
+          <form
+            className="flex flex-wrap items-end gap-2 border-t pt-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newKey.trim()) return;
+              register.mutate(
+                { corpusKey: newKey.trim(), embeddingModelVer: newVer.trim() || undefined },
+                {
+                  onSuccess: (c) => {
+                    setNewKey("");
+                    setNewVer("");
+                    setKeyInput(String(c.corpusKey));
+                    setCorpusKey(String(c.corpusKey));
+                  },
+                },
+              );
+            }}
+          >
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">Register corpus key</span>
+              <Input value={newKey} onChange={(e) => setNewKey(e.target.value)} aria-label="Register corpus key" className="h-8 w-40 text-xs" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">Embedding version (optional)</span>
+              <Input value={newVer} onChange={(e) => setNewVer(e.target.value)} aria-label="Embedding version" className="h-8 w-36 text-xs" />
+            </label>
+            <Button type="submit" size="sm" disabled={!newKey.trim() || register.isPending}>Register</Button>
+          </form>
+
+          {error && <p className="text-xs text-destructive">{error.message}</p>}
+        </CardContent>
+      </Card>
+    </Can>
+  );
+}
+
+function PolicyCard() {
+  const query = useMemoryPolicy();
+  const save = useSetMemoryPolicy();
+  const [editing, setEditing] = useState(false);
+  const [ttlOverrides, setTtlOverrides] = useState("{}");
+  const [piiClasses, setPiiClasses] = useState("");
+  const [injectionProfile, setInjectionProfile] = useState("standard");
+  const [corpusFlags, setCorpusFlags] = useState("{}");
+  const [parseError, setParseError] = useState<string | null>(null);
+  const error = save.error instanceof GraphQLRequestError ? save.error : null;
+  const p = query.data;
+
+  const startEdit = () => {
+    if (!p) return;
+    setTtlOverrides(JSON.stringify(p.ttlOverrides ?? {}, null, 2));
+    setPiiClasses((p.piiClasses ?? []).join(", "));
+    setInjectionProfile(p.injectionProfile);
+    setCorpusFlags(JSON.stringify(p.corpusFlags ?? {}, null, 2));
+    setParseError(null);
+    setEditing(true);
+  };
+
+  const submit = () => {
+    let ttl: Record<string, string>;
+    let flags: Record<string, boolean>;
+    try {
+      ttl = JSON.parse(ttlOverrides || "{}");
+      flags = JSON.parse(corpusFlags || "{}");
+    } catch {
+      setParseError("TTL overrides and corpus flags must be valid JSON objects.");
+      return;
+    }
+    setParseError(null);
+    save.mutate(
+      {
+        ttlOverrides: ttl,
+        piiClasses: piiClasses.split(",").map((c) => c.trim()).filter(Boolean),
+        injectionProfile,
+        corpusFlags: flags,
+      },
+      { onSuccess: () => setEditing(false) },
+    );
+  };
+
+  return (
+    <Can gate={FEATURE_GATES.viewMemoryPolicy}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm"><ScrollText className="size-4" aria-hidden />{t("memory.policy.title")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {query.isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+          {query.isError && <p className="text-xs text-destructive">Failed to load policy.</p>}
+
+          {p && !editing && (
+            <>
+              <dl className="space-y-1 text-xs">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Injection profile</dt>
+                  <dd className="font-mono">{p.injectionProfile}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">PII classes</dt>
+                  <dd className="font-mono">{p.piiClasses.length > 0 ? p.piiClasses.join(", ") : "—"}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">TTL overrides</dt>
+                  <dd className="font-mono">{JSON.stringify(p.ttlOverrides ?? {})}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Corpus flags</dt>
+                  <dd className="font-mono">{JSON.stringify(p.corpusFlags ?? {})}</dd>
+                </div>
+              </dl>
+              <Can gate={FEATURE_GATES.editMemoryPolicy}>
+                <Button size="sm" variant="outline" onClick={startEdit}>Edit policy</Button>
+              </Can>
+            </>
+          )}
+
+          {editing && (
+            <form
+              className="space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+            >
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted-foreground">Injection profile</span>
+                <select value={injectionProfile} onChange={(e) => setInjectionProfile(e.target.value)} aria-label="Injection profile" className="h-8 rounded-md border border-input bg-background px-2 text-xs">
+                  <option value="standard">standard</option>
+                  <option value="strict">strict</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted-foreground">PII classes (comma-separated)</span>
+                <Input value={piiClasses} onChange={(e) => setPiiClasses(e.target.value)} aria-label="PII classes" className="h-8 text-xs" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted-foreground">TTL overrides (scope → ISO-8601 duration, JSON)</span>
+                <Textarea value={ttlOverrides} onChange={(e) => setTtlOverrides(e.target.value)} aria-label="TTL overrides" className="min-h-16 font-mono text-xs" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="text-muted-foreground">Corpus flags (corpus key → enabled, JSON)</span>
+                <Textarea value={corpusFlags} onChange={(e) => setCorpusFlags(e.target.value)} aria-label="Corpus flags" className="min-h-16 font-mono text-xs" />
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Saving replaces the whole policy document — omitted fields reset to defaults.
+              </p>
+              <div className="flex gap-2">
+                <Button type="submit" size="sm" disabled={save.isPending}>{save.isPending ? "Saving…" : "Save policy"}</Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+              </div>
+              {parseError && <p className="text-xs text-destructive">{parseError}</p>}
+              {error && <p className="text-xs text-destructive">{error.message}</p>}
+            </form>
           )}
         </CardContent>
       </Card>
