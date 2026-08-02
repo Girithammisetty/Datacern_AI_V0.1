@@ -56,6 +56,7 @@ import type {
   CreateBudgetInput,
   UpdateBudgetInput,
   CreateRateCardInput,
+  CreateUsageAdjustmentInput,
   UpdateValueAssumptionsInput,
   CreateIngestionInput,
   CreateUploadInput,
@@ -3277,6 +3278,67 @@ export function useDismissAnomaly() {
   return useMutation({
     mutationFn: (id: string) => graphqlRequest<ops.DismissAnomalyResult>(ops.DISMISS_ANOMALY, { id }).then((r) => r.dismissAnomaly),
     onSuccess: () => client.invalidateQueries({ queryKey: ["usage", "anomalies"] }),
+  });
+}
+
+/* ------- billing depth (BRD 67) ------- */
+
+/** The seeded platform meter catalog (usage-service GET /meters, USG-FR-003).
+ * Static reference data — no invalidation path needed. */
+export function useUsageMeters() {
+  return useQuery({
+    queryKey: qk.usageMeters(),
+    queryFn: () => graphqlRequest<ops.UsageMetersResult>(ops.USAGE_METERS, {}).then((r) => r.usageMeters),
+  });
+}
+
+/** Priced monthly chargeback rollups (usage-service GET /reports/chargeback,
+ * USG-FR-043). A month whose reconciliation sits in variance CONFLICTs
+ * downstream (AC-9) — the error is surfaced, never swallowed. */
+export function useChargebackReport(month: string) {
+  return useQuery({
+    queryKey: qk.chargebackReport(month),
+    queryFn: () =>
+      graphqlRequest<ops.ChargebackReportResult>(ops.CHARGEBACK_REPORT, { month }).then((r) => r.chargebackReport),
+    enabled: !!month,
+    retry: false, // the 409 is a state, not a flake — don't hammer retries
+  });
+}
+
+/** Metered-vs-provider-bill reconciliations (usage-service GET
+ * /reconciliations, USG-FR-070). Platform-only — a plain list, not paginated. */
+export function useReconciliations() {
+  return useQuery({
+    queryKey: qk.reconciliations(),
+    queryFn: () =>
+      graphqlRequest<ops.ReconciliationsResult>(ops.RECONCILIATIONS, {}).then((r) => r.reconciliations),
+  });
+}
+
+export function useAcknowledgeReconciliation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.AcknowledgeReconciliationResult>(ops.ACKNOWLEDGE_RECONCILIATION, { id }).then(
+        (r) => r.acknowledgeReconciliation,
+      ),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: qk.reconciliations() });
+      // Acknowledging a variance unblocks chargeback for that month (AC-9).
+      client.invalidateQueries({ queryKey: ["usage", "chargeback"] });
+    },
+  });
+}
+
+export function useCreateUsageAdjustment() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateUsageAdjustmentInput) =>
+      graphqlRequest<ops.CreateUsageAdjustmentResult>(ops.CREATE_USAGE_ADJUSTMENT, { input }).then(
+        (r) => r.createUsageAdjustment,
+      ),
+    // Adjustments fold into chargeback's adjustments_usd/total_usd columns.
+    onSuccess: () => client.invalidateQueries({ queryKey: ["usage", "chargeback"] }),
   });
 }
 

@@ -123,6 +123,9 @@ export const qk = {
   budgets: () => ["usage", "budgets"] as const,
   rateCards: () => ["usage", "rateCards"] as const,
   anomalies: (status?: string) => ["usage", "anomalies", status ?? null] as const,
+  usageMeters: () => ["usage", "meters"] as const,
+  chargebackReport: (month: string) => ["usage", "chargeback", month] as const,
+  reconciliations: () => ["usage", "reconciliations"] as const,
 
   valueSummary: (period: string, workspaceId?: string) =>
     ["value", "summary", period, workspaceId ?? null] as const,

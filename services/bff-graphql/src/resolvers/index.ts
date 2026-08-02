@@ -48,6 +48,7 @@ import {
   // BRD 60 WS2: external-agent credentials (register carries the key once).
   mapExternalAgent, mapRegisteredExternalAgent,
   mapBudget, mapRateCard, mapAnomaly, mapReportSubscription,
+  mapMeter, mapChargebackLine, mapReconciliation, mapUsageAdjustment,
   mapValueSummary, mapValueTrend, mapValueAssumptions, mapValueExport,
   mapChainVerifyResult, mapComplianceJob, mapEvidencePack, mapSiemConfig, mapSiemConfigState,
   decisionAction, urnId,
@@ -1849,6 +1850,23 @@ export const resolvers = {
       return (page.data ?? []).map((d) => mapAnomaly(ctx, d));
     },
 
+    // ---- billing depth (BRD 67) ------------------------------------------
+    usageMeters: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const page = await ctx.clients.usage.meters();
+      return (page.data ?? []).map(mapMeter);
+    },
+
+    chargebackReport: async (_p: unknown, a: { month: string }, ctx: GraphQLContext) => {
+      // A 409 (reconciliation_variance) bubbles verbatim via DownstreamError.
+      const page = await ctx.clients.usage.chargebackReport(a.month);
+      return (page.data ?? []).map(mapChargebackLine);
+    },
+
+    reconciliations: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const page = await ctx.clients.usage.reconciliations();
+      return (page.data ?? []).map((d) => mapReconciliation(ctx, d));
+    },
+
     // ---- value & ROI reporting (BRD 69) ----------------------------------
     valueSummary: async (
       _p: unknown,
@@ -2762,6 +2780,37 @@ export const resolvers = {
         throw new Error(`anomaly ${dismissed.id} was dismissed but no longer appears in the list`);
       }
       return mapAnomaly(ctx, found);
+    },
+
+    // ---- billing depth (BRD 67) ----------------------------------------------
+    acknowledgeReconciliation: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      const acked = await ctx.clients.usage.acknowledgeReconciliation(a.id);
+      // acknowledge's own response is thin ({id, status}); re-read the list
+      // for the full row (month/provider/reportUri) rather than fabricate
+      // the fields the route didn't echo — mirrors dismissAnomaly above.
+      const page = await ctx.clients.usage.reconciliations();
+      const found = (page.data ?? []).find((r) => r.id === acked.id);
+      if (!found) {
+        throw new Error(`reconciliation ${acked.id} was acknowledged but no longer appears in the list`);
+      }
+      return mapReconciliation(ctx, found);
+    },
+
+    createUsageAdjustment: async (
+      _p: unknown,
+      a: {
+        input: { meterKey: string; month: string; quantityDelta: number; usdDelta: number; reason: string };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.usage.createAdjustment({
+        meter_key: a.input.meterKey,
+        month: a.input.month,
+        quantity_delta: a.input.quantityDelta,
+        usd_delta: a.input.usdDelta,
+        reason: a.input.reason,
+      });
+      return mapUsageAdjustment(ctx, d);
     },
 
     // ---- value & ROI reporting (BRD 69) --------------------------------------

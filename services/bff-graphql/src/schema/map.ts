@@ -81,7 +81,11 @@ import type {
   SiemConfigDTO,
   SiemConfigStateDTO,
 } from "../clients/audit.js";
-import { budgetScopeString, type BudgetDTO, type RateCardDTO, type AnomalyDTO } from "../clients/usage.js";
+import {
+  budgetScopeString,
+  type BudgetDTO, type RateCardDTO, type AnomalyDTO,
+  type MeterDTO, type ChargebackLineDTO, type ReconciliationDTO, type AdjustmentDTO,
+} from "../clients/usage.js";
 import type {
   ValueSummaryDTO, ValueTrendDTO, ValueAssumptionsDTO, ValueExportDTO, EstimatedValueDTO,
 } from "../clients/value.js";
@@ -1923,6 +1927,65 @@ export function mapAnomaly(ctx: GraphQLContext, d: AnomalyDTO) {
     dismissedBy: d.dismissed_by ?? null,
     suppressedReason: d.suppressed_reason ?? null,
     createdAt: d.created_at,
+  };
+}
+
+// --- usage: billing depth (BRD 67) -------------------------------------------
+
+/** Meter catalog entries are keyed by meter_key (no uuid) — not a Node. */
+export function mapMeter(d: MeterDTO) {
+  return {
+    __typename: "UsageMeter" as const,
+    meterKey: d.meter_key,
+    unit: d.unit,
+    aggregation: d.aggregation,
+    description: d.description,
+    dimensions: d.dimensions ?? [],
+    deprecated: d.deprecated ?? false,
+  };
+}
+
+/** Chargeback rows have no id downstream (grouped rollup) — not a Node. */
+export function mapChargebackLine(d: ChargebackLineDTO) {
+  return {
+    __typename: "ChargebackLine" as const,
+    tenantId: d.tenant_id,
+    workspaceId: d.workspace_id ?? null,
+    month: d.month,
+    meterKey: d.meter_key,
+    quantity: d.quantity,
+    // Downstream serializes "" when no rate card resolved — surface as null.
+    rateCardId: d.rate_card_id || null,
+    pricePerUnitUsd: d.price_per_unit_usd,
+    usd: d.usd,
+    adjustmentsUsd: d.adjustments_usd,
+    totalUsd: d.total_usd,
+  };
+}
+
+export function mapReconciliation(ctx: GraphQLContext, d: ReconciliationDTO) {
+  return {
+    __typename: "Reconciliation" as const,
+    id: d.id,
+    urn: urn(ctx, "usage", "reconciliation", d.id),
+    month: d.month,
+    provider: d.provider,
+    status: d.status,
+    reportUri: d.report_uri,
+    createdAt: d.created_at,
+  };
+}
+
+export function mapUsageAdjustment(ctx: GraphQLContext, d: AdjustmentDTO) {
+  return {
+    __typename: "UsageAdjustment" as const,
+    id: d.id,
+    urn: urn(ctx, "usage", "adjustment", d.id),
+    meterKey: d.meter_key,
+    month: d.month,
+    quantityDelta: d.quantity_delta,
+    usdDelta: d.usd_delta,
+    reason: d.reason,
   };
 }
 

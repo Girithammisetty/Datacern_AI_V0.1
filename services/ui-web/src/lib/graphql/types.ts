@@ -1758,6 +1758,66 @@ export interface CreateRateCardInput {
   items: Record<string, number>;
 }
 
+/* ------- billing depth (BRD 67) ------- */
+
+/** One seeded meter-catalog entry (usage-service GET /meters, USG-FR-001/003). */
+export interface UsageMeter {
+  meterKey: string;
+  unit: string;
+  /** sum | time_weighted_avg */
+  aggregation: string;
+  description: string;
+  dimensions: string[];
+  deprecated: boolean;
+}
+
+/** One priced monthly chargeback row (usage-service GET /reports/chargeback,
+ * USG-FR-043). totalUsd = usd + adjustmentsUsd. */
+export interface ChargebackLine {
+  tenantId: string;
+  workspaceId?: string | null;
+  month: string;
+  meterKey: string;
+  quantity: number;
+  rateCardId?: string | null;
+  pricePerUnitUsd: number;
+  usd: number;
+  adjustmentsUsd: number;
+  totalUsd: number;
+}
+
+/** A monthly metered-vs-provider-bill reconciliation (USG-FR-070).
+ * status: pending | matched | variance | adjusted | acknowledged. */
+export interface Reconciliation {
+  id: ID;
+  urn: string;
+  month: string;
+  provider: string;
+  status: string;
+  reportUri: string;
+  createdAt: string;
+}
+
+/** POST /adjustments 201 echo (USG-FR-072) — the route echoes only these
+ * fields (no createdAt/actor). */
+export interface UsageAdjustment {
+  id: ID;
+  urn: string;
+  meterKey: string;
+  month: string;
+  quantityDelta: number;
+  usdDelta: number;
+  reason: string;
+}
+
+export interface CreateUsageAdjustmentInput {
+  meterKey: string;
+  month: string;
+  quantityDelta: number;
+  usdDelta: number;
+  reason: string;
+}
+
 /* ------- value & ROI reporting (BRD 69) ------- */
 
 /** A derived figure that only exists paired with its assumption version

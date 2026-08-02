@@ -331,6 +331,24 @@ export const FEATURE_GATES = {
   viewAnomalies: cap("usage.anomaly.read"),
   /** Dismiss a detected anomaly (usage-service POST /anomalies/{id}/dismiss). */
   dismissAnomaly: cap("usage.anomaly.update"),
+  /** View the seeded meter catalog (usage-service GET /meters, USG-FR-003). */
+  viewMeters: cap("usage.meter.read"),
+  /** View the priced monthly chargeback report (usage-service GET
+   * /reports/chargeback, USG-FR-043) — same usage.report.read grant as
+   * viewCostPanel (chargeback is a report read, not a separate action). */
+  viewChargeback: cap("usage.report.read"),
+  /** View metered-vs-provider-bill reconciliations (usage-service GET
+   * /reconciliations, USG-FR-070). Platform-only — no seeded tenant role
+   * holds this; hidden for every tenant persona by design. */
+  viewReconciliations: cap("usage.reconciliation.read"),
+  /** Acknowledge a reconciliation variance (usage-service POST
+   * /reconciliations/{id}/acknowledge). Platform-only. */
+  acknowledgeReconciliation: cap("usage.reconciliation.update"),
+  /** Record a billing adjustment/credit on a closed month (usage-service POST
+   * /adjustments, USG-FR-072). Platform-only — shares
+   * usage.reconciliation.update with acknowledge (adjustments are the
+   * reconciliation workflow's write surface downstream). */
+  createUsageAdjustment: cap("usage.reconciliation.update"),
   /** Edit value-reporting assumptions (usage-service PUT /value/assumptions,
    * BRD 69 ROI-FR-002). Read access to the whole /admin/value page reuses
    * viewCostPanel (usage.report.read) above per design §2.7 — this gate only

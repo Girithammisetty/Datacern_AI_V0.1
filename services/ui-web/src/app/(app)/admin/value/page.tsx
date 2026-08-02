@@ -388,6 +388,18 @@ function AssumptionsPanel() {
 
 /* ------- exports ------- */
 
+/** Route a presigned usage-service artifact URL through the same-origin
+ * download proxy (src/app/api/value-report-artifact/[...key]/route.ts) so it
+ * works when only ui-web is browser-reachable. The signed query (exp + sig)
+ * is preserved verbatim; a URL that isn't a value-report-artifact link is
+ * returned unchanged. */
+function artifactHref(url: string): string {
+  const marker = "/api/v1/value-report-artifacts/";
+  const i = url.indexOf(marker);
+  if (i < 0) return url;
+  return `/api/value-report-artifact/${url.slice(i + marker.length)}`;
+}
+
 function ExportsCard({ period }: { period: string }) {
   const query = useValueExports(period);
   const exportReport = useExportValueReport();
@@ -398,11 +410,11 @@ function ExportsCard({ period }: { period: string }) {
     { id: "assumption", header: "Assumption", width: 110, cell: (e) => (e.assumptionVersion ? `v${e.assumptionVersion}` : "—") },
     {
       id: "json", header: "JSON", width: 90,
-      cell: (e) => e.jsonUrl ? <a className="text-primary hover:underline" href={e.jsonUrl}>download</a> : <span className="text-muted-foreground">—</span>,
+      cell: (e) => e.jsonUrl ? <a className="text-primary hover:underline" href={artifactHref(e.jsonUrl)}>download</a> : <span className="text-muted-foreground">—</span>,
     },
     {
       id: "csv", header: "CSV", width: 90,
-      cell: (e) => e.csvUrl ? <a className="text-primary hover:underline" href={e.csvUrl}>download</a> : <span className="text-muted-foreground">—</span>,
+      cell: (e) => e.csvUrl ? <a className="text-primary hover:underline" href={artifactHref(e.csvUrl)}>download</a> : <span className="text-muted-foreground">—</span>,
     },
     { id: "at", header: "Generated", width: 170, cell: (e) => formatLocal(e.createdAt) },
   ];

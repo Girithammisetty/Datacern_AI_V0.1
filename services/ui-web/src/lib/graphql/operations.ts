@@ -38,6 +38,11 @@ import type {
   RateCard,
   CreateRateCardInput,
   Anomaly,
+  UsageMeter,
+  ChargebackLine,
+  Reconciliation,
+  UsageAdjustment,
+  CreateUsageAdjustmentInput,
   ValueSummary,
   ValueTrend,
   ValueAssumptions,
@@ -2844,6 +2849,58 @@ export const DISMISS_ANOMALY = /* GraphQL */ `
 export interface DismissAnomalyResult {
   dismissAnomaly: Anomaly;
 }
+
+/* ------- billing depth (BRD 67) ------- */
+
+export const USAGE_METERS = /* GraphQL */ `
+  query UsageMeters {
+    usageMeters { meterKey unit aggregation description dimensions deprecated }
+  }
+`;
+export interface UsageMetersResult {
+  usageMeters: UsageMeter[];
+}
+
+const CHARGEBACK_LINE_FIELDS = /* GraphQL */ `tenantId workspaceId month meterKey quantity rateCardId pricePerUnitUsd usd adjustmentsUsd totalUsd`;
+
+export const CHARGEBACK_REPORT = /* GraphQL */ `
+  query ChargebackReport($month: String!) {
+    chargebackReport(month: $month) { ${CHARGEBACK_LINE_FIELDS} }
+  }
+`;
+export interface ChargebackReportResult {
+  chargebackReport: ChargebackLine[];
+}
+
+const RECONCILIATION_FIELDS = /* GraphQL */ `id urn month provider status reportUri createdAt`;
+
+export const RECONCILIATIONS = /* GraphQL */ `
+  query Reconciliations {
+    reconciliations { ${RECONCILIATION_FIELDS} }
+  }
+`;
+export interface ReconciliationsResult {
+  reconciliations: Reconciliation[];
+}
+
+export const ACKNOWLEDGE_RECONCILIATION = /* GraphQL */ `
+  mutation AcknowledgeReconciliation($id: ID!) {
+    acknowledgeReconciliation(id: $id) { ${RECONCILIATION_FIELDS} }
+  }
+`;
+export interface AcknowledgeReconciliationResult {
+  acknowledgeReconciliation: Reconciliation;
+}
+
+export const CREATE_USAGE_ADJUSTMENT = /* GraphQL */ `
+  mutation CreateUsageAdjustment($input: CreateUsageAdjustmentInput!) {
+    createUsageAdjustment(input: $input) { id urn meterKey month quantityDelta usdDelta reason }
+  }
+`;
+export interface CreateUsageAdjustmentResult {
+  createUsageAdjustment: UsageAdjustment;
+}
+export type { CreateUsageAdjustmentInput };
 
 /* ------- value & ROI reporting (BRD 69) ------- */
 

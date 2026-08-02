@@ -3518,6 +3518,92 @@ input CreateRateCardInput {
   items: JSON!
 }
 
+"""
+One seeded meter-catalog entry (usage-service GET /meters, USG-FR-001/003).
+Platform-defined, versioned catalog — no tenant-defined meters in v1; the
+canonical `unit` never changes post-launch (USG-FR-005).
+"""
+type UsageMeter {
+  meterKey: String!
+  unit: String!
+  """sum | time_weighted_avg."""
+  aggregation: String!
+  description: String!
+  """
+  Dimension names carried on this meter's records (documentation of the
+  rollup contract, not a per-row guarantee).
+  """
+  dimensions: [String!]!
+  deprecated: Boolean!
+}
+
+"""
+One priced monthly chargeback row (usage-service GET /reports/chargeback,
+USG-FR-043). `usd` is quantity x pricePerUnitUsd at the rate card resolved
+for month start (BR-5); `totalUsd` folds in `adjustmentsUsd` (signed
+adjustment deltas recorded on the closed month). rateCardId is null when no
+rate card priced the meter.
+"""
+type ChargebackLine {
+  tenantId: String!
+  workspaceId: String
+  """YYYY-MM."""
+  month: String!
+  meterKey: String!
+  quantity: Float!
+  rateCardId: String
+  pricePerUnitUsd: Float!
+  usd: Float!
+  adjustmentsUsd: Float!
+  totalUsd: Float!
+}
+
+"""
+A monthly metered-vs-provider-bill reconciliation (usage-service GET
+/reconciliations, USG-FR-070). `status`: pending | matched | variance |
+adjusted | acknowledged. Chargeback for a month is blocked (409) while its
+reconciliation sits in variance (AC-9) until acknowledged/adjusted.
+"""
+type Reconciliation implements Node {
+  id: ID!
+  urn: String!
+  """YYYY-MM."""
+  month: String!
+  provider: String!
+  status: String!
+  reportUri: String!
+  createdAt: DateTime!
+}
+
+"""
+A recorded billing adjustment/credit (usage-service POST /adjustments 201
+echo, USG-FR-072). Append-only, actor-signed downstream; the route echoes
+only these fields (no createdAt/actor) — nothing here is fabricated.
+"""
+type UsageAdjustment implements Node {
+  id: ID!
+  urn: String!
+  meterKey: String!
+  """YYYY-MM (must already be finalized)."""
+  month: String!
+  quantityDelta: Float!
+  usdDelta: Float!
+  reason: String!
+}
+
+"""
+Record a billing adjustment/credit on a CLOSED month (usage-service POST
+/adjustments, USG-FR-072). `month` must be finalized — an open month 409s
+with reason month_open (BR-5). `usdDelta` is signed (negative = credit).
+"""
+input CreateUsageAdjustmentInput {
+  meterKey: String!
+  month: String!
+  quantityDelta: Float!
+  usdDelta: Float!
+  reason: String!
+}
+
 type ValueDecisions {
   total: Int!
   byDecision: JSON!
@@ -5613,6 +5699,25 @@ type Query {
   """
   anomalies(status: String): [Anomaly!]!
   """
+  The seeded platform meter catalog (usage-service GET /meters,
+  USG-FR-003). Needs usage.meter.read.
+  """
+  usageMeters: [UsageMeter!]!
+  """
+  Priced monthly chargeback rollups for a finalized month (usage-service
+  GET /reports/chargeback, USG-FR-043). `month` is YYYY-MM. 409s verbatim
+  with reason reconciliation_variance while that month's reconciliation
+  variance is unresolved (AC-9). Needs usage.report.read.
+  """
+  chargebackReport(month: String!): [ChargebackLine!]!
+  """
+  Monthly metered-vs-provider-bill reconciliations (usage-service GET
+  /reconciliations, USG-FR-070) — not server-paginated (fixed 100-row cap
+  downstream). Platform-only — needs usage.reconciliation.read AND a
+  platform-operator token; a tenant admin gets a real 403, never faked.
+  """
+  reconciliations: [Reconciliation!]!
+  """
   Value/ROI summary for a period (usage-service GET /api/v1/value/summary,
   BRD 69 ROI-FR-010). `period` is YYYY-MM. Needs usage.report.read.
   """
@@ -6803,6 +6908,21 @@ type Mutation {
   /anomalies/{id}/dismiss). Needs usage.anomaly.update.
   """
   dismissAnomaly(id: ID!): Anomaly!
+  """
+  Acknowledge a reconciliation variance (usage-service POST
+  /reconciliations/{id}/acknowledge, USG-FR-070/071) — unblocks chargeback
+  for that month. Only a row in `variance` can be acknowledged (anything
+  else 404s downstream, surfaced verbatim). Platform-only — needs
+  usage.reconciliation.update AND a platform-operator token.
+  """
+  acknowledgeReconciliation(id: ID!): Reconciliation!
+  """
+  Record a signed billing adjustment/credit on a CLOSED month
+  (usage-service POST /adjustments, USG-FR-072). An open month 409s with
+  reason month_open (BR-5), surfaced verbatim. Platform-only — needs
+  usage.reconciliation.update AND a platform-operator token.
+  """
+  createUsageAdjustment(input: CreateUsageAdjustmentInput!): UsageAdjustment!
   """
   Edit value-reporting assumptions (usage-service PUT /value/assumptions,
   BRD 69 ROI-FR-002). Needs usage.assumptions.update — a stronger grant than
