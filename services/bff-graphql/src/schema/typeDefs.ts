@@ -5829,6 +5829,10 @@ export const typeDefs = gql`
     relationships (dataset-service GET /ontology/entities). Omit workspaceId to
     list the whole tenant. Needs dataset.ontology.read."""
     ontologyEntities(workspaceId: ID): [OntologyEntity!]!
+    """One ontology type's revision history + any in-review proposal, newest
+    first (dataset-service GET /ontology/entities/{key}/versions). Needs
+    dataset.ontology.read."""
+    ontologyVersions(entityKey: ID!, workspaceId: ID!): [OntologyEntityVersion!]!
     """The governed model archetypes — intended-model blueprints a vertical
     declares (experiment-service GET /archetypes). Omit workspaceId to list the
     whole tenant. Needs experiment.archetype.read."""
@@ -6019,7 +6023,28 @@ export const typeDefs = gql`
     description: String!
     attributes: [OntologyAttribute!]!
     relationships: [OntologyRelationship!]!
+    """The currently-published version this live type mirrors (WS3)."""
+    versionNo: Int
     createdAt: String
+  }
+  """One versioned revision of an ontology type + its four-eyes review state
+  (WS3). \`status\`: in_review | published | superseded | rejected. \`diff\` is
+  the machine diff vs the prior published definition (filled at approve)."""
+  type OntologyEntityVersion {
+    entityKey: ID!
+    workspaceId: ID!
+    versionNo: Int!
+    status: String!
+    name: String!
+    description: String!
+    attributes: [OntologyAttribute!]!
+    relationships: [OntologyRelationship!]!
+    diff: JSON
+    submittedBy: String!
+    approvedBy: String
+    decisionNote: String
+    createdAt: String
+    decidedAt: String
   }
   input OntologyAttributeInput { name: String! dataType: String }
   input OntologyRelationshipInput { name: String! target: String! cardinality: String }
@@ -6027,6 +6052,17 @@ export const typeDefs = gql`
     workspaceId: ID!
     entityKey: ID!
     name: String!
+    description: String
+    attributes: [OntologyAttributeInput!]
+    relationships: [OntologyRelationshipInput!]
+  }
+  """A proposed update to an ontology type's definition (WS3). Only the provided
+  fields are overlaid on the live definition; the live type is unchanged until a
+  DISTINCT approver publishes the proposal."""
+  input ProposeOntologyUpdateInput {
+    workspaceId: ID!
+    entityKey: ID!
+    name: String
     description: String
     attributes: [OntologyAttributeInput!]
     relationships: [OntologyRelationshipInput!]
@@ -6281,6 +6317,17 @@ export const typeDefs = gql`
     createOntologyEntity(input: CreateOntologyEntityInput!): OntologyEntity!
     "Remove a domain ontology entity type. Needs dataset.ontology.delete."
     deleteOntologyEntity(entityKey: ID!, workspaceId: ID!): Boolean!
+    """Open a four-eyes update to an ontology type's definition (WS3). Lands
+    in_review; the live type is unchanged until a DISTINCT approver publishes it.
+    Needs dataset.ontology.update."""
+    proposeOntologyUpdate(input: ProposeOntologyUpdateInput!): OntologyEntityVersion!
+    """Publish an in-review ontology update (four-eyes: approver ≠ submitter,
+    enforced downstream). Supersedes the prior version + updates the live type.
+    Needs dataset.ontology.approve."""
+    approveOntologyUpdate(entityKey: ID!, workspaceId: ID!, versionNo: Int!, note: String): OntologyEntityVersion!
+    """Reject an in-review ontology update; the live type is unchanged. Needs
+    dataset.ontology.approve."""
+    rejectOntologyUpdate(entityKey: ID!, workspaceId: ID!, versionNo: Int!, note: String): OntologyEntityVersion!
     """Register a governed model archetype (idempotent by archetypeKey within the
     workspace). Needs experiment.archetype.create."""
     createModelArchetype(input: CreateModelArchetypeInput!): ModelArchetype!

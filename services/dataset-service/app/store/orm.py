@@ -242,6 +242,34 @@ class OntologyEntityRow(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     attributes: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     relationships: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class OntologyEntityVersionRow(Base):
+    """WS3 — versioned ontology revisions + the four-eyes review queue. RLS by
+    tenant like every other table (0001/0002)."""
+
+    __tablename__ = "ontology_entity_versions"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "workspace_id", "entity_key", "version_no"),
+    )
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
+    workspace_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    entity_key: Mapped[str] = mapped_column(Text, nullable=False)
+    version_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    attributes: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    relationships: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    diff: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    submitted_by: Mapped[str] = mapped_column(Text, nullable=False)
+    approved_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

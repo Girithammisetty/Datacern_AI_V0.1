@@ -5766,6 +5766,7 @@ export interface OntologyEntity {
   workspaceId: string;
   name: string;
   description: string;
+  versionNo: number | null;
   createdAt: string | null;
   attributes: OntologyAttribute[];
   relationships: OntologyRelationship[];
@@ -5788,6 +5789,7 @@ export const ONTOLOGY_ENTITIES = /* GraphQL */ `
       workspaceId
       name
       description
+      versionNo
       createdAt
       attributes { name dataType }
       relationships { name target cardinality }
@@ -5804,6 +5806,70 @@ export const CREATE_ONTOLOGY_ENTITY = /* GraphQL */ `
 export const DELETE_ONTOLOGY_ENTITY = /* GraphQL */ `
   mutation DeleteOntologyEntity($entityKey: ID!, $workspaceId: ID!) {
     deleteOntologyEntity(entityKey: $entityKey, workspaceId: $workspaceId)
+  }
+`;
+
+// ---- WS3: ontology versioning + four-eyes update ----------------------------
+export interface OntologyEntityVersion {
+  entityKey: string;
+  workspaceId: string;
+  versionNo: number;
+  status: string;
+  name: string;
+  description: string;
+  attributes: OntologyAttribute[];
+  relationships: OntologyRelationship[];
+  diff: Record<string, unknown> | null;
+  submittedBy: string;
+  approvedBy: string | null;
+  decisionNote: string | null;
+  createdAt: string | null;
+  decidedAt: string | null;
+}
+export interface OntologyVersionsResult {
+  ontologyVersions: OntologyEntityVersion[];
+}
+export interface ProposeOntologyUpdateResult {
+  proposeOntologyUpdate: OntologyEntityVersion;
+}
+export interface ApproveOntologyUpdateResult {
+  approveOntologyUpdate: OntologyEntityVersion;
+}
+export interface RejectOntologyUpdateResult {
+  rejectOntologyUpdate: OntologyEntityVersion;
+}
+
+const ONTOLOGY_VERSION_FIELDS = /* GraphQL */ `
+  entityKey workspaceId versionNo status name description
+  attributes { name dataType } relationships { name target cardinality }
+  diff submittedBy approvedBy decisionNote createdAt decidedAt
+`;
+
+export const ONTOLOGY_VERSIONS = /* GraphQL */ `
+  query OntologyVersions($entityKey: ID!, $workspaceId: ID!) {
+    ontologyVersions(entityKey: $entityKey, workspaceId: $workspaceId) { ${ONTOLOGY_VERSION_FIELDS} }
+  }
+`;
+
+export const PROPOSE_ONTOLOGY_UPDATE = /* GraphQL */ `
+  mutation ProposeOntologyUpdate($input: ProposeOntologyUpdateInput!) {
+    proposeOntologyUpdate(input: $input) { ${ONTOLOGY_VERSION_FIELDS} }
+  }
+`;
+
+export const APPROVE_ONTOLOGY_UPDATE = /* GraphQL */ `
+  mutation ApproveOntologyUpdate($entityKey: ID!, $workspaceId: ID!, $versionNo: Int!, $note: String) {
+    approveOntologyUpdate(entityKey: $entityKey, workspaceId: $workspaceId, versionNo: $versionNo, note: $note) {
+      ${ONTOLOGY_VERSION_FIELDS}
+    }
+  }
+`;
+
+export const REJECT_ONTOLOGY_UPDATE = /* GraphQL */ `
+  mutation RejectOntologyUpdate($entityKey: ID!, $workspaceId: ID!, $versionNo: Int!, $note: String) {
+    rejectOntologyUpdate(entityKey: $entityKey, workspaceId: $workspaceId, versionNo: $versionNo, note: $note) {
+      ${ONTOLOGY_VERSION_FIELDS}
+    }
   }
 `;
 
