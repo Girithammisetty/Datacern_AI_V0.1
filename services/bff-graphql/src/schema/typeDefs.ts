@@ -4782,6 +4782,24 @@ export const typeDefs = gql`
   }
 
   # ============================ roots =========================================
+  "One semantic-discovery hit (score = cosine similarity, higher is closer)."
+  type ToolDiscoveryHit {
+    toolId: ID!
+    version: String
+    score: Float!
+    tier: String
+    description: String
+  }
+  "One platform action-catalog entry (the closed authz vocabulary)."
+  type RbacAction {
+    action: ID!
+    service: String
+    resource: String
+    verb: String
+    workspaceScoped: Boolean
+    description: String
+  }
+
   type Query {
     """The authenticated viewer (from the JWT; no downstream call)."""
     me: Viewer!
@@ -4823,6 +4841,10 @@ export const typeDefs = gql`
     """Tenant + system roles (rbac-service GET /roles), cursor-paginated. Feeds the
     role picker used to bind a role to a Team. Admin only."""
     roles(first: Int = 50, after: String): RoleConnection!
+    """The platform action catalog (rbac-service GET /actions; any
+    authenticated principal): the closed service.resource.verb vocabulary
+    behind every role editor."""
+    rbacActions(first: Int = 500, after: String): [RbacAction!]!
 
     """The real authz decision trace for a subject+action(+resource) tuple
     (rbac-service POST /authz/explain) — a debug tool for "why was I denied".
@@ -5485,6 +5507,11 @@ export const typeDefs = gql`
     # ---- Tier 2b: tool-plane registry admin ----------------------------------
     """The tool catalog (tool-plane GET /tools), cursor-paginated. Needs tool.tool.read."""
     tools(first: Int = 50, after: String, ownerService: String): ToolConnection!
+    """Semantic tool discovery (tool-plane POST /discovery/search, TPL-FR-020):
+    the query is embedded with the real model and ranked by pgvector cosine
+    over the tenant's ENABLED tools only — a killed or disabled tool never
+    appears. Needs tool.tool.read."""
+    discoverTools(query: String!, topK: Int = 5, tierFilter: [String!]): [ToolDiscoveryHit!]!
     """Per-version status + SLA + rolling health for one tool (GET
     /tools/{id}/health) — the per-tool version list. Needs tool.tool.read."""
     toolHealth(toolId: ID!): ToolHealth

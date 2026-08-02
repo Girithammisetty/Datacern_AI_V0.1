@@ -14,7 +14,7 @@ import {
   useRoles,
   // Tier 4b: custom-role CRUD (rbac-service /roles).
   useCreateRole, useUpdateRole, useRenameRole, useSetRoleActions, useDeleteRole,
-} from "@/lib/graphql/hooks";
+ useRbacActions,} from "@/lib/graphql/hooks";
 import { GraphQLRequestError } from "@/lib/graphql/client";
 import type { Role } from "@/lib/graphql/types";
 import { formatLocal } from "@/lib/utils";
@@ -72,6 +72,8 @@ export default function AdminRolesPage() {
           </Can>
         }
       />
+
+      <ActionCatalogRef />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
         <AsyncBoundary
@@ -421,5 +423,36 @@ function RoleDetail({
         }}
       />
     </Card>
+  );
+}
+
+
+/** The platform's closed action vocabulary (rbac GET /actions) — the reference
+ * for the one-action-per-line role editors above. Collapsed by default. */
+function ActionCatalogRef() {
+  const [open, setOpen] = useState(false);
+  const actions = useRbacActions(open);
+  return (
+    <div className="mb-4">
+      <Button size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
+        {open ? "Hide action catalog" : "Show action catalog"}
+      </Button>
+      {open && (
+        <div className="mt-2 max-h-64 overflow-y-auto rounded-md border p-2">
+          {actions.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <ul className="columns-2 gap-4 text-xs md:columns-3">
+              {(actions.data ?? []).map((a) => (
+                <li key={a.action} className="break-inside-avoid font-mono" title={a.description ?? undefined}>
+                  {a.action}
+                  {a.workspaceScoped ? <span className="ml-1 text-muted-foreground">(ws)</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

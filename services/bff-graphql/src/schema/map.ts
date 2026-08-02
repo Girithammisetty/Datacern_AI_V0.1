@@ -50,7 +50,7 @@ import type {
   ToolKillSwitchDTO,
   // Tier 2b: tool-plane registry admin.
   ToolDTO, ToolVersionDTO, ToolHealthDTO, TenantToolSettingsDTO, BYOSubmissionDTO,
-} from "../clients/toolplane.js";
+ ToolDiscoveryHitDTO,} from "../clients/toolplane.js";
 import type {
   MemoryRecordDTO, ErasureRequestDTO, MemoryWriteResultDTO, RetrievalItemDTO,
   RetrieveResultDTO, RagCorpusDTO, CorpusStatusDTO, CorpusRebuildReportDTO,
@@ -81,7 +81,7 @@ import type {
   WorkspaceDTO, GroupDTO, MemberDTO, RoleDTO, ExplainAuthzDTO,
   // Tier 4b: identity/rbac admin (content grants + bulk membership).
   ContentGrantDTO, EffectiveAccessEntryDTO, BulkMembersResponseDTO,
-} from "../clients/rbac.js";
+ RbacActionDTO,} from "../clients/rbac.js";
 import type {
   AuditEventDTO,
   AuditEventDetailDTO,
@@ -309,6 +309,29 @@ export function mapPocCriterion(d: PocCriterionDTO) {
     target: d.target ?? null,
     direction: d.direction ?? null,
     manualValue: d.manual_value ?? null,
+  };
+}
+
+export function mapToolDiscoveryHit(d: ToolDiscoveryHitDTO) {
+  return {
+    __typename: "ToolDiscoveryHit" as const,
+    toolId: d.tool_id,
+    version: d.version ?? null,
+    score: d.score,
+    tier: d.tier ?? null,
+    description: d.description ?? null,
+  };
+}
+
+export function mapRbacAction(d: RbacActionDTO) {
+  return {
+    __typename: "RbacAction" as const,
+    action: d.action,
+    service: d.service ?? null,
+    resource: d.resource ?? null,
+    verb: d.verb ?? null,
+    workspaceScoped: d.workspace_scoped ?? null,
+    description: d.description ?? null,
   };
 }
 

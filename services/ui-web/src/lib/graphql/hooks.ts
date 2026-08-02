@@ -501,6 +501,26 @@ export function usePocProgress(tenantId: string, enabled = true) {
   });
 }
 
+/** Semantic tool discovery over the tenant's enabled tools. */
+export function useDiscoverTools(query: string, enabled = false) {
+  return useQuery({
+    queryKey: qk.discoverTools(query),
+    queryFn: () => graphqlRequest<ops.DiscoverToolsResult>(ops.DISCOVER_TOOLS, { query, topK: 8 })
+      .then((r) => r.discoverTools),
+    enabled: enabled && query.trim().length > 0,
+  });
+}
+
+/** The platform action catalog — the closed authz vocabulary. */
+export function useRbacActions(enabled = true) {
+  return useQuery({
+    queryKey: qk.rbacActions(),
+    queryFn: () => graphqlRequest<ops.RbacActionsResult>(ops.RBAC_ACTIONS).then((r) => r.rbacActions),
+    enabled,
+    staleTime: 300_000,
+  });
+}
+
 export function usePocReports(tenantId: string, enabled = true) {
   return useQuery({
     queryKey: qk.pocReports(tenantId),

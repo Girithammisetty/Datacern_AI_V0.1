@@ -182,6 +182,8 @@ import type {
   ProvisioningStep,
   PocProgress,
   PocReportExport,
+  ToolDiscoveryHit,
+  RbacAction,
   ResolutionRun,
   ResolutionRunDetail,
   MergeCandidate,
@@ -559,6 +561,20 @@ export const CLEAR_AI_CACHE = /* GraphQL */ `
 export interface ClearAiCacheResult { clearAiCache: number }
 
 const TENANT_LIFECYCLE_FIELDS = `id name displayName status tier cloud ownerEmail`;
+
+export const DISCOVER_TOOLS = /* GraphQL */ `
+  query DiscoverTools($query: String!, $topK: Int) {
+    discoverTools(query: $query, topK: $topK) { toolId version score tier description }
+  }
+`;
+export interface DiscoverToolsResult { discoverTools: ToolDiscoveryHit[] }
+
+export const RBAC_ACTIONS = /* GraphQL */ `
+  query RbacActions {
+    rbacActions { action service resource verb workspaceScoped description }
+  }
+`;
+export interface RbacActionsResult { rbacActions: RbacAction[] }
 
 export const POC_PROGRESS = /* GraphQL */ `
   query PocProgress($tenantId: ID!) {

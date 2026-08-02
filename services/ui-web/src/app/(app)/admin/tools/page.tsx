@@ -12,7 +12,7 @@ import { FEATURE_GATES } from "@/lib/authz/registry";
 import {
   useTools, useRegisterTool, useToolHealth, usePublishToolVersion, useDeprecateToolVersion,
   useRetireToolVersion, useSetToolEnablement, useByoSubmissions, useSubmitByoTool, useDecideByoTool,
-} from "@/lib/graphql/hooks";
+ useDiscoverTools,} from "@/lib/graphql/hooks";
 import type { Tool, ToolVersionHealth, ByoSubmission } from "@/lib/graphql/types";
 import { t } from "@/lib/i18n/messages";
 import { formatLocal } from "@/lib/utils";
@@ -28,6 +28,8 @@ export default function AdminToolsPage() {
   return (
     <div>
       <PageHeader title={t("toolsAdmin.title")} description={t("toolsAdmin.subtitle")} />
+
+      <DiscoverySearch />
       <div className="space-y-4">
         <CatalogCard />
         <ByoQueueCard />
@@ -476,5 +478,55 @@ function SubmitByoForm({
       <Button type="submit" size="sm" disabled={pending}>{t("toolsAdmin.byo.submit")}</Button>
       {(parseError || error) && <p className="text-xs text-destructive">{parseError ?? error?.message}</p>}
     </form>
+  );
+}
+
+
+/** Semantic discovery over the tenant's ENABLED tools (pgvector cosine over
+ * real embeddings) — the same ranking an agent gets from the MCP gateway, so
+ * an operator can sanity-check what a free-text ask would surface. */
+function DiscoverySearch() {
+  const [draft, setDraft] = useState("");
+  const [query, setQuery] = useState("");
+  const hits = useDiscoverTools(query, query.length > 0);
+  return (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle>Semantic discovery</CardTitle>
+        <CardDescription>
+          Rank the tenant&apos;s enabled tools against a free-text ask — the same
+          embedding + cosine ranking an agent gets. Killed tools never appear.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form className="mb-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); setQuery(draft.trim()); }}>
+          <Input value={draft} onChange={(e) => setDraft(e.target.value)}
+            placeholder="e.g. apply a disposition to a case" aria-label="Discovery query" />
+          <Button type="submit" size="sm" disabled={!draft.trim() || hits.isFetching}>
+            {hits.isFetching ? "Searching…" : "Search"}
+          </Button>
+        </form>
+        {query && !hits.isFetching && (
+          (hits.data?.length ?? 0) === 0
+            ? <p className="text-sm text-muted-foreground">No enabled tool matches.</p>
+            : (
+              <ul className="space-y-1 text-sm">
+                {(hits.data ?? []).map((h) => (
+                  <li key={`${h.toolId}@${h.version}`} className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-1.5">
+                    <span className="font-mono text-xs">{h.toolId}</span>
+                    {h.version && <span className="text-xs text-muted-foreground">v{h.version}</span>}
+                    {h.tier && <Badge variant="secondary">{h.tier}</Badge>}
+                    <span className="ml-auto text-xs tabular-nums text-muted-foreground">score {h.score.toFixed(3)}</span>
+                    {h.description && <span className="w-full text-xs text-muted-foreground">{h.description}</span>}
+                  </li>
+                ))}
+              </ul>
+            )
+        )}
+        {hits.isError && (
+          <p className="text-xs text-destructive">{hits.error instanceof Error ? hits.error.message : "Search failed"}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

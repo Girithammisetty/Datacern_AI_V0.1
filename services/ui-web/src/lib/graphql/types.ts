@@ -2184,6 +2184,22 @@ export interface PocProgress {
   criteria: PocCriterionProgress[];
 }
 
+export interface ToolDiscoveryHit {
+  toolId: ID;
+  version?: string | null;
+  score: number;
+  tier?: string | null;
+  description?: string | null;
+}
+export interface RbacAction {
+  action: ID;
+  service?: string | null;
+  resource?: string | null;
+  verb?: string | null;
+  workspaceScoped?: boolean | null;
+  description?: string | null;
+}
+
 export interface PocReportExport {
   id: ID;
   version?: number | null;

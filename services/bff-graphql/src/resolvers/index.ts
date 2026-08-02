@@ -72,7 +72,7 @@ import {
   mapDecisionModel, mapBatchEvaluate, mapOutcomeLabel, mapDecisionEffectiveness,
   mapAgentChatSession, mapDecisionEvaluation,
   mapAiSpendFreeze,
-  mapProvisioningStep, mapPocCriterion, mapPocProgress, mapPocReportExport,
+  mapProvisioningStep, mapPocCriterion, mapPocProgress, mapPocReportExport, mapToolDiscoveryHit, mapRbacAction,
   mapAgentRollout, mapRetrainWatch,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
@@ -911,6 +911,11 @@ export const resolvers = {
       const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
       const page = await ctx.clients.rbac.roles(limit, cursor);
       return toConnection(page, (d) => mapRole(d));
+    },
+
+    rbacActions: async (_p: unknown, a: { first?: number }, ctx: GraphQLContext) => {
+      const page = await ctx.clients.rbac.actions(a.first ?? 500);
+      return (page.data ?? []).map(mapRbacAction);
     },
 
     // ---- Tier 4b: identity/rbac admin — content grants -----------------------
@@ -2224,6 +2229,15 @@ export const resolvers = {
       const page = await ctx.clients.toolPlane.tools(limit, cursor, a.ownerService);
       return toConnection(page, mapTool);
     },
+
+    discoverTools: (
+      _p: unknown,
+      a: { query: string; topK?: number; tierFilter?: string[] | null },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.toolPlane
+        .discoverTools(a.query, a.topK ?? 5, a.tierFilter ?? undefined)
+        .then((rows) => rows.map(mapToolDiscoveryHit)),
 
     toolHealth: (_p: unknown, a: { toolId: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.toolPlane.toolHealth(a.toolId).then(mapToolHealth)),

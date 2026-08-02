@@ -139,6 +139,15 @@ export interface SubmitBYOBody {
   data_egress_description?: string;
 }
 
+/** One semantic-discovery hit (tool-plane discoveryHit, TPL-FR-020). */
+export interface ToolDiscoveryHitDTO {
+  tool_id: string;
+  version?: string;
+  score: number;
+  tier?: string;
+  description?: string;
+}
+
 export class ToolPlaneClient {
   constructor(private readonly http: ServiceClient) {}
 
@@ -235,6 +244,17 @@ export class ToolPlaneClient {
   }
 
   // ---- Tier 2b: BYO onboarding (TPL-FR-040) ---------------------------------
+
+  /** POST /discovery/search — semantic tool discovery: the query is embedded
+   * with the real model and ranked by pgvector cosine over the tenant's
+   * ENABLED tools only (killed tools never appear). Needs tool.tool.read. */
+  async discoverTools(query: string, topK = 5, tierFilter?: string[]): Promise<ToolDiscoveryHitDTO[]> {
+    const r = await this.http.post<{ data: ToolDiscoveryHitDTO[] } | ToolDiscoveryHitDTO[]>(
+      "/api/v1/discovery/search",
+      { body: { query, top_k: topK, tier_filter: tierFilter } },
+    );
+    return Array.isArray(r) ? r : (r.data ?? []);
+  }
 
   /** GET /byo?filter[status]= — the submission queue, newest first. Needs tool.byo.approve. */
   async byoSubmissions(status?: string, limit?: number): Promise<BYOSubmissionDTO[]> {
