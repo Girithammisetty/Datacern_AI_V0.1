@@ -20,6 +20,7 @@ import { formatLocal } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n/messages";
 import { useReportCatalog } from "@/lib/graphql/hooks";
 import { reportsByDomain, REPORT_DOMAINS, type ReportFormat } from "@/lib/reports/catalog";
+import { INLINE_RUNNERS } from "@/components/reports/InlineReportDownload";
 
 const FORMAT_LABEL: Record<ReportFormat, string> = { csv: "CSV", json: "JSON", artifact: "File" };
 
@@ -74,10 +75,27 @@ function ReportCatalogSection() {
                       )}
                     </div>
                     {r.note && <p className="text-[11px] leading-snug text-muted-foreground">{r.note}</p>}
-                    <div className="mt-auto pt-1">
-                      <Button asChild variant="outline" size="sm" className="h-8 w-full">
-                        <Link href={r.href}>Open report <ArrowRight className="size-3.5" /></Link>
-                      </Button>
+                    <div className="mt-auto flex flex-col gap-1.5 pt-1">
+                      {(() => {
+                        const Runner = INLINE_RUNNERS[r.id];
+                        // Inline run+download where a builder exists (slice 2);
+                        // every other report keeps its deep link.
+                        return Runner ? (
+                          <>
+                            <Runner />
+                            <Link
+                              href={r.href}
+                              className="text-center text-[11px] text-muted-foreground hover:text-foreground"
+                            >
+                              Open full report →
+                            </Link>
+                          </>
+                        ) : (
+                          <Button asChild variant="outline" size="sm" className="h-8 w-full">
+                            <Link href={r.href}>Open report <ArrowRight className="size-3.5" /></Link>
+                          </Button>
+                        );
+                      })()}
                     </div>
                   </CardContent>
                 </Card>

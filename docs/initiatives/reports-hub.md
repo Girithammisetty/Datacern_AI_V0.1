@@ -107,6 +107,30 @@ already exists) is the slice-2 follow-on.
 **Verified:** `tsc --noEmit` clean, `next lint` clean, full ui-web vitest suite
 green.
 
-**Deferred (slice 2+):** hub-native inline chargeback run+download (the
-`lib/export/chargeback.ts` builder already exists); scheduling arbitrary reports;
-PDF board packs.
+### Slice 2 — hub-native inline run + download (2026-08-02)
+
+For the reports whose data the client can fetch AND whose CSV builder already
+exists, the hub now runs the report and downloads it in place instead of only
+deep-linking:
+
+- `src/components/reports/InlineReportDownload.tsx` (new) — `INLINE_RUNNERS`
+  (report id → run control) + `hasInlineRunner(id)`. Two runners: **chargeback**
+  (month picker defaulting to the previous finalized month + Download CSV) and
+  **agent inventory** (Download CSV). Both fetch **on click** via
+  `queryClient.fetchQuery` (never eager — opening the hub pulls no report data),
+  build the CSV with the existing `lib/export/{chargeback,agentInventory}.ts`
+  builders, and toast honestly on an empty result or an error. The agent
+  inventory export is the system-inventory view (no spend); the spend-inclusive
+  export stays on the Control Tower page behind its own gate.
+- `dashboards/reports/page.tsx` — a catalog card renders its inline runner when
+  one exists (with a small "Open full report →" link to the owning page for
+  filtering); every other report keeps its "Open report →" deep link.
+- `InlineReportDownload.test.tsx` — the runner registry, chargeback fetch →
+  build → download (right filename + CSV content) and its empty-month no-download
+  path, and the agent-fleet fetch + empty path. `tsc`/lint clean, full ui-web
+  suite green.
+
+**Still deferred (slice 3+):** inline run for the remaining reports (value/ROI,
+case export, chart export — each needs its own fetch+build wiring); scheduling
+arbitrary reports beyond dashboards; PDF board packs; an entitlement-gated
+catalog (capability filter is server-side today).
