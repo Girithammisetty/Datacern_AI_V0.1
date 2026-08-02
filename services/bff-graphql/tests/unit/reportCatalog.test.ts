@@ -29,10 +29,10 @@ async function run(fetchImpl: typeof fetch) {
 
 describe("Query.reportCatalog (server-authoritative, capability-filtered)", () => {
   it("returns only reports the caller's capabilities reach", async () => {
-    // usage.report.read → the two financial reports; nothing else.
+    // usage.report.read → the three financial reports; nothing else.
     const { fetchImpl } = rbac(["usage.report.read"]);
     const ids = (await run(fetchImpl)).map((r) => r.id).sort();
-    expect(ids).toEqual(["chargeback", "value-roi"]);
+    expect(ids).toEqual(["billing-periods", "chargeback", "value-roi"]);
   });
 
   it("returns the whole catalog for a broadly-capable caller", async () => {
@@ -41,9 +41,10 @@ describe("Query.reportCatalog (server-authoritative, capability-filtered)", () =
       "case.case.export", "case.disposition.read", "chart.chart.export",
     ]);
     const ids = (await run(fetchImpl)).map((r) => r.id);
-    expect(ids).toHaveLength(8);
+    expect(ids).toHaveLength(9);
     expect(ids).toContain("agent-inventory");
     expect(ids).toContain("compliance-pack");
+    expect(ids).toContain("billing-periods");
   });
 
   it("returns nothing for a caller with no report capabilities", async () => {

@@ -1901,6 +1901,37 @@ export interface ChargebackLine {
   totalUsd: number;
 }
 
+/** The persisted export artifact for a closed billing period. `pushedStatus` is
+ * pushed | billing_push_not_configured | push_failed — surfaced verbatim. */
+export interface BillingExport {
+  csvKey?: string | null;
+  csvSha256?: string | null;
+  jsonlKey?: string | null;
+  jsonlSha256?: string | null;
+  pushedStatus?: string | null;
+  pushedReference?: string | null;
+  pushedAt?: string | null;
+  createdAt: string;
+}
+
+/** A closed monthly billing period joined with its export record (BRD 67 slice
+ * 3). `grossUsd` is the priced total; `netBillableUsd` folds in adjustments.
+ * `export` is null until the close job records the period's artifacts. */
+export interface BillingPeriod {
+  id: ID;
+  urn: string;
+  period: string;
+  version: number;
+  rateCardId?: string | null;
+  rateCardVersion: number;
+  grossUsd: number;
+  netBillableUsd: number;
+  status: string;
+  closedAt: string;
+  closedBy?: string | null;
+  export?: BillingExport | null;
+}
+
 /** A monthly metered-vs-provider-bill reconciliation (USG-FR-070).
  * status: pending | matched | variance | adjusted | acknowledged. */
 export interface Reconciliation {

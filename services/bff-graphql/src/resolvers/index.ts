@@ -56,7 +56,7 @@ import {
   // BRD 60 WS2: external-agent credentials (register carries the key once).
   mapExternalAgent, mapRegisteredExternalAgent,
   mapBudget, mapRateCard, mapAnomaly, mapReportSubscription,
-  mapMeter, mapChargebackLine, mapReconciliation, mapUsageAdjustment,
+  mapMeter, mapChargebackLine, mapBillingPeriod, mapReconciliation, mapUsageAdjustment,
   mapValueSummary, mapValueTrend, mapValueAssumptions, mapValueExport,
   mapChainVerifyResult, mapComplianceJob, mapEvidencePack, mapSiemConfig, mapSiemConfigState,
   decisionAction, urnId,
@@ -782,6 +782,13 @@ const REPORT_CATALOG: ReportCatalogEntry[] = [
     description: "Any governed chart's underlying rows as a file, straight from the dashboard it lives on.",
     domain: "operations", formats: ["csv"], cadence: "on_demand", href: "/dashboards",
     schedulable: true, note: null, requiredCapability: "chart.chart.export",
+  },
+  {
+    id: "billing-periods", title: "Billing periods",
+    description: "Closed monthly billing periods with their gross and net-billable totals and export/push status — the finance-close view behind the invoice.",
+    domain: "financial", formats: ["csv"], cadence: "monthly", href: "/admin/usage",
+    schedulable: false, note: "Populated by the monthly close job; empty until a month is closed. Push status is surfaced verbatim (pushed / not-configured / failed).",
+    requiredCapability: "usage.report.read",
   },
 ];
 
@@ -2132,6 +2139,15 @@ export const resolvers = {
       // A 409 (reconciliation_variance) bubbles verbatim via DownstreamError.
       const page = await ctx.clients.usage.chargebackReport(a.month);
       return (page.data ?? []).map(mapChargebackLine);
+    },
+
+    billingPeriods: async (
+      _p: unknown,
+      a: { period?: string; first?: number },
+      ctx: GraphQLContext,
+    ) => {
+      const page = await ctx.clients.usage.billingPeriods(a.period ?? undefined, a.first ?? undefined);
+      return (page.data ?? []).map((d) => mapBillingPeriod(ctx, d));
     },
 
     reconciliations: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {

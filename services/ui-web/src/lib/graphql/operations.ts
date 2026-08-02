@@ -40,6 +40,7 @@ import type {
   Anomaly,
   UsageMeter,
   ChargebackLine,
+  BillingPeriod,
   Reconciliation,
   UsageAdjustment,
   CreateUsageAdjustmentInput,
@@ -3185,6 +3186,20 @@ export const CHARGEBACK_REPORT = /* GraphQL */ `
 `;
 export interface ChargebackReportResult {
   chargebackReport: ChargebackLine[];
+}
+
+const BILLING_PERIOD_FIELDS = /* GraphQL */ `
+  id urn period version rateCardId rateCardVersion grossUsd netBillableUsd status closedAt closedBy
+  export { csvKey csvSha256 jsonlKey jsonlSha256 pushedStatus pushedReference pushedAt createdAt }
+`;
+
+export const BILLING_PERIODS = /* GraphQL */ `
+  query BillingPeriods($period: String, $first: Int) {
+    billingPeriods(period: $period, first: $first) { ${BILLING_PERIOD_FIELDS} }
+  }
+`;
+export interface BillingPeriodsResult {
+  billingPeriods: BillingPeriod[];
 }
 
 const RECONCILIATION_FIELDS = /* GraphQL */ `id urn month provider status reportUri createdAt`;

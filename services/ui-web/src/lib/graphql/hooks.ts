@@ -3672,6 +3672,19 @@ export function useChargebackReport(month: string) {
   });
 }
 
+/** A tenant's closed billing periods, newest first, each joined with its export
+ * record (usage-service GET /billing/periods, BRD 67 slice 3). Empty until the
+ * monthly close job runs — never fabricated. */
+export function useBillingPeriods(period?: string, first?: number) {
+  return useQuery({
+    queryKey: qk.billingPeriods(period),
+    queryFn: () =>
+      graphqlRequest<ops.BillingPeriodsResult>(ops.BILLING_PERIODS, { period, first }).then(
+        (r) => r.billingPeriods,
+      ),
+  });
+}
+
 /** Metered-vs-provider-bill reconciliations (usage-service GET
  * /reconciliations, USG-FR-070). Platform-only — a plain list, not paginated. */
 export function useReconciliations() {
