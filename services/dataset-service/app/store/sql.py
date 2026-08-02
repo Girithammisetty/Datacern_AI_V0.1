@@ -23,6 +23,7 @@ from app.domain.entities import (
     EntityResolutionRun,
     LineageEdge,
     OntologyEntity,
+    OntologyEntityVersion,
     Profile,
     ResolvedEntity,
     ResolvedEntityMember,
@@ -35,6 +36,7 @@ from app.store.orm import (
     LineageEdgeRow,
     MergeCandidateRow,
     OntologyEntityRow,
+    OntologyEntityVersionRow,
     OutboxRow,
     ProcessedEventRow,
     ProfileRow,
@@ -733,7 +735,18 @@ def _ontology(row: OntologyEntityRow) -> OntologyEntity:
         id=row.id, tenant_id=row.tenant_id, workspace_id=row.workspace_id,
         entity_key=row.entity_key, name=row.name, description=row.description or "",
         attributes=row.attributes or [], relationships=row.relationships or [],
+        version_no=row.version_no or 1,
         created_by=row.created_by, created_at=row.created_at, updated_at=row.updated_at)
+
+
+def _ontology_version(row: OntologyEntityVersionRow) -> OntologyEntityVersion:
+    return OntologyEntityVersion(
+        id=row.id, tenant_id=row.tenant_id, workspace_id=row.workspace_id,
+        entity_key=row.entity_key, version_no=row.version_no, status=row.status,
+        name=row.name, description=row.description or "",
+        attributes=row.attributes or [], relationships=row.relationships or [],
+        diff=row.diff, submitted_by=row.submitted_by, approved_by=row.approved_by,
+        decision_note=row.decision_note, created_at=row.created_at, decided_at=row.decided_at)
 
 
 class SqlOntologyRepo:
@@ -763,7 +776,25 @@ class SqlOntologyRepo:
             id=e.id, tenant_id=e.tenant_id, workspace_id=e.workspace_id,
             entity_key=e.entity_key, name=e.name, description=e.description,
             attributes=e.attributes, relationships=e.relationships,
+            version_no=e.version_no,
             created_by=e.created_by, created_at=e.created_at, updated_at=e.updated_at))
+        await self.s.flush()
+
+    async def update_entity(self, e: OntologyEntity) -> None:
+        """Replace the live row's definition + version_no (on an approved update).
+        Keyed by (workspace, entity_key) under RLS; the SoR row is never deleted."""
+        row = (await self.s.execute(select(OntologyEntityRow).where(
+            OntologyEntityRow.workspace_id == e.workspace_id,
+            OntologyEntityRow.entity_key == e.entity_key,
+        ))).scalar_one_or_none()
+        if row is None:
+            return
+        row.name = e.name
+        row.description = e.description
+        row.attributes = e.attributes
+        row.relationships = e.relationships
+        row.version_no = e.version_no
+        row.updated_at = e.updated_at
         await self.s.flush()
 
     async def delete(self, workspace_id: str, entity_key: str) -> bool:
@@ -776,3 +807,58 @@ class SqlOntologyRepo:
         await self.s.delete(row)
         await self.s.flush()
         return True
+
+    # ---- versions (WS3) ----------------------------------------------------
+
+    async def add_version(self, v: OntologyEntityVersion) -> None:
+        self.s.add(OntologyEntityVersionRow(
+            id=v.id, tenant_id=v.tenant_id, workspace_id=v.workspace_id,
+            entity_key=v.entity_key, version_no=v.version_no, status=v.status,
+            name=v.name, description=v.description, attributes=v.attributes,
+            relationships=v.relationships, diff=v.diff, submitted_by=v.submitted_by,
+            approved_by=v.approved_by, decision_note=v.decision_note,
+            created_at=v.created_at, decided_at=v.decided_at))
+        await self.s.flush()
+
+    async def get_version(self, workspace_id: str, entity_key: str,
+                          version_no: int) -> OntologyEntityVersion | None:
+        row = (await self.s.execute(select(OntologyEntityVersionRow).where(
+            OntologyEntityVersionRow.workspace_id == workspace_id,
+            OntologyEntityVersionRow.entity_key == entity_key,
+            OntologyEntityVersionRow.version_no == version_no,
+        ))).scalar_one_or_none()
+        return _ontology_version(row) if row else None
+
+    async def get_version_by_status(self, workspace_id: str, entity_key: str,
+                                    status: str) -> OntologyEntityVersion | None:
+        """The single open (in_review) or currently-published version, if any.
+        Both are unique by construction (one open at a time; one published)."""
+        row = (await self.s.execute(select(OntologyEntityVersionRow).where(
+            OntologyEntityVersionRow.workspace_id == workspace_id,
+            OntologyEntityVersionRow.entity_key == entity_key,
+            OntologyEntityVersionRow.status == status,
+        ).order_by(OntologyEntityVersionRow.version_no.desc()))).scalars().first()
+        return _ontology_version(row) if row else None
+
+    async def list_versions(self, workspace_id: str,
+                            entity_key: str) -> list[OntologyEntityVersion]:
+        rows = (await self.s.execute(select(OntologyEntityVersionRow).where(
+            OntologyEntityVersionRow.workspace_id == workspace_id,
+            OntologyEntityVersionRow.entity_key == entity_key,
+        ).order_by(OntologyEntityVersionRow.version_no.desc()))).scalars().all()
+        return [_ontology_version(r) for r in rows]
+
+    async def update_version(self, v: OntologyEntityVersion) -> None:
+        row = (await self.s.execute(select(OntologyEntityVersionRow).where(
+            OntologyEntityVersionRow.workspace_id == v.workspace_id,
+            OntologyEntityVersionRow.entity_key == v.entity_key,
+            OntologyEntityVersionRow.version_no == v.version_no,
+        ))).scalar_one_or_none()
+        if row is None:
+            return
+        row.status = v.status
+        row.diff = v.diff
+        row.approved_by = v.approved_by
+        row.decision_note = v.decision_note
+        row.decided_at = v.decided_at
+        await self.s.flush()

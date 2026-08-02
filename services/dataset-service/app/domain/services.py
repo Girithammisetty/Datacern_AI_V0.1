@@ -25,6 +25,7 @@ from app.domain.entities import (
     LineageEdge,
     MergeCandidateStatus,
     OntologyEntity,
+    OntologyEntityVersion,
     Profile,
     ProfileErrorCategory,
     ProfileStatus,
@@ -36,6 +37,7 @@ from app.domain.errors import (
     Conflict,
     Gone,
     NotFound,
+    PermissionDenied,
     RateLimited,
     SnapshotAlreadyRegistered,
     ValidationFailed,
@@ -1568,6 +1570,29 @@ class RetentionService(_Base):
 # ---------------------------------------------------------------------------
 
 
+def _named_diff(old: list, new: list) -> dict:
+    """Diff two lists of {name, ...} dicts by name → added/removed/changed
+    (changed = same name, different rest). Order-insensitive; dependency-free."""
+    old_by = {str(x.get("name")): x for x in old if isinstance(x, dict) and x.get("name")}
+    new_by = {str(x.get("name")): x for x in new if isinstance(x, dict) and x.get("name")}
+    added = sorted(k for k in new_by if k not in old_by)
+    removed = sorted(k for k in old_by if k not in new_by)
+    changed = sorted(k for k in new_by if k in old_by and new_by[k] != old_by[k])
+    return {"added": added, "removed": removed, "changed": changed}
+
+
+def _ontology_diff(old: dict, new: dict) -> dict:
+    """Machine diff of an ontology type revision — what a reviewer/auditor reads
+    to see exactly what an approved update changed."""
+    return {
+        "name_changed": old.get("name") != new.get("name"),
+        "description_changed": old.get("description") != new.get("description"),
+        "attributes": _named_diff(old.get("attributes") or [], new.get("attributes") or []),
+        "relationships": _named_diff(
+            old.get("relationships") or [], new.get("relationships") or []),
+    }
+
+
 class OntologyService(_Base):
     """A governed catalog of the vertical's entity TYPES + typed relationships —
     the type-level domain model, distinct from dataset-derived semantic entities
@@ -1583,13 +1608,25 @@ class OntologyService(_Base):
             existing = await uow.ontology.get(workspace_id, key)
             if existing:
                 return existing  # idempotent by (workspace, entity_key)
+            actor = ctx.actor.get("id", "unknown")
             e = OntologyEntity(
                 id=str(uuid7()), tenant_id=ctx.tenant_id, workspace_id=workspace_id,
                 entity_key=key, name=name, description=str(payload.get("description") or ""),
                 attributes=list(payload.get("attributes") or []),
                 relationships=list(payload.get("relationships") or []),
-                created_by=ctx.actor.get("id", "unknown"), created_at=now, updated_at=now)
+                version_no=1,
+                created_by=actor, created_at=now, updated_at=now)
             await uow.ontology.add(e)
+            # Seed a v1 published version so the type's history is complete from
+            # creation (WS3). The creator is both submitter and approver — this is
+            # the bootstrap revision, not a reviewed change.
+            await uow.ontology.add_version(OntologyEntityVersion(
+                id=str(uuid7()), tenant_id=ctx.tenant_id, workspace_id=workspace_id,
+                entity_key=key, version_no=1, status="published", name=e.name,
+                description=e.description, attributes=e.attributes,
+                relationships=e.relationships, diff=None, submitted_by=actor,
+                approved_by=actor, decision_note="bootstrap (initial version)",
+                created_at=now, decided_at=now))
             await self._emit(uow, ctx, "dataset.ontology.created",
                              f"wr:{ctx.tenant_id}:dataset:ontology/{key}",
                              {"entity_key": key, "workspace_id": workspace_id})
@@ -1614,3 +1651,122 @@ class OntologyService(_Base):
                                  f"wr:{ctx.tenant_id}:dataset:ontology/{entity_key}",
                                  {"entity_key": entity_key, "workspace_id": workspace_id})
         return ok
+
+    # ---- versioned four-eyes update (WS3) ----------------------------------
+
+    async def propose_update(self, ctx: CallCtx, workspace_id: str, entity_key: str,
+                             patch: dict) -> OntologyEntityVersion:
+        """Open an ``in_review`` update to a type's definition (name/description/
+        attributes/relationships). It does NOT change the live type until a
+        DISTINCT approver publishes it. One open proposal at a time."""
+        now = self.clock.now()
+        async with self.uow(ctx.tenant_id) as uow:
+            live = await uow.ontology.get(workspace_id, entity_key)
+            if live is None:
+                raise NotFound(f"ontology entity {entity_key!r} not found")
+            open_v = await uow.ontology.get_version_by_status(workspace_id, entity_key, "in_review")
+            if open_v is not None:
+                raise Conflict(
+                    f"version {open_v.version_no} is already in review; "
+                    "decide it before proposing another")
+            # Next version number is one past the HIGHEST ever used (not the live
+            # one) so a rejected/superseded number is never reused — the
+            # (tenant, workspace, key, version_no) uniqueness holds.
+            history = await uow.ontology.list_versions(workspace_id, entity_key)
+            next_no = max((x.version_no for x in history), default=live.version_no) + 1
+            # New definition = the live one with the provided fields overlaid.
+            name = str(patch.get("name", live.name) or "").strip() or live.name
+            v = OntologyEntityVersion(
+                id=str(uuid7()), tenant_id=ctx.tenant_id, workspace_id=workspace_id,
+                entity_key=entity_key, version_no=next_no, status="in_review",
+                name=name,
+                description=str(patch.get("description", live.description) or ""),
+                attributes=list(patch["attributes"]) if "attributes" in patch else live.attributes,
+                relationships=(list(patch["relationships"]) if "relationships" in patch
+                               else live.relationships),
+                diff=None, submitted_by=ctx.actor.get("id", "unknown"),
+                approved_by=None, decision_note=None, created_at=now, decided_at=None)
+            await uow.ontology.add_version(v)
+            await self._emit(uow, ctx, "dataset.ontology.update_proposed",
+                             f"wr:{ctx.tenant_id}:dataset:ontology/{entity_key}",
+                             {"entity_key": entity_key, "workspace_id": workspace_id,
+                              "version_no": v.version_no})
+            return v
+
+    async def approve_update(self, ctx: CallCtx, workspace_id: str, entity_key: str,
+                             version_no: int, note: str | None = None) -> OntologyEntityVersion:
+        """Publish an in-review update (four-eyes: the approver MUST differ from
+        the submitter). Supersedes the prior published version, updates the live
+        type, and records a machine diff vs the prior published definition."""
+        now = self.clock.now()
+        async with self.uow(ctx.tenant_id) as uow:
+            v = await uow.ontology.get_version(workspace_id, entity_key, version_no)
+            if v is None:
+                raise NotFound(f"ontology version {version_no} of {entity_key!r} not found")
+            if v.status != "in_review":
+                raise Conflict(f"version {version_no} is {v.status}, not in_review")
+            if v.submitted_by == ctx.actor.get("id"):
+                raise PermissionDenied(
+                    "author cannot approve their own ontology update (four-eyes)")
+            live = await uow.ontology.get(workspace_id, entity_key)
+            if live is None:
+                raise NotFound(f"ontology entity {entity_key!r} not found")
+
+            prior_def = {"name": live.name, "description": live.description,
+                         "attributes": live.attributes, "relationships": live.relationships}
+            new_def = {"name": v.name, "description": v.description,
+                       "attributes": v.attributes, "relationships": v.relationships}
+
+            # Supersede the currently-published version, if one is recorded.
+            published = await uow.ontology.get_version_by_status(
+                workspace_id, entity_key, "published")
+            if published is not None:
+                published.status = "superseded"
+                await uow.ontology.update_version(published)
+
+            v.status = "published"
+            v.approved_by = ctx.actor.get("id", "unknown")
+            v.decision_note = note
+            v.diff = _ontology_diff(prior_def, new_def)
+            v.decided_at = now
+            await uow.ontology.update_version(v)
+
+            live.name = v.name
+            live.description = v.description
+            live.attributes = v.attributes
+            live.relationships = v.relationships
+            live.version_no = v.version_no
+            live.updated_at = now
+            await uow.ontology.update_entity(live)
+
+            await self._emit(uow, ctx, "dataset.ontology.updated",
+                             f"wr:{ctx.tenant_id}:dataset:ontology/{entity_key}",
+                             {"entity_key": entity_key, "workspace_id": workspace_id,
+                              "version_no": v.version_no, "diff": v.diff})
+            return v
+
+    async def reject_update(self, ctx: CallCtx, workspace_id: str, entity_key: str,
+                            version_no: int, note: str | None = None) -> OntologyEntityVersion:
+        """Reject an in-review update (the live type is unchanged)."""
+        now = self.clock.now()
+        async with self.uow(ctx.tenant_id) as uow:
+            v = await uow.ontology.get_version(workspace_id, entity_key, version_no)
+            if v is None:
+                raise NotFound(f"ontology version {version_no} of {entity_key!r} not found")
+            if v.status != "in_review":
+                raise Conflict(f"version {version_no} is {v.status}, not in_review")
+            v.status = "rejected"
+            v.approved_by = ctx.actor.get("id", "unknown")
+            v.decision_note = note
+            v.decided_at = now
+            await uow.ontology.update_version(v)
+            await self._emit(uow, ctx, "dataset.ontology.update_rejected",
+                             f"wr:{ctx.tenant_id}:dataset:ontology/{entity_key}",
+                             {"entity_key": entity_key, "workspace_id": workspace_id,
+                              "version_no": version_no})
+            return v
+
+    async def list_versions(self, ctx: CallCtx, workspace_id: str,
+                            entity_key: str) -> list[OntologyEntityVersion]:
+        async with self.uow(ctx.tenant_id) as uow:
+            return await uow.ontology.list_versions(workspace_id, entity_key)

@@ -206,13 +206,56 @@ the specific type for the case, not the whole workspace graph) — deferred to W
 once the semantic/ER links exist; semantic-layer NL→SQL ontology wiring (WS2);
 governance/versioning of the ontology (WS3).
 
+### Increment 2 (WS3) — govern the ontology like semantic models — BUILT (backend)
+
+Closes gap #3 (governance asymmetry: semantic models had four-eyes versioning;
+the ontology had none — change = delete+recreate). The ontology now versions and
+updates through a four-eyes flow that mirrors the semantic-service state machine.
+
+**Built (dataset-service):**
+- **Schema (`0006_ontology_versioning.py`).** `ontology_entities.version_no` (the
+  live row's currently-published version) + a new `ontology_entity_versions`
+  table (every revision + the review queue: `in_review | published | superseded |
+  rejected`, definition snapshot, machine `diff`, submitter/approver/note),
+  RLS-forced like the rest. Existing types are **backfilled** with a v1
+  `published` version so history is complete from day one.
+- **State machine (`OntologyService`).** `create` now seeds a v1 published
+  version. `propose_update` opens an `in_review` revision (name/description/
+  attributes/relationships overlaid on the live definition) **without touching
+  the live type** — one open proposal at a time (409 otherwise), and the next
+  version number is one past the highest ever used so a rejected/superseded
+  number is never reused. `approve_update` publishes it — **author≠approver
+  enforced** (403 on self-approve), supersedes the prior published version,
+  updates the live row, and records a machine `diff` (name/description changed +
+  attributes/relationships added/removed/changed). `reject_update` closes a
+  proposal, live unchanged. Events: `update_proposed` / `updated` (with diff) /
+  `update_rejected`.
+- **API + RBAC.** `GET/POST /ontology/entities/{key}/versions`,
+  `POST .../versions/{n}/approve`, `POST .../versions/{n}/reject`, gated on new
+  actions `dataset.ontology.update` (propose) and `dataset.ontology.approve`
+  (decide), both granted to the use-case admin so two distinct admins are needed
+  to publish a change. Added to dataset-service's action MANIFEST.
+
+**Verified:** `test_ontology_versioning.py` — 11 cases: create seeds v1;
+propose leaves the live type unchanged; self-approve 403 (four-eyes); a distinct
+approver publishes + supersedes + updates the live row + diffs; reject leaves it
+unchanged; one-open-at-a-time 409; re-propose after reject bumps to v3 (no number
+reuse). Existing `test_ontology_api.py` unchanged and green; `ruff` clean; full
+dataset-service unit suite green (bar 3 pre-existing DuckDB-httpfs network-gated
+failures unrelated to this change).
+
+**Deferred (next slice):** BFF + UI surface for the review queue (the existing
+ontology page is read/create/delete — the propose/approve/reject controls are the
+immediate follow-on); making `relationship.target` navigable + SHACL-style
+attribute contracts is WS4.
+
 ### Phasing
-WS1 (this increment) proves the anti-hallucination thesis on the existing
+WS1 (increment 1) proves the anti-hallucination thesis on the existing
 pipeline with the smallest build. WS2 links the layers (unlocks per-case typing +
-cross-dataset reasoning). WS3 closes the governance asymmetry. WS4 makes it a
-navigable, contract-enforcing graph with standards export. WS5 makes it
-self-improving. Each is independently shippable and documented as its own
-increment here.
+cross-dataset reasoning). WS3 (increment 2, backend built) closes the governance
+asymmetry. WS4 makes it a navigable, contract-enforcing graph with standards
+export. WS5 makes it self-improving. Each is independently shippable and
+documented as its own increment here.
 
 **Honest status:** analysis + design complete and code-grounded; **Increment 1
 (WS1) is built and unit-verified** (adapter + shared grounding helpers + both
