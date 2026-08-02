@@ -161,6 +161,7 @@ import type {
   DecisionEffectiveness,
   DecisionEvaluation,
   AgentChatSession,
+  AiSpendFreeze,
   ResolutionRun,
   ResolutionRunDetail,
   MergeCandidate,
@@ -506,6 +507,29 @@ export const NEW_DECISION_MODEL_VERSION = /* GraphQL */ `
   }
 `;
 export interface NewDecisionModelVersionResult { newDecisionModelVersion: DecisionModel }
+
+export const AI_SPEND_FREEZES = /* GraphQL */ `
+  query AiSpendFreezes {
+    aiSpendFreezes { scope reason frozenBy frozenAt }
+  }
+`;
+export interface AiSpendFreezesResult { aiSpendFreezes: AiSpendFreeze[] }
+
+export const CREATE_AI_SPEND_FREEZE = /* GraphQL */ `
+  mutation CreateAiSpendFreeze($scope: String!, $tenantId: String, $reason: String!, $idempotencyKey: String!) {
+    createAiSpendFreeze(scope: $scope, tenantId: $tenantId, reason: $reason, idempotencyKey: $idempotencyKey) {
+      scope reason frozenBy frozenAt
+    }
+  }
+`;
+export interface CreateAiSpendFreezeResult { createAiSpendFreeze: AiSpendFreeze }
+
+export const CLEAR_AI_SPEND_FREEZE = /* GraphQL */ `
+  mutation ClearAiSpendFreeze($scope: String!, $tenantId: String) {
+    clearAiSpendFreeze(scope: $scope, tenantId: $tenantId) { scope cleared }
+  }
+`;
+export interface ClearAiSpendFreezeResult { clearAiSpendFreeze: { scope: string; cleared: boolean } }
 
 export const EVALUATE_DECISION_MODEL = /* GraphQL */ `
   mutation EvaluateDecisionModel($id: ID!, $caseId: ID!, $dryRun: Boolean!, $idempotencyKey: String!) {

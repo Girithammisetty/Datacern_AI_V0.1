@@ -1990,6 +1990,13 @@ export interface BatchEvaluateResult {
   results: BatchEvaluateRow[];
 }
 
+export interface AiSpendFreeze {
+  scope: string;
+  reason?: string | null;
+  frozenBy?: string | null;
+  frozenAt?: string | null;
+}
+
 export interface DecisionEvaluation {
   matched: boolean;
   ruleIndex?: number | null;

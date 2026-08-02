@@ -62,6 +62,7 @@ import {
   mapAgentDefinition, mapAgentVersionInfo, mapTenantAgentConfig, mapAgentRunListItem,
   mapDecisionModel, mapBatchEvaluate, mapOutcomeLabel, mapDecisionEffectiveness,
   mapAgentChatSession, mapDecisionEvaluation,
+  mapAiSpendFreeze,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
@@ -2030,6 +2031,9 @@ export const resolvers = {
       return toConnection(page, (d) => mapAiVirtualKey(ctx, d));
     },
 
+    aiSpendFreezes: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      ctx.clients.aiGateway.spendFreezes().then((rows) => rows.map(mapAiSpendFreeze)),
+
     aiGuardrailPolicy: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
       ctx.clients.aiGateway.guardrails().then(mapAiGuardrailPolicy),
 
@@ -3514,6 +3518,21 @@ export const resolvers = {
         a.idempotencyKey,
       );
       return mapAiBudget(ctx, d);
+    },
+
+    createAiSpendFreeze: async (
+      _p: unknown,
+      a: { scope: string; tenantId?: string | null; reason: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) =>
+      mapAiSpendFreeze(await ctx.clients.aiGateway.createSpendFreeze(
+        { scope: a.scope as "platform" | "tenant", tenant_id: a.tenantId ?? undefined, reason: a.reason },
+        a.idempotencyKey,
+      )),
+
+    clearAiSpendFreeze: async (_p: unknown, a: { scope: string; tenantId?: string | null }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.aiGateway.clearSpendFreeze(a.scope, a.tenantId ?? undefined);
+      return { __typename: "AiSpendFreezeCleared" as const, scope: d.scope, cleared: d.cleared };
     },
 
     updateAiBudget: (

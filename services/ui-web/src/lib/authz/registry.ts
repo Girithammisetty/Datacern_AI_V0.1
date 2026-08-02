@@ -517,6 +517,9 @@ export const FEATURE_GATES = {
    * /admin/budgets); a platform-scoped budget additionally needs the
    * platform-operator scope. */
   manageAiBudgets: cap("ai.budget.write"),
+  /** Freeze/unfreeze LLM spend (ai-gateway spend kill-switch; matches the
+   * downstream require("ai.budget.update") exactly). */
+  manageAiSpendFreeze: cap("ai.budget.update"),
   /** Read live spend against ai-gateway budgets (ai-gateway GET /admin/spend). */
   viewAiSpend: cap("ai.spend.read"),
   /** Read the virtual-key list (ai-gateway GET /admin/keys) — never carries secrets. */

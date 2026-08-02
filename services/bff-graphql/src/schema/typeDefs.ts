@@ -3601,6 +3601,18 @@ export const typeDefs = gql`
   }
   type AiBudgetConnection { nodes: [AiBudget!]! pageInfo: PageInfo! }
 
+  """One active LLM spend freeze (ai-gateway GET /admin/spend-freezes) — the
+  emergency brake: while frozen, every completion/embedding call in scope is
+  refused at admission. scope is "platform" or "tenant:{id}" as resolved
+  server-side."""
+  type AiSpendFreeze {
+    scope: String!
+    reason: String
+    frozenBy: String
+    frozenAt: String
+  }
+  type AiSpendFreezeCleared { scope: String! cleared: Boolean! }
+
   """Live spend against one ai-gateway budget (ai-gateway GET /admin/spend)."""
   type AiSpendRow {
     budgetId: ID!
@@ -4799,6 +4811,9 @@ export const typeDefs = gql`
     """Live spend for every budget at a scope (ai-gateway GET /admin/spend).
     Needs ai.spend.read."""
     aiSpend(scopeType: String!, scopeRef: String!, window: String): [AiSpendRow!]!
+    """Active spend freezes (ai-gateway GET /admin/spend-freezes). Needs
+    ai.budget.read."""
+    aiSpendFreezes: [AiSpendFreeze!]!
     """Cost-detail breakdown (by provider / model / request-class) over the last
     \`windowHours\` (ai-gateway GET /admin/spend/breakdown). Needs ai.spend.read."""
     aiCostBreakdown(windowHours: Int = 24): AiCostBreakdown!
@@ -6256,6 +6271,14 @@ export const typeDefs = gql`
     """Create an ai-gateway LLM-spend budget (ai-gateway POST /admin/budgets, 201).
     A platform-scoped budget additionally needs the platform-operator scope. Needs ai.budget.update."""
     createAiBudget(input: CreateAiBudgetInput!, idempotencyKey: String): AiBudget!
+    """Freeze LLM spend (ai-gateway POST /admin/spend-freezes, 201): scope
+    "tenant" freezes the caller's own tenant (ai.budget.update); "platform" or
+    another tenant's id needs ai.platform.admin. Every in-scope LLM call is
+    refused until lifted."""
+    createAiSpendFreeze(scope: String!, tenantId: String, reason: String!, idempotencyKey: String): AiSpendFreeze!
+    """Lift a spend freeze (ai-gateway DELETE /admin/spend-freezes). Same authz
+    split as create. Returns whether anything was actually cleared."""
+    clearAiSpendFreeze(scope: String!, tenantId: String): AiSpendFreezeCleared!
     """Patch an ai-gateway budget's limit/degrade-threshold/status (ai-gateway
     PATCH /admin/budgets/{id}). Needs ai.budget.update."""
     updateAiBudget(id: ID!, input: PatchAiBudgetInput!): AiBudget!

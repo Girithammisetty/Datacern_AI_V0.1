@@ -105,7 +105,7 @@ import type {
 import type {
   AiProviderDTO, AiLadderDTO, AiBudgetDTO, AiSpendRowDTO, AiVirtualKeyDTO, AiGuardrailPolicyDTO,
   AiCostBreakdownDTO, AiCostRollupDTO,
-} from "../clients/aigateway.js";
+ SpendFreezeDTO,} from "../clients/aigateway.js";
 
 /** Build a resource URN (MASTER-FR-013) from the caller's tenant claim. */
 export function urn(ctx: GraphQLContext, service: string, type: string, id: string): string {
@@ -2606,6 +2606,16 @@ export function mapDecisionModel(d: DecisionModelDTO) {
       note: r.note ?? null,
     })),
     defaultOutcome: mapDecisionOutcome(d.default_outcome),
+  };
+}
+
+export function mapAiSpendFreeze(d: SpendFreezeDTO) {
+  return {
+    __typename: "AiSpendFreeze" as const,
+    scope: d.scope,
+    reason: d.reason ?? null,
+    frozenBy: d.frozen_by ?? null,
+    frozenAt: d.frozen_at ?? null,
   };
 }
 

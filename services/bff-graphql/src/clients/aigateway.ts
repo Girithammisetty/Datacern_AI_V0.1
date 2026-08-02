@@ -39,6 +39,15 @@ export interface AiLadderDTO {
 }
 
 /** ai-gateway's own Budget (LLM spend, distinct from usage-service Budget). */
+/** One active spend freeze (ai-gateway _freeze_dict). scope is "platform" or
+ * "tenant:<uuid>" as resolved server-side. */
+export interface SpendFreezeDTO {
+  scope: string;
+  reason?: string;
+  frozen_by?: string;
+  frozen_at?: string;
+}
+
 export interface AiBudgetDTO {
   id: string;
   scope_type: string;
@@ -196,6 +205,37 @@ export class AiGatewayClient {
       { body },
     );
     return unwrap<AiLadderDTO>(r);
+  }
+
+  // ---- spend kill-switch (freeze) ------------------------------------------
+
+  /** GET /admin/spend-freezes — active freezes. Needs ai.budget.read. */
+  async spendFreezes(): Promise<SpendFreezeDTO[]> {
+    const r = await this.http.get<{ data: SpendFreezeDTO[] }>("/api/v1/admin/spend-freezes");
+    return r.data ?? [];
+  }
+
+  /** POST /admin/spend-freezes (201) — freeze LLM spend for the caller's
+   * tenant (ai.budget.update) or platform-wide (ai.platform.admin; freezing
+   * ANOTHER tenant also needs operator). */
+  async createSpendFreeze(
+    body: { scope: "platform" | "tenant"; tenant_id?: string; reason: string },
+    idempotencyKey?: string,
+  ): Promise<SpendFreezeDTO> {
+    const r = await this.http.post<{ data: SpendFreezeDTO }>("/api/v1/admin/spend-freezes", {
+      body, idempotencyKey,
+    });
+    return unwrap<SpendFreezeDTO>(r);
+  }
+
+  /** DELETE /admin/spend-freezes?scope=&tenant_id= — lift a freeze. Same
+   * authz split as create. */
+  async clearSpendFreeze(scope: string, tenantId?: string): Promise<{ scope: string; cleared: boolean }> {
+    const r = await this.http.delete<{ data: { scope: string; cleared: boolean } }>(
+      "/api/v1/admin/spend-freezes",
+      { query: { scope, tenant_id: tenantId } },
+    );
+    return unwrap<{ scope: string; cleared: boolean }>(r);
   }
 
   // ---- ai-gateway's own budgets + live spend -------------------------------

@@ -450,6 +450,38 @@ export function useNewDecisionModelVersion() {
   });
 }
 
+/** Active LLM spend freezes (the emergency brake state). */
+export function useAiSpendFreezes() {
+  return useQuery({
+    queryKey: qk.aiSpendFreezes(),
+    queryFn: () => graphqlRequest<ops.AiSpendFreezesResult>(ops.AI_SPEND_FREEZES)
+      .then((r) => r.aiSpendFreezes),
+  });
+}
+
+/** Freeze LLM spend (tenant self-serve; platform/other-tenant = operator). */
+export function useCreateAiSpendFreeze() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { scope: "platform" | "tenant"; tenantId?: string; reason: string }) =>
+      graphqlRequest<ops.CreateAiSpendFreezeResult>(ops.CREATE_AI_SPEND_FREEZE, {
+        ...vars, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createAiSpendFreeze),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.aiSpendFreezes() }),
+  });
+}
+
+/** Lift a spend freeze. */
+export function useClearAiSpendFreeze() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { scope: string; tenantId?: string }) =>
+      graphqlRequest<ops.ClearAiSpendFreezeResult>(ops.CLEAR_AI_SPEND_FREEZE, vars)
+        .then((r) => r.clearAiSpendFreeze),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.aiSpendFreezes() }),
+  });
+}
+
 /** Dry-run (or propose from) a published decision table against one case. */
 export function useEvaluateDecisionModel() {
   return useMutation({
