@@ -823,7 +823,7 @@ export interface MergeCandidatesResult { mergeCandidates: MergeCandidate[] }
 export const RESOLVE_ENTITIES = /* GraphQL */ `
   mutation ResolveEntities($datasetId: ID!, $input: ResolveEntitiesInput!, $idempotencyKey: String!) {
     resolveEntities(datasetId: $datasetId, input: $input, idempotencyKey: $idempotencyKey) {
-      datasetId entityType recordCount resolvedEntityCount mergedClusterCount
+      datasetId entityType ontologyLinked recordCount resolvedEntityCount mergedClusterCount
       reviewCandidateCount runId configId configVersion
     }
   }

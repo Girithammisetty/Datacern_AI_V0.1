@@ -220,7 +220,16 @@ function ResolveForm({ datasetId, columns, onDone }:
         <p className="text-xs text-muted-foreground" data-testid="er-run-result">
           Run {String(result.runId).slice(0, 8)}: {result.recordCount} records →{" "}
           {result.resolvedEntityCount} entities · {result.mergedClusterCount} merged ·{" "}
-          {result.reviewCandidateCount} candidate{result.reviewCandidateCount === 1 ? "" : "s"} to review.
+          {result.reviewCandidateCount} candidate{result.reviewCandidateCount === 1 ? "" : "s"} to review.{" "}
+          {result.ontologyLinked ? (
+            // WS2: the run's type resolves to a declared ontology type.
+            <span className="text-primary">Linked to ontology type “{result.entityType}”.</span>
+          ) : (
+            <span>
+              Type “{result.entityType}” isn&apos;t declared in the workspace ontology — declare it to
+              link resolved entities into the domain model.
+            </span>
+          )}
         </p>
       )}
     </div>

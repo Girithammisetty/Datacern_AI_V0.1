@@ -42,6 +42,11 @@ class Entity:
     primary_key: list[str]
     dataset_version_policy: dict  # {"policy": "latest"} | {"policy": "pinned", "version_no": n}
     description: str | None = None
+    # Knowledge Spine WS2: the governed domain ontology type this entity is an
+    # instance-table of (dataset-service OntologyEntity.entity_key — the
+    # canonical join key across the ontology / semantic / resolution layers).
+    # Optional: a semantic entity without a declared domain type stays valid.
+    ontology_entity_key: str | None = None
 
 
 @dataclass(slots=True)
@@ -130,6 +135,16 @@ def parse_definition(doc: dict, *, settings=None) -> Definition:
                                    "latest or pinned")
         if policy["policy"] == "pinned" and not isinstance(policy.get("version_no"), int):
             raise ValidationFailed(f"entity {name!r}: pinned policy requires version_no")
+        # WS2: optional link to the governed ontology type (entity_key format —
+        # same restricted shape as names, so a typo'd key fails at authoring).
+        onto_key = e.get("ontology_entity_key")
+        if onto_key is not None and (
+            not isinstance(onto_key, str) or not NAME_RE.match(onto_key)
+        ):
+            raise ValidationFailed(
+                f"entity {name!r}: ontology_entity_key must match ^[a-z][a-z0-9_]{{0,62}}$",
+                [{"field": "ontology_entity_key", "value": onto_key}],
+            )
         entities[name] = Entity(
             name=name,
             dataset_urn=e.get("dataset_urn") or "",
@@ -137,6 +152,7 @@ def parse_definition(doc: dict, *, settings=None) -> Definition:
             primary_key=list(pk),
             dataset_version_policy=policy,
             description=e.get("description"),
+            ontology_entity_key=onto_key,
         )
 
     dimensions: dict[str, Dimension] = {}

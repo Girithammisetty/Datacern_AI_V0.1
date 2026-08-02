@@ -185,6 +185,9 @@ export interface ResolutionConfigDTO {
 export interface ResolveEntitiesDTO {
   dataset_id: string;
   entity_type: string;
+  /** WS2: true when entity_type is a declared ontology type in the dataset's
+   * workspace — the canonical join key across the spine's layers. */
+  ontology_linked?: boolean;
   record_count: number;
   resolved_entity_count: number;
   merged_cluster_count: number;

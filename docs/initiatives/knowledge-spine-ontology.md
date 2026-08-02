@@ -206,6 +206,39 @@ the specific type for the case, not the whole workspace graph) — deferred to W
 once the semantic/ER links exist; semantic-layer NL→SQL ontology wiring (WS2);
 governance/versioning of the ontology (WS3).
 
+### Increment (WS2) — link the vertebrae on `entity_key` — BUILT (first slice)
+
+Closes the first half of gap #2 ("the three layers are not linked"). Built
+2026-08-02:
+
+- **ER → ontology (dataset-service).** A resolution run now resolves its
+  `entity_type` against the governed ontology registry in the dataset's
+  workspace and reports `ontology_linked` in the run summary + the
+  `dataset.entity_resolution.run` event. A miss is honest metadata, never an
+  error — free-string types and resolve-before-declare workflows keep working.
+  Tests: `test_ws2_ontology_links.py` (linked / undeclared / unknown-dataset
+  never claims a link).
+- **Semantic → ontology (semantic-service).** The semantic `Entity` gains an
+  optional `ontology_entity_key` — the canonical join key
+  (`OntologyEntity.entity_key`) — validated to the restricted name shape at
+  authoring (a typo'd key fails at save), round-tripping through the stored
+  definition, absent stays valid. Tests: `test_ontology_entity_key.py`.
+  Cross-service *existence* validation (does the key exist in the registry?) is
+  deferred — it needs a dataset-service ontology lookup from semantic-service's
+  authoring path; the format gate + the BFF/UI surface land first.
+- **BFF + UI.** `ResolveEntitiesResult.ontologyLinked: Boolean!` (absent
+  downstream → honest false); the ER page's run summary states "Linked to
+  ontology type …" or tells the steward exactly what to declare to link the run
+  into the domain model.
+
+With this, one `entity_key` can be followed ontology type → resolution runs →
+semantic entity — the precondition for per-case typing, "measures of this
+type" queries, and an Entity-360 view.
+
+**Deferred in WS2:** existence validation of `ontology_entity_key` at semantic
+authoring; surfacing the semantic↔ontology link in the model-builder UI; the
+explicit ontology-attribute → dataset-column mapping.
+
 ### Phasing
 WS1 (this increment) proves the anti-hallucination thesis on the existing
 pipeline with the smallest build. WS2 links the layers (unlocks per-case typing +

@@ -391,10 +391,22 @@ class DatasetService(_Base):
             blocking_fields=blocking, auto_merge_threshold=auto_thr, review_threshold=review_thr)
         result = resolve(rows, cfg, pk_column=pk_column)
 
+        # WS2 (knowledge spine): resolve entity_type against the governed
+        # ontology registry in the dataset's workspace — entity_key is the
+        # canonical join key across the ontology / semantic / resolution layers.
+        # A miss is honest metadata, never an error: free-string types keep
+        # working, and a steward may resolve before the type is declared.
+        ontology_linked = False
+        async with self.uow(tenant_id) as uow:
+            ds = await uow.datasets.get(dataset_id)
+            if ds is not None:
+                ontology_linked = (await uow.ontology.get(ds.workspace_id, entity_type)) is not None
+
         multi = [c for c in result.clusters if len(c.member_pks) > 1]
         out = {
             "dataset_id": dataset_id,
             "entity_type": entity_type,
+            "ontology_linked": ontology_linked,
             "record_count": len(rows),
             "resolved_entity_count": len(result.clusters),
             "merged_cluster_count": len(multi),
@@ -462,7 +474,8 @@ class DatasetService(_Base):
                     uow, ctx, "dataset.entity_resolution.run",
                     dataset_urn(tenant_id, dataset_id),
                     {"run_id": run_id, "config_id": config_id, "config_version": version_no,
-                     "entity_type": entity_type, "resolved_entity_count": len(result.clusters),
+                     "entity_type": entity_type, "ontology_linked": ontology_linked,
+                     "resolved_entity_count": len(result.clusters),
                      "merged_cluster_count": len(multi),
                      "review_candidate_count": len(result.merge_candidates)})
             await uow.commit()

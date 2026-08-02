@@ -6055,10 +6055,14 @@ export const typeDefs = gql`
     createdAt: String
     clusters: [ResolvedCluster!]!
   }
-  "The outcome of running a resolution: run summary + the persisted run/config ids."
+  """The outcome of running a resolution: run summary + the persisted run/config
+  ids. \`ontologyLinked\` (WS2) is true when \`entityType\` is a declared
+  ontology type in the dataset's workspace — false is honest metadata (the type
+  isn't in the domain model yet), never an error."""
   type ResolveEntitiesResult {
     datasetId: ID!
     entityType: String!
+    ontologyLinked: Boolean!
     recordCount: Int!
     resolvedEntityCount: Int!
     mergedClusterCount: Int!

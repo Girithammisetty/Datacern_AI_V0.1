@@ -3262,6 +3262,8 @@ export function mapResolveEntities(d: ResolveEntitiesDTO) {
     __typename: "ResolveEntitiesResult" as const,
     datasetId: d.dataset_id,
     entityType: d.entity_type,
+    // Absent on an older downstream -> honest false, never a fabricated link.
+    ontologyLinked: d.ontology_linked ?? false,
     recordCount: d.record_count,
     resolvedEntityCount: d.resolved_entity_count,
     mergedClusterCount: d.merged_cluster_count,
