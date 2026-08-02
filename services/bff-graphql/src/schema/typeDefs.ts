@@ -6008,6 +6008,12 @@ export const typeDefs = gql`
     """Delete the run's note (experiment-service DELETE /runs/{id}/note). Needs
     experiment.run.update."""
     deleteRunNote(runId: ID!): Boolean!
+    """Edit a run's metadata (experiment-service PATCH /runs/{id}: name, note,
+    tags — exclude_unset). Needs experiment.run.update."""
+    patchRun(runId: ID!, name: String, note: String, tags: JSON): Run!
+    """Delete a run (experiment-service DELETE /runs/{id}). Needs
+    experiment.run.delete."""
+    deleteRun(runId: ID!): Boolean!
     """
     Update the human overlay of a model card (experiment-service PATCH
     /models/{id}/versions/{v}/card — any subset of the 4 overlay fields; auto

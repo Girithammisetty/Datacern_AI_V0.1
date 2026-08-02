@@ -4529,6 +4529,22 @@ export const resolvers = {
       return mapRunNote(d);
     },
 
+    patchRun: async (
+      _p: unknown,
+      a: { runId: string; name?: string | null; note?: string | null; tags?: Record<string, unknown> | null },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.experiment.patchRun(a.runId, {
+        ...(a.name != null ? { name: a.name } : {}),
+        ...(a.note != null ? { note: a.note } : {}),
+        ...(a.tags != null ? { tags: a.tags } : {}),
+      });
+      return mapRun(ctx, d);
+    },
+
+    deleteRun: (_p: unknown, a: { runId: string }, ctx: GraphQLContext) =>
+      ctx.clients.experiment.deleteRun(a.runId),
+
     deleteRunNote: async (_p: unknown, a: { runId: string }, ctx: GraphQLContext) => {
       const d = await ctx.clients.experiment.deleteRunNote(a.runId);
       return d?.note_deleted ?? true;

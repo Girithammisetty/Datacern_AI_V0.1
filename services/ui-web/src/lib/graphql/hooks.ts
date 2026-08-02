@@ -450,6 +450,29 @@ export function useNewDecisionModelVersion() {
   });
 }
 
+/** Edit a run's metadata (name/note/tags). */
+export function usePatchRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { runId: string; name?: string; note?: string }) =>
+      graphqlRequest<ops.PatchRunResult>(ops.PATCH_RUN, vars).then((r) => r.patchRun),
+    onSuccess: (_d, vars) => {
+      client.invalidateQueries({ queryKey: qk.run(vars.runId) });
+      client.invalidateQueries({ queryKey: qk.runNote(vars.runId) });
+    },
+  });
+}
+
+/** Delete a run (experiment.run.delete). */
+export function useDeleteRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) =>
+      graphqlRequest<ops.DeleteRunResult>(ops.DELETE_RUN, { runId }).then((r) => r.deleteRun),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["ml"] }),
+  });
+}
+
 /** Active LLM spend freezes (the emergency brake state). */
 export function useAiSpendFreezes() {
   return useQuery({

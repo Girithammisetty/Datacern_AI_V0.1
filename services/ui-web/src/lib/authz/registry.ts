@@ -793,6 +793,8 @@ export const FEATURE_GATES = {
   /** Set/delete a run's note (experiment-service PUT|DELETE /runs/{id}/note —
    * both authorized as experiment.run.update). */
   updateRun: cap("experiment.run.update"),
+  /** Delete a training run (experiment-service DELETE /runs/{id}). */
+  deleteRun: cap("experiment.run.delete"),
   /** Edit a model card's human overlay (experiment-service PATCH
    * /models/{id}/versions/{v}/card). */
   updateModelCard: cap("experiment.model_card.update"),

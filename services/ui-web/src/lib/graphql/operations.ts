@@ -508,6 +508,20 @@ export const NEW_DECISION_MODEL_VERSION = /* GraphQL */ `
 `;
 export interface NewDecisionModelVersionResult { newDecisionModelVersion: DecisionModel }
 
+export const PATCH_RUN = /* GraphQL */ `
+  mutation PatchRun($runId: ID!, $name: String, $note: String, $tags: JSON) {
+    patchRun(runId: $runId, name: $name, note: $note, tags: $tags) { id name status }
+  }
+`;
+export interface PatchRunResult { patchRun: { id: string; name?: string | null; status?: string | null } }
+
+export const DELETE_RUN = /* GraphQL */ `
+  mutation DeleteRun($runId: ID!) {
+    deleteRun(runId: $runId)
+  }
+`;
+export interface DeleteRunResult { deleteRun: boolean }
+
 export const AI_SPEND_FREEZES = /* GraphQL */ `
   query AiSpendFreezes {
     aiSpendFreezes { scope reason frozenBy frozenAt }
