@@ -16,17 +16,17 @@ here. Each is scoped and its harness prepared; run them against a booted stack
 | Observability drill (#23) | Live pending→firing evidence | `deploy/observability/drill.sh` (self-contained throwaway Prometheus) |
 | Cross-tenant probe re-run (#22) | Fresh PASS evidence incl. the 2 new campaign surfaces | `python deploy/security/cross_tenant_authz_probe.py` (extended this session, syntax-verified) |
 
-## Larger builds (do in a worktree, verify against the stack)
+## Code/config portions now DONE (verify live when a stack exists)
 
-- **ClickHouse HA (#21)** — BRD 58 WS4 B9/B10: replicated tables + keeper in
-  `deploy/clickhouse` + helm, stateless-service horizontal-scaling proof, the
-  ops-resilience drill in `docs/initiatives/clickhouse-ha-and-ops-resilience.md`.
-- **BRD 55 remaining legs (#27)** — OM-FR-030 decision-drift detection
-  (proposal-mode review on effectiveness drop, AC-3), OM-FR-040 SFT enrichment
-  with outcome-labeled examples (AC-4), and SoR inbound outcome capture. All in
-  agent-runtime + eval-service; the outcome-label write path + effectiveness
-  read are already built and wired to the UI this session (the /decisions
-  outcome surfaces), so these extend a live base.
+- **ClickHouse HA (#21)** — manifests built + helm-lint-validated; the
+  retrain-scheduler replica blocker is CLOSED in code (`FOR UPDATE SKIP LOCKED`
+  claim, unit-verified). **Stack-gated remainder:** raft-quorum + failover on a
+  multi-node cluster (kind/k3d), and a live-Postgres confirmation before the
+  `replicas: 2` bump is enabled.
+- **BRD 55 legs (#27)** — OM-FR-030 drift detection (AC-3) and OM-FR-040 SFT
+  enrichment (AC-4) BUILT + unit-verified + wired to the effectiveness panel.
+  **Stack-gated remainder:** SoR inbound outcome capture (needs the live
+  write-back / connection rails).
 
 ## Done and pushed this session (executable-here work)
 
