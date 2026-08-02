@@ -60,6 +60,8 @@ import type {
   UserDTO, ServiceAccountDTO, TenantDTO,
   // Tier 4b: identity/rbac admin (service-account create/rotate carries api_key once).
   CreatedServiceAccountDTO,
+  // BRD 60 WS2: external-agent credentials (register carries the key once).
+  ExternalAgentKeyDTO, CreatedExternalAgentKeyDTO,
   // BRD 66 slice 3 (CPL-FR-033): commercial plane (plan/trial/entitlements).
   TenantEntitlementsDTO,
 } from "../clients/identity.js";
@@ -249,6 +251,34 @@ export function mapServiceAccount(ctx: GraphQLContext, d: ServiceAccountDTO) {
     revokedAt: d.revoked_at ?? null,
     createdAt: d.created_at ?? null,
     updatedAt: d.updated_at ?? null,
+  };
+}
+
+/** identity domain.ExternalAgentKey (BRD 60 WS2) — metadata only; the secret
+ * hash is json:"-" downstream and never reaches the BFF. */
+export function mapExternalAgent(ctx: GraphQLContext, d: ExternalAgentKeyDTO) {
+  return {
+    __typename: "ExternalAgent" as const,
+    id: d.id,
+    urn: urn(ctx, "identity", "external_agent", d.id),
+    agentId: d.agent_id,
+    agentVersion: d.agent_version ?? null,
+    scopes: d.scopes ?? [],
+    label: d.label ?? null,
+    active: d.active,
+    createdBy: d.created_by ?? null,
+    createdAt: d.created_at ?? null,
+    lastUsedAt: d.last_used_at ?? null,
+  };
+}
+
+/** identity CreatedExternalAgentKey ({key, plaintext, shown_once}) — the
+ * plaintext is passed through VERBATIM (shown exactly once; never persisted). */
+export function mapRegisteredExternalAgent(ctx: GraphQLContext, d: CreatedExternalAgentKeyDTO) {
+  return {
+    __typename: "RegisteredExternalAgent" as const,
+    externalAgent: mapExternalAgent(ctx, d.key),
+    apiKey: d.plaintext,
   };
 }
 

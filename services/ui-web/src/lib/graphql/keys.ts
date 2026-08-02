@@ -151,6 +151,8 @@ export const qk = {
   userGroups: (userId: string) => ["admin", "userGroups", userId] as const,
   roles: () => ["admin", "roles"] as const,
   serviceAccounts: () => ["admin", "serviceAccounts"] as const,
+  // BRD 60 WS2: the tenant's external-agent credentials.
+  externalAgents: () => ["admin", "externalAgents"] as const,
   tenant: (id: string) => ["admin", "tenant", id] as const,
   tenantLabels: () => ["admin", "tenantLabels"] as const,
   // BRD 66 slice 3: commercial plane (plan/trial/entitlements).

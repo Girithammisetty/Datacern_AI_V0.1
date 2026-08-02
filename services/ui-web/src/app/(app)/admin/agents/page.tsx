@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
 import { Can } from "@/components/authz/Can";
 import { AgentCatalogCard } from "@/components/admin/AgentCatalogCard";
 import { AgentFleetTiles, AgentFleetTable } from "@/components/admin/AgentFleetTable";
+import { ExternalAgentsCard } from "@/components/admin/ExternalAgentsCard";
 import { OperatorCeilingsCard } from "@/components/admin/OperatorCeilingsCard";
 import { Badge, Card, CardHeader, CardTitle, CardContent, Input } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,14 @@ export default function AdminAgentsPage() {
       <div className="mt-4">
         <AgentCatalogCard />
       </div>
+      {/* BRD 60 WS2: external-agent credential governance (register/list/revoke
+          a customer's OWN agents). Tenant-admin gated — the list endpoint itself
+          needs identity.user.admin, so the whole card is behind the Can. */}
+      <Can gate={FEATURE_GATES.manageExternalAgents}>
+        <div className="mt-4">
+          <ExternalAgentsCard />
+        </div>
+      </Can>
       {/* Operator-only: platform ceilings that clamp all custom agents (renders
           nothing for non-operators). */}
       <div className="mt-4">

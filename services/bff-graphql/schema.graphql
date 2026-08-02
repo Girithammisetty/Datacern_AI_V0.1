@@ -502,6 +502,50 @@ type ServiceAccountConnection {
   pageInfo: PageInfo!
 }
 
+"""
+A tenant-minted external-agent credential (identity-service GET
+/tenants/self/external-agents, BRD 60 WS2): a customer's OWN agent exchanges
+its key for a short-lived agent_autonomous token. Metadata only — the secret
+hash is never serialized and the plaintext key is unrecoverable after
+creation. The exchanged token always enters through the governed
+external-intent ingress (propose-only, four-eyes), so external agents can
+never auto-execute (BRD 68 ACT-FR-003).
+"""
+type ExternalAgent implements Node {
+  id: ID!
+  urn: String!
+  """The agent identity the exchanged token carries."""
+  agentId: String!
+  agentVersion: Int
+  """The tool/action allow-list the exchanged token is ceiling-limited to."""
+  scopes: [String!]!
+  """Admin-facing display label for the credential."""
+  label: String
+  """false once revoked — a revoked key can no longer be exchanged."""
+  active: Boolean!
+  createdBy: String
+  createdAt: DateTime
+  lastUsedAt: DateTime
+}
+
+"""
+A registered external agent WITH its plaintext key (identity-service POST
+/tenants/self/external-agents). The apiKey (wr_xa_<id>.<secret>) is returned
+EXACTLY ONCE here and is never retrievable again — the UI must surface it
+immediately and never persist it.
+"""
+type RegisteredExternalAgent {
+  externalAgent: ExternalAgent!
+  apiKey: String!
+}
+
+input RegisterExternalAgentInput {
+  agentId: String!
+  agentVersion: Int
+  scopes: [String!]
+  label: String
+}
+
 """Tenant compute quotas (identity-service domain.Quotas)."""
 type TenantQuotas {
   cpu: Int
@@ -5026,6 +5070,12 @@ type Query {
   """Service accounts (identity-service GET /service-accounts). Admin only."""
   serviceAccounts(first: Int = 50, after: String): ServiceAccountConnection!
   """
+  The caller tenant's registered external-agent credentials (identity-service
+  GET /tenants/self/external-agents, BRD 60 WS2), metadata only. Needs
+  identity.user.admin.
+  """
+  externalAgents: [ExternalAgent!]!
+  """
   The caller's tenant UI label overrides as a list (identity-service GET
   /tenants/self/labels). Member-visible read; editing needs identity.user.admin.
   The same overrides Viewer.displayLabels exposes, in editor shape.
@@ -5908,6 +5958,39 @@ type BatchEvaluateResult {
   results: [BatchEvaluateRow!]!
 }
 
+"""
+One decision-table evaluation against a case (agent-runtime POST
+/decision-models/{id}/evaluate). dryRun=true is a pure preview — the fired
+rule and outcome with NO side effect (DM-FR-030); dryRun=false mints the
+governed four-eyes proposal on a match (proposalId set, DM-FR-020).
+"""
+type DecisionEvaluation {
+  matched: Boolean!
+  "Index of the fired rule; null when the default outcome (or nothing) fired."
+  ruleIndex: Int
+  "Plain-language explanation naming the fired rule — the explainability leg."
+  explanation: String
+  outcome: DecisionOutcome
+  proposalId: ID
+  dryRun: Boolean!
+}
+
+"""
+An agent chat session (agent-runtime). Sessions are CREATED implicitly by
+the chat path; this type exists for the explicit terminate control.
+"""
+type AgentChatSession {
+  id: ID!
+  agentKey: String
+  agentVersion: Int
+  contextUrn: String
+  "active | idle | expired | terminated"
+  status: String
+  createdAt: String
+  lastActivityAt: String
+  expiresHardAt: String
+}
+
 enum DecisionEffectivenessBy {
   DECISION_TYPE
   PRODUCER
@@ -6483,6 +6566,19 @@ type Mutation {
   204). Irreversible. Needs identity.service_account.admin.
   """
   revokeServiceAccount(id: ID!): Boolean!
+  """
+  Register an external agent — mint its credential (identity-service POST
+  /tenants/self/external-agents, 201; BRD 60 WS2). The returned apiKey
+  (wr_xa_<id>.<secret>) is shown EXACTLY ONCE and is never retrievable again.
+  Needs identity.user.admin.
+  """
+  registerExternalAgent(input: RegisterExternalAgentInput!, idempotencyKey: String): RegisteredExternalAgent!
+  """
+  Revoke an external-agent credential (identity-service DELETE
+  /tenants/self/external-agents/{id}, 204) — the key stops exchanging
+  immediately. Needs identity.user.admin.
+  """
+  revokeExternalAgent(id: ID!): Boolean!
   """
   Edit a workspace's name/description/public flag (rbac-service PATCH
   /workspaces/{id}). Needs rbac.workspace.update.
@@ -7666,6 +7762,22 @@ type Mutation {
   the prior version is never mutated. Needs case.disposition.create.
   """
   newDecisionModelVersion(id: ID!, input: CreateDecisionModelInput!, idempotencyKey: String): DecisionModel!
+  """
+  Evaluate a PUBLISHED decision table against one case (agent-runtime POST
+  /decision-models/{id}/evaluate). dryRun=true (default) previews the fired
+  rule + outcome with no side effect; dryRun=false opens the four-eyes
+  proposal on a match — never an autonomous execution. Needs
+  case.disposition.read (evaluate) / the proposal path's own gates on
+  dryRun=false.
+  """
+  evaluateDecisionModel(id: ID!, caseId: ID!, dryRun: Boolean = true, fields: JSON, idempotencyKey: String): DecisionEvaluation!
+  """
+  Terminate an agent chat session (agent-runtime POST
+  /sessions/{id}/terminate; 404 on unknown/cross-tenant). Ends a runaway or
+  finished copilot conversation immediately — the session refuses further
+  turns.
+  """
+  terminateAgentChatSession(id: ID!): AgentChatSession!
   """
   Record the REALIZED outcome of a decision (agent-runtime POST
   /decisions/{ref}/outcome, OM-FR-010 human path). When decisionRef is a

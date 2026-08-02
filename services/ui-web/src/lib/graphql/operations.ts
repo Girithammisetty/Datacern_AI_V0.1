@@ -99,6 +99,10 @@ import type {
   UpdateRoleInput,
   CreateServiceAccountInput,
   CreatedServiceAccount,
+  // BRD 60 WS2: external-agent credentials (register carries the key once).
+  ExternalAgent,
+  RegisterExternalAgentInput,
+  RegisteredExternalAgent,
   EffectiveAccessEntry,
   ContentGrant,
   CreateContentGrantInput,
@@ -3165,6 +3169,40 @@ export const REVOKE_SERVICE_ACCOUNT = /* GraphQL */ `
 `;
 export interface RevokeServiceAccountResult {
   revokeServiceAccount: boolean;
+}
+
+/* ---- BRD 60 WS2: external-agent credentials (tenant admin) ---------------- */
+const EXTERNAL_AGENT_FIELDS = /* GraphQL */ `id urn agentId agentVersion scopes label active createdBy createdAt lastUsedAt`;
+
+export const EXTERNAL_AGENTS = /* GraphQL */ `
+  query ExternalAgents {
+    externalAgents { ${EXTERNAL_AGENT_FIELDS} }
+  }
+`;
+export interface ExternalAgentsResult {
+  externalAgents: ExternalAgent[];
+}
+
+export const REGISTER_EXTERNAL_AGENT = /* GraphQL */ `
+  mutation RegisterExternalAgent($input: RegisterExternalAgentInput!, $idempotencyKey: String) {
+    registerExternalAgent(input: $input, idempotencyKey: $idempotencyKey) {
+      externalAgent { ${EXTERNAL_AGENT_FIELDS} }
+      apiKey
+    }
+  }
+`;
+export interface RegisterExternalAgentResult {
+  registerExternalAgent: RegisteredExternalAgent;
+}
+export type { RegisterExternalAgentInput };
+
+export const REVOKE_EXTERNAL_AGENT = /* GraphQL */ `
+  mutation RevokeExternalAgent($id: ID!) {
+    revokeExternalAgent(id: $id)
+  }
+`;
+export interface RevokeExternalAgentResult {
+  revokeExternalAgent: boolean;
 }
 
 export const UPDATE_WORKSPACE = /* GraphQL */ `

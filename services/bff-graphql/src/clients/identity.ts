@@ -145,6 +145,39 @@ export interface TenantEntitlementsDTO {
   trial_ends_at?: string | null;
 }
 
+/** identity domain.ExternalAgentKey (BRD 60 WS2) — a tenant-minted credential
+ * for a customer's OWN agent. Metadata only: the secret hash is json:"-" and
+ * the plaintext key is unrecoverable after creation. */
+export interface ExternalAgentKeyDTO {
+  id: string;
+  tenant_id: string;
+  agent_id: string;
+  agent_version?: number;
+  scopes?: string[];
+  label?: string;
+  active: boolean;
+  created_by?: string;
+  created_at?: string | null;
+  last_used_at?: string | null;
+}
+
+/** POST /tenants/self/external-agents body (identity handleCreateExternalAgentKey). */
+export interface CreateExternalAgentKeyBody {
+  agent_id: string;
+  agent_version?: number;
+  scopes?: string[];
+  label?: string;
+}
+
+/** POST /tenants/self/external-agents response — the ONLY shape that ever
+ * carries the plaintext key (format wr_xa_<id>.<secret>). Returned exactly
+ * once at creation (shown_once) and never retrievable again. */
+export interface CreatedExternalAgentKeyDTO {
+  key: ExternalAgentKeyDTO;
+  plaintext: string;
+  shown_once: boolean;
+}
+
 export class IdentityClient {
   constructor(private readonly http: ServiceClient) {}
 
@@ -345,5 +378,34 @@ export class IdentityClient {
   /** DELETE /api/v1/service-accounts/{id} — revoke (identity.service_account.admin). 204. */
   async revokeServiceAccount(id: string): Promise<void> {
     await this.http.delete<void>(`/api/v1/service-accounts/${encodeURIComponent(id)}`);
+  }
+
+  // ---- BRD 60 WS2: external-agent credentials (self-scoped, tenant admin) ---
+  /** GET /api/v1/tenants/self/external-agents — the caller tenant's registered
+   * external-agent credentials, metadata only. Needs identity.user.admin. */
+  async externalAgents(): Promise<ExternalAgentKeyDTO[]> {
+    const res = await this.http.get<{ keys: ExternalAgentKeyDTO[] }>(
+      "/api/v1/tenants/self/external-agents",
+    );
+    return res.keys ?? [];
+  }
+
+  /** POST /api/v1/tenants/self/external-agents (identity.user.admin, 201) —
+   * mint a credential for a named external agent. The response carries the
+   * plaintext key EXACTLY ONCE — pass it through verbatim. */
+  registerExternalAgent(
+    body: CreateExternalAgentKeyBody,
+    idempotencyKey?: string,
+  ): Promise<CreatedExternalAgentKeyDTO> {
+    return this.http.post<CreatedExternalAgentKeyDTO>("/api/v1/tenants/self/external-agents", {
+      body,
+      idempotencyKey,
+    });
+  }
+
+  /** DELETE /api/v1/tenants/self/external-agents/{id} — revoke (deactivate) a
+   * credential (identity.user.admin). 204. */
+  async revokeExternalAgent(id: string): Promise<void> {
+    await this.http.delete<void>(`/api/v1/tenants/self/external-agents/${encodeURIComponent(id)}`);
   }
 }

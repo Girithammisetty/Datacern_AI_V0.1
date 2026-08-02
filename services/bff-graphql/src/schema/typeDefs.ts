@@ -403,6 +403,50 @@ export const typeDefs = gql`
 
   type ServiceAccountConnection { nodes: [ServiceAccount!]! pageInfo: PageInfo! }
 
+  """
+  A tenant-minted external-agent credential (identity-service GET
+  /tenants/self/external-agents, BRD 60 WS2): a customer's OWN agent exchanges
+  its key for a short-lived agent_autonomous token. Metadata only — the secret
+  hash is never serialized and the plaintext key is unrecoverable after
+  creation. The exchanged token always enters through the governed
+  external-intent ingress (propose-only, four-eyes), so external agents can
+  never auto-execute (BRD 68 ACT-FR-003).
+  """
+  type ExternalAgent implements Node {
+    id: ID!
+    urn: String!
+    """The agent identity the exchanged token carries."""
+    agentId: String!
+    agentVersion: Int
+    """The tool/action allow-list the exchanged token is ceiling-limited to."""
+    scopes: [String!]!
+    """Admin-facing display label for the credential."""
+    label: String
+    """false once revoked — a revoked key can no longer be exchanged."""
+    active: Boolean!
+    createdBy: String
+    createdAt: DateTime
+    lastUsedAt: DateTime
+  }
+
+  """
+  A registered external agent WITH its plaintext key (identity-service POST
+  /tenants/self/external-agents). The apiKey (wr_xa_<id>.<secret>) is returned
+  EXACTLY ONCE here and is never retrievable again — the UI must surface it
+  immediately and never persist it.
+  """
+  type RegisteredExternalAgent {
+    externalAgent: ExternalAgent!
+    apiKey: String!
+  }
+
+  input RegisterExternalAgentInput {
+    agentId: String!
+    agentVersion: Int
+    scopes: [String!]
+    label: String
+  }
+
   """Tenant compute quotas (identity-service domain.Quotas)."""
   type TenantQuotas {
     cpu: Int
@@ -4164,6 +4208,11 @@ export const typeDefs = gql`
     """Service accounts (identity-service GET /service-accounts). Admin only."""
     serviceAccounts(first: Int = 50, after: String): ServiceAccountConnection!
 
+    """The caller tenant's registered external-agent credentials (identity-service
+    GET /tenants/self/external-agents, BRD 60 WS2), metadata only. Needs
+    identity.user.admin."""
+    externalAgents: [ExternalAgent!]!
+
     """The caller's tenant UI label overrides as a list (identity-service GET
     /tenants/self/labels). Member-visible read; editing needs identity.user.admin.
     The same overrides Viewer.displayLabels exposes, in editor shape."""
@@ -5310,6 +5359,16 @@ export const typeDefs = gql`
     """Revoke a service account (identity-service DELETE /service-accounts/{id},
     204). Irreversible. Needs identity.service_account.admin."""
     revokeServiceAccount(id: ID!): Boolean!
+
+    """Register an external agent — mint its credential (identity-service POST
+    /tenants/self/external-agents, 201; BRD 60 WS2). The returned apiKey
+    (wr_xa_<id>.<secret>) is shown EXACTLY ONCE and is never retrievable again.
+    Needs identity.user.admin."""
+    registerExternalAgent(input: RegisterExternalAgentInput!, idempotencyKey: String): RegisteredExternalAgent!
+    """Revoke an external-agent credential (identity-service DELETE
+    /tenants/self/external-agents/{id}, 204) — the key stops exchanging
+    immediately. Needs identity.user.admin."""
+    revokeExternalAgent(id: ID!): Boolean!
 
     """Edit a workspace's name/description/public flag (rbac-service PATCH
     /workspaces/{id}). Needs rbac.workspace.update."""

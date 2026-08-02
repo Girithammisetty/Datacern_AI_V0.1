@@ -49,6 +49,7 @@ import type {
   CreateRoleInput,
   UpdateRoleInput,
   CreateServiceAccountInput,
+  RegisterExternalAgentInput,
   CreateContentGrantInput,
   CreateBudgetInput,
   UpdateBudgetInput,
@@ -3576,6 +3577,40 @@ export function useRevokeServiceAccount() {
     mutationFn: (id: string) =>
       graphqlRequest<ops.RevokeServiceAccountResult>(ops.REVOKE_SERVICE_ACCOUNT, { id }),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.serviceAccounts() }),
+  });
+}
+
+/** BRD 60 WS2: the caller tenant's external-agent credentials (metadata only —
+ * the plaintext key is unrecoverable after registration). identity.user.admin. */
+export function useExternalAgents() {
+  return useQuery({
+    queryKey: qk.externalAgents(),
+    queryFn: () =>
+      graphqlRequest<ops.ExternalAgentsResult>(ops.EXTERNAL_AGENTS).then((r) => r.externalAgents),
+  });
+}
+
+/** Register an external agent. The response's apiKey is the ONLY time the
+ * secret exists client-side — surfaced once via SecretBanner, never
+ * cached/persisted. */
+export function useRegisterExternalAgent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RegisterExternalAgentInput) =>
+      graphqlRequest<ops.RegisterExternalAgentResult>(ops.REGISTER_EXTERNAL_AGENT, {
+        input,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.registerExternalAgent),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.externalAgents() }),
+  });
+}
+
+export function useRevokeExternalAgent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.RevokeExternalAgentResult>(ops.REVOKE_EXTERNAL_AGENT, { id }),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.externalAgents() }),
   });
 }
 

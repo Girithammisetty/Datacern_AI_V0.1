@@ -747,6 +747,10 @@ export const FEATURE_GATES = {
   /** Create/rotate/revoke a service account (identity-service POST
    * /service-accounts, POST .../rotate, DELETE). The api_key is shown ONCE. */
   manageServiceAccounts: cap("identity.service_account.admin"),
+  /** List/register/revoke the tenant's external-agent credentials (identity-
+   * service GET|POST /tenants/self/external-agents, DELETE .../{id} — BRD 60
+   * WS2). The plaintext key is shown ONCE at registration. */
+  manageExternalAgents: cap("identity.user.admin"),
   /** Edit a workspace's name/description/public flag + link/unlink content
    * groups (rbac-service PATCH /workspaces/{id}, PUT|DELETE
    * .../content-groups/{gid}). */

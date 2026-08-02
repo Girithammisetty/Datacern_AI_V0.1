@@ -271,6 +271,36 @@ export interface CreatedServiceAccount {
   apiKey: string;
 }
 
+/** A tenant-minted external-agent credential (BRD 60 WS2) — metadata only.
+ * The exchanged token always enters the governed external-intent ingress
+ * (propose-only), so auto-execute is permanently denied (BRD 68 ACT-FR-003). */
+export interface ExternalAgent {
+  id: ID;
+  urn: string;
+  agentId: string;
+  agentVersion?: number | null;
+  scopes: string[];
+  label?: string | null;
+  active: boolean;
+  createdBy?: string | null;
+  createdAt?: string | null;
+  lastUsedAt?: string | null;
+}
+
+export interface RegisterExternalAgentInput {
+  agentId: string;
+  agentVersion?: number;
+  scopes?: string[];
+  label?: string;
+}
+
+/** A registered external agent WITH its one-time apiKey (wr_xa_<id>.<secret>)
+ * — shown exactly once, never retrievable again, never persisted client-side. */
+export interface RegisteredExternalAgent {
+  externalAgent: ExternalAgent;
+  apiKey: string;
+}
+
 /** One row of effective access to a resource (provenance direct |
  * implicit_creator | via_group; `via` names the group for via_group rows). */
 export interface EffectiveAccessEntry {

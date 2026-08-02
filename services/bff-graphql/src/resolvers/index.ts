@@ -44,6 +44,8 @@ import {
   mapTenantCommercial, EMPTY_TENANT_COMMERCIAL,
   // Tier 4b: identity/rbac admin (lifecycle, roles, grants, bulk membership).
   mapCreatedServiceAccount, mapEffectiveAccessEntry, mapContentGrant, mapBulkGroupMembershipResult,
+  // BRD 60 WS2: external-agent credentials (register carries the key once).
+  mapExternalAgent, mapRegisteredExternalAgent,
   mapBudget, mapRateCard, mapAnomaly, mapReportSubscription,
   mapValueSummary, mapValueTrend, mapValueAssumptions, mapValueExport,
   mapChainVerifyResult, mapComplianceJob, mapEvidencePack, mapSiemConfig, mapSiemConfigState,
@@ -709,6 +711,14 @@ export const resolvers = {
       const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
       const page = await ctx.clients.identity.serviceAccounts(limit, cursor);
       return toConnection(page, (d) => mapServiceAccount(ctx, d));
+    },
+
+    // BRD 60 WS2: the caller tenant's external-agent credentials (metadata
+    // only — identity never serializes the secret hash). identity.user.admin
+    // is enforced downstream on the forwarded JWT.
+    externalAgents: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const keys = await ctx.clients.identity.externalAgents();
+      return keys.map((d) => mapExternalAgent(ctx, d));
     },
 
     // inc18: the tenant UI-label overrides in editor shape (member-readable).
@@ -2416,6 +2426,33 @@ export const resolvers = {
 
     revokeServiceAccount: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
       await ctx.clients.identity.revokeServiceAccount(a.id);
+      return true;
+    },
+
+    // ---- BRD 60 WS2: external-agent credential lifecycle ----------------------
+    registerExternalAgent: async (
+      _p: unknown,
+      a: {
+        input: { agentId: string; agentVersion?: number; scopes?: string[]; label?: string };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.identity.registerExternalAgent(
+        {
+          agent_id: a.input.agentId,
+          agent_version: a.input.agentVersion,
+          scopes: a.input.scopes,
+          label: a.input.label,
+        },
+        a.idempotencyKey,
+      );
+      // plaintext passes through verbatim — shown exactly once, never persisted.
+      return mapRegisteredExternalAgent(ctx, d);
+    },
+
+    revokeExternalAgent: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.revokeExternalAgent(a.id);
       return true;
     },
 
