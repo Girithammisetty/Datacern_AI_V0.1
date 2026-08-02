@@ -625,6 +625,25 @@ export const CREATE_POC_TENANT = /* GraphQL */ `
 `;
 export interface CreatePocTenantResult { createPocTenant: { tenant: Tenant; operationId: string | null } }
 
+export const SET_POC_CRITERIA = /* GraphQL */ `
+  mutation SetPocCriteria($tenantId: ID!, $criteria: [PocCriterionInput!]!) {
+    setPocCriteria(tenantId: $tenantId, criteria: $criteria)
+  }
+`;
+export interface SetPocCriteriaResult { setPocCriteria: boolean }
+
+export const CLONE_DEMO_TENANT = /* GraphQL */ `
+  mutation CloneDemoTenant($id: ID!) {
+    cloneDemoTenant(id: $id) { tenant { ${TENANT_LIFECYCLE_FIELDS} } operationId }
+  }
+`;
+export interface CloneDemoTenantResult { cloneDemoTenant: { tenant: Tenant; operationId: string | null } }
+
+export const EXTEND_TRIAL = /* GraphQL */ `
+  mutation ExtendTrial($id: ID!, $trialDays: Int) { extendTrial(id: $id, trialDays: $trialDays) }
+`;
+export interface ExtendTrialResult { extendTrial: boolean }
+
 export const SET_POC_MANUAL_VALUE = /* GraphQL */ `
   mutation SetPocManualValue($tenantId: ID!, $key: String!, $value: Float!) {
     setPocManualValue(tenantId: $tenantId, key: $key, value: $value)

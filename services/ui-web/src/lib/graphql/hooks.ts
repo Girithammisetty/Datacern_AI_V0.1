@@ -570,6 +570,35 @@ export function useCreatePocTenant() {
   });
 }
 
+export function useSetPocCriteria() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { tenantId: string; criteria: Array<{ key: string; description?: string; metricRef?: string; target: number; direction: string }> }) =>
+      graphqlRequest<ops.SetPocCriteriaResult>(ops.SET_POC_CRITERIA, vars).then((r) => r.setPocCriteria),
+    onSuccess: (_d, vars) => {
+      client.invalidateQueries({ queryKey: qk.pocProgress(vars.tenantId) });
+    },
+  });
+}
+
+export function useCloneDemoTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.CloneDemoTenantResult>(ops.CLONE_DEMO_TENANT, { id }).then((r) => r.cloneDemoTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useExtendTrial() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; trialDays?: number }) =>
+      graphqlRequest<ops.ExtendTrialResult>(ops.EXTEND_TRIAL, vars).then((r) => r.extendTrial),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
 export function useSetPocManualValue() {
   const client = useQueryClient();
   return useMutation({
