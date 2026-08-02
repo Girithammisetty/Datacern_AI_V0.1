@@ -152,6 +152,34 @@ Two more inline runners, plus an honest exclusion:
 value/ROI, case export); tests cover the value builder + the value runner
 fetch→build→download. `tsc`/lint clean, full ui-web suite green.
 
+### Slice 4 — billing periods, full-stack (2026-08-02)
+
+The B2 close pipeline produces closed billing periods (gross + net-billable
+totals, export/push status behind each invoice) but that finance-close view had
+**no read path** off the platform — the last reporting gap. Wired end-to-end:
+
+- **BFF** — `UsageClient.billingPeriods(period?, first?)` → usage-service
+  `GET /api/v1/billing/periods` (gated `usage.report.read`), `BillingPeriodDTO`
+  + `mapBillingPeriod` (nullable export; empty rate card → null), a
+  `type BillingPeriod implements Node` + `type BillingExport` in the schema, a
+  `billingPeriods(period, first)` query + resolver, and a **billing-periods**
+  entry in the server-authoritative `REPORT_CATALOG` (capability-filtered like
+  the rest). Schema snapshot regenerated; resolver tests cover the newest-first
+  list, verbatim push status, the closed-but-not-exported row, and param
+  pass-through.
+- **UI** — `useBillingPeriods` hook + `BillingPeriod`/`BillingExport` types, a
+  `buildBillingPeriodsCsv` builder (measured totals exact; a period with no
+  export yet exports the literal `not exported`, never an implied success), and
+  an inline runner registered in `INLINE_RUNNERS` so the hub card runs +
+  downloads it in place. Builder + runner tests green; `tsc`/lint clean, full
+  ui-web suite green.
+
+Push status is surfaced verbatim (pushed / billing_push_not_configured /
+push_failed) — a not-configured push is never read as a success. The report is
+empty for a tenant until the monthly close job runs — no period is fabricated.
+
 **Still deferred:** scheduling arbitrary reports beyond dashboards; PDF board
 packs; an entitlement-gated catalog (the capability filter is server-side
-today); a signed download endpoint for the B2 billing-periods artifacts.
+today); a signed download endpoint for the B2 billing-periods **artifacts**
+(the object-store CSV/JSONL keys are surfaced, but streaming them through an
+authed proxy is a separate slice).

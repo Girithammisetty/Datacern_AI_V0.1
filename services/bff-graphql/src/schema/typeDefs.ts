@@ -3508,6 +3508,44 @@ export const typeDefs = gql`
     totalUsd: Float!
   }
 
+  """The persisted export artifact for a closed billing period (object-store
+  keys + content hashes, plus the push outcome). \`pushedStatus\` is one of
+  pushed | billing_push_not_configured | push_failed — surfaced verbatim so a
+  not-configured push is never read as a success."""
+  type BillingExport {
+    csvKey: String
+    csvSha256: String
+    jsonlKey: String
+    jsonlSha256: String
+    pushedStatus: String
+    pushedReference: String
+    pushedAt: DateTime
+    createdAt: DateTime!
+  }
+
+  """A closed billing period joined with its export record (usage-service GET
+  /billing/periods, BRD 67 slice 3). \`grossUsd\` is the priced total;
+  \`netBillableUsd\` folds in adjustments. \`export\` is null until the close
+  job records the period's artifacts. Empty for a tenant until B2's monthly
+  close runs — no period is fabricated."""
+  type BillingPeriod implements Node {
+    id: ID!
+    urn: String!
+    """YYYY-MM."""
+    period: String!
+    """Close version; a re-close bumps this."""
+    version: Int!
+    rateCardId: String
+    rateCardVersion: Int!
+    grossUsd: Float!
+    netBillableUsd: Float!
+    """closed | exported | export_failed."""
+    status: String!
+    closedAt: DateTime!
+    closedBy: String
+    export: BillingExport
+  }
+
   """A monthly metered-vs-provider-bill reconciliation (usage-service GET
   /reconciliations, USG-FR-070). \`status\`: pending | matched | variance |
   adjusted | acknowledged. Chargeback for a month is blocked (409) while its
@@ -5511,6 +5549,11 @@ export const typeDefs = gql`
     with reason reconciliation_variance while that month's reconciliation
     variance is unresolved (AC-9). Needs usage.report.read."""
     chargebackReport(month: String!): [ChargebackLine!]!
+    """A tenant's closed billing periods, newest first, each joined with its
+    export record (usage-service GET /billing/periods, BRD 67 slice 3). Optional
+    \`period\` (YYYY-MM) filter; \`first\` caps rows (default 50, max 200
+    downstream). Empty until B2's monthly close runs. Needs usage.report.read."""
+    billingPeriods(period: String, first: Int): [BillingPeriod!]!
     """Monthly metered-vs-provider-bill reconciliations (usage-service GET
     /reconciliations, USG-FR-070) — not server-paginated (fixed 100-row cap
     downstream). Platform-only — needs usage.reconciliation.read AND a

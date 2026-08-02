@@ -99,6 +99,7 @@ import {
   budgetScopeString,
   type BudgetDTO, type RateCardDTO, type AnomalyDTO,
   type MeterDTO, type ChargebackLineDTO, type ReconciliationDTO, type AdjustmentDTO,
+  type BillingPeriodDTO,
 } from "../clients/usage.js";
 import type {
   ValueSummaryDTO, ValueTrendDTO, ValueAssumptionsDTO, ValueExportDTO, EstimatedValueDTO,
@@ -2326,6 +2327,41 @@ export function mapChargebackLine(d: ChargebackLineDTO) {
     usd: d.usd,
     adjustmentsUsd: d.adjustments_usd,
     totalUsd: d.total_usd,
+  };
+}
+
+/** A closed billing period joined with its export record. `gross`/`netBillable`
+ * are the priced and adjustment-folded totals; `export` is null until the close
+ * job records the period's artifacts. `pushedStatus` distinguishes pushed vs
+ * push-not-configured vs push-failed — surfaced verbatim, never inferred. */
+export function mapBillingPeriod(ctx: GraphQLContext, d: BillingPeriodDTO) {
+  const exp = d.export ?? null;
+  return {
+    __typename: "BillingPeriod" as const,
+    id: d.id,
+    urn: urn(ctx, "usage", "billing-period", d.id),
+    period: d.period,
+    version: d.version,
+    rateCardId: d.rate_card_id || null,
+    rateCardVersion: d.rate_card_version,
+    grossUsd: d.gross_usd,
+    netBillableUsd: d.net_billable_usd,
+    status: d.status,
+    closedAt: d.closed_at,
+    closedBy: d.closed_by || null,
+    export: exp
+      ? {
+          __typename: "BillingExport" as const,
+          csvKey: exp.csv_key || null,
+          csvSha256: exp.csv_sha256 || null,
+          jsonlKey: exp.jsonl_key || null,
+          jsonlSha256: exp.jsonl_sha256 || null,
+          pushedStatus: exp.pushed_status ?? null,
+          pushedReference: exp.pushed_reference ?? null,
+          pushedAt: exp.pushed_at ?? null,
+          createdAt: exp.created_at,
+        }
+      : null,
   };
 }
 
