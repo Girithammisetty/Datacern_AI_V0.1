@@ -249,7 +249,58 @@ Invoice rendering, payment collection, dunning, tax (external billing system, un
 
 ## 3. Implementation & Test
 
-**Status: slice 1 (`governed_decision` meter end-to-end) implemented and unit-tested; slices 2-4 not started.** §2 remains the design for slices 2-4.
+**Status: slice 1 (`governed_decision` meter end-to-end) implemented and unit-tested; slice 4's billing-push seam (port + Stripe adapter) scaffolded and unit-tested; slices 2-3 not started.** §2 remains the design for slices 2-3.
+
+### Slice 4 (partial) — billing-push seam + Stripe adapter (2026-08-02)
+
+The `BillingPusher` port and the first real adapter (Stripe) are built and unit-tested ahead of slice 3's close job, exactly as §2.8 designs the honest-stub triad. This is the "metering → billing" seam (GTM roadmap §6 B2), scaffolded against Stripe.
+
+**usage-service:**
+- `internal/domain/billing.go` (new) — the Go instance of the `GpuTrainer`/`NotConfigured`/`Unconfigured` triad (§2.8, first in the repo): `BillingPusher` port (`Push(ctx, BillingPeriod) (BillingPushResult, error)`), `ErrBillingPushNotConfigured` sentinel, `BillingPushNotConfiguredError{Adapter,Reason}` (matches `errors.Is`), and `UnconfiguredPusher` (a real object that fails honestly, never a fake "pushed"). Also `BillingPeriod`/`BillingLine` (the in-memory shape slice 3's close job will produce) and a pure `NewBillingPeriod(...)` that aggregates priced rollup rows (the output of the existing `store.Chargeback`, §2.6) into one sorted, summed line per meter — deterministic for replay safety (VMB-FR-021).
+  - Note: the port returns `(BillingPushResult, error)` rather than §2.8's sketched bare `error` + artifact-URL params. Stripe meter events need the period's quantities, not a URL, and the result (`Accepted`, `Reference`, `Idempotent`) is what the close job records on `billing_exports.pushed_status`. This is a typed evolution of the sketch, not a departure from its intent.
+- `internal/billing/stripe.go` (new) — `StripePusher` posts one **Stripe Billing Meter Event** per billable, non-zero line: `event_name`, `identifier` (the stable `<tenant>:<period>:v<version>:<meter>` dedup key), `payload[stripe_customer_id]`, `payload[value]=<quantity>`. It sends **quantities only** — Stripe's own meter aggregation + price config does the money, so usage-service "never touches money" (§1a). The HTTP call is behind an injectable `HTTPDoer` (real `*http.Client` in prod, a fake in tests) and only fires when `STRIPE_API_KEY` is set — no SDK dependency added, no secret in the repo, no live call under test (README "No credential-gated exceptions": payload-shaping is fully unit-tested; the live call is operator-activated). A `CustomerResolver` maps tenant → Stripe `cus_…`; a tenant with no mapping fails honestly for that tenant (typed not-configured error), never invents a customer. Request-level `Idempotency-Key` header + the event `identifier` make a retried push a no-op in Stripe.
+- `internal/billing/pusher.go` (new) — `BuildPusher(cfg)` selection (mirrors agent-runtime's `build_trainer()`): returns the `StripePusher` when `BILLING_PUSHER=stripe` + `STRIPE_API_KEY` are set, else an `UnconfiguredPusher`. `FromEnv(get)` reads `BILLING_PUSHER`, `STRIPE_API_KEY`, `STRIPE_API_BASE`, `STRIPE_METER_EVENTS` (JSON or `k=v,k=v`, default `governed_decision`), `STRIPE_CUSTOMER_MAP` (JSON tenant→customer); malformed maps degrade to unconfigured rather than crashing boot.
+- `internal/jobs/jobs.go` — `Runner.Pusher domain.BillingPusher` (the designated call site for slice 3's close job; always non-nil).
+- `cmd/server/main.go` — constructs `runner.Pusher = billing.BuildPusher(billing.FromEnv(os.Getenv))` at boot and logs its state (a loud "unconfigured (export-only)" warning by default, mirroring the provider-bill `MINIO_ENDPOINT` warning), so the billing posture is visible at startup even before a close job calls `Push`.
+
+**Verified (executed here):** `go build ./... && go vet ./...` clean; `make nostub` passed; `go test -short ./...` all packages ok, including the new `internal/domain/billing_test.go` (4 tests: aggregation/sort/sum, unpriced-row, empty, unconfigured-fails-honestly) and `internal/billing/{stripe,pusher}_test.go` (14 tests: one-event-per-billable-line with exact form-body + headers, identifier stability across runs, zero-quantity/non-billable no-ops, missing-customer honest failure, Stripe API-error message surfacing, transport-error propagation, custom meter allowlist ordering, `BuildPusher` selection paths, `FromEnv`/parser robustness, and a wired end-to-end push through a fake doer).
+
+**Not built / deferred (honest):**
+- **No live Stripe verification.** The adapter is proven against a fake `HTTPDoer`; a real `sk_test_…` key + a Stripe test meter would confirm the wire format end-to-end. Command to verify once a test key is available: set `BILLING_PUSHER=stripe STRIPE_API_KEY=sk_test_… STRIPE_CUSTOMER_MAP='{"<tenant>":"cus_…"}'` and drive a `BillingPeriod` through `StripePusher.Push` against `https://api.stripe.com` (or Stripe's test-mode base).
+- **Slice 2** (`usage_decisions` attribution, `decision_urns[]` propagation) unchanged — not started.
+
+### Slice 3 (partial) — period-close core + export artifacts + DDL (2026-08-02)
+
+The pure, infra-free heart of slice 3 (§2.6/§2.7) is built and unit-tested; the Postgres/object-store-coupled shell is scoped out honestly.
+
+**usage-service:**
+- `internal/billing/export.go` (new) — `BuildArtifacts(BillingPeriod)` renders the JSONL detail (`billing/<tenant>/<period>/<version>/meters.jsonl`, one line per meter line) + the RFC-4180 CSV summary (`summary.csv`, with disclosure header comments) + SHA-256 checksums, reusing `valueexport.WriteCSV`/`SHA256Hex` (same service, same convention as the value-report export). Deterministic: the lines are already meter-sorted by `NewBillingPeriod`, so re-rendering a (tenant, period, version) yields byte-identical artifacts and identical checksums — the property that makes a correction's new version comparable and a replay a no-op (VMB-FR-021). `ArtifactPrefix` gives the versioned prefix (v1's keys never overwritten; a correction writes v+1).
+- `internal/billing/close.go` (new) — `DecideClose(CloseInputs) CloseDecision`, the pure §2.6 ordering gate the advisory-lock close job wraps: requires the month finalized (past the 48h late-event window) and reconciliation settled (variance blocks, pending isn't settled; matched/adjusted/acknowledged clear — the exact condition chargeback export already uses); a never-closed period closes at v1, an already-closed one only on a correction at v+1, otherwise a no-op. Pure and idempotent, so running it per-replica is safe — the advisory lock only guards the concurrent version-insert, not the decision's correctness.
+- `migrations/000008_billing_periods.up.sql` / `.down.sql` (new) — the `billing_periods` + `billing_exports` DDL (§2.6), mirroring `value_exports` (000006) exactly: versioning-by-convention (correction → v+1, prior row/keys untouched; UPDATE limited to `status`/`pushed_*`), standard `tenant_isolation` RLS, and the indexes.
+
+**Verified (executed here):** `go build ./... && go vet ./...` clean; `make nostub` passed; `go test -short ./...` green, including `internal/billing/export_test.go` (6 tests: keys/checksums, JSONL sort + fields, CSV summary shape, cross-run determinism, version-bump prefix isolation, empty period) and `internal/billing/close_test.go` (8-case gate matrix + idempotency).
+
+### Slice 3 (close loop + store + API) — the infra-coupled shell (2026-08-02)
+
+The DB/object-store shell that threads the pure helpers is now written — build/vet-clean and with an auto-skipping integration test — completing slice 3 to the buildable limit of this environment (no Docker daemon → no live run).
+
+- `internal/store/billing.go` (new) — `MonthFinalized`, `BillingPeriodVersion`, `InsertBillingPeriod` (closes at `bp.Version` + records the export atomically under a per-`(tenant,period)` `pg_advisory_xact_lock` so two replicas can't both insert the same version; the `UNIQUE (tenant_id, period, version)` constraint is the final backstop), `MarkExportPush` (annotates `pushed_status`/`pushed_reference`, never blocks the close), `ListBillingPeriods` (join period+export, newest first — VMB-FR-023). `*store.PG` now satisfies the API `Store` interface's new `ListBillingPeriods`.
+- `internal/billing/objectstore.go` (new) — `ArtifactStore` port (`Put(key, data)`) + `FSArtifactStore` (filesystem, dev/self-host); the prod MinIO adapter wraps go-common/objectstore, mirroring `jobs.MinioBillStore`.
+- `internal/jobs/billing_close.go` (new) — `Runner.CloseBilling(tenant, period)` composes the whole pipeline: `MonthFinalized` + `ReconciliationStatus` → `DecideClose` gate → `Chargeback` → `chargebackToRollup` → `NewBillingPeriod` → `BuildArtifacts` → `Artifacts.Put` (files first) → `InsertBillingPeriod` → `Pusher.Push` → `MarkExportPush`. `CloseAllBilling(period)` sweeps every tenant; `PreviousMonth` targets the just-ended month. Failures degrade safely (a broken push only annotates the export).
+- `internal/api/handlers_billing.go` + route (new) — `GET /api/v1/billing/periods` (`?period`, `?limit`), guarded by `ActionReportRead`, RLS-scoped.
+- `cmd/server/main.go` — constructs `runner.Artifacts` (`BILLING_ARTIFACT_ROOT`, default `/var/lib/datacern/billing`) with a startup log, and adds a **daily** `CloseAllBilling(PreviousMonth(now))` tick to `startJobs` — safe because `DecideClose` no-ops an unfinalized / unsettled / already-closed month.
+
+**Verified (executed here):** `go build ./... && go vet ./...` clean; `make nostub` passed; `go test -short ./...` green, including the new pure-helper tests `internal/jobs/billing_close_test.go` (`PreviousMonth`, `chargebackToRollup`, `rateCardOf`, `pushOutcome`) and `internal/billing/objectstore_test.go` (FS `Put` + version isolation).
+
+**Written but NOT executed (needs live Postgres — no Docker daemon here):**
+- `test/integration/billing_close_test.go` (new: `TestBillingClose_EndToEnd`) drives `Runner.CloseBilling` the way cmd/server's ticker does — seed `governed_decision` usage → refresh rollups → assert an unfinalized month does NOT close → `FinalizeMonth` → close → assert the `billing_periods` row + export + `ListBillingPeriods` + the honest `billing_push_not_configured` annotation → re-run asserts no duplicate version. Confirmed it **SKIPs** here with `real infra unavailable: pg ping … connection refused` (compiles + auto-skips, exactly like `governed_decision_test.go`). Pending live verification.
+- `migrations/000008_billing_periods` applied against a real DB (the DDL mirrors `value_exports`, but its RLS/constraints aren't exercised until the integration test runs).
+
+**Remaining deferred (follow-ons, not this pass):**
+- The **correction path** (`Corrected=true` → v+1): wiring `usage.month_refinalized` / late-adjustment triggers to re-close at v+1. `DecideClose` already handles the decision; the trigger that sets `Corrected` isn't wired.
+- **Allowance drawdown** (net billable < gross): reading the entitlements snapshot (§2.6) to offset included allowance. Until wired, `net_billable_usd == gross_usd` (never a fabricated discount).
+- **`rate_card_version`** threading (Chargeback surfaces the id, not the version — left 0 today).
+- A **live-Stripe** run and a signed billing-artifact **download** endpoint.
 
 ### Slice 1 — what was built (2026-07-25)
 
@@ -301,8 +352,8 @@ Invoice rendering, payment collection, dunning, tax (external billing system, un
 
 1. ✅ **Slice 1 — `governed_decision` meter end-to-end** (this pass). Catalog entry + `usage_raw`/rollup migration (§2.2) → agent-runtime payload fields (`decision_latency_ms`, `edit_distance_bucket`, `proposal_kind`; `pack_name` deferred, nullable) → ingest mapping entries (§2.1's filter-based `auto_executed_action` included) → rollup verification (unit-level; integration written, not run — see above). Emission→catalog→ingest→rollup proven on the cheapest meter (no cross-service propagation needed).
 2. **Slice 2 — `usage_decisions` attribution.** `decision_urns[]` propagation (§2.5, both services) + `usage_decisions` DDL + split-insert logic (§2.4) + `GET /api/v1/decisions/costs` (VMB-FR-011). Not started.
-3. **Slice 3 — period close + export.** `billing_periods`/`billing_exports` DDL, advisory-lock close job (§2.6), JSONL/CSV export with checksums (§2.7), `billing.export_ready.v1`. Not started.
-4. **Slice 4 — pusher adapters.** `BillingPusher` port + `UnconfiguredPusher` stubs (§2.8) wired into the close job's post-export step; `GET /api/v1/billing/periods` (VMB-FR-023). Not started.
+3. 🟢 **Slice 3 — period close + export (written; live-run pending).** DDL, the pure artifact builder (`BuildArtifacts`) + close gate (`DecideClose`), AND the infra shell — store CRUD (advisory-lock `InsertBillingPeriod`, `ListBillingPeriods`), the `CloseBilling`/`CloseAllBilling` job loop, the `FSArtifactStore`, `GET /api/v1/billing/periods`, and the daily close tick — all built build/vet-clean (2026-08-02, see above). The end-to-end integration test is written and auto-skips without infra; live-run verification against real Postgres is the only remaining step. **Deferred follow-ons:** correction-path trigger, allowance drawdown, `rate_card_version` threading, `billing.export_ready.v1`.
+4. 🟡 **Slice 4 (partial) — pusher adapters.** `BillingPusher` port + `UnconfiguredPusher` stub + a real **Stripe** adapter (Billing Meter Events) + `BuildPusher` selection, all unit-tested and wired into `cmd/server` startup (2026-08-02, see above). **Remaining:** the close job's post-export `Push` call (blocked on slice 3), `GET /api/v1/billing/periods` (VMB-FR-023), a Lago adapter, and live-Stripe verification.
 
 ### Test plan
 

@@ -61,6 +61,9 @@ type Store interface {
 	CreateValueExport(ctx context.Context, op domain.Op, e domain.ValueExport) (domain.ValueExport, error)
 	ListValueExports(ctx context.Context, tenant uuid.UUID, period string) ([]domain.ValueExport, error)
 
+	// Billing period close (BRD 67 slice 3, VMB-FR-023).
+	ListBillingPeriods(ctx context.Context, tenant uuid.UUID, period string, limit int) ([]domain.BillingPeriodRecord, error)
+
 	Ping(ctx context.Context) error
 }
 
@@ -147,6 +150,9 @@ func (s *Server) Router() http.Handler {
 			r.With(s.RequireAction(authz.ActionReportRead)).Get("/value/trend", s.handleValueTrend)
 			r.With(s.RequireAction(authz.ActionReportRead)).Post("/value-reports", s.handleExportValueReport)
 			r.With(s.RequireAction(authz.ActionReportRead)).Get("/value-reports", s.handleListValueReports)
+
+			// Billing period close listing (VMB-FR-023). A report-shaped read.
+			r.With(s.RequireAction(authz.ActionReportRead)).Get("/billing/periods", s.handleListBillingPeriods)
 		})
 		// Signed artifact download is validated by HMAC, not JWT (design §2.8,
 		// mirrors chart-service's GET /exports/* pattern).

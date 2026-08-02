@@ -29,6 +29,8 @@ import (
 
 	"github.com/datacern-ai/usage-service/internal/api"
 	"github.com/datacern-ai/usage-service/internal/authz"
+	"github.com/datacern-ai/usage-service/internal/billing"
+	"github.com/datacern-ai/usage-service/internal/domain"
 	"github.com/datacern-ai/usage-service/internal/entitlements"
 	"github.com/datacern-ai/usage-service/internal/events"
 	"github.com/datacern-ai/usage-service/internal/ingest"
@@ -185,6 +187,30 @@ func main() {
 		slog.Warn("provider-bill object store: MINIO_ENDPOINT unset, reconciliation job has no bill source (dev-only; the variance-block gate stays inert -- always 'pending' -- until a real bucket is configured)")
 	}
 
+	// Billing pusher (revenue side, GTM B2 / value-metering-billing-export
+	// slice 4): forwards closed periods' billable meter quantities to an
+	// external rating system. Defaults to an honest UnconfiguredPusher — the
+	// file/CSV export is the source of truth and a provider push is opt-in
+	// (set BILLING_PUSHER=stripe + STRIPE_API_KEY + STRIPE_CUSTOMER_MAP). The
+	// close job that calls Push is not built yet (slice 3); this constructs and
+	// logs the pusher's configured state so the posture is visible at boot.
+	runner.Pusher = billing.BuildPusher(billing.FromEnv(os.Getenv))
+	if _, unconfigured := runner.Pusher.(*domain.UnconfiguredPusher); unconfigured {
+		slog.Warn("billing pusher: unconfigured (export-only); set BILLING_PUSHER=stripe + STRIPE_API_KEY + STRIPE_CUSTOMER_MAP to push metered usage to Stripe")
+	} else {
+		slog.Info("billing pusher: configured", "adapter", env("BILLING_PUSHER", "none"))
+	}
+
+	// Billing artifact store (JSONL/CSV exports, design §2.7). Filesystem root
+	// by default (self-host); nil only if BILLING_ARTIFACT_ROOT is explicitly
+	// blanked, in which case the close job records keys without writing bytes.
+	if root := env("BILLING_ARTIFACT_ROOT", "/var/lib/datacern/billing"); root != "" {
+		runner.Artifacts = billing.NewFSArtifactStore(root)
+		slog.Info("billing artifact store: filesystem", "root", root)
+	} else {
+		slog.Warn("billing artifact store: BILLING_ARTIFACT_ROOT blank, close job records keys without writing artifact bytes (dev-only)")
+	}
+
 	startJobs(ctx, runner)
 
 	// Register the action manifest with rbac (best-effort, RBC-FR-022).
@@ -300,6 +326,19 @@ func startJobs(ctx context.Context, r *jobs.Runner) {
 	every(ctx, 6*time.Hour, func() {
 		if err := r.EnforceRetention(ctx); err != nil {
 			slog.Warn("retention failed", "err", err)
+		}
+	})
+	// Billing close (BRD 67 slice 3): attempt to close the just-ended month for
+	// every tenant. Idempotent and fully gated by jobs.DecideClose — a month
+	// that isn't finalized, has an unresolved reconciliation variance, or is
+	// already closed is a no-op, so a daily tick is safe and self-healing once
+	// the prerequisites are met.
+	every(ctx, 24*time.Hour, func() {
+		period := jobs.PreviousMonth(time.Now().UTC())
+		if n, err := r.CloseAllBilling(ctx, period); err != nil {
+			slog.Warn("billing close sweep failed", "period", period, "err", err)
+		} else if n > 0 {
+			slog.Info("billing close sweep", "period", period, "tenants_closed", n)
 		}
 	})
 }
