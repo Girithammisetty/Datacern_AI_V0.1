@@ -22,6 +22,10 @@ router = APIRouter(prefix="/api/v1")
 class ScoringFieldIn(BaseModel):
     column: str
     weight: float = 1.0
+    # dice (default) | jaro_winkler | phonetic | exact | numeric — how this
+    # field's values are compared during probabilistic scoring. Unknown values
+    # fall back to dice in the engine (never rejected).
+    comparator: str = "dice"
 
 
 class ResolutionConfigIn(BaseModel):

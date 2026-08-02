@@ -377,7 +377,8 @@ class DatasetService(_Base):
             return list(names)
 
         det_keys = [_cols(k) for k in (config.get("deterministic_keys") or [])]
-        scoring = [ScoringField(column=_cols([f["column"]])[0], weight=float(f.get("weight", 1.0)))
+        scoring = [ScoringField(column=_cols([f["column"]])[0], weight=float(f.get("weight", 1.0)),
+                                comparator=str(f.get("comparator") or "dice"))
                    for f in (config.get("scoring_fields") or [])]
         blocking = _cols(config.get("blocking_fields") or [])
         if not det_keys and not scoring:
@@ -420,7 +421,8 @@ class DatasetService(_Base):
                 id=config_id, tenant_id=tenant_id, dataset_id=dataset_id,
                 entity_type=entity_type, version_no=version_no,
                 deterministic_keys=det_keys,
-                scoring_fields=[{"column": f.column, "weight": f.weight} for f in scoring],
+                scoring_fields=[{"column": f.column, "weight": f.weight, "comparator": f.comparator}
+                                for f in scoring],
                 blocking_fields=blocking, auto_merge_threshold=auto_thr,
                 review_threshold=review_thr, pk_column=pk_column,
                 created_by=actor_sub, created_at=now))

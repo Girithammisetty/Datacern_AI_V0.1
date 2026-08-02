@@ -22,11 +22,24 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass, field
 
+# Per-field similarity comparators (ER-FR-010 depth). "dice" (the original,
+# and the DEFAULT so existing configs/runs are byte-for-byte unchanged) suits
+# free text; "jaro_winkler" is stronger on short person/org names and
+# transpositions ("Viktor"/"Victor"); "phonetic" matches on sound (Soundex),
+# for names spelled differently but pronounced alike ("Smith"/"Smyth");
+# "exact" is a normalized equality (1.0 or 0.0) for codes/ids used as a
+# soft (scored) signal; "numeric" compares magnitudes so near amounts/counts
+# score high without exact equality.
+COMPARATORS = ("dice", "jaro_winkler", "phonetic", "exact", "numeric")
+
 
 @dataclass(slots=True)
 class ScoringField:
     column: str
     weight: float = 1.0
+    # One of COMPARATORS; unknown values fall back to "dice" (never raises —
+    # resolution stays deterministic even on a hand-edited config).
+    comparator: str = "dice"
 
 
 @dataclass(slots=True)
@@ -103,6 +116,144 @@ def string_similarity(a: str, b: str) -> float:
     return (2 * inter) / (len(ga) + len(gb))
 
 
+def jaro_similarity(a: str, b: str) -> float:
+    """Jaro similarity — matching characters within a sliding window, penalizing
+    transpositions. 1.0 identical, 0.0 disjoint. Dependency-free."""
+    if a == b:
+        return 1.0
+    la, lb = len(a), len(b)
+    if la == 0 or lb == 0:
+        return 0.0
+    window = max(la, lb) // 2 - 1
+    if window < 0:
+        window = 0
+    a_matches = [False] * la
+    b_matches = [False] * lb
+    matches = 0
+    for i in range(la):
+        lo = max(0, i - window)
+        hi = min(i + window + 1, lb)
+        for j in range(lo, hi):
+            if b_matches[j] or a[i] != b[j]:
+                continue
+            a_matches[i] = b_matches[j] = True
+            matches += 1
+            break
+    if matches == 0:
+        return 0.0
+    # Count transpositions (half the out-of-order matched pairs).
+    t = 0
+    k = 0
+    for i in range(la):
+        if not a_matches[i]:
+            continue
+        while not b_matches[k]:
+            k += 1
+        if a[i] != b[k]:
+            t += 1
+        k += 1
+    t //= 2
+    m = matches
+    return (m / la + m / lb + (m - t) / m) / 3.0
+
+
+def jaro_winkler_similarity(a: str, b: str, *, prefix_weight: float = 0.1) -> float:
+    """Jaro-Winkler — Jaro boosted for a shared prefix (up to 4 chars). Stronger
+    than Dice on short person/org names and single-letter transpositions."""
+    a, b = _norm(a), _norm(b)
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    j = jaro_similarity(a, b)
+    prefix = 0
+    for ca, cb in zip(a, b, strict=False):  # prefix compare stops at the shorter
+        if ca != cb or prefix == 4:
+            break
+        prefix += 1
+    return j + prefix * prefix_weight * (1 - j)
+
+
+# Soundex digit map (classic Russell/American Soundex); vowels + h/w/y drop out.
+_SOUNDEX_MAP = {
+    "b": "1", "f": "1", "p": "1", "v": "1",
+    "c": "2", "g": "2", "j": "2", "k": "2", "q": "2", "s": "2", "x": "2", "z": "2",
+    "d": "3", "t": "3", "l": "4", "m": "5", "n": "5", "r": "6",
+}
+
+
+def soundex(value: str) -> str:
+    """Classic 4-char Soundex code (letter + 3 digits) for a single token, or ""
+    for a blank/non-alpha value. Deterministic and dependency-free."""
+    s = "".join(ch for ch in _norm(value) if ch.isalpha())
+    if not s:
+        return ""
+    first = s[0].upper()
+    prev = _SOUNDEX_MAP.get(s[0], "")
+    digits = ""
+    for ch in s[1:]:
+        code = _SOUNDEX_MAP.get(ch, "")
+        # h/w between two same-coded consonants don't reset the "previous" code;
+        # a vowel does (so repeats separated by a vowel are both kept).
+        if code:
+            if code != prev:
+                digits += code
+            prev = code
+        elif ch in "hw":
+            pass
+        else:  # vowel or y
+            prev = ""
+        if len(digits) == 3:
+            break
+    return (first + digits).ljust(4, "0")
+
+
+def phonetic_similarity(a: str, b: str) -> float:
+    """1.0 when two multi-token strings share the same Soundex code per token
+    (order-insensitive on a best-match basis), else 0.0 — a crisp "sounds the
+    same" signal ("Smith"/"Smyth", "Claire"/"Clair")."""
+    ta = [t for t in (_norm(a).split()) if t]
+    tb = [t for t in (_norm(b).split()) if t]
+    if not ta and not tb:
+        return 1.0
+    if not ta or not tb:
+        return 0.0
+    ca = sorted(soundex(t) for t in ta)
+    cb = sorted(soundex(t) for t in tb)
+    return 1.0 if ca == cb else 0.0
+
+
+def numeric_similarity(a: str, b: str) -> float:
+    """Magnitude closeness for numbers: 1.0 equal, decaying to 0.0 as the
+    relative difference grows (1 - |a-b| / max(|a|,|b|)). Non-numeric → 0.0."""
+    try:
+        na, nb = float(str(a).strip()), float(str(b).strip())
+    except (TypeError, ValueError):
+        return 0.0
+    if na == nb:
+        return 1.0
+    denom = max(abs(na), abs(nb))
+    if denom == 0:
+        return 1.0
+    return max(0.0, 1.0 - abs(na - nb) / denom)
+
+
+def field_similarity(a, b, comparator: str) -> float:
+    """Dispatch to the field's comparator; unknown → "dice" (never raises)."""
+    if comparator == "jaro_winkler":
+        return jaro_winkler_similarity(a, b)
+    if comparator == "phonetic":
+        return phonetic_similarity(a, b)
+    if comparator == "exact":
+        na, nb = _norm(a), _norm(b)
+        if not na and not nb:
+            return 1.0
+        return 1.0 if (na and nb and na == nb) else 0.0
+    if comparator == "numeric":
+        return numeric_similarity(a, b)
+    return string_similarity(a, b)
+
+
 def _det_key_values(row: dict, key: list[str]) -> tuple | None:
     """The composite key's normalized value tuple, or None if any part is blank
     (a partial key must NEVER merge — missing id != missing id)."""
@@ -126,8 +277,10 @@ def _pair_score(a: dict, b: dict, cfg: ResolutionConfig) -> tuple[float, dict]:
     acc = 0.0
     per_field = {}
     for f in cfg.scoring_fields:
-        s = string_similarity(a.get(f.column), b.get(f.column))
-        per_field[f.column] = round(s, 4)
+        s = field_similarity(a.get(f.column), b.get(f.column), f.comparator)
+        # Record the comparator alongside the score so a steward reviewing a
+        # candidate sees WHY it matched (name sounded alike vs spelled alike).
+        per_field[f.column] = {"score": round(s, 4), "comparator": f.comparator}
         acc += s * max(0.0, f.weight)
     return acc / total_w, {"fields": per_field}
 
