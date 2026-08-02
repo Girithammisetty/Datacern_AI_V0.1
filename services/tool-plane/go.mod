@@ -3,6 +3,7 @@ module github.com/datacern-ai/tool-plane
 go 1.26.5
 
 require (
+	github.com/datacern-ai/go-common v0.0.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang-migrate/migrate/v4 v4.19.1
@@ -12,7 +13,6 @@ require (
 	github.com/redis/go-redis/v9 v9.21.0
 	github.com/segmentio/kafka-go v0.4.51
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
-	github.com/datacern-ai/go-common v0.0.0
 )
 
 require (
