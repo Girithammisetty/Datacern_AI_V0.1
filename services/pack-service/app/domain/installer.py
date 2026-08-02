@@ -955,6 +955,16 @@ def _named_entries(kind: str, doc) -> list[tuple[str, dict]]:
     return []
 
 
+# Ledger actions that never put an object into Core, so drift has nothing to
+# compare. `requires_binding` is the tenant owing data; `awaiting_binding` is a
+# component blocked behind one; `deferred` / `after_approval` / `blocked` are
+# the installer's own "not now" outcomes. See packctl.installer for the
+# vocabulary these come from.
+NEVER_MATERIALIZED = frozenset({
+    "requires_binding", "awaiting_binding", "deferred", "after_approval", "blocked", "failed",
+})
+
+
 def detect_drift(client, ledger: list[dict], manifest) -> list[dict]:
     """Compare each non-tombstoned ledger object to Core's current state. Returns
     one row per object: {kind, identity, status, contentChecked, detail}. `status`
@@ -974,6 +984,18 @@ def detect_drift(client, ledger: list[dict], manifest) -> list[dict]:
     rows: list[dict] = []
     for r in ledger:
         if r.get("tombstoned"):
+            continue
+        if r.get("action") in NEVER_MATERIALIZED:
+            # Never created, so it cannot have drifted. Drift compares what the
+            # install PUT in Core against what is there now; a component the
+            # tenant has not bound data for was deliberately not put anywhere.
+            #
+            # Counting these as `missing` made a correct install read as
+            # drifted: journey-packs on 53a115c4 reported drifted=11 missing=11
+            # for exactly the 11 components awaiting a dataset binding, and
+            # "a freshly installed pack reads in_sync" went red on a system
+            # behaving as designed. `missing` has to keep meaning "somebody
+            # deleted this", which is the signal the check exists to raise.
             continue
         kind, name = r["kind"], r["identity"]
         spec = intended.get((kind, name))
