@@ -5,6 +5,11 @@
 export const qk = {
   me: () => ["platform", "me"] as const,
   tenants: () => ["platform", "tenants"] as const,
+  tenantProvisioning: (id: string) => ["platform", "tenantProvisioning", id] as const,
+  pocProgress: (id: string) => ["platform", "pocProgress", id] as const,
+  pocReports: (id: string) => ["platform", "pocReports", id] as const,
+  discoverTools: (q: string) => ["agentic", "discoverTools", q] as const,
+  rbacActions: () => ["platform", "rbacActions"] as const,
   user: (id: string) => ["platform", "user", id] as const,
   evidencePack: (proposalId: string) => ["governance", "evidencePack", proposalId] as const,
 
@@ -25,6 +30,7 @@ export const qk = {
   decisionOutcome: (ref: string) => ["data", "decisionOutcome", ref] as const,
   decisionEffectiveness: (by: string, decisionType?: string) =>
     ["data", "decisionEffectiveness", by, decisionType ?? ""] as const,
+  aiSpendFreezes: () => ["usage", "aiSpendFreezes"] as const,
   resolutionRuns: (datasetId: string) => ["data", "resolutionRuns", datasetId] as const,
   resolutionRun: (id: string) => ["data", "resolutionRun", id] as const,
   mergeCandidates: (runId: string) => ["data", "mergeCandidates", runId] as const,
@@ -43,6 +49,7 @@ export const qk = {
   queryExecutions: (filters: unknown) => ["data", "queryExecutions", filters] as const,
   queryExecution: (id: string) => ["data", "queryExecution", id] as const,
   queryStats: (since?: string) => ["data", "queryStats", since ?? null] as const,
+  queryLimits: () => ["data", "queryLimits"] as const,
 
   ingestionSchedules: () => ["data", "ingestionSchedules"] as const,
   ingestionSchedule: (id: string) => ["data", "ingestionSchedule", id] as const,
@@ -110,6 +117,9 @@ export const qk = {
   dashboard: (id: string) => ["dashboards", "dashboard", id] as const,
   chartDrillTarget: (chartId: string, dimension: string) =>
     ["dashboards", "chartDrillTarget", chartId, dimension] as const,
+  chartDrilldown: (chartId: string, vars: unknown) =>
+    ["dashboards", "chartDrilldown", chartId, vars] as const,
+  chartExportOperation: (id: string) => ["dashboards", "chartExportOperation", id] as const,
   archivedDashboards: (workspaceId: string) => ["dashboards", "archived", workspaceId] as const,
   chartTypes: () => ["dashboards", "chartTypes"] as const,
   semanticModels: (workspaceId: string) => ["dashboards", "semanticModels", workspaceId] as const,
@@ -122,6 +132,9 @@ export const qk = {
   budgets: () => ["usage", "budgets"] as const,
   rateCards: () => ["usage", "rateCards"] as const,
   anomalies: (status?: string) => ["usage", "anomalies", status ?? null] as const,
+  usageMeters: () => ["usage", "meters"] as const,
+  chargebackReport: (month: string) => ["usage", "chargeback", month] as const,
+  reconciliations: () => ["usage", "reconciliations"] as const,
 
   valueSummary: (period: string, workspaceId?: string) =>
     ["value", "summary", period, workspaceId ?? null] as const,
@@ -151,6 +164,8 @@ export const qk = {
   userGroups: (userId: string) => ["admin", "userGroups", userId] as const,
   roles: () => ["admin", "roles"] as const,
   serviceAccounts: () => ["admin", "serviceAccounts"] as const,
+  // BRD 60 WS2: the tenant's external-agent credentials.
+  externalAgents: () => ["admin", "externalAgents"] as const,
   tenant: (id: string) => ["admin", "tenant", id] as const,
   tenantLabels: () => ["admin", "tenantLabels"] as const,
   // BRD 66 slice 3: commercial plane (plan/trial/entitlements).
@@ -158,11 +173,17 @@ export const qk = {
   // Tier 4b: identity/rbac admin — effective access lookup per resource URN.
   contentGrants: (resourceUrn: string) => ["admin", "contentGrants", resourceUrn] as const,
   auditEvents: (filters: unknown) => ["admin", "auditEvents", filters] as const,
+  auditAgentActivity: (filters: unknown) => ["admin", "auditAgentActivity", filters] as const,
+  auditEvent: (id: string) => ["admin", "auditEvent", id] as const,
+  auditExports: (date?: string) => ["admin", "auditExports", date ?? null] as const,
+  auditExportFile: (vars: unknown) => ["admin", "auditExportFile", vars] as const,
   agentKillSwitches: () => ["admin", "agentKillSwitches"] as const,
   toolKillSwitches: () => ["admin", "toolKillSwitches"] as const,
   memories: (filters: unknown) => ["admin", "memories", filters] as const,
   memory: (id: string) => ["admin", "memory", id] as const,
   memoryStats: () => ["admin", "memoryStats"] as const,
+  corpusStatus: (corpusKey: string) => ["admin", "corpusStatus", corpusKey] as const,
+  memoryPolicy: () => ["admin", "memoryPolicy"] as const,
   erasure: (id: string) => ["admin", "erasure", id] as const,
   complianceOperation: (id: string) => ["admin", "complianceOperation", id] as const,
 
@@ -201,6 +222,9 @@ export const qk = {
   agentVersions: (agentKey: string) => ["agentic", "versions", agentKey] as const,
   tenantAgentConfig: (agentKey: string) => ["agentic", "tenantConfig", agentKey] as const,
   agentRuns: (filters: unknown) => ["agentic", "runs", filters] as const,
+  // BRD 14/68: agent lifecycle controls (rollouts + retrain watches)
+  agentRollouts: (filters: unknown) => ["agentic", "rollouts", filters] as const,
+  retrainWatches: () => ["agentic", "retrainWatches"] as const,
 
   // BRD 68 slice 1: Agent Control Tower fleet aggregation
   agentFleet: (filters: unknown) => ["agentic", "fleet", filters] as const,

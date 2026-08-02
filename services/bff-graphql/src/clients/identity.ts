@@ -79,6 +79,54 @@ export interface TenantDTO {
   updated_at?: string | null;
 }
 
+/** One POC success criterion (identity domain.SuccessCriterion). */
+export interface PocCriterionDTO {
+  key: string;
+  description?: string;
+  metric_ref?: string;
+  target?: number;
+  direction?: string; // gte|lte
+  manual_value?: number | null;
+}
+
+/** One POC report export (identity pocExportView): json_url is presigned. */
+export interface PocReportExportDTO {
+  id: string;
+  version?: number;
+  json_sha256?: string;
+  generated_by?: string;
+  created_at?: string;
+  json_url?: string;
+}
+
+/** GET /tenants/{id}/poc/progress (identity domain.PocProgress). */
+export interface PocProgressDTO {
+  tenant_id: string;
+  window_start?: string;
+  window_end?: string;
+  as_of?: string;
+  criteria: (PocCriterionDTO & {
+    actual_value?: number | null;
+    outcome?: string; // met|missed|inconclusive
+    data_source?: string;
+  })[];
+}
+
+/** One provisioning-saga step (identity domain.ProvisioningStep). */
+export interface ProvisioningStepDTO {
+  id: string;
+  tenant_id?: string;
+  workflow_id?: string;
+  step_index: number;
+  step_name: string;
+  status: string;
+  attempt?: number;
+  error?: string;
+  compensation?: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
 /** GET /api/v1/tenants/self — the member-safe subset of the caller's tenant. */
 export interface TenantSelfDTO {
   id?: string;
@@ -143,6 +191,39 @@ export interface TenantEntitlementsDTO {
   plan?: { key: string; version: number } | null;
   commercial_state: string;
   trial_ends_at?: string | null;
+}
+
+/** identity domain.ExternalAgentKey (BRD 60 WS2) — a tenant-minted credential
+ * for a customer's OWN agent. Metadata only: the secret hash is json:"-" and
+ * the plaintext key is unrecoverable after creation. */
+export interface ExternalAgentKeyDTO {
+  id: string;
+  tenant_id: string;
+  agent_id: string;
+  agent_version?: number;
+  scopes?: string[];
+  label?: string;
+  active: boolean;
+  created_by?: string;
+  created_at?: string | null;
+  last_used_at?: string | null;
+}
+
+/** POST /tenants/self/external-agents body (identity handleCreateExternalAgentKey). */
+export interface CreateExternalAgentKeyBody {
+  agent_id: string;
+  agent_version?: number;
+  scopes?: string[];
+  label?: string;
+}
+
+/** POST /tenants/self/external-agents response — the ONLY shape that ever
+ * carries the plaintext key (format wr_xa_<id>.<secret>). Returned exactly
+ * once at creation (shown_once) and never retrievable again. */
+export interface CreatedExternalAgentKeyDTO {
+  key: ExternalAgentKeyDTO;
+  plaintext: string;
+  shown_once: boolean;
 }
 
 export class IdentityClient {
@@ -236,6 +317,167 @@ export class IdentityClient {
   /** GET /api/v1/tenants/{id} — the tenant object + its settings. */
   tenant(id: string): Promise<TenantDTO> {
     return this.http.get<TenantDTO>(`/api/v1/tenants/${encodeURIComponent(id)}`);
+  }
+
+  // ---- tenant lifecycle (IDN-FR-005..008; identity requireSuperAdmin) ------
+
+  /** POST /api/v1/tenants — provision a tenant (201; 202 + operation_id when
+   * publish=true starts the saga immediately). */
+  async createTenant(
+    body: { name: string; display_name?: string; owner_email?: string; tier?: string; cloud?: string; publish?: boolean },
+    idempotencyKey?: string,
+  ): Promise<{ tenant: TenantDTO; operation_id?: string }> {
+    const r = await this.http.post<TenantDTO | { operation_id: string; tenant: TenantDTO }>(
+      "/api/v1/tenants",
+      { body, idempotencyKey },
+    );
+    return "operation_id" in (r as Record<string, unknown>)
+      ? (r as { operation_id: string; tenant: TenantDTO })
+      : { tenant: r as TenantDTO };
+  }
+
+  /** PATCH /api/v1/tenants/{id} — edit tenant attributes. */
+  patchTenant(id: string, body: Record<string, unknown>): Promise<TenantDTO> {
+    return this.http.patch<TenantDTO>(`/api/v1/tenants/${encodeURIComponent(id)}`, { body });
+  }
+
+  /** DELETE /api/v1/tenants/{id}?mode=archive|destroy&force= (IDN-FR-008). */
+  deleteTenant(id: string, mode: "archive" | "destroy", force = false): Promise<TenantDTO> {
+    return this.http.delete<TenantDTO>(`/api/v1/tenants/${encodeURIComponent(id)}`, {
+      query: { mode, force },
+    });
+  }
+
+  /** POST /api/v1/tenants/{id}/publish (202) — start the provisioning saga. */
+  async publishTenant(id: string): Promise<string> {
+    const r = await this.http.post<{ operation_id: string }>(
+      `/api/v1/tenants/${encodeURIComponent(id)}/publish`, {},
+    );
+    return r.operation_id;
+  }
+
+  /** POST /api/v1/tenants/{id}/suspend — data intact, access off. */
+  suspendTenant(id: string): Promise<TenantDTO> {
+    return this.http.post<TenantDTO>(`/api/v1/tenants/${encodeURIComponent(id)}/suspend`, {});
+  }
+
+  /** POST /api/v1/tenants/{id}/reactivate — returns the tenant + any config
+   * drift detected while suspended. */
+  reactivateTenant(id: string): Promise<{ tenant: TenantDTO; drift?: unknown }> {
+    return this.http.post<{ tenant: TenantDTO; drift?: unknown }>(
+      `/api/v1/tenants/${encodeURIComponent(id)}/reactivate`, {},
+    );
+  }
+
+  /** GET /api/v1/tenants/{id}/provisioning — the saga's step-by-step state. */
+  async provisioningStatus(id: string): Promise<ProvisioningStepDTO[]> {
+    const r = await this.http.get<{ steps: ProvisioningStepDTO[] }>(
+      `/api/v1/tenants/${encodeURIComponent(id)}/provisioning`,
+    );
+    return r.steps ?? [];
+  }
+
+  /** POST /api/v1/tenants/{id}/provisioning/retry (202) — retry a failed saga. */
+  async retryProvisioning(id: string): Promise<string> {
+    const r = await this.http.post<{ operation_id: string }>(
+      `/api/v1/tenants/${encodeURIComponent(id)}/provisioning/retry`, {},
+    );
+    return r.operation_id;
+  }
+
+  // ---- BRD 70 demo/POC + BRD 66 trials (identity requireSuperAdmin unless
+  // noted; POC reads are tenant-admin with cross-tenant guard) --------------
+
+  /** POST /api/v1/demo-tenants (202) — provision + seed a demo sandbox from a
+   * deploy/demo/<pack>/ bundle (DSP-FR-010). Always publishes. */
+  createDemoTenant(
+    body: { name: string; display_name?: string; owner_email?: string; pack: string; tier?: string },
+    idempotencyKey?: string,
+  ): Promise<{ operation_id: string; tenant: TenantDTO }> {
+    return this.http.post<{ operation_id: string; tenant: TenantDTO }>("/api/v1/demo-tenants", { body, idempotencyKey });
+  }
+
+  /** POST /api/v1/demo-tenants/{id}/reset — idempotent re-seed (DSP-FR-012). */
+  resetDemoTenant(id: string): Promise<TenantDTO> {
+    return this.http.post<TenantDTO>(`/api/v1/demo-tenants/${encodeURIComponent(id)}/reset`, {});
+  }
+
+  /** POST /api/v1/demo-tenants/{id}/clone — fresh sibling sandbox. */
+  cloneDemoTenant(id: string): Promise<{ operation_id?: string; tenant: TenantDTO } | TenantDTO> {
+    return this.http.post<{ operation_id?: string; tenant: TenantDTO } | TenantDTO>(
+      `/api/v1/demo-tenants/${encodeURIComponent(id)}/clone`, {},
+    );
+  }
+
+  /** POST /api/v1/poc-tenants — provision a POC tenant (pack optional). */
+  createPocTenant(
+    body: { name: string; display_name?: string; owner_email?: string; pack?: string },
+    idempotencyKey?: string,
+  ): Promise<{ operation_id?: string; tenant: TenantDTO } | TenantDTO> {
+    return this.http.post<{ operation_id?: string; tenant: TenantDTO } | TenantDTO>(
+      "/api/v1/poc-tenants", { body, idempotencyKey },
+    );
+  }
+
+  /** GET /tenants/{id}/poc/criteria — the agreed success criteria. */
+  pocCriteria(id: string): Promise<{ criteria?: PocCriterionDTO[] } | PocCriterionDTO[]> {
+    return this.http.get(`/api/v1/tenants/${encodeURIComponent(id)}/poc/criteria`);
+  }
+
+  /** PUT /api/v1/poc-tenants/{id}/criteria — set the agreed criteria. */
+  setPocCriteria(id: string, criteria: PocCriterionDTO[]): Promise<unknown> {
+    return this.http.put(`/api/v1/poc-tenants/${encodeURIComponent(id)}/criteria`, { body: { criteria } });
+  }
+
+  /** GET /tenants/{id}/poc/progress — actual-vs-target per criterion from real
+   * BRD 69 value data; inconclusive when the data is genuinely absent. */
+  pocProgress(id: string): Promise<PocProgressDTO> {
+    return this.http.get<PocProgressDTO>(`/api/v1/tenants/${encodeURIComponent(id)}/poc/progress`);
+  }
+
+  /** PATCH /tenants/{id}/poc/criteria/{key}/manual-value — sponsor-updated
+   * manual metric (audited, DSP-FR-021). */
+  setPocManualValue(id: string, key: string, value: number): Promise<unknown> {
+    return this.http.patch(
+      `/api/v1/tenants/${encodeURIComponent(id)}/poc/criteria/${encodeURIComponent(key)}/manual-value`,
+      { body: { value } },
+    );
+  }
+
+  /** GET /tenants/{id}/poc-reports — prior report exports; json_url is a
+   * presigned (24h) artifact link minted downstream. */
+  pocReports(id: string): Promise<{ data?: PocReportExportDTO[] } | PocReportExportDTO[]> {
+    return this.http.get(`/api/v1/tenants/${encodeURIComponent(id)}/poc-reports`);
+  }
+
+  /** POST /tenants/{id}/poc-reports — generate a poc-report.v1 export. */
+  exportPocReport(id: string, idempotencyKey?: string): Promise<{ data?: PocReportExportDTO } | PocReportExportDTO> {
+    return this.http.post(`/api/v1/tenants/${encodeURIComponent(id)}/poc-reports`, { idempotencyKey });
+  }
+
+  /** POST /tenants/{id}/trial (CPL-FR-021) — start a trial; 409 on an illegal
+   * commercial transition (demo/poc tenants have no edge into trial). */
+  startTrial(id: string, trialDays?: number): Promise<unknown> {
+    return this.http.post(`/api/v1/tenants/${encodeURIComponent(id)}/trial`, {
+      body: trialDays ? { trial_days: trialDays } : {},
+    });
+  }
+
+  /** POST /tenants/{id}/trial/extend — extend a running trial. */
+  extendTrial(id: string, trialDays?: number): Promise<unknown> {
+    return this.http.post(`/api/v1/tenants/${encodeURIComponent(id)}/trial/extend`, {
+      body: trialDays ? { trial_days: trialDays } : {},
+    });
+  }
+
+  /** POST /tenants/{id}/convert — trial → paid. */
+  convertTrial(id: string): Promise<unknown> {
+    return this.http.post(`/api/v1/tenants/${encodeURIComponent(id)}/convert`, {});
+  }
+
+  /** POST /api/v1/users/{id}/activate — re-activate a deactivated user. */
+  activateUser(id: string): Promise<UserDTO> {
+    return this.http.post<UserDTO>(`/api/v1/users/${encodeURIComponent(id)}/activate`, {});
   }
 
   /** GET /api/v1/tenants/{id}/entitlements (BRD 66 slice 3, CPL-FR-011/033):
@@ -345,5 +587,34 @@ export class IdentityClient {
   /** DELETE /api/v1/service-accounts/{id} — revoke (identity.service_account.admin). 204. */
   async revokeServiceAccount(id: string): Promise<void> {
     await this.http.delete<void>(`/api/v1/service-accounts/${encodeURIComponent(id)}`);
+  }
+
+  // ---- BRD 60 WS2: external-agent credentials (self-scoped, tenant admin) ---
+  /** GET /api/v1/tenants/self/external-agents — the caller tenant's registered
+   * external-agent credentials, metadata only. Needs identity.user.admin. */
+  async externalAgents(): Promise<ExternalAgentKeyDTO[]> {
+    const res = await this.http.get<{ keys: ExternalAgentKeyDTO[] }>(
+      "/api/v1/tenants/self/external-agents",
+    );
+    return res.keys ?? [];
+  }
+
+  /** POST /api/v1/tenants/self/external-agents (identity.user.admin, 201) —
+   * mint a credential for a named external agent. The response carries the
+   * plaintext key EXACTLY ONCE — pass it through verbatim. */
+  registerExternalAgent(
+    body: CreateExternalAgentKeyBody,
+    idempotencyKey?: string,
+  ): Promise<CreatedExternalAgentKeyDTO> {
+    return this.http.post<CreatedExternalAgentKeyDTO>("/api/v1/tenants/self/external-agents", {
+      body,
+      idempotencyKey,
+    });
+  }
+
+  /** DELETE /api/v1/tenants/self/external-agents/{id} — revoke (deactivate) a
+   * credential (identity.user.admin). 204. */
+  async revokeExternalAgent(id: string): Promise<void> {
+    await this.http.delete<void>(`/api/v1/tenants/self/external-agents/${encodeURIComponent(id)}`);
   }
 }

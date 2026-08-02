@@ -1,8 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Wallet, Receipt, X, TrendingUp } from "lucide-react";
+import { Wallet, Receipt, X, TrendingUp, FileSpreadsheet, Scale, BookOpen } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { CostPanel } from "@/components/usage/CostPanel";
+import { QueryLimitsCard } from "@/components/admin/QueryLimitsCard";
 import { DataTable, type Column } from "@/components/primitives/DataTable";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
@@ -21,12 +22,27 @@ import {
   useActivateRateCard,
   useAnomalies,
   useDismissAnomaly,
+  useUsageMeters,
+  useChargebackReport,
+  useReconciliations,
+  useAcknowledgeReconciliation,
+  useCreateUsageAdjustment,
 } from "@/lib/graphql/hooks";
-import type { Budget, RateCard, Anomaly } from "@/lib/graphql/types";
-import { formatUsd, formatLocal } from "@/lib/utils";
+import type {
+  Budget, RateCard, Anomaly, UsageMeter, ChargebackLine, Reconciliation, UsageAdjustment,
+} from "@/lib/graphql/types";
+import { formatUsd, formatLocal, formatNumber } from "@/lib/utils";
 
 const WINDOWS = ["calendar_month", "calendar_day", "rolling_7d"];
 const ACTIONS = ["alert_only", "hard_stop"];
+
+/** UTC YYYY-MM of the previous month — chargeback is only served for
+ * finalized months (USG-FR-043 BR-5), so the current month is never useful. */
+function previousPeriod(): string {
+  const now = new Date();
+  const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  return `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
 export default function AdminUsagePage() {
   const { workspaceId } = useSession();
@@ -40,13 +56,280 @@ export default function AdminUsagePage() {
         <CostPanel workspaceId={workspaceId} />
         <BudgetsCard workspaceId={workspaceId} />
       </div>
+      {/* Per-tenant query concurrency + cost ceilings (query-service /limits). */}
+      <div className="mt-4">
+        <Can gate={FEATURE_GATES.viewQueryLimits}>
+          <QueryLimitsCard />
+        </Can>
+      </div>
+      <div className="mt-4">
+        <ChargebackCard />
+      </div>
       <div className="mt-4">
         <RateCardsCard />
       </div>
       <div className="mt-4">
         <AnomaliesCard />
       </div>
+      <div className="mt-4">
+        <ReconciliationsCard />
+      </div>
+      <div className="mt-4">
+        <AdjustmentsCard />
+      </div>
+      <div className="mt-4">
+        <MeterCatalogCard />
+      </div>
     </div>
+  );
+}
+
+/* ------- billing depth (BRD 67): chargeback ------- */
+
+function ChargebackCard() {
+  const [month, setMonth] = useState(previousPeriod());
+  const query = useChargebackReport(month);
+  const rows = query.data ?? [];
+  const totalUsd = rows.reduce((sum, l) => sum + l.totalUsd, 0);
+
+  const columns: Column<ChargebackLine>[] = [
+    { id: "meter", header: "Meter", cell: (l) => <span className="font-medium">{l.meterKey}</span> },
+    { id: "workspace", header: "Workspace", cell: (l) => <span className="font-mono text-xs">{l.workspaceId ?? "—"}</span> },
+    { id: "quantity", header: "Quantity", width: 110, cell: (l) => formatNumber(l.quantity) },
+    { id: "price", header: "Price/unit", width: 110, cell: (l) => (l.rateCardId ? formatUsd(l.pricePerUnitUsd) : <span className="text-muted-foreground">unpriced</span>) },
+    { id: "usd", header: "USD", width: 100, cell: (l) => formatUsd(l.usd) },
+    { id: "adjustments", header: "Adjustments", width: 110, cell: (l) => (l.adjustmentsUsd !== 0 ? formatUsd(l.adjustmentsUsd) : "—") },
+    { id: "total", header: "Total", width: 100, cell: (l) => <span className="font-medium">{formatUsd(l.totalUsd)}</span> },
+  ];
+
+  return (
+    <Can gate={FEATURE_GATES.viewChargeback} fallback={null}>
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <FileSpreadsheet className="size-4" aria-hidden />Chargeback
+            {rows.length > 0 && <Badge variant="secondary">{formatUsd(totalUsd)} total</Badge>}
+          </CardTitle>
+          <label className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground">Month</span>
+            <Input
+              type="month"
+              value={month}
+              onChange={(e) => e.target.value && setMonth(e.target.value)}
+              aria-label="Chargeback month"
+              className="h-8 w-36 text-xs"
+            />
+          </label>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Priced monthly rollups for a finalized month. A month whose reconciliation sits in variance is
+            blocked (409) until the variance is acknowledged or adjusted — the real error is shown, never hidden.
+          </p>
+          <AsyncBoundary
+            isLoading={query.isLoading}
+            isError={query.isError}
+            error={query.error}
+            isEmpty={rows.length === 0}
+            emptyTitle="No chargeback lines for this month."
+            emptyHint="Chargeback is only available for finalized months with metered usage."
+            onRetry={() => query.refetch()}
+          >
+            <DataTable ariaLabel="Chargeback lines" rows={rows} columns={columns} rowId={(l) => `${l.meterKey}:${l.workspaceId ?? ""}`} />
+          </AsyncBoundary>
+        </CardContent>
+      </Card>
+    </Can>
+  );
+}
+
+/* ------- billing depth (BRD 67): reconciliations ------- */
+
+function ReconciliationsCard() {
+  const query = useReconciliations();
+  const acknowledge = useAcknowledgeReconciliation();
+  const [confirming, setConfirming] = useState<Reconciliation | null>(null);
+  const rows = query.data ?? [];
+
+  const columns: Column<Reconciliation>[] = [
+    { id: "month", header: "Month", width: 100, cell: (r) => <span className="font-medium">{r.month}</span> },
+    { id: "provider", header: "Provider", width: 120, cell: (r) => r.provider },
+    {
+      id: "status", header: "Status", width: 130,
+      cell: (r) => (
+        <Badge variant={r.status === "variance" ? "warning" : r.status === "matched" ? "success" : "secondary"}>
+          {r.status}
+        </Badge>
+      ),
+    },
+    { id: "report", header: "Report", cell: (r) => <span className="font-mono text-xs">{r.reportUri}</span> },
+    { id: "at", header: "Created", width: 170, cell: (r) => formatLocal(r.createdAt) },
+    {
+      id: "actions", header: "", width: 130,
+      cell: (r) =>
+        r.status === "variance" ? (
+          <Can gate={FEATURE_GATES.acknowledgeReconciliation}>
+            <Button size="sm" variant="ghost" disabled={acknowledge.isPending} onClick={() => setConfirming(r)}>
+              Acknowledge
+            </Button>
+          </Can>
+        ) : null,
+    },
+  ];
+
+  return (
+    <Can gate={FEATURE_GATES.viewReconciliations} fallback={null}>
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="flex items-center gap-2 text-sm"><Scale className="size-4" aria-hidden />Provider-bill reconciliation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Monthly metered-vs-provider-bill comparison (platform operators only). A month in variance blocks
+            chargeback until acknowledged here or corrected with an adjustment below.
+          </p>
+          {acknowledge.error && <p className="mb-2 text-xs text-destructive">{acknowledge.error.message}</p>}
+          <AsyncBoundary
+            isLoading={query.isLoading}
+            isError={query.isError}
+            error={query.error}
+            isEmpty={rows.length === 0}
+            emptyTitle="No reconciliations yet."
+            onRetry={() => query.refetch()}
+          >
+            <DataTable ariaLabel="Reconciliations" rows={rows} columns={columns} rowId={(r) => r.id} />
+          </AsyncBoundary>
+        </CardContent>
+
+        <ConfirmDialog
+          open={confirming != null}
+          onOpenChange={(open) => { if (!open) setConfirming(null); }}
+          title="Acknowledge variance"
+          description={`Acknowledge the ${confirming?.month} ${confirming?.provider} variance? This unblocks chargeback for that month without correcting the billed figures.`}
+          confirmLabel="Acknowledge"
+          onConfirm={() => {
+            if (confirming) acknowledge.mutate(confirming.id, { onSettled: () => setConfirming(null) });
+          }}
+        />
+      </Card>
+    </Can>
+  );
+}
+
+/* ------- billing depth (BRD 67): adjustments ------- */
+
+function AdjustmentsCard() {
+  const create = useCreateUsageAdjustment();
+  const [meterKey, setMeterKey] = useState("api_calls");
+  const [month, setMonth] = useState(previousPeriod());
+  const [quantityDelta, setQuantityDelta] = useState("0");
+  const [usdDelta, setUsdDelta] = useState("0");
+  const [reason, setReason] = useState("");
+  const [lastCreated, setLastCreated] = useState<UsageAdjustment | null>(null);
+
+  return (
+    <Can gate={FEATURE_GATES.createUsageAdjustment} fallback={null}>
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="flex items-center gap-2 text-sm"><Receipt className="size-4" aria-hidden />Billing adjustments</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Record a signed adjustment/credit on a CLOSED month (platform operators only). Adjustments are
+            append-only and fold into chargeback totals; an open month is rejected (month_open). A negative USD
+            delta is a credit.
+          </p>
+          <form
+            className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/30 p-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const qty = Number(quantityDelta);
+              const usd = Number(usdDelta);
+              if (meterKey.trim() && month && reason.trim() && !Number.isNaN(qty) && !Number.isNaN(usd)) {
+                create.mutate(
+                  { meterKey: meterKey.trim(), month, quantityDelta: qty, usdDelta: usd, reason: reason.trim() },
+                  { onSuccess: (adj) => { setLastCreated(adj); setReason(""); } },
+                );
+              }
+            }}
+          >
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">Adjustment meter key</span>
+              <Input value={meterKey} onChange={(e) => setMeterKey(e.target.value)} aria-label="Adjustment meter key" className="h-8 w-40 text-xs" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">Month (closed)</span>
+              <Input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} aria-label="Adjustment month" className="h-8 w-36 text-xs" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">Quantity delta</span>
+              <Input type="number" step="any" value={quantityDelta} onChange={(e) => setQuantityDelta(e.target.value)} aria-label="Quantity delta" className="h-8 w-28 text-xs" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">USD delta</span>
+              <Input type="number" step="0.01" value={usdDelta} onChange={(e) => setUsdDelta(e.target.value)} aria-label="USD delta" className="h-8 w-28 text-xs" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">Reason (required)</span>
+              <Input value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Adjustment reason" className="h-8 w-64 text-xs" />
+            </label>
+            <Button type="submit" size="sm" disabled={create.isPending || !reason.trim()}>Record adjustment</Button>
+            {create.error && <p className="w-full text-xs text-destructive">{create.error.message}</p>}
+          </form>
+          {lastCreated && (
+            <p className="text-xs text-muted-foreground">
+              Recorded {lastCreated.id}: {lastCreated.meterKey} {lastCreated.month} ·{" "}
+              qty {formatNumber(lastCreated.quantityDelta)} · {formatUsd(lastCreated.usdDelta)} — {lastCreated.reason}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </Can>
+  );
+}
+
+/* ------- billing depth (BRD 67): meter catalog ------- */
+
+function MeterCatalogCard() {
+  const query = useUsageMeters();
+  const rows = query.data ?? [];
+
+  const columns: Column<UsageMeter>[] = [
+    { id: "key", header: "Meter key", cell: (m) => <span className="font-mono text-xs font-medium">{m.meterKey}</span> },
+    { id: "unit", header: "Unit", width: 110, cell: (m) => m.unit },
+    { id: "aggregation", header: "Aggregation", width: 150, cell: (m) => m.aggregation },
+    { id: "description", header: "Description", cell: (m) => <span className="text-xs">{m.description}</span> },
+    { id: "dims", header: "Dimensions", width: 120, cell: (m) => `${m.dimensions.length}` },
+    {
+      id: "deprecated", header: "", width: 110,
+      cell: (m) => (m.deprecated ? <Badge variant="warning">deprecated</Badge> : null),
+    },
+  ];
+
+  return (
+    <Can gate={FEATURE_GATES.viewMeters} fallback={null}>
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="flex items-center gap-2 text-sm"><BookOpen className="size-4" aria-hidden />Meter catalog</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-2 text-xs text-muted-foreground">
+            The seeded platform meter catalog — canonical units never change post-launch; no tenant-defined
+            meters in v1. Reference for budget meter keys and rate-card items.
+          </p>
+          <AsyncBoundary
+            isLoading={query.isLoading}
+            isError={query.isError}
+            error={query.error}
+            isEmpty={rows.length === 0}
+            emptyTitle="No meters in the catalog."
+            onRetry={() => query.refetch()}
+          >
+            <DataTable ariaLabel="Meter catalog" rows={rows} columns={columns} rowId={(m) => m.meterKey} />
+          </AsyncBoundary>
+        </CardContent>
+      </Card>
+    </Can>
   );
 }
 

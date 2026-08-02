@@ -34,6 +34,16 @@ const emptyBudgets = { budgets: { nodes: [], pageInfo: { nextCursor: null, hasMo
 const emptyRateCards = { rateCards: { nodes: [], pageInfo: { nextCursor: null, hasMore: false } } };
 const emptyCostPanel = { workspaceCostPanel: { rows: [], budgetStates: [] } };
 const emptyAnomalies = { anomalies: [] };
+// query-service GET /limits view: overrides + effective ceilings + maxima.
+const queryLimits = {
+  queryLimits: {
+    overrides: { maxScanBytes: null, maxRuntimeS: null, maxResultBytes: null, maxResultRows: null,
+      concurrentSlots: 4, warehousePrimary: null, updatedBy: "u-admin" },
+    effectiveUser: { maxScanBytes: 53687091200, maxRuntimeS: 1600, maxResultBytes: 1073741824, maxResultRows: 5000000 },
+    effectiveAgent: { maxScanBytes: 5368709120, maxRuntimeS: 1600, maxResultBytes: 52428800, maxResultRows: 10000 },
+    platformMaxima: { maxScanBytes: 53687091200, maxRuntimeS: 1600, maxResultBytes: 1073741824, maxResultRows: 5000000 },
+  },
+};
 
 beforeEach(() => {
   requests.length = 0;
@@ -43,6 +53,8 @@ beforeEach(() => {
     if (doc.includes("query Anomalies")) return emptyAnomalies;
     if (doc.includes("query Budgets")) return emptyBudgets;
     if (doc.includes("query RateCards")) return emptyRateCards;
+    if (doc.includes("query QueryLimits")) return queryLimits;
+    if (doc.includes("mutation SetQueryLimits")) return { setQueryLimits: queryLimits.queryLimits };
     if (doc.includes("mutation CreateBudget")) {
       return {
         createBudget: {
@@ -136,6 +148,35 @@ describe("Admin Usage page — budget administration", () => {
 
     await waitFor(() => {
       expect(requests.some((r) => r.doc.includes("mutation DeleteBudget") && r.vars.id === "b-new")).toBe(true);
+    });
+  });
+});
+
+describe("Admin Usage page — query limits (query-service /limits)", () => {
+  it("renders the effective ceilings from queryLimits and the stored concurrency override", async () => {
+    renderWithProviders(<AdminUsagePage />);
+    expect(await screen.findByText("Query limits")).toBeInTheDocument();
+    // Effective-user scan ceiling formats the real 50 GB value.
+    expect(await screen.findByText("Effective (users)")).toBeInTheDocument();
+    expect(screen.getByText(/4 slots \(override\)/)).toBeInTheDocument();
+    expect(requests.some((r) => r.doc.includes("query QueryLimits"))).toBe(true);
+  });
+
+  it("saves lowered overrides through setQueryLimits with real numeric variables", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AdminUsagePage />);
+    // The override form renders once the queryLimits fetch resolves.
+    await user.clear(await screen.findByLabelText("Max runtime (s)"));
+    await user.type(screen.getByLabelText("Max runtime (s)"), "600");
+    await user.clear(screen.getByLabelText("Concurrent slots"));
+    await user.type(screen.getByLabelText("Concurrent slots"), "2");
+    await user.click(screen.getByRole("button", { name: "Save limits" }));
+
+    await waitFor(() => {
+      const call = requests.find((r) => r.doc.includes("mutation SetQueryLimits"));
+      expect(call?.vars.input).toMatchObject({ maxRuntimeS: 600, concurrentSlots: 2 });
+      // Untouched fields stay undefined so the service keeps its defaults.
+      expect(call?.vars.input.maxScanBytes).toBeUndefined();
     });
   });
 });

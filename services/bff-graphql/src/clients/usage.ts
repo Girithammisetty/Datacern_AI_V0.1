@@ -1,4 +1,6 @@
-/** usage-service REST client (BRD 17). Backs: UsageReport, Budget, BudgetState, CostPanel, RateCard. */
+/** usage-service REST client (BRD 17). Backs: UsageReport, Budget, BudgetState,
+ * CostPanel, RateCard, Anomaly, UsageMeter, ChargebackLine, Reconciliation,
+ * UsageAdjustment (BRD 67 billing depth). */
 import { ServiceClient } from "./base.js";
 import { unwrap, type Envelope, type Page } from "./types.js";
 
@@ -109,6 +111,68 @@ export interface CreateRateCardBody {
   items: Record<string, number>;
 }
 
+/** usage-service domain.Meter (USG-FR-001/003): one seeded catalog entry.
+ * Units are canonical and never change post-launch (USG-FR-005). */
+export interface MeterDTO {
+  meter_key: string;
+  unit: string;
+  /** sum | time_weighted_avg */
+  aggregation: string;
+  description: string;
+  dimensions: string[];
+  deprecated: boolean;
+}
+
+/** usage-service store.ChargebackLine (USG-FR-043): one priced monthly row.
+ * `usd` is quantity*price; `total_usd` folds in `adjustments_usd`. */
+export interface ChargebackLineDTO {
+  tenant_id: string;
+  workspace_id?: string | null;
+  month: string;
+  meter_key: string;
+  quantity: number;
+  /** Empty string when no rate card resolved for the meter. */
+  rate_card_id: string;
+  price_per_unit_usd: number;
+  usd: number;
+  adjustments_usd: number;
+  total_usd: number;
+}
+
+/** usage-service domain.Reconciliation (USG-FR-070): monthly provider-bill vs
+ * metered comparison. status: pending | matched | variance | adjusted |
+ * acknowledged. */
+export interface ReconciliationDTO {
+  id: string;
+  /** YYYY-MM */
+  month: string;
+  provider: string;
+  status: string;
+  report_uri: string;
+  created_at: string;
+}
+
+/** POST /adjustments body (usage-service adjustmentBody). month must be a
+ * FINALIZED YYYY-MM (an open month 409s with reason month_open, BR-5). */
+export interface CreateAdjustmentBody {
+  meter_key: string;
+  month: string;
+  quantity_delta: number;
+  usd_delta: number;
+  reason: string;
+}
+
+/** POST /adjustments 201 echo — the handler returns only these six fields
+ * (no tenant/actor/created_at echoed; see handlers_recon.go). */
+export interface AdjustmentDTO {
+  id: string;
+  month: string;
+  meter_key: string;
+  quantity_delta: number;
+  usd_delta: number;
+  reason: string;
+}
+
 /** usage-service domain.Anomaly (USG-FR-050/051). status: open | dismissed. */
 export interface AnomalyDTO {
   id: string;
@@ -147,6 +211,22 @@ export class UsageClient {
         limit: params.limit,
         cursor: params.cursor,
       },
+    });
+  }
+
+  /** GET /meters — the seeded platform meter catalog (USG-FR-003; needs
+   * usage.meter.read). Not paginated downstream (page is always empty-cursor). */
+  meters(): Promise<Page<MeterDTO>> {
+    return this.http.get<Page<MeterDTO>>("/api/v1/meters");
+  }
+
+  /** GET /reports/chargeback?month=YYYY-MM — priced monthly rollups for a
+   * finalized month (USG-FR-043; needs usage.report.read). 409s with details
+   * {reason:"reconciliation_variance"} while that month's reconciliation
+   * variance is unresolved (AC-9) — surfaced verbatim, never faked. */
+  chargebackReport(month: string): Promise<Page<ChargebackLineDTO>> {
+    return this.http.get<Page<ChargebackLineDTO>>("/api/v1/reports/chargeback", {
+      query: { month },
     });
   }
 
@@ -248,5 +328,35 @@ export class UsageClient {
       `/api/v1/anomalies/${encodeURIComponent(id)}/dismiss`,
     );
     return unwrap<{ id: string; status: string }>(r);
+  }
+
+  // ---- reconciliation + billing adjustments (USG-FR-070/072) -----------------
+  /** GET /reconciliations — PLATFORM-ONLY (needs usage.reconciliation.read).
+   * No server-side pagination (fixed 100-row cap downstream, next_cursor
+   * always "") — surfaced as-is, not faked into a real page. */
+  reconciliations(): Promise<Page<ReconciliationDTO>> {
+    return this.http.get<Page<ReconciliationDTO>>("/api/v1/reconciliations");
+  }
+
+  /** POST /reconciliations/{id}/acknowledge (200; PLATFORM-ONLY, needs
+   * usage.reconciliation.update). Only a variance row can be acknowledged —
+   * anything else 404s downstream. Response is thin ({id, status}) — the
+   * resolver re-reads the list for the full row. */
+  async acknowledgeReconciliation(id: string): Promise<{ id: string; status: string }> {
+    const r = await this.http.post<Envelope<{ id: string; status: string }> | { id: string; status: string }>(
+      `/api/v1/reconciliations/${encodeURIComponent(id)}/acknowledge`,
+    );
+    return unwrap<{ id: string; status: string }>(r);
+  }
+
+  /** POST /adjustments — record a signed billing adjustment/credit on a CLOSED
+   * month (201; USG-FR-072; PLATFORM-ONLY, needs usage.reconciliation.update).
+   * An open month 409s with details {reason:"month_open"} (BR-5). No
+   * Idempotency-Key replay downstream (unlike budgets) — none is sent. */
+  async createAdjustment(body: CreateAdjustmentBody): Promise<AdjustmentDTO> {
+    const r = await this.http.post<Envelope<AdjustmentDTO> | AdjustmentDTO>("/api/v1/adjustments", {
+      body,
+    });
+    return unwrap<AdjustmentDTO>(r);
   }
 }

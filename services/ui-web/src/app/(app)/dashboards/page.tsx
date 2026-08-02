@@ -2,13 +2,14 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Plus } from "lucide-react";
+import { LayoutDashboard, Plus, Upload } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { Can } from "@/components/authz/Can";
 import { Card, CardHeader, CardTitle, Badge } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { CreateDashboardDialog } from "@/components/charts/CreateDashboardDialog";
+import { ImportDashboardDialog } from "@/components/charts/ImportDashboardDialog";
 import { FEATURE_GATES } from "@/lib/authz/registry";
 import { useDashboards } from "@/lib/graphql/hooks";
 import { useSession } from "@/lib/session/SessionContext";
@@ -20,9 +21,15 @@ export default function DashboardsPage() {
   const query = useDashboards(workspaceId);
   const items = useMemo(() => query.data?.pages.flatMap((p) => p.nodes) ?? [], [query.data]);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const onCreated = (id: string) => {
     setCreating(false);
+    router.push(`/dashboards/${id}`);
+  };
+
+  const onImported = (id: string) => {
+    setImporting(false);
     router.push(`/dashboards/${id}`);
   };
 
@@ -32,11 +39,18 @@ export default function DashboardsPage() {
         title={t("dashboards.title")}
         description={t("dashboards.subtitle")}
         actions={
-          <Can gate={FEATURE_GATES.createDashboard}>
-            <Button onClick={() => setCreating(true)}>
-              <Plus /> {t("dashboards.create")}
-            </Button>
-          </Can>
+          <>
+            <Can gate={FEATURE_GATES.importDashboard}>
+              <Button variant="outline" onClick={() => setImporting(true)}>
+                <Upload /> Import
+              </Button>
+            </Can>
+            <Can gate={FEATURE_GATES.createDashboard}>
+              <Button onClick={() => setCreating(true)}>
+                <Plus /> {t("dashboards.create")}
+              </Button>
+            </Can>
+          </>
         }
       />
 
@@ -73,6 +87,7 @@ export default function DashboardsPage() {
       </AsyncBoundary>
 
       <CreateDashboardDialog open={creating} onOpenChange={setCreating} onCreated={onCreated} />
+      <ImportDashboardDialog open={importing} onOpenChange={setImporting} onImported={onImported} />
     </div>
   );
 }

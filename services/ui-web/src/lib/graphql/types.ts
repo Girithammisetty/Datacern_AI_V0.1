@@ -271,6 +271,36 @@ export interface CreatedServiceAccount {
   apiKey: string;
 }
 
+/** A tenant-minted external-agent credential (BRD 60 WS2) — metadata only.
+ * The exchanged token always enters the governed external-intent ingress
+ * (propose-only), so auto-execute is permanently denied (BRD 68 ACT-FR-003). */
+export interface ExternalAgent {
+  id: ID;
+  urn: string;
+  agentId: string;
+  agentVersion?: number | null;
+  scopes: string[];
+  label?: string | null;
+  active: boolean;
+  createdBy?: string | null;
+  createdAt?: string | null;
+  lastUsedAt?: string | null;
+}
+
+export interface RegisterExternalAgentInput {
+  agentId: string;
+  agentVersion?: number;
+  scopes?: string[];
+  label?: string;
+}
+
+/** A registered external agent WITH its one-time apiKey (wr_xa_<id>.<secret>)
+ * — shown exactly once, never retrievable again, never persisted client-side. */
+export interface RegisteredExternalAgent {
+  externalAgent: ExternalAgent;
+  apiKey: string;
+}
+
 /** One row of effective access to a resource (provenance direct |
  * implicit_creator | via_group; `via` names the group for via_group rows). */
 export interface EffectiveAccessEntry {
@@ -451,6 +481,47 @@ export interface AuditEventsFilter {
   actorId?: string;
   actorType?: string;
   resourceUrn?: string;
+}
+
+/** Query.auditAgentActivity variables — dual-attribution activity for ONE
+ * agent (agentId required; oboUserId narrows to one on-behalf-of user). */
+export interface AuditAgentActivityFilter {
+  agentId: string;
+  oboUserId?: string;
+  from?: string;
+  to?: string;
+  includeAutonomous?: boolean;
+}
+
+/** Query.auditEvent — one event + its hash-chain position. */
+export interface AuditEventDetail {
+  event: AuditEvent;
+  chainDate: string;
+  chainSeq: number;
+  sealed: boolean;
+}
+
+/** Query.auditExports row — one sealed WORM export batch (manifest). */
+export interface AuditExportBatch {
+  date: string;
+  revision: number;
+  uri: string;
+  manifestSha256: string;
+  chainHead: string;
+  rowCount: number;
+  sealedAt?: string | null;
+  downloadUrl?: string | null;
+}
+
+export type AuditExportFormat = "CSV" | "NDJSON";
+
+/** Query.auditExportFile — descriptor for the raw CSV/NDJSON download; the
+ * file itself streams through the same-origin /api/audit-export proxy. */
+export interface AuditExportFile {
+  downloadPath: string;
+  format: AuditExportFormat;
+  from: string;
+  to: string;
 }
 
 export interface Profile {
@@ -693,6 +764,64 @@ export interface RunSqlInput {
   engineHint?: string;
 }
 
+/** Effective execution ceilings (query-service domain.Ceilings). */
+export interface QueryCeilings {
+  maxScanBytes?: number | null;
+  maxRuntimeS?: number | null;
+  maxResultBytes?: number | null;
+  maxResultRows?: number | null;
+}
+
+/** The tenant's stored override row — null means the platform default applies. */
+export interface QueryLimitOverrides extends QueryCeilings {
+  concurrentSlots?: number | null;
+  warehousePrimary?: boolean | null;
+  updatedBy?: string | null;
+}
+
+/** Tenant query governance (query-service GET /limits, QRY-FR-042/044). */
+export interface QueryLimits {
+  overrides: QueryLimitOverrides;
+  effectiveUser: QueryCeilings;
+  effectiveAgent: QueryCeilings;
+  platformMaxima: QueryCeilings;
+}
+
+/** PUT /limits body — overrides may only LOWER the platform maxima. */
+export interface QueryLimitsInput {
+  maxScanBytes?: number;
+  maxRuntimeS?: number;
+  maxResultBytes?: number;
+  maxResultRows?: number;
+  concurrentSlots?: number;
+  warehousePrimary?: boolean;
+}
+
+/** Plan + cost estimate without executing (query-service POST /sql/dry-run). */
+export interface SqlDryRun {
+  engine?: string | null;
+  routingReason?: string | null;
+  estimatedScanBytes?: number | null;
+  estimatedRows?: number | null;
+  /** "pruned/total" summary string. */
+  partitionsPruned?: string | null;
+  /** high | low. */
+  confidence?: string | null;
+  /** ok | exceeded. */
+  ceilingVerdict?: string | null;
+  ceilings?: QueryCeilings | null;
+  warnings?: JSONValue;
+}
+
+/** A signed result-export descriptor (query-service POST /executions/{id}/export).
+ * downloadPath is the service-relative signed path /api/v1/downloads/{token} —
+ * downloaded through the same-origin /api/query-export/{token} proxy. */
+export interface QueryExportDescriptor {
+  format: string;
+  downloadPath: string;
+  expiresAt?: string | null;
+}
+
 /** One immutable saved-query version (query-service). */
 export interface SavedQueryVersion {
   id: ID;
@@ -792,6 +921,63 @@ export interface Dashboard {
   module?: string | null;
   archived: boolean;
   charts: Chart[];
+}
+
+/** A page of raw rows behind a clicked aggregate segment (chart-service
+ * POST /charts/{id}/drilldown, CHART-FR-040). */
+export interface ChartDrilldownRows {
+  columns?: JSONValue;
+  rows?: JSONValue;
+  nextCursor?: string | null;
+  hasMore: boolean;
+}
+
+export interface ChartDrilldownInput {
+  dimension: string;
+  value?: JSONValue;
+  dataseriesValue?: JSONValue;
+  filters?: Array<{ field: string; op: string; value: JSONValue; origin?: ID }>;
+  cursor?: string;
+  limit?: number;
+}
+
+/** An async chart-export operation (chart-service domain.Operation). Download
+ * the completed artifact through /api/chart-export/{operationId}. */
+export interface ChartExportOperation {
+  id: ID;
+  chartId?: ID | null;
+  kind?: string | null;
+  /** csv | png (png is infra-gated on the renderer sidecar). */
+  format?: string | null;
+  /** pending | running | completed | failed. */
+  status: string;
+  artifactUrl?: string | null;
+  artifactUrn?: string | null;
+  error?: string | null;
+  expiresAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+/** Result of importing a portable dashboard bundle. */
+export interface DashboardImportResult {
+  dashboardId: ID;
+  chartsCreated: number;
+}
+
+/** A parent→child chart cross-navigation link (chart-service CHART-FR-015). */
+export interface ChartLink {
+  parentChartId: ID;
+  childChartId: ID;
+  /** 0 = shared-source, 1 = main-secondary. */
+  linkType: number;
+  linkedColumns?: JSONValue;
+}
+
+export interface ChartLinkInput {
+  childChartId: ID;
+  linkedColumns?: Array<{ parentCol: string; childCol: string }>;
+  linkType?: number;
 }
 
 /* ---------- charts: type catalog, semantic models, authoring (no-code editor) ---------- */
@@ -1687,6 +1873,66 @@ export interface CreateRateCardInput {
   items: Record<string, number>;
 }
 
+/* ------- billing depth (BRD 67) ------- */
+
+/** One seeded meter-catalog entry (usage-service GET /meters, USG-FR-001/003). */
+export interface UsageMeter {
+  meterKey: string;
+  unit: string;
+  /** sum | time_weighted_avg */
+  aggregation: string;
+  description: string;
+  dimensions: string[];
+  deprecated: boolean;
+}
+
+/** One priced monthly chargeback row (usage-service GET /reports/chargeback,
+ * USG-FR-043). totalUsd = usd + adjustmentsUsd. */
+export interface ChargebackLine {
+  tenantId: string;
+  workspaceId?: string | null;
+  month: string;
+  meterKey: string;
+  quantity: number;
+  rateCardId?: string | null;
+  pricePerUnitUsd: number;
+  usd: number;
+  adjustmentsUsd: number;
+  totalUsd: number;
+}
+
+/** A monthly metered-vs-provider-bill reconciliation (USG-FR-070).
+ * status: pending | matched | variance | adjusted | acknowledged. */
+export interface Reconciliation {
+  id: ID;
+  urn: string;
+  month: string;
+  provider: string;
+  status: string;
+  reportUri: string;
+  createdAt: string;
+}
+
+/** POST /adjustments 201 echo (USG-FR-072) — the route echoes only these
+ * fields (no createdAt/actor). */
+export interface UsageAdjustment {
+  id: ID;
+  urn: string;
+  meterKey: string;
+  month: string;
+  quantityDelta: number;
+  usdDelta: number;
+  reason: string;
+}
+
+export interface CreateUsageAdjustmentInput {
+  meterKey: string;
+  month: string;
+  quantityDelta: number;
+  usdDelta: number;
+  reason: string;
+}
+
 /* ------- value & ROI reporting (BRD 69) ------- */
 
 /** A derived figure that only exists paired with its assumption version
@@ -1917,6 +2163,88 @@ export interface BatchEvaluateResult {
   proposed: boolean;
   summary: { cases: number; matched: number; unmatched: number; proposalsCreated: number; byOutcome: Record<string, number> };
   results: BatchEvaluateRow[];
+}
+
+export interface PocCriterionProgress {
+  key: string;
+  description?: string | null;
+  metricRef?: string | null;
+  target?: number | null;
+  direction?: string | null;
+  manualValue?: number | null;
+  actualValue?: number | null;
+  outcome?: string | null;
+  dataSource?: string | null;
+}
+export interface PocProgress {
+  tenantId: ID;
+  windowStart?: string | null;
+  windowEnd?: string | null;
+  asOf?: string | null;
+  criteria: PocCriterionProgress[];
+}
+
+export interface ToolDiscoveryHit {
+  toolId: ID;
+  version?: string | null;
+  score: number;
+  tier?: string | null;
+  description?: string | null;
+}
+export interface RbacAction {
+  action: ID;
+  service?: string | null;
+  resource?: string | null;
+  verb?: string | null;
+  workspaceScoped?: boolean | null;
+  description?: string | null;
+}
+
+export interface PocReportExport {
+  id: ID;
+  version?: number | null;
+  jsonSha256?: string | null;
+  generatedBy?: string | null;
+  createdAt?: string | null;
+  jsonUrl?: string | null;
+}
+
+export interface ProvisioningStep {
+  id: ID;
+  stepIndex: number;
+  stepName: string;
+  status: string;
+  attempt?: number | null;
+  error?: string | null;
+  compensation?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+}
+
+export interface AiSpendFreeze {
+  scope: string;
+  reason?: string | null;
+  frozenBy?: string | null;
+  frozenAt?: string | null;
+}
+
+export interface DecisionEvaluation {
+  matched: boolean;
+  ruleIndex?: number | null;
+  explanation?: string | null;
+  outcome?: DecisionOutcome | null;
+  proposalId?: string | null;
+  dryRun: boolean;
+}
+export interface AgentChatSession {
+  id: ID;
+  agentKey?: string | null;
+  agentVersion?: number | null;
+  contextUrn?: string | null;
+  status?: string | null;
+  createdAt?: string | null;
+  lastActivityAt?: string | null;
+  expiresHardAt?: string | null;
 }
 
 // ---- BRD 55: decision outcome monitoring -----------------------------------
@@ -2698,6 +3026,103 @@ export interface ErasureRequest {
   completedAt?: string | null;
 }
 
+/** One ranked hit from the retrieval tester (bff `memoryRetrievalTest`). */
+export interface MemoryRetrievalHit {
+  /** memory | chunk */
+  kind: string;
+  /** UNTRUSTED model input (BR-12) — render as plain text, never execute. */
+  content: string;
+  score: number;
+  contentDisposition: string;
+  scope?: string | null;
+  memoryId?: ID | null;
+  provenance?: JSONValue | null;
+  corpus?: string | null;
+  chunkId?: ID | null;
+  sourceUrn?: string | null;
+  snapshotVer?: string | null;
+  debug?: JSONValue | null;
+}
+
+export interface MemoryRetrievalResult {
+  hits: MemoryRetrievalHit[];
+  degraded: boolean;
+}
+
+export interface MemoryRetrievalTestInput {
+  queryText?: string;
+  /** user | workspace | tenant */
+  scopes: string[];
+  /** scope -> scope_ref map; only `workspace` needs one. */
+  scopeRefs?: Record<string, string>;
+  corpora?: string[];
+  topK?: number;
+  minConfidence?: number;
+  tags?: string[];
+  includeDebug?: boolean;
+}
+
+/** A tenant RAG corpus (memory-service _corpus_view). */
+export interface RagCorpus {
+  corpusKey: ID;
+  source?: JSONValue | null;
+  chunking?: JSONValue | null;
+  activeEmbeddingVer: string;
+  refresh?: JSONValue | null;
+  anonymizationProfile?: JSONValue | null;
+  /** active | paused | rebuilding */
+  status: string;
+}
+
+export interface CorpusStatus {
+  corpusKey: ID;
+  status: string;
+  activeEmbeddingVer: string;
+  chunkCount: number;
+}
+
+export interface CorpusRebuildReport {
+  corpusKey: ID;
+  activeEmbeddingVer: string;
+  chunksReembedded: number;
+  oldChunksDropped: number;
+}
+
+export interface RegisterCorpusInput {
+  corpusKey: string;
+  source?: JSONValue;
+  chunking?: JSONValue;
+  embeddingModelVer?: string;
+  refresh?: JSONValue;
+  anonymizationProfile?: JSONValue;
+}
+
+export interface CorpusPatchInput {
+  source?: JSONValue;
+  chunking?: JSONValue;
+  refresh?: JSONValue;
+  anonymizationProfile?: JSONValue;
+  /** active | paused */
+  status?: string;
+}
+
+/** The tenant memory PII/retention policy (memory-service /policies/self). */
+export interface MemoryPolicy {
+  /** scope -> ISO-8601 duration */
+  ttlOverrides: Record<string, string>;
+  piiClasses: string[];
+  injectionProfile: string;
+  /** corpus_key -> enabled */
+  corpusFlags: Record<string, boolean>;
+}
+
+export interface MemoryPolicyInput {
+  ttlOverrides?: Record<string, string>;
+  piiClasses?: string[];
+  injectionProfile?: string;
+  corpusFlags?: Record<string, boolean>;
+}
+
 // ---- rbac authz explain (debug "why was I denied") -------------------------
 export interface AuthzChainStep {
   type: string;
@@ -3379,6 +3804,50 @@ export interface AgentVersionPublishResult {
   agentKey: ID;
   version: number;
   status: string;
+}
+
+// ---- BRD 14/68: agent lifecycle controls (rollouts + retrain watches) ------
+
+/** One rollout record (agent-runtime GET /registry/rollouts). mode is
+ * direct|canary|shadow; status is active|promoted|rolled_back. */
+export interface AgentRollout {
+  rolloutId: ID;
+  agentKey: ID;
+  cell?: string | null;
+  mode: string;
+  candidateVersion: number;
+  baselineVersion: number;
+  pct: number;
+  tenantFilter?: JSONValue;
+  status: string;
+}
+
+/** Thin rollout write response ({rolloutId, status}). */
+export interface AgentRolloutActionResult {
+  rolloutId: ID;
+  status: string;
+}
+
+/** A standing drift watch on a deployed model (BRD 52 inc3): past the
+ * threshold it opens a four-eyes retrain proposal via the governance agent. */
+export interface RetrainWatch {
+  id: ID;
+  modelUrn: string;
+  watchedAgentKey: string;
+  workspaceId?: ID | null;
+  cadenceSeconds: number;
+  correctionWindowHours: number;
+  driftThreshold: number;
+  minCorrections: number;
+  enabled: boolean;
+  lastCheckedAt?: string | null;
+  lastSignal?: JSONValue;
+  createdBy?: string | null;
+}
+
+export interface RetrainWatchDeleteResult {
+  id: ID;
+  deleted: boolean;
 }
 
 export interface TenantAgentConfig {

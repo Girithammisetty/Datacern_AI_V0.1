@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle, CardDescription, Badge, Input } from "@/co
 import { Button } from "@/components/ui/button";
 import {
   useSiemConfig, useProposeSiemConfig, useApproveSiemConfig, useRejectSiemConfig, useDeleteSiemConfig,
+  useAuditExports,
 } from "@/lib/graphql/hooks";
 import { useSession } from "@/lib/session/SessionContext";
 import { GraphQLRequestError } from "@/lib/graphql/client";
@@ -184,6 +185,8 @@ export default function AuditExportPage() {
         )}
       </AsyncBoundary>
 
+      <SealedExportsCard />
+
       <ConfirmDialog
         open={!!toDecide}
         onOpenChange={(o) => !o && setToDecide(null)}
@@ -226,6 +229,69 @@ export default function AuditExportPage() {
         }}
       />
     </div>
+  );
+}
+
+/** Previously generated WORM export batches (audit-service GET /exports,
+ * AUD-FR-023): the sealed per-day Object-Lock manifests, each with a presigned
+ * manifest download link. Distinct from the SIEM stream above — these are the
+ * daily tamper-evidence seals the chain verifier checks against. */
+function SealedExportsCard() {
+  const [date, setDate] = useState("");
+  const query = useAuditExports(date || undefined);
+  const batches = query.data ?? [];
+
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          Sealed WORM export batches
+          <label className="flex items-center gap-2 text-xs font-normal">
+            <span className="text-muted-foreground">Day</span>
+            <Input
+              type="date" value={date} onChange={(e) => setDate(e.target.value)}
+              className="h-8 w-40" aria-label="Filter batches by day"
+            />
+          </label>
+        </CardTitle>
+        <CardDescription>
+          Each chain-day is exported to immutable (Object-Lock) storage and sealed with a manifest — the
+          tamper-evidence the chain verifier replays against.
+        </CardDescription>
+      </CardHeader>
+      <div className="px-4 pb-4">
+        <AsyncBoundary isLoading={query.isLoading} isError={query.isError} error={query.error} onRetry={() => query.refetch()}>
+          {batches.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No sealed batches{date ? " for this day" : " yet"} — days seal after the daily WORM export runs.
+            </p>
+          ) : (
+            <div className="divide-y">
+              {batches.map((b) => (
+                <div key={`${b.date}-r${b.revision}`} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <span className="whitespace-nowrap font-medium">{b.date}</span>
+                  <Badge variant="secondary">rev {b.revision}</Badge>
+                  <span className="whitespace-nowrap text-xs text-muted-foreground">{b.rowCount} rows</span>
+                  <span className="hidden truncate font-mono text-xs text-muted-foreground md:inline" title={b.manifestSha256}>
+                    {b.manifestSha256.slice(0, 16)}…
+                  </span>
+                  <span className="whitespace-nowrap text-xs text-muted-foreground">
+                    {b.sealedAt ? formatLocal(b.sealedAt) : "—"}
+                  </span>
+                  {b.downloadUrl ? (
+                    <Button size="sm" variant="ghost" asChild>
+                      <a href={b.downloadUrl} target="_blank" rel="noreferrer">Manifest</a>
+                    </Button>
+                  ) : (
+                    <span className="truncate font-mono text-xs text-muted-foreground" title={b.uri}>{b.uri}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </AsyncBoundary>
+      </div>
+    </Card>
   );
 }
 

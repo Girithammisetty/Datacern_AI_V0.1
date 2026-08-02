@@ -183,6 +183,16 @@ export interface EffectiveAccessEntryDTO {
   workspace_id: string;
 }
 
+/** One catalog action (rbac ActionDef). */
+export interface RbacActionDTO {
+  action: string;
+  service?: string;
+  resource?: string;
+  verb?: string;
+  workspace_scoped?: boolean;
+  description?: string;
+}
+
 export class RbacClient {
   constructor(private readonly http: ServiceClient) {}
 
@@ -420,6 +430,12 @@ export class RbacClient {
   /** DELETE /api/v1/grants/{id} (204; needs rbac.grant.delete). */
   async deleteGrant(id: string): Promise<void> {
     await this.http.delete<void>(`/api/v1/grants/${encodeURIComponent(id)}`);
+  }
+
+  /** GET /actions — the platform action catalog (any authenticated principal):
+   * the closed <service>.<resource>.<verb> vocabulary behind every role. */
+  actions(limit = 500, cursor?: string): Promise<Page<RbacActionDTO>> {
+    return this.http.get<Page<RbacActionDTO>>("/api/v1/actions", { query: { limit, cursor } });
   }
 
   // ---- authz debug explain -----------------------------------------------

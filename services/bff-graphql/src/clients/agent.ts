@@ -68,6 +68,60 @@ export interface DecideBody {
   edited_args?: Record<string, unknown>;
 }
 
+/** One rollout record (agent-runtime rollouts table; GET /registry/rollouts).
+ * mode: direct|canary|shadow · status: active|promoted|rolled_back. */
+export interface AgentRolloutDTO {
+  rollout_id: string;
+  agent_key: string;
+  cell?: string;
+  mode: string;
+  candidate_version: number;
+  baseline_version: number;
+  pct?: number;
+  tenant_filter?: Record<string, unknown>;
+  status: string;
+}
+
+/** POST /registry/rollouts body (create_rollout, registry.py). candidate/
+ * baseline are the version ints being compared; pct only matters for canary. */
+export interface StartAgentRolloutBody {
+  agent_key: string;
+  mode: string;
+  candidate_version: number;
+  baseline_version: number;
+  pct?: number;
+  cell?: string;
+  tenant_filter?: Record<string, unknown>;
+}
+
+/** One retrain watch (registry.py _watch_view — BRD 52 inc3 drift thresholds
+ * that open four-eyes retrain proposals via the governance agent). */
+export interface RetrainWatchDTO {
+  id: string;
+  model_urn: string;
+  watched_agent_key: string;
+  workspace_id?: string | null;
+  cadence_seconds: number;
+  correction_window_hours: number;
+  drift_threshold: number;
+  min_corrections: number;
+  enabled: boolean;
+  last_checked_at?: string | null;
+  last_signal?: Record<string, unknown>;
+  created_by?: string | null;
+}
+
+export interface CreateRetrainWatchBody {
+  model_urn: string;
+  watched_agent_key: string;
+  workspace_id?: string;
+  cadence_seconds?: number;
+  correction_window_hours?: number;
+  drift_threshold?: number;
+  min_corrections?: number;
+  enabled?: boolean;
+}
+
 /** agent-runtime KillSwitch (ART-FR-073). scope: agent|agent_version|agent_version_tenant. */
 /** One rollout record (agent-runtime rollouts table; GET /registry/rollouts).
  * mode: direct|canary|shadow · status: active|promoted|rolled_back. */
@@ -357,6 +411,35 @@ export class AgentClient {
     return r.data ?? [];
   }
 
+  /** POST /registry/rollouts — start a direct|canary|shadow rollout (operator-
+   * only downstream, registry.py _require_operator). Response is thin
+   * ({rollout_id, status: "active"}). */
+  async startRollout(body: StartAgentRolloutBody, idempotencyKey?: string): Promise<{ rollout_id: string; status: string }> {
+    const r = await this.http.post<{ data: { rollout_id: string; status: string } }>(
+      "/api/v1/registry/rollouts",
+      { body, idempotencyKey },
+    );
+    return r.data;
+  }
+
+  /** POST /registry/rollouts/{id}/promote — candidate wins (operator-only). */
+  async promoteRollout(rolloutId: string, idempotencyKey?: string): Promise<{ rollout_id: string; status: string }> {
+    const r = await this.http.post<{ data: { rollout_id: string; status: string } }>(
+      `/api/v1/registry/rollouts/${encodeURIComponent(rolloutId)}/promote`,
+      { idempotencyKey },
+    );
+    return r.data;
+  }
+
+  /** POST /registry/rollouts/{id}/rollback — back to baseline (operator-only). */
+  async rollbackRollout(rolloutId: string, idempotencyKey?: string): Promise<{ rollout_id: string; status: string }> {
+    const r = await this.http.post<{ data: { rollout_id: string; status: string } }>(
+      `/api/v1/registry/rollouts/${encodeURIComponent(rolloutId)}/rollback`,
+      { idempotencyKey },
+    );
+    return r.data;
+  }
+
   /** GET /registry/kill-switches — active kills (operator: all tenants; tenant
    * admin: own tenant + global). Needs operator or tenant.admin JWT scope. */
   async killSwitches(): Promise<AgentKillSwitchDTO[]> {
@@ -395,6 +478,43 @@ export class AgentClient {
       `/api/v1/registry/agents/${encodeURIComponent(agentKey)}/versions`,
     );
     return r.data ?? [];
+  }
+
+  /** POST /registry/agents — register an agent definition, status "draft"
+   * (operator-only downstream, registry.py _require_operator). Response is
+   * thin ({agent_key, status}). */
+  async registerAgentDefinition(
+    body: { agent_key: string; display_name: string; description?: string; owner_team?: string; default_write_mode?: string },
+    idempotencyKey?: string,
+  ): Promise<{ agent_key: string; status: string }> {
+    const r = await this.http.post<{ data: { agent_key: string; status: string } }>(
+      "/api/v1/registry/agents",
+      { body, idempotencyKey },
+    );
+    return r.data;
+  }
+
+  /** POST /registry/agents/{key}/versions — create an immutable draft version
+   * (operator-only; 409 if the version already exists). Publish it separately
+   * via publishAgentVersion. Response is thin ({agent_key, version, status}). */
+  async createAgentVersion(
+    agentKey: string,
+    body: {
+      version: number;
+      graph_ref: string;
+      prompt_refs?: unknown[];
+      toolset?: unknown[];
+      model_config?: Record<string, unknown>;
+      eval_gate?: Record<string, unknown>;
+      eval_gate_result_id?: string;
+    },
+    idempotencyKey?: string,
+  ): Promise<{ agent_key: string; version: number; status: string }> {
+    const r = await this.http.post<{ data: { agent_key: string; version: number; status: string } }>(
+      `/api/v1/registry/agents/${encodeURIComponent(agentKey)}/versions`,
+      { body, idempotencyKey },
+    );
+    return r.data;
   }
 
   /** POST /registry/agents/{key}/versions/{v}/publish — eval-gate-guarded
@@ -473,6 +593,34 @@ export class AgentClient {
     const r = await this.http.put<{ data: AgentCeilingsDTO }>(
       "/api/v1/registry/platform/agent-ceilings",
       { body: { max_budget_tokens: maxBudgetTokens, max_tier: maxTier } },
+    );
+    return r.data;
+  }
+
+  // ---- BRD 52 inc3: scheduled drift/retrain watches (ai.agent.admin) --------
+
+  /** GET /registry/retrain-watches — the caller-tenant's watches. */
+  async retrainWatches(): Promise<RetrainWatchDTO[]> {
+    const r = await this.http.get<{ data: RetrainWatchDTO[] }>("/api/v1/registry/retrain-watches");
+    return r.data ?? [];
+  }
+
+  /** POST /registry/retrain-watches — register a drift watch on a deployed
+   * model; over the threshold it opens a four-eyes retrain proposal. Returns
+   * the full stored row (_watch_view). Needs ai.agent.admin. */
+  async createRetrainWatch(body: CreateRetrainWatchBody, idempotencyKey?: string): Promise<RetrainWatchDTO> {
+    const r = await this.http.post<{ data: RetrainWatchDTO }>(
+      "/api/v1/registry/retrain-watches",
+      { body, idempotencyKey },
+    );
+    return r.data;
+  }
+
+  /** DELETE /registry/retrain-watches/{id} — remove a watch (404 if not the
+   * caller-tenant's). Needs ai.agent.admin. */
+  async deleteRetrainWatch(watchId: string): Promise<{ id: string; deleted: boolean }> {
+    const r = await this.http.delete<{ data: { id: string; deleted: boolean } }>(
+      `/api/v1/registry/retrain-watches/${encodeURIComponent(watchId)}`,
     );
     return r.data;
   }
@@ -564,6 +712,34 @@ export class AgentClient {
     return unwrap<BatchEvaluateDTO>(r);
   }
 
+  /** POST /sessions/{id}/terminate — end an agent chat session (404 cross-
+   * tenant/unknown). The copilot creates sessions implicitly via chat; this is
+   * the explicit kill for a runaway/finished conversation. */
+  async terminateSession(sessionId: string): Promise<AgentSessionDTO> {
+    const r = await this.http.post<{ data: AgentSessionDTO } | AgentSessionDTO>(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/terminate`,
+      {},
+    );
+    return unwrap<AgentSessionDTO>(r);
+  }
+
+  /** POST /decision-models/{id}/evaluate?dry_run= — evaluate a PUBLISHED table
+   * against one case. dry_run=true returns outcome + fired rule with NO side
+   * effect (DM-FR-030); dry_run=false mints a governed four-eyes proposal on
+   * match (DM-FR-020). */
+  async evaluateDecisionModel(
+    id: string,
+    body: { case_id: string; fields?: Record<string, unknown> },
+    dryRun: boolean,
+    idempotencyKey?: string,
+  ): Promise<DecisionEvaluationDTO> {
+    const r = await this.http.post<{ data: DecisionEvaluationDTO } | DecisionEvaluationDTO>(
+      `/api/v1/decision-models/${encodeURIComponent(id)}/evaluate`,
+      { body, query: { dry_run: dryRun }, idempotencyKey },
+    );
+    return unwrap<DecisionEvaluationDTO>(r);
+  }
+
   // ---- BRD 55: decision outcome monitoring (realized outcomes on decisions) --
 
   /** GET /decisions/{ref}/outcome — the realized-outcome label, or 404. */
@@ -608,6 +784,29 @@ export class AgentClient {
     );
     return unwrap<DecisionEffectivenessDTO>(r);
   }
+}
+
+/** One agent chat session (agent-runtime session_view). */
+export interface AgentSessionDTO {
+  id: string;
+  agent_key?: string;
+  agent_version?: number;
+  context_urn?: string | null;
+  status?: string; // active | idle | expired | terminated
+  created_at?: string;
+  last_activity_at?: string;
+  expires_hard_at?: string;
+}
+
+/** POST /decision-models/{id}/evaluate result: the fired rule (or no match)
+ * and, when not a dry run, the minted proposal id. */
+export interface DecisionEvaluationDTO {
+  matched: boolean;
+  rule_index?: number | null;
+  explanation?: string;
+  outcome?: { disposition_code: string; severity: string } | null;
+  proposal_id?: string | null;
+  dry_run?: boolean;
 }
 
 /** One realized-outcome label on a decision (agent-runtime outcome_labels,

@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Play, Clock, Save, History, Pencil, Trash2, Layers } from "lucide-react";
+import { Play, Clock, Save, History, Pencil, Trash2, Layers, FlaskConical, Download, X } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
@@ -14,12 +14,14 @@ import {
   useRunSql,
   useRunSavedQuery,
   useDeleteSavedQuery,
+  useDryRunSql,
+  useExportQueryExecution,
 } from "@/lib/graphql/hooks";
-import type { QueryResult, SavedQuery, SavedQueryVersion } from "@/lib/graphql/types";
+import type { QueryResult, SavedQuery, SavedQueryVersion, SqlDryRun } from "@/lib/graphql/types";
 import { SavedQueryDialog } from "@/components/queries/SavedQueryDialog";
 import { VersionsDialog } from "@/components/queries/VersionsDialog";
 import { ExecutionsPanel } from "@/components/queries/ExecutionsPanel";
-import { formatLocal, formatNumber } from "@/lib/utils";
+import { formatBytes, formatLocal, formatNumber } from "@/lib/utils";
 import { t } from "@/lib/i18n/messages";
 
 const DEFAULT_SQL = "SELECT 1 AS example";
@@ -28,6 +30,7 @@ export default function QueriesPage() {
   const saved = useSavedQueries();
   const runSql = useRunSql();
   const runSaved = useRunSavedQuery();
+  const dryRun = useDryRunSql();
   const deleteMutation = useDeleteSavedQuery();
   const [sql, setSql] = useState(DEFAULT_SQL);
   const [activeName, setActiveName] = useState<string | null>(null);
@@ -53,6 +56,10 @@ export default function QueriesPage() {
     setActiveName(null);
     runSql.mutate({ sql, limit: 1000 });
   };
+
+  // Dry run: plan + cost estimate through the same governance path, no
+  // execution (query-service POST /sql/dry-run). Shown above the results.
+  const execDryRun = () => dryRun.mutate({ sql, limit: 1000 });
 
   const execSaved = (q: SavedQuery) => {
     setActiveName(q.name);
@@ -131,6 +138,14 @@ export default function QueriesPage() {
                       <Save /> {t("queries.save")}
                     </Button>
                   </Can>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={execDryRun}
+                    disabled={dryRun.isPending || sql.trim().length === 0}
+                  >
+                    <FlaskConical /> {dryRun.isPending ? "Estimating…" : "Dry run"}
+                  </Button>
                   <Button size="sm" onClick={execAdhoc} disabled={pending || sql.trim().length === 0}>
                     <Play /> {pending ? "Running…" : "Run"}
                   </Button>
@@ -153,6 +168,14 @@ export default function QueriesPage() {
                 </p>
               </CardContent>
             </Card>
+
+            {(dryRun.data || dryRun.error) && (
+              <DryRunPanel
+                estimate={dryRun.data}
+                error={dryRun.error as Error | null}
+                onDismiss={() => dryRun.reset()}
+              />
+            )}
 
             <ResultPanel result={result} error={runError} isPending={pending} />
           </div>
@@ -263,6 +286,110 @@ export default function QueriesPage() {
   );
 }
 
+/** Cost/row estimate from a dry run (query-service POST /sql/dry-run,
+ * QRY-FR-041): engine routing, estimated scan bytes/rows and the ceiling
+ * verdict — shown BEFORE the user commits to a real run. */
+function DryRunPanel({
+  estimate,
+  error,
+  onDismiss,
+}: {
+  estimate?: SqlDryRun;
+  error: Error | null;
+  onDismiss: () => void;
+}) {
+  return (
+    <Card data-testid="dry-run-panel">
+      <CardHeader className="flex-row items-center justify-between gap-2">
+        <CardTitle className="text-sm">Dry-run estimate</CardTitle>
+        <Button variant="ghost" size="icon" aria-label="Dismiss estimate" onClick={onDismiss}>
+          <X />
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        {error ? (
+          // e.g. 422 COST_CEILING_EXCEEDED — the real downstream verdict.
+          <p className="text-destructive">{error.message}</p>
+        ) : estimate ? (
+          <>
+            <p className="flex flex-wrap items-center gap-2 text-xs">
+              {estimate.engine && <Badge variant="secondary">{estimate.engine}</Badge>}
+              {estimate.ceilingVerdict && (
+                <Badge variant={estimate.ceilingVerdict === "ok" ? "success" : "destructive"}>
+                  ceilings {estimate.ceilingVerdict}
+                </Badge>
+              )}
+              {estimate.confidence && (
+                <span className="text-muted-foreground">confidence {estimate.confidence}</span>
+              )}
+            </p>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+              <div>
+                <dt className="text-muted-foreground">Estimated scan</dt>
+                <dd className="tabular-nums">{formatBytes(estimate.estimatedScanBytes)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Estimated rows</dt>
+                <dd className="tabular-nums">{formatNumber(estimate.estimatedRows)}</dd>
+              </div>
+              {estimate.partitionsPruned && (
+                <div>
+                  <dt className="text-muted-foreground">Partitions pruned</dt>
+                  <dd className="tabular-nums">{estimate.partitionsPruned}</dd>
+                </div>
+              )}
+            </dl>
+            {estimate.routingReason && (
+              <p className="text-xs text-muted-foreground">Routing: {estimate.routingReason}</p>
+            )}
+            {Array.isArray(estimate.warnings) && estimate.warnings.length > 0 && (
+              <ul className="list-inside list-disc text-xs text-muted-foreground">
+                {(estimate.warnings as unknown[]).map((w, i) => (
+                  <li key={i}>{String(w)}</li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Mint + link a signed CSV export of the current result's execution
+ * (query-service POST /executions/{id}/export → same-origin
+ * /api/query-export/{token} proxy). */
+function ExportResultButton({ executionId }: { executionId: string }) {
+  const exportMutation = useExportQueryExecution();
+  const descriptor = exportMutation.data;
+  // The service path is /api/v1/downloads/{token}; the proxy takes the token.
+  const token = descriptor?.downloadPath.split("/").pop() ?? null;
+  return (
+    <span className="flex items-center gap-2">
+      {token ? (
+        <a
+          href={`/api/query-export/${encodeURIComponent(token)}`}
+          className="flex items-center gap-1 text-xs text-primary hover:underline"
+        >
+          <Download className="size-3" aria-hidden /> Download CSV
+        </a>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={exportMutation.isPending}
+          onClick={() => exportMutation.mutate({ id: executionId, format: "csv" })}
+        >
+          <Download /> {exportMutation.isPending ? "Preparing…" : "Export CSV"}
+        </Button>
+      )}
+      {exportMutation.error && (
+        <span className="text-xs text-destructive">{(exportMutation.error as Error).message}</span>
+      )}
+    </span>
+  );
+}
+
 function ResultPanel({
   result,
   error,
@@ -316,6 +443,9 @@ function ResultPanel({
           {result.engine && <Badge variant="secondary">{result.engine}</Badge>}
           {result.cacheHit && <Badge variant="secondary">cache</Badge>}
           {result.durationMs != null && <span className="tabular-nums">{result.durationMs} ms</span>}
+          <Can gate={FEATURE_GATES.exportQueryResults}>
+            <ExportResultButton key={result.executionId} executionId={result.executionId} />
+          </Can>
         </p>
       </CardHeader>
       <CardContent className="p-0">

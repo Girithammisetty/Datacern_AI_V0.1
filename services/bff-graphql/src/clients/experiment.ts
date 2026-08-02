@@ -473,6 +473,30 @@ export class ExperimentClient {
     return unwrap<ExperimentDTO>(r);
   }
 
+  /** PATCH /runs/{id} — edit run metadata (name/note/tags, exclude_unset).
+   * Needs experiment.run.update. */
+  async patchRun(runId: string, body: { name?: string; note?: string; tags?: Record<string, unknown> }): Promise<RunDTO> {
+    const r = await this.http.patch<{ data: RunDetailDTO | RunDTO } | RunDetailDTO | RunDTO>(
+      `/api/v1/runs/${encodeURIComponent(runId)}`,
+      { body },
+    );
+    const b = unwrap<RunDetailDTO | RunDTO>(r);
+    // Same nested-detail normalization as run() above.
+    if (b && typeof b === "object" && "run" in b && b.run && typeof b.run === "object") {
+      const detail = b as RunDetailDTO;
+      return { ...detail.run!, params: detail.params, metrics: detail.metrics };
+    }
+    return b as RunDTO;
+  }
+
+  /** DELETE /runs/{id} — delete a run. Needs experiment.run.delete. */
+  async deleteRun(runId: string): Promise<boolean> {
+    const r = await this.http.delete<{ data: { id: string; deleted: boolean } }>(
+      `/api/v1/runs/${encodeURIComponent(runId)}`,
+    );
+    return unwrap<{ id: string; deleted: boolean }>(r).deleted;
+  }
+
   /** PUT /runs/{id}/note — upsert the run's note (PUT and POST share the same
    * upsert handler; PUT is used so repeats are idempotent). Needs experiment.run.update. */
   async upsertRunNote(runId: string, description: string): Promise<RunNoteDTO> {

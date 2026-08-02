@@ -1,7 +1,7 @@
 "use client";
 import { use, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Briefcase, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Briefcase, FileDown, Pencil, Plus, Table2, Trash2, X } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, Badge } from "@/components/ui
 import { Button } from "@/components/ui/button";
 import { ChartView } from "@/components/charts/ChartView";
 import { ChartEditor } from "@/components/charts/ChartEditor";
+import { ChartExportButton } from "@/components/charts/ChartExportButton";
 import { DatasetRowsGrid } from "@/components/data/DatasetRowsGrid";
 import { FEATURE_GATES, cap } from "@/lib/authz/registry";
 import {
@@ -20,6 +21,8 @@ import {
   useDeleteDashboard,
   useArchiveDashboard,
   useChartDrillTarget,
+  useChartDrilldown,
+  useExportDashboardBundle,
 } from "@/lib/graphql/hooks";
 import type { Chart } from "@/lib/graphql/types";
 import {
@@ -66,6 +69,31 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
   });
   const drillTarget = drillQ.data?.chartDrillTarget ?? null;
 
+  // Aggregate → raw-rows drilldown (chart-service POST /charts/{id}/drilldown,
+  // CHART-FR-040): available on charts whose display_meta declares a drilldown
+  // saved query; the clicked dimension/value arrives as a bind predicate.
+  const [rowsDrill, setRowsDrill] = useState<{ chartId: string; name: string; dimension: string; value: string } | null>(null);
+  const rowsDrillQ = useChartDrilldown(
+    rowsDrill?.chartId ?? null,
+    rowsDrill ? { dimension: rowsDrill.dimension, value: rowsDrill.value, limit: 50 } : null,
+  );
+
+  // Dashboard portability: download the export bundle as a JSON file (plain
+  // JSON via GraphQL — no proxy needed, unlike the CSV artifact downloads).
+  const exportBundle = useExportDashboardBundle();
+  const downloadBundle = () =>
+    exportBundle.mutate(id, {
+      onSuccess: (bundle) => {
+        const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `dashboard-${id}.bundle.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+    });
+
   return (
     <div>
       <AsyncBoundary
@@ -91,6 +119,11 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
                       }}
                     >
                       <Plus /> {t("dashboards.addChart")}
+                    </Button>
+                  </Can>
+                  <Can gate={FEATURE_GATES.exportDashboardBundle}>
+                    <Button variant="outline" onClick={downloadBundle} disabled={exportBundle.isPending}>
+                      <FileDown /> {exportBundle.isPending ? "Exporting…" : "Export bundle"}
                     </Button>
                   </Can>
                   {!dash.archived && (
@@ -169,6 +202,13 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
                   const onSelect = field
                     ? (value: string) => setFilters((cur) => toggleCrossFilter(cur, chart.id, field, value))
                     : undefined;
+                  // Aggregate → raw-rows drilldown is available when the chart's
+                  // display_meta declares a drilldown saved query AND a segment
+                  // is selected (the clicked value becomes the bind predicate).
+                  const drilldownConfigured = Boolean(
+                    (chart.displayMeta as { drilldown?: { query_urn?: string } } | null)?.drilldown?.query_urn,
+                  );
+                  const selected = selectedValueFor(filters, chart.id);
                   return (
                     <Card key={chart.id}>
                       <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
@@ -179,6 +219,22 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
                         <div className="flex items-center gap-2">
                           {/* AC-4: provenance badge on AI-generated charts. */}
                           <ProvenanceBadge provenance={chart.provenance} />
+                          {drilldownConfigured && field && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Drill into ${chart.name ?? chart.id}`}
+                              title={selected != null ? "View underlying rows for the selection" : "Select a segment first to drill into its rows"}
+                              disabled={selected == null}
+                              onClick={() =>
+                                selected != null &&
+                                setRowsDrill({ chartId: chart.id, name: chart.name ?? chart.id, dimension: field, value: selected })
+                              }
+                            >
+                              <Table2 />
+                            </Button>
+                          )}
+                          <ChartExportButton chartId={chart.id} />
                           {/* A manager consuming a grid can bulk-create cases from
                               its records directly — no chart-click required. */}
                           {field && (chart.chartType === "grid_chart" || chart.chartType === "pivot_table_chart") && (
@@ -295,6 +351,47 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
               }}
             />
 
+            {/* Aggregate → raw-rows drilldown modal (chart-service
+                POST /charts/{id}/drilldown): the clicked segment's dimension/
+                value arrives as a bind predicate over the chart's drilldown
+                saved query; first page capped at 50 rows. */}
+            <Dialog.Root open={!!rowsDrill} onOpenChange={(o) => !o && setRowsDrill(null)}>
+              <Dialog.Portal>
+                <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40" />
+                <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(900px,94vw)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg border bg-background p-5 shadow-lg">
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <div>
+                      <Dialog.Title className="text-lg font-semibold">Underlying rows</Dialog.Title>
+                      {rowsDrill && (
+                        <Dialog.Description className="text-sm text-muted-foreground">
+                          {rowsDrill.name} · {rowsDrill.dimension}:{" "}
+                          <span className="font-medium">{rowsDrill.value}</span>
+                        </Dialog.Description>
+                      )}
+                    </div>
+                    <Dialog.Close asChild>
+                      <Button variant="ghost" size="icon" aria-label="Close drilldown">
+                        <X />
+                      </Button>
+                    </Dialog.Close>
+                  </div>
+                  {rowsDrillQ.isFetching && !rowsDrillQ.data ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">{t("state.loading")}</p>
+                  ) : rowsDrillQ.isError ? (
+                    <p className="py-8 text-center text-sm text-destructive">
+                      {(rowsDrillQ.error as Error).message}
+                    </p>
+                  ) : (
+                    <DrilldownRowsTable
+                      columns={rowsDrillQ.data?.columns}
+                      rows={rowsDrillQ.data?.rows}
+                      hasMore={rowsDrillQ.data?.hasMore ?? false}
+                    />
+                  )}
+                </Dialog.Content>
+              </Dialog.Portal>
+            </Dialog.Root>
+
             {/* Drill-through → create cases modal. Resolves the selected chart
                 to its backing dataset, then hosts the proven dataset-rows grid
                 pre-filtered to the clicked segment; cases carry dashboard_urn. */}
@@ -350,6 +447,58 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
           </>
         )}
       </AsyncBoundary>
+    </div>
+  );
+}
+
+/** Render a drilldown page: columns are query-service exec columns
+ * ({name,type} objects or bare strings); rows are positional cell arrays. */
+function DrilldownRowsTable({
+  columns,
+  rows,
+  hasMore,
+}: {
+  columns?: unknown;
+  rows?: unknown;
+  hasMore: boolean;
+}) {
+  const cols = (Array.isArray(columns) ? columns : []).map((c) =>
+    typeof c === "string" ? c : String((c as { name?: unknown })?.name ?? ""),
+  );
+  const rowList = (Array.isArray(rows) ? rows : []) as unknown[][];
+  if (cols.length === 0 && rowList.length === 0) {
+    return <p className="py-8 text-center text-sm text-muted-foreground">No rows behind this segment.</p>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm" aria-label="Drilldown rows">
+        <thead>
+          <tr className="border-b bg-muted/40 text-left">
+            {cols.map((c) => (
+              <th key={c} className="whitespace-nowrap px-3 py-2 font-medium">{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rowList.map((row, i) => (
+            <tr key={i} className="border-b last:border-0">
+              {cols.map((c, j) => {
+                const v = Array.isArray(row) ? row[j] : (row as Record<string, unknown>)[c];
+                return (
+                  <td key={c} className="whitespace-nowrap px-3 py-1.5 font-mono text-xs tabular-nums">
+                    {v == null ? "∅" : typeof v === "object" ? JSON.stringify(v) : String(v)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {hasMore && (
+        <p className="border-t px-3 py-2 text-xs text-muted-foreground">
+          Showing the first page; more rows exist behind this segment.
+        </p>
+      )}
     </div>
   );
 }

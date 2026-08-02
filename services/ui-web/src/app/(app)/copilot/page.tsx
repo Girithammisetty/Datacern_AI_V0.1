@@ -27,7 +27,7 @@ export default function CopilotPage() {
   const session = useSession();
   const contextUrn = `wr:${session.tenantId}:workspace:${session.workspaceId}`;
   const [agentKey, setAgentKey] = useState<string>("analytics");
-  const { messages, streaming, send } = useCopilotThread(contextUrn, agentKey);
+  const { messages, streaming, send, endSession, hasSession } = useCopilotThread(contextUrn, agentKey);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -57,6 +57,15 @@ export default function CopilotPage() {
                 </option>
               ))}
             </select>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!hasSession || streaming}
+              title="Terminate the agent session — the conversation refuses further turns"
+              onClick={() => void endSession()}
+            >
+              End session
+            </Button>
             <AiLabel />
           </div>
         }

@@ -10,6 +10,9 @@ import type {
   AgentFleetSummary,
   AlgorithmTemplate,
   AuditEvent,
+  AuditEventDetail,
+  AuditExportBatch,
+  AuditExportFile,
   Case,
   CaseComment,
   CaseActivity,
@@ -35,6 +38,11 @@ import type {
   RateCard,
   CreateRateCardInput,
   Anomaly,
+  UsageMeter,
+  ChargebackLine,
+  Reconciliation,
+  UsageAdjustment,
+  CreateUsageAdjustmentInput,
   ValueSummary,
   ValueTrend,
   ValueAssumptions,
@@ -65,6 +73,18 @@ import type {
   SavedQueryInput,
   QueryExecution,
   QueryStats,
+  // Query governance + dry-run + result export (query-service).
+  QueryLimits,
+  QueryLimitsInput,
+  SqlDryRun,
+  QueryExportDescriptor,
+  // Chart drilldown + export + portability + links (chart-service).
+  ChartDrilldownRows,
+  ChartDrilldownInput,
+  ChartExportOperation,
+  DashboardImportResult,
+  ChartLink,
+  ChartLinkInput,
   IngestionSchedule,
   CreateIngestionScheduleInput,
   UpdateIngestionScheduleInput,
@@ -99,6 +119,10 @@ import type {
   UpdateRoleInput,
   CreateServiceAccountInput,
   CreatedServiceAccount,
+  // BRD 60 WS2: external-agent credentials (register carries the key once).
+  ExternalAgent,
+  RegisterExternalAgentInput,
+  RegisteredExternalAgent,
   EffectiveAccessEntry,
   ContentGrant,
   CreateContentGrantInput,
@@ -152,6 +176,14 @@ import type {
   BatchEvaluateResult,
   DecisionOutcomeLabel,
   DecisionEffectiveness,
+  DecisionEvaluation,
+  AgentChatSession,
+  AiSpendFreeze,
+  ProvisioningStep,
+  PocProgress,
+  PocReportExport,
+  ToolDiscoveryHit,
+  RbacAction,
   ResolutionRun,
   ResolutionRunDetail,
   MergeCandidate,
@@ -176,6 +208,11 @@ import type {
   KillSwitchLiftResult,
   MemoryRecord,
   ErasureRequest,
+  MemoryRetrievalResult,
+  CorpusStatus,
+  RagCorpus,
+  CorpusRebuildReport,
+  MemoryPolicy,
   AuthzExplanation,
   ChainVerifyResult,
   ComplianceJob,
@@ -230,6 +267,10 @@ import type {
   AgentDefinition,
   AgentVersionInfo,
   AgentVersionPublishResult,
+  AgentRollout,
+  AgentRolloutActionResult,
+  RetrainWatch,
+  RetrainWatchDeleteResult,
   TenantAgentConfig,
   AgentRunListItem,
   TenantBranding,
@@ -497,6 +538,188 @@ export const NEW_DECISION_MODEL_VERSION = /* GraphQL */ `
   }
 `;
 export interface NewDecisionModelVersionResult { newDecisionModelVersion: DecisionModel }
+
+export const PATCH_RUN = /* GraphQL */ `
+  mutation PatchRun($runId: ID!, $name: String, $note: String, $tags: JSON) {
+    patchRun(runId: $runId, name: $name, note: $note, tags: $tags) { id name status }
+  }
+`;
+export interface PatchRunResult { patchRun: { id: string; name?: string | null; status?: string | null } }
+
+export const DELETE_RUN = /* GraphQL */ `
+  mutation DeleteRun($runId: ID!) {
+    deleteRun(runId: $runId)
+  }
+`;
+export interface DeleteRunResult { deleteRun: boolean }
+
+export const CLEAR_AI_CACHE = /* GraphQL */ `
+  mutation ClearAiCache($scope: String!, $workspaceId: String) {
+    clearAiCache(scope: $scope, workspaceId: $workspaceId)
+  }
+`;
+export interface ClearAiCacheResult { clearAiCache: number }
+
+const TENANT_LIFECYCLE_FIELDS = `id name displayName status tier cloud ownerEmail`;
+
+export const DISCOVER_TOOLS = /* GraphQL */ `
+  query DiscoverTools($query: String!, $topK: Int) {
+    discoverTools(query: $query, topK: $topK) { toolId version score tier description }
+  }
+`;
+export interface DiscoverToolsResult { discoverTools: ToolDiscoveryHit[] }
+
+export const RBAC_ACTIONS = /* GraphQL */ `
+  query RbacActions {
+    rbacActions { action service resource verb workspaceScoped description }
+  }
+`;
+export interface RbacActionsResult { rbacActions: RbacAction[] }
+
+export const POC_PROGRESS = /* GraphQL */ `
+  query PocProgress($tenantId: ID!) {
+    pocProgress(tenantId: $tenantId) {
+      tenantId windowStart windowEnd asOf
+      criteria { key description metricRef target direction manualValue actualValue outcome dataSource }
+    }
+  }
+`;
+export interface PocProgressResult { pocProgress: PocProgress }
+
+export const POC_REPORTS = /* GraphQL */ `
+  query PocReports($tenantId: ID!) {
+    pocReports(tenantId: $tenantId) { id version jsonSha256 generatedBy createdAt jsonUrl }
+  }
+`;
+export interface PocReportsResult { pocReports: PocReportExport[] }
+
+export const EXPORT_POC_REPORT = /* GraphQL */ `
+  mutation ExportPocReport($tenantId: ID!, $idempotencyKey: String!) {
+    exportPocReport(tenantId: $tenantId, idempotencyKey: $idempotencyKey) {
+      id version jsonSha256 createdAt jsonUrl
+    }
+  }
+`;
+export interface ExportPocReportResult { exportPocReport: PocReportExport }
+
+export const CREATE_DEMO_TENANT = /* GraphQL */ `
+  mutation CreateDemoTenant($input: CreateDemoTenantInput!, $idempotencyKey: String!) {
+    createDemoTenant(input: $input, idempotencyKey: $idempotencyKey) {
+      tenant { ${TENANT_LIFECYCLE_FIELDS} } operationId
+    }
+  }
+`;
+export interface CreateDemoTenantResult { createDemoTenant: { tenant: Tenant; operationId: string | null } }
+
+export const RESET_DEMO_TENANT = /* GraphQL */ `
+  mutation ResetDemoTenant($id: ID!) { resetDemoTenant(id: $id) { ${TENANT_LIFECYCLE_FIELDS} } }
+`;
+export interface ResetDemoTenantResult { resetDemoTenant: Tenant }
+
+export const CREATE_POC_TENANT = /* GraphQL */ `
+  mutation CreatePocTenant($input: CreatePocTenantInput!, $idempotencyKey: String!) {
+    createPocTenant(input: $input, idempotencyKey: $idempotencyKey) {
+      tenant { ${TENANT_LIFECYCLE_FIELDS} } operationId
+    }
+  }
+`;
+export interface CreatePocTenantResult { createPocTenant: { tenant: Tenant; operationId: string | null } }
+
+export const SET_POC_MANUAL_VALUE = /* GraphQL */ `
+  mutation SetPocManualValue($tenantId: ID!, $key: String!, $value: Float!) {
+    setPocManualValue(tenantId: $tenantId, key: $key, value: $value)
+  }
+`;
+export interface SetPocManualValueResult { setPocManualValue: boolean }
+
+export const START_TRIAL = /* GraphQL */ `
+  mutation StartTrial($id: ID!, $trialDays: Int) { startTrial(id: $id, trialDays: $trialDays) }
+`;
+export interface StartTrialResult { startTrial: boolean }
+
+export const CONVERT_TRIAL = /* GraphQL */ `
+  mutation ConvertTrial($id: ID!) { convertTrial(id: $id) }
+`;
+export interface ConvertTrialResult { convertTrial: boolean }
+
+export const TENANT_PROVISIONING = /* GraphQL */ `
+  query TenantProvisioning($id: ID!) {
+    tenantProvisioning(id: $id) {
+      id stepIndex stepName status attempt error compensation startedAt completedAt
+    }
+  }
+`;
+export interface TenantProvisioningResult { tenantProvisioning: ProvisioningStep[] }
+
+export const CREATE_TENANT = /* GraphQL */ `
+  mutation CreateTenant($input: CreateTenantInput!, $idempotencyKey: String!) {
+    createTenant(input: $input, idempotencyKey: $idempotencyKey) {
+      tenant { ${TENANT_LIFECYCLE_FIELDS} } operationId
+    }
+  }
+`;
+export interface CreateTenantResult2 { createTenant: { tenant: Tenant; operationId: string | null } }
+
+export const PUBLISH_TENANT = /* GraphQL */ `
+  mutation PublishTenant($id: ID!) { publishTenant(id: $id) }
+`;
+export interface PublishTenantResult { publishTenant: string }
+
+export const SUSPEND_TENANT = /* GraphQL */ `
+  mutation SuspendTenant($id: ID!) { suspendTenant(id: $id) { ${TENANT_LIFECYCLE_FIELDS} } }
+`;
+export interface SuspendTenantResult { suspendTenant: Tenant }
+
+export const REACTIVATE_TENANT = /* GraphQL */ `
+  mutation ReactivateTenant($id: ID!) {
+    reactivateTenant(id: $id) { tenant { ${TENANT_LIFECYCLE_FIELDS} } drift }
+  }
+`;
+export interface ReactivateTenantResult { reactivateTenant: { tenant: Tenant; drift?: unknown } }
+
+export const RETRY_TENANT_PROVISIONING = /* GraphQL */ `
+  mutation RetryTenantProvisioning($id: ID!) { retryTenantProvisioning(id: $id) }
+`;
+export interface RetryTenantProvisioningResult { retryTenantProvisioning: string }
+
+export const AI_SPEND_FREEZES = /* GraphQL */ `
+  query AiSpendFreezes {
+    aiSpendFreezes { scope reason frozenBy frozenAt }
+  }
+`;
+export interface AiSpendFreezesResult { aiSpendFreezes: AiSpendFreeze[] }
+
+export const CREATE_AI_SPEND_FREEZE = /* GraphQL */ `
+  mutation CreateAiSpendFreeze($scope: String!, $tenantId: String, $reason: String!, $idempotencyKey: String!) {
+    createAiSpendFreeze(scope: $scope, tenantId: $tenantId, reason: $reason, idempotencyKey: $idempotencyKey) {
+      scope reason frozenBy frozenAt
+    }
+  }
+`;
+export interface CreateAiSpendFreezeResult { createAiSpendFreeze: AiSpendFreeze }
+
+export const CLEAR_AI_SPEND_FREEZE = /* GraphQL */ `
+  mutation ClearAiSpendFreeze($scope: String!, $tenantId: String) {
+    clearAiSpendFreeze(scope: $scope, tenantId: $tenantId) { scope cleared }
+  }
+`;
+export interface ClearAiSpendFreezeResult { clearAiSpendFreeze: { scope: string; cleared: boolean } }
+
+export const EVALUATE_DECISION_MODEL = /* GraphQL */ `
+  mutation EvaluateDecisionModel($id: ID!, $caseId: ID!, $dryRun: Boolean!, $idempotencyKey: String!) {
+    evaluateDecisionModel(id: $id, caseId: $caseId, dryRun: $dryRun, idempotencyKey: $idempotencyKey) {
+      matched ruleIndex explanation outcome { dispositionCode severity } proposalId dryRun
+    }
+  }
+`;
+export interface EvaluateDecisionModelResult { evaluateDecisionModel: DecisionEvaluation }
+
+export const TERMINATE_AGENT_CHAT_SESSION = /* GraphQL */ `
+  mutation TerminateAgentChatSession($id: ID!) {
+    terminateAgentChatSession(id: $id) { id status agentKey }
+  }
+`;
+export interface TerminateAgentChatSessionResult { terminateAgentChatSession: AgentChatSession }
 
 // ---- BRD 55: decision outcome monitoring -----------------------------------
 const OUTCOME_LABEL_FIELDS = `
@@ -1147,6 +1370,57 @@ export const QUERY_STATS = /* GraphQL */ `
 `;
 export interface QueryStatsResult {
   queryStats: QueryStats;
+}
+
+/* ---------- query governance: limits, dry-run, result export (query-service) ---------- */
+const QUERY_CEILING_FIELDS = /* GraphQL */ `
+  maxScanBytes maxRuntimeS maxResultBytes maxResultRows
+`;
+const QUERY_LIMITS_FIELDS = /* GraphQL */ `
+  overrides { ${QUERY_CEILING_FIELDS} concurrentSlots warehousePrimary updatedBy }
+  effectiveUser { ${QUERY_CEILING_FIELDS} }
+  effectiveAgent { ${QUERY_CEILING_FIELDS} }
+  platformMaxima { ${QUERY_CEILING_FIELDS} }
+`;
+
+export const QUERY_LIMITS = /* GraphQL */ `
+  query QueryLimits {
+    queryLimits { ${QUERY_LIMITS_FIELDS} }
+  }
+`;
+export interface QueryLimitsResult {
+  queryLimits: QueryLimits;
+}
+
+export const SET_QUERY_LIMITS = /* GraphQL */ `
+  mutation SetQueryLimits($input: QueryLimitsInput!) {
+    setQueryLimits(input: $input) { ${QUERY_LIMITS_FIELDS} }
+  }
+`;
+export interface SetQueryLimitsResult {
+  setQueryLimits: QueryLimits;
+}
+export type { QueryLimitsInput };
+
+export const DRY_RUN_SQL = /* GraphQL */ `
+  mutation DryRunSql($input: RunSqlInput!) {
+    dryRunSql(input: $input) {
+      engine routingReason estimatedScanBytes estimatedRows partitionsPruned
+      confidence ceilingVerdict ceilings { ${QUERY_CEILING_FIELDS} } warnings
+    }
+  }
+`;
+export interface DryRunSqlResult {
+  dryRunSql: SqlDryRun;
+}
+
+export const EXPORT_QUERY_EXECUTION = /* GraphQL */ `
+  mutation ExportQueryExecution($id: ID!, $format: String) {
+    exportQueryExecution(id: $id, format: $format) { format downloadPath expiresAt }
+  }
+`;
+export interface ExportQueryExecutionResult {
+  exportQueryExecution: QueryExportDescriptor;
 }
 
 /* ---------- pipelines: step catalog, templates, runs (no-code builder) ---------- */
@@ -2657,6 +2931,79 @@ export const DELETE_CHART = /* GraphQL */ `
 export interface DeleteChartResult {
   deleteChart: boolean;
 }
+
+/* ---------- chart drilldown + export + dashboard portability (chart-service) ---------- */
+export const CHART_DRILLDOWN = /* GraphQL */ `
+  query ChartDrilldown($chartId: ID!, $input: ChartDrilldownInput!) {
+    chartDrilldown(chartId: $chartId, input: $input) { columns rows nextCursor hasMore }
+  }
+`;
+export interface ChartDrilldownResult {
+  chartDrilldown: ChartDrilldownRows;
+}
+
+const CHART_EXPORT_OPERATION_FIELDS = /* GraphQL */ `
+  id chartId kind format status artifactUrl error expiresAt createdAt updatedAt
+`;
+
+export const EXPORT_CHART = /* GraphQL */ `
+  mutation ExportChart($id: ID!, $format: String!) {
+    exportChart(id: $id, format: $format) { ${CHART_EXPORT_OPERATION_FIELDS} }
+  }
+`;
+export interface ExportChartResult {
+  exportChart: ChartExportOperation;
+}
+
+export const CHART_EXPORT_OPERATION = /* GraphQL */ `
+  query ChartExportOperation($id: ID!) {
+    chartExportOperation(id: $id) { ${CHART_EXPORT_OPERATION_FIELDS} }
+  }
+`;
+export interface ChartExportOperationResult {
+  chartExportOperation: ChartExportOperation | null;
+}
+
+export const EXPORT_DASHBOARD_BUNDLE = /* GraphQL */ `
+  mutation ExportDashboardBundle($id: ID!) {
+    exportDashboardBundle(id: $id)
+  }
+`;
+export interface ExportDashboardBundleResult {
+  exportDashboardBundle: JSONValue;
+}
+
+export const IMPORT_DASHBOARD = /* GraphQL */ `
+  mutation ImportDashboard($bundle: JSON!, $urnMapping: JSON, $idempotencyKey: String) {
+    importDashboard(bundle: $bundle, urnMapping: $urnMapping, idempotencyKey: $idempotencyKey) {
+      dashboardId chartsCreated
+    }
+  }
+`;
+export interface ImportDashboardResult {
+  importDashboard: DashboardImportResult;
+}
+
+export const SET_CHART_LINK = /* GraphQL */ `
+  mutation SetChartLink($chartId: ID!, $input: ChartLinkInput!) {
+    setChartLink(chartId: $chartId, input: $input) {
+      parentChartId childChartId linkType linkedColumns
+    }
+  }
+`;
+export interface SetChartLinkResult {
+  setChartLink: ChartLink;
+}
+
+export const DELETE_CHART_LINK = /* GraphQL */ `
+  mutation DeleteChartLink($chartId: ID!, $childChartId: ID!) {
+    deleteChartLink(chartId: $chartId, childChartId: $childChartId)
+  }
+`;
+export interface DeleteChartLinkResult {
+  deleteChartLink: boolean;
+}
+
 export type {
   ChartType,
   SemanticModel,
@@ -2665,6 +3012,8 @@ export type {
   UpdateChartInput,
   CreateDashboardInput,
   UpdateDashboardInput,
+  ChartDrilldownInput,
+  ChartLinkInput,
 };
 
 export const WORKSPACE_COST_PANEL = /* GraphQL */ `
@@ -2774,6 +3123,58 @@ export const DISMISS_ANOMALY = /* GraphQL */ `
 export interface DismissAnomalyResult {
   dismissAnomaly: Anomaly;
 }
+
+/* ------- billing depth (BRD 67) ------- */
+
+export const USAGE_METERS = /* GraphQL */ `
+  query UsageMeters {
+    usageMeters { meterKey unit aggregation description dimensions deprecated }
+  }
+`;
+export interface UsageMetersResult {
+  usageMeters: UsageMeter[];
+}
+
+const CHARGEBACK_LINE_FIELDS = /* GraphQL */ `tenantId workspaceId month meterKey quantity rateCardId pricePerUnitUsd usd adjustmentsUsd totalUsd`;
+
+export const CHARGEBACK_REPORT = /* GraphQL */ `
+  query ChargebackReport($month: String!) {
+    chargebackReport(month: $month) { ${CHARGEBACK_LINE_FIELDS} }
+  }
+`;
+export interface ChargebackReportResult {
+  chargebackReport: ChargebackLine[];
+}
+
+const RECONCILIATION_FIELDS = /* GraphQL */ `id urn month provider status reportUri createdAt`;
+
+export const RECONCILIATIONS = /* GraphQL */ `
+  query Reconciliations {
+    reconciliations { ${RECONCILIATION_FIELDS} }
+  }
+`;
+export interface ReconciliationsResult {
+  reconciliations: Reconciliation[];
+}
+
+export const ACKNOWLEDGE_RECONCILIATION = /* GraphQL */ `
+  mutation AcknowledgeReconciliation($id: ID!) {
+    acknowledgeReconciliation(id: $id) { ${RECONCILIATION_FIELDS} }
+  }
+`;
+export interface AcknowledgeReconciliationResult {
+  acknowledgeReconciliation: Reconciliation;
+}
+
+export const CREATE_USAGE_ADJUSTMENT = /* GraphQL */ `
+  mutation CreateUsageAdjustment($input: CreateUsageAdjustmentInput!) {
+    createUsageAdjustment(input: $input) { id urn meterKey month quantityDelta usdDelta reason }
+  }
+`;
+export interface CreateUsageAdjustmentResult {
+  createUsageAdjustment: UsageAdjustment;
+}
+export type { CreateUsageAdjustmentInput };
 
 /* ------- value & ROI reporting (BRD 69) ------- */
 
@@ -3149,6 +3550,40 @@ export interface RevokeServiceAccountResult {
   revokeServiceAccount: boolean;
 }
 
+/* ---- BRD 60 WS2: external-agent credentials (tenant admin) ---------------- */
+const EXTERNAL_AGENT_FIELDS = /* GraphQL */ `id urn agentId agentVersion scopes label active createdBy createdAt lastUsedAt`;
+
+export const EXTERNAL_AGENTS = /* GraphQL */ `
+  query ExternalAgents {
+    externalAgents { ${EXTERNAL_AGENT_FIELDS} }
+  }
+`;
+export interface ExternalAgentsResult {
+  externalAgents: ExternalAgent[];
+}
+
+export const REGISTER_EXTERNAL_AGENT = /* GraphQL */ `
+  mutation RegisterExternalAgent($input: RegisterExternalAgentInput!, $idempotencyKey: String) {
+    registerExternalAgent(input: $input, idempotencyKey: $idempotencyKey) {
+      externalAgent { ${EXTERNAL_AGENT_FIELDS} }
+      apiKey
+    }
+  }
+`;
+export interface RegisterExternalAgentResult {
+  registerExternalAgent: RegisteredExternalAgent;
+}
+export type { RegisterExternalAgentInput };
+
+export const REVOKE_EXTERNAL_AGENT = /* GraphQL */ `
+  mutation RevokeExternalAgent($id: ID!) {
+    revokeExternalAgent(id: $id)
+  }
+`;
+export interface RevokeExternalAgentResult {
+  revokeExternalAgent: boolean;
+}
+
 export const UPDATE_WORKSPACE = /* GraphQL */ `
   mutation UpdateWorkspace($id: ID!, $input: UpdateWorkspaceInput!, $idempotencyKey: String) {
     updateWorkspace(id: $id, input: $input, idempotencyKey: $idempotencyKey) { ${WORKSPACE_FIELDS} }
@@ -3462,6 +3897,80 @@ export const AUDIT_EVENTS = /* GraphQL */ `
 `;
 export interface AuditEventsResult {
   auditEvents: Connection<AuditEvent>;
+}
+
+/** Dual-attribution activity for one agent (audit-service GET
+ * /audit/agent-activity). Bounded at 200 rows — hasMore is always false. */
+export const AUDIT_AGENT_ACTIVITY = /* GraphQL */ `
+  query AuditAgentActivity(
+    $agentId: ID!, $oboUserId: String, $from: DateTime, $to: DateTime,
+    $includeAutonomous: Boolean
+  ) {
+    auditAgentActivity(
+      agentId: $agentId, oboUserId: $oboUserId, from: $from, to: $to,
+      includeAutonomous: $includeAutonomous
+    ) {
+      nodes {
+        eventId urn eventType tenantId actorType actorId viaAgentId viaAgentVersion
+        action resourceUrn occurredAt ingestedAt traceId payloadDigest bodyWithheld chainSeq
+      }
+      pageInfo { nextCursor hasMore }
+    }
+  }
+`;
+export interface AuditAgentActivityResult {
+  auditAgentActivity: Connection<AuditEvent>;
+}
+
+/** One event by id + its chain position (audit-service GET
+ * /audit/events/{event_id}); null for cross-tenant/nonexistent alike. */
+export const AUDIT_EVENT = /* GraphQL */ `
+  query AuditEvent($id: ID!) {
+    auditEvent(id: $id) {
+      event {
+        eventId urn eventType tenantId actorType actorId viaAgentId viaAgentVersion
+        action resourceUrn occurredAt ingestedAt traceId payloadDigest bodyWithheld
+        payload chainSeq chainHash
+      }
+      chainDate
+      chainSeq
+      sealed
+    }
+  }
+`;
+export interface AuditEventResult {
+  auditEvent: AuditEventDetail | null;
+}
+
+/** Previously generated (sealed) WORM export batches (audit-service GET /exports). */
+export const AUDIT_EXPORTS = /* GraphQL */ `
+  query AuditExports($date: String) {
+    auditExports(date: $date) {
+      date revision uri manifestSha256 chainHead rowCount sealedAt downloadUrl
+    }
+  }
+`;
+export interface AuditExportsResult {
+  auditExports: AuditExportBatch[];
+}
+
+/** Raw CSV/NDJSON export descriptor — the file streams through the
+ * same-origin /api/audit-export proxy, never through GraphQL. */
+export const AUDIT_EXPORT_FILE = /* GraphQL */ `
+  query AuditExportFile(
+    $from: DateTime, $to: DateTime, $eventType: String, $action: String,
+    $actorId: String, $actorType: String, $resourceUrn: String, $format: AuditExportFormat
+  ) {
+    auditExportFile(
+      from: $from, to: $to, eventType: $eventType, action: $action,
+      actorId: $actorId, actorType: $actorType, resourceUrn: $resourceUrn, format: $format
+    ) {
+      downloadPath format from to
+    }
+  }
+`;
+export interface AuditExportFileResult {
+  auditExportFile: AuditExportFile;
 }
 
 export type {
@@ -3909,6 +4418,111 @@ export const REQUEST_MEMORY_ERASURE = /* GraphQL */ `
 `;
 export interface RequestMemoryErasureResult {
   requestMemoryErasure: ErasureRequest;
+}
+
+// ---- memory governance console (BRD 15): row actions, retrieval tester, ----
+// ---- corpora, tenant policy ------------------------------------------------
+export const UPDATE_MEMORY = /* GraphQL */ `
+  mutation UpdateMemory($id: ID!, $content: String!) {
+    updateMemory(id: $id, content: $content) { ${MEMORY_RECORD_FIELDS} provenance mergedFrom revalidateAt }
+  }
+`;
+export interface UpdateMemoryResult {
+  updateMemory: MemoryRecord;
+}
+
+export const DELETE_MEMORY = /* GraphQL */ `
+  mutation DeleteMemory($id: ID!) {
+    deleteMemory(id: $id)
+  }
+`;
+export interface DeleteMemoryResult {
+  deleteMemory: boolean;
+}
+
+export const UNQUARANTINE_MEMORY = /* GraphQL */ `
+  mutation UnquarantineMemory($id: ID!, $reason: String!) {
+    unquarantineMemory(id: $id, reason: $reason) { ${MEMORY_RECORD_FIELDS} provenance mergedFrom revalidateAt }
+  }
+`;
+export interface UnquarantineMemoryResult {
+  unquarantineMemory: MemoryRecord;
+}
+
+export const MEMORY_RETRIEVAL_TEST = /* GraphQL */ `
+  query MemoryRetrievalTest($input: MemoryRetrievalTestInput!) {
+    memoryRetrievalTest(input: $input) {
+      degraded
+      hits { kind content score contentDisposition scope memoryId corpus chunkId sourceUrn snapshotVer }
+    }
+  }
+`;
+export interface MemoryRetrievalTestResult {
+  memoryRetrievalTest: MemoryRetrievalResult;
+}
+
+const RAG_CORPUS_FIELDS = /* GraphQL */ `
+  corpusKey source chunking activeEmbeddingVer refresh anonymizationProfile status
+`;
+
+export const CORPUS_STATUS = /* GraphQL */ `
+  query CorpusStatus($corpusKey: String!) {
+    corpusStatus(corpusKey: $corpusKey) { corpusKey status activeEmbeddingVer chunkCount }
+  }
+`;
+export interface CorpusStatusResult {
+  corpusStatus: CorpusStatus | null;
+}
+
+export const REGISTER_CORPUS = /* GraphQL */ `
+  mutation RegisterCorpus($input: RegisterCorpusInput!) {
+    registerCorpus(input: $input) { ${RAG_CORPUS_FIELDS} }
+  }
+`;
+export interface RegisterCorpusResult {
+  registerCorpus: RagCorpus;
+}
+
+export const UPDATE_CORPUS = /* GraphQL */ `
+  mutation UpdateCorpus($corpusKey: String!, $patch: CorpusPatchInput!) {
+    updateCorpus(corpusKey: $corpusKey, patch: $patch) { ${RAG_CORPUS_FIELDS} }
+  }
+`;
+export interface UpdateCorpusResult {
+  updateCorpus: RagCorpus;
+}
+
+export const REBUILD_CORPUS = /* GraphQL */ `
+  mutation RebuildCorpus($corpusKey: String!, $embeddingModelVer: String!) {
+    rebuildCorpus(corpusKey: $corpusKey, embeddingModelVer: $embeddingModelVer) {
+      corpusKey activeEmbeddingVer chunksReembedded oldChunksDropped
+    }
+  }
+`;
+export interface RebuildCorpusResult {
+  rebuildCorpus: CorpusRebuildReport;
+}
+
+const MEMORY_POLICY_FIELDS = /* GraphQL */ `
+  ttlOverrides piiClasses injectionProfile corpusFlags
+`;
+
+export const MEMORY_POLICY = /* GraphQL */ `
+  query MemoryPolicy {
+    memoryPolicy { ${MEMORY_POLICY_FIELDS} }
+  }
+`;
+export interface MemoryPolicyResult {
+  memoryPolicy: MemoryPolicy;
+}
+
+export const SET_MEMORY_POLICY = /* GraphQL */ `
+  mutation SetMemoryPolicy($input: MemoryPolicyInput!) {
+    setMemoryPolicy(input: $input) { ${MEMORY_POLICY_FIELDS} }
+  }
+`;
+export interface SetMemoryPolicyResult {
+  setMemoryPolicy: MemoryPolicy;
 }
 
 // ---- rbac authz explain (debug) ---------------------------------------------
@@ -4979,6 +5593,94 @@ export const SET_AGENT_CEILINGS = /* GraphQL */ `
   }
 `;
 export interface SetAgentCeilingsResult { setAgentCeilings: AgentCeilings }
+
+// BRD 14/68: agent lifecycle controls — rollouts (start/promote/rollback are
+// operator-only downstream) + drift retrain watches (ai.agent.admin).
+export const AGENT_ROLLOUTS = /* GraphQL */ `
+  query AgentRollouts($agentKey: String, $status: String) {
+    agentRollouts(agentKey: $agentKey, status: $status) {
+      rolloutId agentKey cell mode candidateVersion baselineVersion pct tenantFilter status
+    }
+  }
+`;
+export interface AgentRolloutsResult {
+  agentRollouts: AgentRollout[];
+}
+
+export const START_AGENT_ROLLOUT = /* GraphQL */ `
+  mutation StartAgentRollout($input: StartAgentRolloutInput!, $idempotencyKey: String) {
+    startAgentRollout(input: $input, idempotencyKey: $idempotencyKey) { rolloutId status }
+  }
+`;
+export interface StartAgentRolloutInput {
+  agentKey: string;
+  mode: string;
+  candidateVersion: number;
+  baselineVersion: number;
+  pct?: number;
+  cell?: string;
+  tenantFilter?: JSONValue;
+}
+export interface StartAgentRolloutResult {
+  startAgentRollout: AgentRolloutActionResult;
+}
+
+export const PROMOTE_AGENT_ROLLOUT = /* GraphQL */ `
+  mutation PromoteAgentRollout($rolloutId: ID!, $idempotencyKey: String) {
+    promoteAgentRollout(rolloutId: $rolloutId, idempotencyKey: $idempotencyKey) { rolloutId status }
+  }
+`;
+export interface PromoteAgentRolloutResult {
+  promoteAgentRollout: AgentRolloutActionResult;
+}
+
+export const ROLLBACK_AGENT_ROLLOUT = /* GraphQL */ `
+  mutation RollbackAgentRollout($rolloutId: ID!, $idempotencyKey: String) {
+    rollbackAgentRollout(rolloutId: $rolloutId, idempotencyKey: $idempotencyKey) { rolloutId status }
+  }
+`;
+export interface RollbackAgentRolloutResult {
+  rollbackAgentRollout: AgentRolloutActionResult;
+}
+
+const RETRAIN_WATCH_FIELDS = /* GraphQL */ `id modelUrn watchedAgentKey workspaceId cadenceSeconds correctionWindowHours driftThreshold minCorrections enabled lastCheckedAt lastSignal createdBy`;
+
+export const RETRAIN_WATCHES = /* GraphQL */ `
+  query RetrainWatches {
+    retrainWatches { ${RETRAIN_WATCH_FIELDS} }
+  }
+`;
+export interface RetrainWatchesResult {
+  retrainWatches: RetrainWatch[];
+}
+
+export const CREATE_RETRAIN_WATCH = /* GraphQL */ `
+  mutation CreateRetrainWatch($input: CreateRetrainWatchInput!, $idempotencyKey: String) {
+    createRetrainWatch(input: $input, idempotencyKey: $idempotencyKey) { ${RETRAIN_WATCH_FIELDS} }
+  }
+`;
+export interface CreateRetrainWatchInput {
+  modelUrn: string;
+  watchedAgentKey: string;
+  workspaceId?: string;
+  cadenceSeconds?: number;
+  correctionWindowHours?: number;
+  driftThreshold?: number;
+  minCorrections?: number;
+  enabled?: boolean;
+}
+export interface CreateRetrainWatchResult {
+  createRetrainWatch: RetrainWatch;
+}
+
+export const DELETE_RETRAIN_WATCH = /* GraphQL */ `
+  mutation DeleteRetrainWatch($id: ID!) {
+    deleteRetrainWatch(id: $id) { id deleted }
+  }
+`;
+export interface DeleteRetrainWatchResult {
+  deleteRetrainWatch: RetrainWatchDeleteResult;
+}
 
 export const AGENT_RUNS = /* GraphQL */ `
   query AgentRuns($agentKey: String, $first: Int) {

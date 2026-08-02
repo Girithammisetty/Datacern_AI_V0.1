@@ -62,6 +62,20 @@ beforeEach(() => {
       return { agentFleetSummary: { totalByKind: {}, activeCount: 0, killedCount: 0, quarantinedCount: 0, periodSpendUsd: null, periodDecisions: null } };
     }
     if (doc.includes("query AgentFleet")) return { agentFleet: [] };
+    // BRD 60 WS2: the external-agents governance card lists the tenant's keys.
+    if (doc.includes("query ExternalAgents")) return { externalAgents: [] };
+    if (doc.includes("mutation RegisterExternalAgent")) {
+      return {
+        registerExternalAgent: {
+          externalAgent: {
+            id: "xa-1", urn: "urn:wr:t-42:identity:external_agent:xa-1", agentId: "acme-bot",
+            agentVersion: null, scopes: ["dataset.dataset.read"], label: null, active: true,
+            createdBy: "user:u-1", createdAt: "2026-07-12T00:00:00Z", lastUsedAt: null,
+          },
+          apiKey: "wr_xa_xa-1.s3cret",
+        },
+      };
+    }
     return {};
   };
 });
@@ -115,6 +129,33 @@ describe("Admin Agents page — agent kill switches", () => {
     await waitFor(() => {
       expect(requests.some((r) => r.doc.includes("mutation DeleteAgentKillSwitch") && r.vars.killId === "k-1")).toBe(true);
     });
+  });
+});
+
+describe("Admin Agents page — external agents (BRD 60 WS2)", () => {
+  it("registers an external agent and surfaces the one-time key", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AdminAgentsPage />);
+
+    // ACT-FR-003 (BRD 68): the propose-only badge is permanent — it renders in
+    // the card header before any row exists.
+    expect(await screen.findByText("auto-execute: denied")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Register agent" }));
+    await user.type(screen.getByLabelText("Agent name"), "acme-bot");
+    await user.type(
+      screen.getByLabelText("Tool allow-list (comma or space separated, optional)"),
+      "dataset.dataset.read",
+    );
+    await user.click(screen.getByRole("button", { name: "Register" }));
+
+    await waitFor(() => {
+      const call = requests.find((r) => r.doc.includes("mutation RegisterExternalAgent"));
+      expect(call?.vars?.input).toMatchObject({ agentId: "acme-bot", scopes: ["dataset.dataset.read"] });
+    });
+
+    // The plaintext key is surfaced exactly once via the SecretBanner idiom.
+    expect(await screen.findByTestId("xa-api-key")).toHaveTextContent("wr_xa_xa-1.s3cret");
   });
 });
 

@@ -134,6 +134,86 @@ export interface PreviewChartBody {
   sources?: ChartSourceInputBody[];
 }
 
+/** POST /charts/{id}/drilldown body (chart-service resolve.DrilldownRequest,
+ * CHART-FR-040): the clicked dimension is injected as a bind predicate over the
+ * chart's drilldown saved query. */
+export interface ChartDrilldownBody {
+  clicked: { dimension: string; value?: unknown };
+  dataseries_value?: unknown;
+  filters?: Array<{ field: string; op: string; value: unknown }>;
+  cursor?: string;
+  limit?: number;
+}
+
+/** POST /charts/{id}/drilldown response — a {data,page} envelope of raw rows. */
+export interface ChartDrilldownDTO {
+  data?: { columns?: unknown; rows?: unknown };
+  page?: { next_cursor?: string | null; has_more?: boolean };
+}
+
+/** An async export operation (chart-service domain.Operation, CHART-FR-041).
+ * status: pending | running | completed | failed; artifact_url is a signed
+ * download link once completed (FSStore: service-relative /api/v1/exports/…;
+ * S3Store: absolute presigned URL). */
+export interface ChartOperationDTO {
+  id: string;
+  chart_id?: string | null;
+  kind?: string;
+  format?: string;
+  status?: string;
+  artifact_url?: string;
+  artifact_urn?: string;
+  error?: string;
+  expires_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** POST /charts/{id}/export body (chart-service exportReq). */
+export interface ChartExportBody {
+  format: string; // csv | png (png is infra-gated on the renderer sidecar)
+  width?: number;
+  height?: number;
+  theme?: string;
+  request?: Record<string, unknown>;
+}
+
+/** The portable dashboard bundle (chart-service handlers_bundle.go, CHART-FR-005). */
+export interface DashboardBundleDTO {
+  dashboard?: {
+    name?: string;
+    module?: string;
+    description?: string;
+    layout?: unknown;
+    meta?: unknown;
+    tags?: string[];
+  };
+  charts?: Array<{
+    name?: string;
+    chart_type?: string;
+    description?: string;
+    config?: unknown;
+    display_meta?: unknown;
+    sources?: ChartSourceDTO[];
+  }>;
+}
+
+/** PUT /charts/{id}/link body (chart-service linkWrite). */
+export interface ChartLinkBody {
+  child_chart_id: string;
+  linked_columns?: Array<{ parent_col: string; child_col: string }>;
+  /** 0 = shared-source, 1 = main-secondary (default). */
+  link_type?: number;
+}
+
+/** PUT /charts/{id}/link response. */
+export interface ChartLinkDTO {
+  parent_chart_id?: string;
+  child_chart_id?: string;
+  link_type?: number;
+  linked_columns?: unknown;
+}
+
 export class ChartClient {
   constructor(private readonly http: ServiceClient) {}
 
@@ -280,5 +360,80 @@ export class ChartClient {
       { body },
     );
     return unwrap<ChartShapedDataDTO>(r);
+  }
+
+  // ---- drilldown: aggregate → raw rows (CHART-FR-040) ----------------------
+  /** POST /charts/{id}/drilldown — paginated raw rows for a clicked aggregate
+   * segment (needs chart.chart.read; side-effect free). 422 NO_DRILLDOWN when
+   * the chart's display_meta declares no drilldown query. Returns the full
+   * {data,page} envelope (writePage) so callers keep the cursor. */
+  drilldown(chartId: string, body: ChartDrilldownBody): Promise<ChartDrilldownDTO> {
+    return this.http.post<ChartDrilldownDTO>(
+      `/api/v1/charts/${encodeURIComponent(chartId)}/drilldown`,
+      { body },
+    );
+  }
+
+  // ---- CSV/PNG export + operation polling (CHART-FR-041) -------------------
+  /** POST /charts/{id}/export — start an async CSV/PNG export (202 with
+   * {operation_id}; needs chart.chart.export; 429 EXPORT_LIMIT past 5
+   * concurrent exports/tenant). Poll operation() until it settles. */
+  async exportChart(id: string, body: ChartExportBody): Promise<{ operation_id: string }> {
+    const r = await this.http.post<{ data: { operation_id: string } }>(
+      `/api/v1/charts/${encodeURIComponent(id)}/export`,
+      { body },
+    );
+    return r.data;
+  }
+
+  /** GET /operations/{id} — export operation status + artifact link. */
+  async operation(id: string): Promise<ChartOperationDTO> {
+    const r = await this.http.get<{ data: ChartOperationDTO } | ChartOperationDTO>(
+      `/api/v1/operations/${encodeURIComponent(id)}`,
+    );
+    return unwrap<ChartOperationDTO>(r);
+  }
+
+  // ---- dashboard portability (CHART-FR-005) --------------------------------
+  /** POST /dashboards/{id}/export-bundle — a self-contained JSON bundle of the
+   * dashboard + its charts (needs chart.dashboard.export). */
+  async exportBundle(dashboardId: string): Promise<DashboardBundleDTO> {
+    const r = await this.http.post<{ data: DashboardBundleDTO } | DashboardBundleDTO>(
+      `/api/v1/dashboards/${encodeURIComponent(dashboardId)}/export-bundle`,
+    );
+    return unwrap<DashboardBundleDTO>(r);
+  }
+
+  /** POST /dashboards/import — import a bundle into a workspace, remapping
+   * source URNs via url_mapping; any unmapped URN fails atomically with 422
+   * UNMAPPED_URN before any write (needs chart.dashboard.create). */
+  async importBundle(
+    body: { bundle: DashboardBundleDTO; workspace_id: string; url_mapping?: Record<string, string> },
+    idempotencyKey?: string,
+  ): Promise<{ dashboard_id: string; charts_created: number }> {
+    const r = await this.http.post<{ data: { dashboard_id: string; charts_created: number } }>(
+      "/api/v1/dashboards/import",
+      { body, idempotencyKey },
+    );
+    return r.data;
+  }
+
+  // ---- chart↔chart cross-navigation links (CHART-FR-015) -------------------
+  /** PUT /charts/{id}/link — create a parent→child link transactionally with
+   * cycle detection (authorized as chart.chart.update). */
+  async createLink(parentChartId: string, body: ChartLinkBody): Promise<ChartLinkDTO> {
+    const r = await this.http.put<{ data: ChartLinkDTO } | ChartLinkDTO>(
+      `/api/v1/charts/${encodeURIComponent(parentChartId)}/link`,
+      { body },
+    );
+    return unwrap<ChartLinkDTO>(r);
+  }
+
+  /** DELETE /charts/{id}/link — remove a link + clear the child back-reference
+   * (204; the child id rides the body, matching the downstream handler). */
+  async removeLink(parentChartId: string, childChartId: string): Promise<void> {
+    await this.http.delete<void>(`/api/v1/charts/${encodeURIComponent(parentChartId)}/link`, {
+      body: { child_chart_id: childChartId },
+    });
   }
 }

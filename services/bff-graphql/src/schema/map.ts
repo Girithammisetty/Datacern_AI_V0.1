@@ -8,6 +8,8 @@ import type {
 } from "../clients/dataset.js";
 import type {
   SavedQueryDTO, ExecutionDTO, ResultsDTO, SavedQueryVersionDTO, QueryStatDTO,
+  // Governance + dry-run + result export (QRY-FR-041/042/044/062).
+  CeilingsDTO, QueryLimitsDTO, DryRunDTO, ExecutionExportDTO,
 } from "../clients/query.js";
 import type {
   CaseDTO,
@@ -15,7 +17,11 @@ import type {
   CaseCommentDTO, CaseActivityDTO, CaseOperationDTO, DispositionDTO, CaseFieldDTO, CaseSlaPolicyDTO,
   CaseSchemaDTO, CaseFormDTO, CaseFormFieldDTO, QueueIntelligenceDTO,
 } from "../clients/case.js";
-import type { DashboardDTO, ChartDTO, ChartTypeDTO, ChartShapedDataDTO } from "../clients/chart.js";
+import type {
+  DashboardDTO, ChartDTO, ChartTypeDTO, ChartShapedDataDTO,
+  // Drilldown + export + portability + links (CHART-FR-005/015/040/041).
+  ChartDrilldownDTO, ChartOperationDTO, ChartLinkDTO,
+} from "../clients/chart.js";
 import type {
   ReportSubscriptionDTO,
   // Tier 2b: notification-service (inbox/preferences/rules/webhooks/templates/ops).
@@ -26,10 +32,14 @@ import type {
   ProposalDTO, AgentRunDTO, AgentKillSwitchDTO,
   // Tier 2b: agent-runtime catalog/registry.
   AgentDefinitionDTO, AgentVersionDTO, TenantAgentConfigDTO, AgentRunListItemDTO,
+  // BRD 14/68: lifecycle controls (rollouts + retrain watches).
+  AgentRolloutDTO, RetrainWatchDTO,
   // BRD 54 inc2: governed decision tables.
   DecisionModelDTO, DecisionOutcomeDTO, BatchEvaluateDTO, EntityMergeProposalDTO,
   // BRD 55: decision outcome monitoring.
   OutcomeLabelDTO, DecisionEffectivenessDTO,
+  // Sessions + decision-table evaluate.
+  AgentSessionDTO, DecisionEvaluationDTO,
 } from "../clients/agent.js";
 import type {
   PackSummaryDTO, PackDetailDTO, PlanOpDTO, LedgerRowDTO, InstallDTO,
@@ -40,8 +50,12 @@ import type {
   ToolKillSwitchDTO,
   // Tier 2b: tool-plane registry admin.
   ToolDTO, ToolVersionDTO, ToolHealthDTO, TenantToolSettingsDTO, BYOSubmissionDTO,
-} from "../clients/toolplane.js";
-import type { MemoryRecordDTO, ErasureRequestDTO } from "../clients/memory.js";
+ ToolDiscoveryHitDTO,} from "../clients/toolplane.js";
+import type {
+  MemoryRecordDTO, ErasureRequestDTO, MemoryWriteResultDTO, RetrievalItemDTO,
+  RetrieveResultDTO, RagCorpusDTO, CorpusStatusDTO, CorpusRebuildReportDTO,
+  MemoryPolicyDTO,
+} from "../clients/memory.js";
 import type {
   ExperimentDTO, RunDTO, ModelDTO, MetricsDTO, RegistryModelDTO, ModelVersionDTO, PromotionDTO,
   // Tier 4b: ml ops (register/notes/artifacts).
@@ -58,16 +72,20 @@ import type {
   UserDTO, ServiceAccountDTO, TenantDTO,
   // Tier 4b: identity/rbac admin (service-account create/rotate carries api_key once).
   CreatedServiceAccountDTO,
+  // BRD 60 WS2: external-agent credentials (register carries the key once).
+  ExternalAgentKeyDTO, CreatedExternalAgentKeyDTO,
   // BRD 66 slice 3 (CPL-FR-033): commercial plane (plan/trial/entitlements).
   TenantEntitlementsDTO,
-} from "../clients/identity.js";
+ ProvisioningStepDTO, PocCriterionDTO, PocProgressDTO, PocReportExportDTO,} from "../clients/identity.js";
 import type {
   WorkspaceDTO, GroupDTO, MemberDTO, RoleDTO, ExplainAuthzDTO,
   // Tier 4b: identity/rbac admin (content grants + bulk membership).
   ContentGrantDTO, EffectiveAccessEntryDTO, BulkMembersResponseDTO,
-} from "../clients/rbac.js";
+ RbacActionDTO,} from "../clients/rbac.js";
 import type {
   AuditEventDTO,
+  AuditEventDetailDTO,
+  AuditExportBatchDTO,
   ChainVerifyResultDTO,
   ComplianceJobDTO,
   EvidencePackDTO,
@@ -75,7 +93,11 @@ import type {
   SiemConfigDTO,
   SiemConfigStateDTO,
 } from "../clients/audit.js";
-import { budgetScopeString, type BudgetDTO, type RateCardDTO, type AnomalyDTO } from "../clients/usage.js";
+import {
+  budgetScopeString,
+  type BudgetDTO, type RateCardDTO, type AnomalyDTO,
+  type MeterDTO, type ChargebackLineDTO, type ReconciliationDTO, type AdjustmentDTO,
+} from "../clients/usage.js";
 import type {
   ValueSummaryDTO, ValueTrendDTO, ValueAssumptionsDTO, ValueExportDTO, EstimatedValueDTO,
 } from "../clients/value.js";
@@ -99,7 +121,7 @@ import type {
 import type {
   AiProviderDTO, AiLadderDTO, AiBudgetDTO, AiSpendRowDTO, AiVirtualKeyDTO, AiGuardrailPolicyDTO,
   AiCostBreakdownDTO, AiCostRollupDTO,
-} from "../clients/aigateway.js";
+ SpendFreezeDTO,} from "../clients/aigateway.js";
 
 /** Build a resource URN (MASTER-FR-013) from the caller's tenant claim. */
 export function urn(ctx: GraphQLContext, service: string, type: string, id: string): string {
@@ -250,6 +272,118 @@ export function mapServiceAccount(ctx: GraphQLContext, d: ServiceAccountDTO) {
   };
 }
 
+/** identity domain.ExternalAgentKey (BRD 60 WS2) — metadata only; the secret
+ * hash is json:"-" downstream and never reaches the BFF. */
+export function mapExternalAgent(ctx: GraphQLContext, d: ExternalAgentKeyDTO) {
+  return {
+    __typename: "ExternalAgent" as const,
+    id: d.id,
+    urn: urn(ctx, "identity", "external_agent", d.id),
+    agentId: d.agent_id,
+    agentVersion: d.agent_version ?? null,
+    scopes: d.scopes ?? [],
+    label: d.label ?? null,
+    active: d.active,
+    createdBy: d.created_by ?? null,
+    createdAt: d.created_at ?? null,
+    lastUsedAt: d.last_used_at ?? null,
+  };
+}
+
+/** identity CreatedExternalAgentKey ({key, plaintext, shown_once}) — the
+ * plaintext is passed through VERBATIM (shown exactly once; never persisted). */
+export function mapRegisteredExternalAgent(ctx: GraphQLContext, d: CreatedExternalAgentKeyDTO) {
+  return {
+    __typename: "RegisteredExternalAgent" as const,
+    externalAgent: mapExternalAgent(ctx, d.key),
+    apiKey: d.plaintext,
+  };
+}
+
+export function mapPocCriterion(d: PocCriterionDTO) {
+  return {
+    __typename: "PocCriterion" as const,
+    key: d.key,
+    description: d.description ?? null,
+    metricRef: d.metric_ref ?? null,
+    target: d.target ?? null,
+    direction: d.direction ?? null,
+    manualValue: d.manual_value ?? null,
+  };
+}
+
+export function mapToolDiscoveryHit(d: ToolDiscoveryHitDTO) {
+  return {
+    __typename: "ToolDiscoveryHit" as const,
+    toolId: d.tool_id,
+    version: d.version ?? null,
+    score: d.score,
+    tier: d.tier ?? null,
+    description: d.description ?? null,
+  };
+}
+
+export function mapRbacAction(d: RbacActionDTO) {
+  return {
+    __typename: "RbacAction" as const,
+    action: d.action,
+    service: d.service ?? null,
+    resource: d.resource ?? null,
+    verb: d.verb ?? null,
+    workspaceScoped: d.workspace_scoped ?? null,
+    description: d.description ?? null,
+  };
+}
+
+export function mapPocReportExport(d: PocReportExportDTO) {
+  return {
+    __typename: "PocReportExport" as const,
+    id: d.id,
+    version: d.version ?? null,
+    jsonSha256: d.json_sha256 ?? null,
+    generatedBy: d.generated_by ?? null,
+    createdAt: d.created_at ?? null,
+    jsonUrl: d.json_url ?? null,
+  };
+}
+
+export function mapPocProgress(d: PocProgressDTO) {
+  return {
+    __typename: "PocProgress" as const,
+    tenantId: d.tenant_id,
+    windowStart: d.window_start ?? null,
+    windowEnd: d.window_end ?? null,
+    asOf: d.as_of ?? null,
+    criteria: (d.criteria ?? []).map((c) => ({
+      __typename: "PocCriterionProgress" as const,
+      key: c.key,
+      description: c.description ?? null,
+      metricRef: c.metric_ref ?? null,
+      target: c.target ?? null,
+      direction: c.direction ?? null,
+      manualValue: c.manual_value ?? null,
+      actualValue: c.actual_value ?? null,
+      outcome: c.outcome ?? null,
+      dataSource: c.data_source ?? null,
+    })),
+  };
+}
+
+export function mapProvisioningStep(d: ProvisioningStepDTO) {
+  return {
+    __typename: "ProvisioningStep" as const,
+    id: d.id,
+    stepIndex: d.step_index,
+    stepName: d.step_name,
+    status: d.status,
+    attempt: d.attempt ?? null,
+    error: d.error ?? null,
+    compensation: d.compensation ?? null,
+    startedAt: d.started_at ?? null,
+    completedAt: d.completed_at ?? null,
+  };
+}
+
 export function mapTenant(ctx: GraphQLContext, d: TenantDTO) {
   return {
     __typename: "Tenant" as const,
@@ -359,6 +493,33 @@ export function mapAuditEvent(ctx: GraphQLContext, d: AuditEventDTO) {
     payload: d.payload ?? null,
     chainSeq: d.chain_seq ?? null,
     chainHash: d.chain_hash ?? null,
+  };
+}
+
+/** GET /audit/events/{event_id}: the event plus its chain position + sealed
+ * flag (whether the day is verifiable against its WORM manifest). */
+export function mapAuditEventDetail(ctx: GraphQLContext, d: AuditEventDetailDTO) {
+  return {
+    __typename: "AuditEventDetail" as const,
+    event: mapAuditEvent(ctx, d.event),
+    chainDate: d.chain_date,
+    chainSeq: d.chain_seq,
+    sealed: d.sealed,
+  };
+}
+
+/** GET /exports row: one sealed WORM export batch (manifest). */
+export function mapAuditExportBatch(d: AuditExportBatchDTO) {
+  return {
+    __typename: "AuditExportBatch" as const,
+    date: d.date,
+    revision: d.revision,
+    uri: d.uri,
+    manifestSha256: d.manifest_sha256,
+    chainHead: d.chain_head,
+    rowCount: d.row_count,
+    sealedAt: d.sealed_at ?? null,
+    downloadUrl: d.download_url ?? null,
   };
 }
 
@@ -672,6 +833,61 @@ export function mapQueryExecution(ctx: GraphQLContext, d: ExecutionDTO) {
     scanBytes: stats.actual_scan_bytes ?? null,
     queuePosition: (d as { queue_position?: number }).queue_position ?? null,
     error: d.error ?? null,
+  };
+}
+
+/** Map query-service domain.Ceilings (snake) → QueryCeilings (camel). */
+function mapCeilings(c?: CeilingsDTO) {
+  return {
+    maxScanBytes: c?.max_scan_bytes ?? null,
+    maxRuntimeS: c?.max_runtime_s ?? null,
+    maxResultBytes: c?.max_result_bytes ?? null,
+    maxResultRows: c?.max_result_rows ?? null,
+  };
+}
+
+/** Map GET /limits (overrides + effective + maxima) → QueryLimits. */
+export function mapQueryLimits(d: QueryLimitsDTO) {
+  const o = d.overrides ?? {};
+  return {
+    overrides: {
+      maxScanBytes: o.max_scan_bytes ?? null,
+      maxRuntimeS: o.max_runtime_s ?? null,
+      maxResultBytes: o.max_result_bytes ?? null,
+      maxResultRows: o.max_result_rows ?? null,
+      concurrentSlots: o.concurrent_slots ?? null,
+      warehousePrimary: o.warehouse_primary ?? null,
+      updatedBy: o.updated_by ?? null,
+    },
+    effectiveUser: mapCeilings(d.effective_user),
+    effectiveAgent: mapCeilings(d.effective_agent),
+    platformMaxima: mapCeilings(d.platform_maxima),
+  };
+}
+
+/** Map POST /sql/dry-run → SqlDryRun (QRY-FR-041). */
+export function mapSqlDryRun(d: DryRunDTO) {
+  return {
+    engine: d.engine ?? null,
+    routingReason: d.routing_reason ?? null,
+    estimatedScanBytes: d.estimated_scan_bytes ?? null,
+    estimatedRows: d.estimated_rows ?? null,
+    partitionsPruned: d.partitions_pruned ?? null,
+    confidence: d.confidence ?? null,
+    ceilingVerdict: d.ceiling_verdict ?? null,
+    ceilings: mapCeilings(d.ceilings),
+    warnings: d.warnings ?? null,
+  };
+}
+
+/** Map POST /executions/{id}/export → QueryExportDescriptor. The service's
+ * `url` IS the service-relative signed path (/api/v1/downloads/{token}) —
+ * passed through untouched as downloadPath. */
+export function mapQueryExportDescriptor(d: ExecutionExportDTO) {
+  return {
+    format: d.format ?? "csv",
+    downloadPath: d.url ?? "",
+    expiresAt: d.expires_at ?? null,
   };
 }
 
@@ -994,6 +1210,43 @@ export function mapChartType(d: ChartTypeDTO) {
   };
 }
 
+/** Map a POST /charts/{id}/drilldown {data,page} envelope → ChartDrilldownRows. */
+export function mapChartDrilldown(d: ChartDrilldownDTO) {
+  return {
+    columns: d.data?.columns ?? null,
+    rows: d.data?.rows ?? null,
+    nextCursor: d.page?.next_cursor ?? null,
+    hasMore: d.page?.has_more ?? false,
+  };
+}
+
+/** Map a chart-service export operation (domain.Operation) → ChartExportOperation. */
+export function mapChartOperation(d: ChartOperationDTO) {
+  return {
+    id: d.id,
+    chartId: d.chart_id ?? null,
+    kind: d.kind ?? null,
+    format: d.format ?? null,
+    status: d.status ?? "pending",
+    artifactUrl: d.artifact_url ?? null,
+    artifactUrn: d.artifact_urn ?? null,
+    error: d.error ?? null,
+    expiresAt: d.expires_at ?? null,
+    createdAt: d.created_at ?? null,
+    updatedAt: d.updated_at ?? null,
+  };
+}
+
+/** Map PUT /charts/{id}/link → ChartLink. */
+export function mapChartLink(d: ChartLinkDTO) {
+  return {
+    parentChartId: d.parent_chart_id ?? "",
+    childChartId: d.child_chart_id ?? "",
+    linkType: d.link_type ?? 1,
+    linkedColumns: d.linked_columns ?? null,
+  };
+}
+
 /** Map a POST /charts/preview ShapedResult into the editor's live-preview shape. */
 export function mapChartShapedData(d: ChartShapedDataDTO) {
   return {
@@ -1121,6 +1374,87 @@ export function mapErasureRequest(_ctx: GraphQLContext, d: ErasureRequestDTO) {
     status: d.status,
     report: d.report ?? null,
     completedAt: d.completed_at ?? null,
+  };
+}
+
+export function mapMemoryWriteResult(_ctx: GraphQLContext, d: MemoryWriteResultDTO) {
+  return {
+    __typename: "MemoryWriteResult" as const,
+    memoryId: d.memory_id ?? null,
+    status: d.status,
+    merged: d.merged ?? null,
+    session: d.session ?? null,
+    code: d.code ?? null,
+    message: d.message ?? null,
+  };
+}
+
+function mapMemoryRetrievalHit(d: RetrievalItemDTO) {
+  return {
+    __typename: "MemoryRetrievalHit" as const,
+    kind: d.kind,
+    content: d.content,
+    score: d.score,
+    contentDisposition: d.content_disposition,
+    scope: d.scope ?? null,
+    memoryId: d.memory_id ?? null,
+    provenance: d.provenance ?? null,
+    corpus: d.corpus ?? null,
+    chunkId: d.chunk_id ?? null,
+    sourceUrn: d.source_urn ?? null,
+    snapshotVer: d.snapshot_ver ?? null,
+    debug: d.debug ?? null,
+  };
+}
+
+export function mapMemoryRetrievalResult(_ctx: GraphQLContext, d: RetrieveResultDTO) {
+  return {
+    __typename: "MemoryRetrievalResult" as const,
+    hits: (d.data ?? []).map(mapMemoryRetrievalHit),
+    degraded: d.degraded ?? false,
+  };
+}
+
+export function mapRagCorpus(_ctx: GraphQLContext, d: RagCorpusDTO) {
+  return {
+    __typename: "RagCorpus" as const,
+    corpusKey: d.corpus_key,
+    source: d.source ?? null,
+    chunking: d.chunking ?? null,
+    activeEmbeddingVer: d.active_embedding_ver,
+    refresh: d.refresh ?? null,
+    anonymizationProfile: d.anonymization_profile ?? null,
+    status: d.status,
+  };
+}
+
+export function mapCorpusStatus(_ctx: GraphQLContext, d: CorpusStatusDTO) {
+  return {
+    __typename: "CorpusStatus" as const,
+    corpusKey: d.corpus_key,
+    status: d.status,
+    activeEmbeddingVer: d.active_embedding_ver,
+    chunkCount: d.chunk_count,
+  };
+}
+
+export function mapCorpusRebuildReport(_ctx: GraphQLContext, d: CorpusRebuildReportDTO) {
+  return {
+    __typename: "CorpusRebuildReport" as const,
+    corpusKey: d.corpus_key,
+    activeEmbeddingVer: d.active_embedding_ver,
+    chunksReembedded: d.chunks_reembedded,
+    oldChunksDropped: d.old_chunks_dropped,
+  };
+}
+
+export function mapMemoryPolicy(_ctx: GraphQLContext, d: MemoryPolicyDTO) {
+  return {
+    __typename: "MemoryPolicy" as const,
+    ttlOverrides: d.ttl_overrides ?? {},
+    piiClasses: d.pii_classes ?? [],
+    injectionProfile: d.injection_profile,
+    corpusFlags: d.corpus_flags ?? {},
   };
 }
 
@@ -1865,6 +2199,65 @@ export function mapAnomaly(ctx: GraphQLContext, d: AnomalyDTO) {
   };
 }
 
+// --- usage: billing depth (BRD 67) -------------------------------------------
+
+/** Meter catalog entries are keyed by meter_key (no uuid) — not a Node. */
+export function mapMeter(d: MeterDTO) {
+  return {
+    __typename: "UsageMeter" as const,
+    meterKey: d.meter_key,
+    unit: d.unit,
+    aggregation: d.aggregation,
+    description: d.description,
+    dimensions: d.dimensions ?? [],
+    deprecated: d.deprecated ?? false,
+  };
+}
+
+/** Chargeback rows have no id downstream (grouped rollup) — not a Node. */
+export function mapChargebackLine(d: ChargebackLineDTO) {
+  return {
+    __typename: "ChargebackLine" as const,
+    tenantId: d.tenant_id,
+    workspaceId: d.workspace_id ?? null,
+    month: d.month,
+    meterKey: d.meter_key,
+    quantity: d.quantity,
+    // Downstream serializes "" when no rate card resolved — surface as null.
+    rateCardId: d.rate_card_id || null,
+    pricePerUnitUsd: d.price_per_unit_usd,
+    usd: d.usd,
+    adjustmentsUsd: d.adjustments_usd,
+    totalUsd: d.total_usd,
+  };
+}
+
+export function mapReconciliation(ctx: GraphQLContext, d: ReconciliationDTO) {
+  return {
+    __typename: "Reconciliation" as const,
+    id: d.id,
+    urn: urn(ctx, "usage", "reconciliation", d.id),
+    month: d.month,
+    provider: d.provider,
+    status: d.status,
+    reportUri: d.report_uri,
+    createdAt: d.created_at,
+  };
+}
+
+export function mapUsageAdjustment(ctx: GraphQLContext, d: AdjustmentDTO) {
+  return {
+    __typename: "UsageAdjustment" as const,
+    id: d.id,
+    urn: urn(ctx, "usage", "adjustment", d.id),
+    meterKey: d.meter_key,
+    month: d.month,
+    quantityDelta: d.quantity_delta,
+    usdDelta: d.usd_delta,
+    reason: d.reason,
+  };
+}
+
 // --- value & ROI reporting (BRD 69) ------------------------------------------
 
 /** ROI-NFR-004 null-propagation: usage-service serializes a nil
@@ -2523,6 +2916,39 @@ export function mapTenantAgentConfig(d: TenantAgentConfigDTO) {
   };
 }
 
+export function mapAgentRollout(d: AgentRolloutDTO) {
+  return {
+    __typename: "AgentRollout" as const,
+    rolloutId: d.rollout_id,
+    agentKey: d.agent_key,
+    cell: d.cell ?? null,
+    mode: d.mode,
+    candidateVersion: d.candidate_version,
+    baselineVersion: d.baseline_version,
+    pct: d.pct ?? 0,
+    tenantFilter: d.tenant_filter ?? null,
+    status: d.status,
+  };
+}
+
+export function mapRetrainWatch(d: RetrainWatchDTO) {
+  return {
+    __typename: "RetrainWatch" as const,
+    id: d.id,
+    modelUrn: d.model_urn,
+    watchedAgentKey: d.watched_agent_key,
+    workspaceId: d.workspace_id ?? null,
+    cadenceSeconds: d.cadence_seconds,
+    correctionWindowHours: d.correction_window_hours,
+    driftThreshold: d.drift_threshold,
+    minCorrections: d.min_corrections,
+    enabled: d.enabled,
+    lastCheckedAt: d.last_checked_at ?? null,
+    lastSignal: d.last_signal ?? null,
+    createdBy: d.created_by ?? null,
+  };
+}
+
 function mapDecisionOutcome(o: DecisionOutcomeDTO | null | undefined) {
   return o ? { dispositionCode: o.disposition_code, severity: o.severity } : null;
 }
@@ -2545,6 +2971,42 @@ export function mapDecisionModel(d: DecisionModelDTO) {
       note: r.note ?? null,
     })),
     defaultOutcome: mapDecisionOutcome(d.default_outcome),
+  };
+}
+
+export function mapAiSpendFreeze(d: SpendFreezeDTO) {
+  return {
+    __typename: "AiSpendFreeze" as const,
+    scope: d.scope,
+    reason: d.reason ?? null,
+    frozenBy: d.frozen_by ?? null,
+    frozenAt: d.frozen_at ?? null,
+  };
+}
+
+export function mapAgentChatSession(d: AgentSessionDTO) {
+  return {
+    __typename: "AgentChatSession" as const,
+    id: d.id,
+    agentKey: d.agent_key ?? null,
+    agentVersion: d.agent_version ?? null,
+    contextUrn: d.context_urn ?? null,
+    status: d.status ?? null,
+    createdAt: d.created_at ?? null,
+    lastActivityAt: d.last_activity_at ?? null,
+    expiresHardAt: d.expires_hard_at ?? null,
+  };
+}
+
+export function mapDecisionEvaluation(d: DecisionEvaluationDTO) {
+  return {
+    __typename: "DecisionEvaluation" as const,
+    matched: d.matched,
+    ruleIndex: d.rule_index ?? null,
+    explanation: d.explanation ?? null,
+    outcome: mapDecisionOutcome(d.outcome),
+    proposalId: d.proposal_id ?? null,
+    dryRun: Boolean(d.dry_run),
   };
 }
 

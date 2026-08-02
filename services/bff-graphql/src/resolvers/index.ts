@@ -14,6 +14,7 @@ import type { ChartSourceInputBody } from "../clients/chart.js";
 import { budgetScopeString } from "../clients/usage.js";
 import type { AgentKillSwitchDTO, AgentDefinitionDTO, TenantAgentConfigDTO, AgentRolloutDTO } from "../clients/agent.js";
 import type { EvalGateResultDTO } from "../clients/eval.js";
+import type { WriteMemoryParams } from "../clients/memory.js";
 import {
   mapUser, mapDataset, mapProfile, mapCase, mapDashboard, mapChart,
   // Tier 4b: case ops (lifecycle, comments/timeline, export, catalog, SLA).
@@ -27,10 +28,17 @@ import {
   // Tier 4b: ml ops (register/notes/artifacts + validate/schedules).
   mapRegisterModelResult, mapRunNote, mapRunArtifact, mapCompatibilityReport, mapInferenceSchedule,
   mapMemoryRecord, mapErasureRequest,
+  // BRD 15 governance console: writes, retrieval tester, corpora, policy.
+  mapMemoryWriteResult, mapMemoryRetrievalResult, mapRagCorpus, mapCorpusStatus,
+  mapCorpusRebuildReport, mapMemoryPolicy,
   mapConnectorType, mapConnection, mapConnectionTest, mapWriteback,
   mapIngestion, mapUpload, mapLineage, mapSavedQuery, mapQueryResult,
   // Tier 4a: data-plane secondary CRUD/lifecycle.
   mapSavedQueryVersion, mapQueryExecution, mapQueryStats,
+  // Query governance + dry-run + result export (QRY-FR-041/042/044/062).
+  mapQueryLimits, mapSqlDryRun, mapQueryExportDescriptor,
+  // Chart drilldown + export + links (CHART-FR-005/015/040/041).
+  mapChartDrilldown, mapChartOperation, mapChartLink,
   mapIngestionSchedule,
   mapCaseStream, mapScheduleRunNow, mapConnectionPreview,
   mapDatasetConsumers, mapSimilarDataset, mapDatasetVersion, mapReprofile,
@@ -41,10 +49,14 @@ import {
   mapSemanticModel,
   mapDatasetSchema, mapSemanticModelSummary, mapSemanticModelVersion, mapSemanticCompileResult,
   mapWorkspace, mapGroup, mapGroupMember, mapRole, mapAuthzExplanation, mapServiceAccount, mapTenant, mapAuditEvent,
+  mapAuditEventDetail, mapAuditExportBatch,
   mapTenantCommercial, EMPTY_TENANT_COMMERCIAL,
   // Tier 4b: identity/rbac admin (lifecycle, roles, grants, bulk membership).
   mapCreatedServiceAccount, mapEffectiveAccessEntry, mapContentGrant, mapBulkGroupMembershipResult,
+  // BRD 60 WS2: external-agent credentials (register carries the key once).
+  mapExternalAgent, mapRegisteredExternalAgent,
   mapBudget, mapRateCard, mapAnomaly, mapReportSubscription,
+  mapMeter, mapChargebackLine, mapReconciliation, mapUsageAdjustment,
   mapValueSummary, mapValueTrend, mapValueAssumptions, mapValueExport,
   mapChainVerifyResult, mapComplianceJob, mapEvidencePack, mapSiemConfig, mapSiemConfigState,
   decisionAction, urnId,
@@ -58,6 +70,10 @@ import {
   mapTool, mapToolVersion, mapToolHealth, mapTenantToolSettings, mapByoSubmission,
   mapAgentDefinition, mapAgentVersionInfo, mapTenantAgentConfig, mapAgentRunListItem,
   mapDecisionModel, mapBatchEvaluate, mapOutcomeLabel, mapDecisionEffectiveness,
+  mapAgentChatSession, mapDecisionEvaluation,
+  mapAiSpendFreeze,
+  mapProvisioningStep, mapPocCriterion, mapPocProgress, mapPocReportExport, mapToolDiscoveryHit, mapRbacAction,
+  mapAgentRollout, mapRetrainWatch,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
@@ -412,6 +428,37 @@ function triggerBody(i: CaseTriggerInputShape) {
 
 const DEFAULT_PERIOD_DAYS = 30;
 
+/** WriteMemoryInput (GraphQL camelCase) -> memory-service client params. */
+interface WriteMemoryArgs {
+  scope: string;
+  scopeRef: string;
+  content: string;
+  provenance: {
+    sourceType: string; runId?: string; agentKey?: string; agentVersion?: string;
+    userId?: string; toolId?: string;
+  };
+  confidence?: number;
+  tags?: string[];
+}
+
+function toWriteMemoryParams(i: WriteMemoryArgs): WriteMemoryParams {
+  return {
+    scope: i.scope,
+    scopeRef: i.scopeRef,
+    content: i.content,
+    provenance: {
+      source_type: i.provenance.sourceType,
+      run_id: i.provenance.runId,
+      agent_key: i.provenance.agentKey,
+      agent_version: i.provenance.agentVersion,
+      user_id: i.provenance.userId,
+      tool_id: i.provenance.toolId,
+    },
+    confidence: i.confidence,
+    tags: i.tags,
+  };
+}
+
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -710,6 +757,14 @@ export const resolvers = {
       return toConnection(page, (d) => mapServiceAccount(ctx, d));
     },
 
+    // BRD 60 WS2: the caller tenant's external-agent credentials (metadata
+    // only — identity never serializes the secret hash). identity.user.admin
+    // is enforced downstream on the forwarded JWT.
+    externalAgents: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const keys = await ctx.clients.identity.externalAgents();
+      return keys.map((d) => mapExternalAgent(ctx, d));
+    },
+
     // inc18: the tenant UI-label overrides in editor shape (member-readable).
     tenantLabels: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
       ctx.clients.identity
@@ -763,6 +818,24 @@ export const resolvers = {
 
     // Cross-tenant list for the platform-admin all-tenants view. identity's
     // requireSuperAdmin gate enforces (a tenant admin's JWT is rejected there).
+    tenantProvisioning: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.identity.provisioningStatus(a.id).then((rows) => rows.map(mapProvisioningStep)),
+
+    pocCriteria: async (_p: unknown, a: { tenantId: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.identity.pocCriteria(a.tenantId);
+      const rows = Array.isArray(d) ? d : (d.criteria ?? []);
+      return rows.map(mapPocCriterion);
+    },
+
+    pocProgress: (_p: unknown, a: { tenantId: string }, ctx: GraphQLContext) =>
+      ctx.clients.identity.pocProgress(a.tenantId).then(mapPocProgress),
+
+    pocReports: async (_p: unknown, a: { tenantId: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.identity.pocReports(a.tenantId);
+      const rows = Array.isArray(d) ? d : (d.data ?? []);
+      return rows.map(mapPocReportExport);
+    },
+
     tenants: (_p: unknown, a: { limit?: number }, ctx: GraphQLContext) =>
       ctx.clients.identity
         .tenants(a.limit ?? 200)
@@ -840,6 +913,11 @@ export const resolvers = {
       return toConnection(page, (d) => mapRole(d));
     },
 
+    rbacActions: async (_p: unknown, a: { first?: number }, ctx: GraphQLContext) => {
+      const page = await ctx.clients.rbac.actions(a.first ?? 500);
+      return (page.data ?? []).map(mapRbacAction);
+    },
+
     // ---- Tier 4b: identity/rbac admin — content grants -----------------------
     contentGrants: async (_p: unknown, a: { resourceUrn: string }, ctx: GraphQLContext) => {
       const rows = await ctx.clients.rbac.grants(a.resourceUrn);
@@ -881,6 +959,74 @@ export const resolvers = {
         limit, cursor,
       });
       return toConnection(page, (d) => mapAuditEvent(ctx, d));
+    },
+
+    // Dual attribution (AUD-FR-033): everything one agent did, on whose behalf.
+    // The downstream caps at 200 rows and never paginates (has_more:false).
+    auditAgentActivity: async (
+      _p: unknown,
+      a: { agentId: string; oboUserId?: string; from?: string; to?: string; includeAutonomous?: boolean },
+      ctx: GraphQLContext,
+    ) => {
+      const page = await ctx.clients.audit.agentActivity({
+        agentId: a.agentId, oboUserId: a.oboUserId, from: a.from, to: a.to,
+        includeAutonomous: a.includeAutonomous ?? false,
+      });
+      return toConnection(page, (d) => mapAuditEvent(ctx, d));
+    },
+
+    auditEvent: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.audit.event(a.id).then((d) => mapAuditEventDetail(ctx, d))),
+
+    auditExports: async (_p: unknown, a: { date?: string }, ctx: GraphQLContext) => {
+      const page = await ctx.clients.audit.listExports(a.date);
+      return page.data.map(mapAuditExportBatch);
+    },
+
+    // Raw CSV/NDJSON export descriptor. The file itself streams downstream →
+    // ui-web (/api/audit-export proxy) and never traverses the BFF; this
+    // resolver only validates the window against audit-service's REAL rules
+    // (parseSearch: from/to required, ≤92 days) and builds the querystring the
+    // proxy forwards verbatim (snake_case, matching GET /audit/export).
+    auditExportFile: (
+      _p: unknown,
+      a: {
+        from?: string; to?: string; eventType?: string; action?: string;
+        actorId?: string; actorType?: string; resourceUrn?: string; format?: string;
+      },
+      _ctx: GraphQLContext,
+    ) => {
+      const to = a.to ?? new Date().toISOString();
+      const from = a.from ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const fromMs = Date.parse(from);
+      const toMs = Date.parse(to);
+      if (Number.isNaN(fromMs) || Number.isNaN(toMs)) {
+        throw gqlError(ErrorCode.VALIDATION_FAILED, "auditExportFile: from/to must be RFC3339");
+      }
+      if (toMs < fromMs) {
+        throw gqlError(ErrorCode.VALIDATION_FAILED, "auditExportFile: to must be >= from");
+      }
+      if (toMs - fromMs > 92 * 24 * 60 * 60 * 1000) {
+        throw gqlError(ErrorCode.VALIDATION_FAILED, "auditExportFile: time range exceeds 92 days");
+      }
+      const format = a.format === "NDJSON" ? "NDJSON" : "CSV";
+      const qs = new URLSearchParams({ from, to, format: format.toLowerCase() });
+      if (a.eventType) qs.set("event_type", a.eventType);
+      if (a.action) qs.set("action", a.action);
+      if (a.actorId) qs.set("actor_id", a.actorId);
+      if (a.actorType) qs.set("actor_type", a.actorType);
+      if (a.resourceUrn) {
+        // Mirror auditEvents: resource filters are prefix matches in the UI.
+        qs.set("resource_urn", a.resourceUrn);
+        qs.set("resource_match", "prefix");
+      }
+      return {
+        __typename: "AuditExportFile" as const,
+        downloadPath: `/api/audit-export?${qs.toString()}`,
+        format,
+        from,
+        to,
+      };
     },
 
     complianceOperation: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
@@ -1102,6 +1248,10 @@ export const resolvers = {
       ctx: GraphQLContext,
     ) => mapQueryStats(await ctx.clients.query.stats(a.since, a.limit ?? undefined)),
 
+    // Tenant governance ceilings + concurrency (query-service GET /limits).
+    queryLimits: async (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      mapQueryLimits(await ctx.clients.query.limits()),
+
     dashboard: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.chart.dashboard(a.id).then((d) => mapDashboard(ctx, d))),
 
@@ -1164,6 +1314,34 @@ export const resolvers = {
       });
       return mapChartShapedData(d);
     },
+
+    // ---- chart drilldown + export operation polling (JWT passthrough) --------
+    // A Query, not a Mutation: the downstream drilldown handler is side-effect
+    // free (it wraps the chart's drilldown saved query with a bind predicate).
+    chartDrilldown: async (
+      _p: unknown,
+      a: {
+        chartId: string;
+        input: {
+          dimension: string; value?: unknown; dataseriesValue?: unknown;
+          filters?: Array<{ field: string; op: string; value: unknown }>;
+          cursor?: string; limit?: number;
+        };
+      },
+      ctx: GraphQLContext,
+    ) =>
+      mapChartDrilldown(
+        await ctx.clients.chart.drilldown(a.chartId, {
+          clicked: { dimension: a.input.dimension, value: a.input.value },
+          dataseries_value: a.input.dataseriesValue,
+          filters: a.input.filters?.map((f) => ({ field: f.field, op: f.op, value: f.value })),
+          cursor: a.input.cursor,
+          limit: a.input.limit,
+        }),
+      ),
+
+    chartExportOperation: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.chart.operation(a.id).then(mapChartOperation)),
 
     // ---- semantic models: field pickers for the chart editor (JWT passthrough)
     semanticModels: (_p: unknown, a: { workspaceId?: string }, ctx: GraphQLContext) =>
@@ -1559,6 +1737,31 @@ export const resolvers = {
 
     memoryStats: (_p: unknown, _a: unknown, ctx: GraphQLContext) => ctx.clients.memory.stats(),
 
+    memoryRetrievalTest: async (
+      _p: unknown,
+      a: {
+        input: {
+          queryText?: string; scopes: string[]; scopeRefs?: Record<string, string>;
+          corpora?: string[]; topK?: number; minConfidence?: number; tags?: string[];
+          snapshotVer?: string; includeDebug?: boolean;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.retrieve({
+        queryText: a.input.queryText, scopes: a.input.scopes, scopeRefs: a.input.scopeRefs,
+        corpora: a.input.corpora, topK: a.input.topK, minConfidence: a.input.minConfidence,
+        tags: a.input.tags, snapshotVer: a.input.snapshotVer, includeDebug: a.input.includeDebug,
+      });
+      return mapMemoryRetrievalResult(ctx, d);
+    },
+
+    corpusStatus: (_p: unknown, a: { corpusKey: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.memory.corpusStatus(a.corpusKey).then((d) => mapCorpusStatus(ctx, d))),
+
+    memoryPolicy: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      ctx.clients.memory.policy().then((d) => mapMemoryPolicy(ctx, d)),
+
     experiments: async (_p: unknown, a: ConnectionArgs, ctx: GraphQLContext) => {
       const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
       const page = await ctx.clients.experiment.experiments(limit, cursor);
@@ -1768,6 +1971,23 @@ export const resolvers = {
       return (page.data ?? []).map((d) => mapAnomaly(ctx, d));
     },
 
+    // ---- billing depth (BRD 67) ------------------------------------------
+    usageMeters: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const page = await ctx.clients.usage.meters();
+      return (page.data ?? []).map(mapMeter);
+    },
+
+    chargebackReport: async (_p: unknown, a: { month: string }, ctx: GraphQLContext) => {
+      // A 409 (reconciliation_variance) bubbles verbatim via DownstreamError.
+      const page = await ctx.clients.usage.chargebackReport(a.month);
+      return (page.data ?? []).map(mapChargebackLine);
+    },
+
+    reconciliations: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      const page = await ctx.clients.usage.reconciliations();
+      return (page.data ?? []).map((d) => mapReconciliation(ctx, d));
+    },
+
     // ---- value & ROI reporting (BRD 69) ----------------------------------
     valueSummary: async (
       _p: unknown,
@@ -1950,6 +2170,9 @@ export const resolvers = {
       return toConnection(page, (d) => mapAiVirtualKey(ctx, d));
     },
 
+    aiSpendFreezes: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      ctx.clients.aiGateway.spendFreezes().then((rows) => rows.map(mapAiSpendFreeze)),
+
     aiGuardrailPolicy: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
       ctx.clients.aiGateway.guardrails().then(mapAiGuardrailPolicy),
 
@@ -2007,6 +2230,15 @@ export const resolvers = {
       return toConnection(page, mapTool);
     },
 
+    discoverTools: (
+      _p: unknown,
+      a: { query: string; topK?: number; tierFilter?: string[] | null },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.toolPlane
+        .discoverTools(a.query, a.topK ?? 5, a.tierFilter ?? undefined)
+        .then((rows) => rows.map(mapToolDiscoveryHit)),
+
     toolHealth: (_p: unknown, a: { toolId: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.toolPlane.toolHealth(a.toolId).then(mapToolHealth)),
 
@@ -2046,6 +2278,15 @@ export const resolvers = {
       const page = await ctx.clients.agent.agentRuns({ agentKey: a.agentKey, limit });
       return toConnection(page, (d) => mapAgentRunListItem(ctx, d));
     },
+
+    // ---- BRD 14/68: agent lifecycle controls --------------------------------
+    agentRollouts: (_p: unknown, a: { agentKey?: string; status?: string }, ctx: GraphQLContext) =>
+      ctx.clients.agent
+        .rollouts({ agentKey: a.agentKey, status: a.status })
+        .then((rows) => rows.map(mapAgentRollout)),
+
+    retrainWatches: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      ctx.clients.agent.retrainWatches().then((rows) => rows.map(mapRetrainWatch)),
 
     // ---- BRD 68 slice 1: Agent Control Tower fleet aggregation --------------
     agentFleet: (
@@ -2241,6 +2482,133 @@ export const resolvers = {
       return { __typename: "SetEmbedConfigResult" as const, embedSecret: d.embed_secret, allowedOrigins: d.allowed_origins };
     },
 
+    // ---- tenant lifecycle (identity requireSuperAdmin downstream) -----------
+    createTenant: async (
+      _p: unknown,
+      a: { input: { name: string; displayName?: string | null; ownerEmail?: string | null; tier?: string | null; cloud?: string | null; publish?: boolean | null }; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.identity.createTenant({
+        name: a.input.name,
+        display_name: a.input.displayName ?? undefined,
+        owner_email: a.input.ownerEmail ?? undefined,
+        tier: a.input.tier ?? undefined,
+        cloud: a.input.cloud ?? undefined,
+        publish: a.input.publish ?? undefined,
+      }, a.idempotencyKey);
+      return {
+        __typename: "CreateTenantResult" as const,
+        tenant: mapTenant(ctx, d.tenant),
+        operationId: d.operation_id ?? null,
+      };
+    },
+
+    patchTenant: async (_p: unknown, a: { id: string; patch: Record<string, unknown> }, ctx: GraphQLContext) =>
+      mapTenant(ctx, await ctx.clients.identity.patchTenant(a.id, a.patch)),
+
+    deleteTenant: async (_p: unknown, a: { id: string; mode: string; force?: boolean }, ctx: GraphQLContext) =>
+      mapTenant(ctx, await ctx.clients.identity.deleteTenant(a.id, a.mode as "archive" | "destroy", a.force ?? false)),
+
+    publishTenant: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.identity.publishTenant(a.id),
+
+    suspendTenant: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapTenant(ctx, await ctx.clients.identity.suspendTenant(a.id)),
+
+    reactivateTenant: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.identity.reactivateTenant(a.id);
+      return {
+        __typename: "ReactivateTenantResult" as const,
+        tenant: mapTenant(ctx, d.tenant),
+        drift: d.drift ?? null,
+      };
+    },
+
+    retryTenantProvisioning: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.identity.retryProvisioning(a.id),
+
+    activateUser: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapUser(ctx, await ctx.clients.identity.activateUser(a.id)),
+
+    // ---- BRD 70 demo/POC + BRD 66 trials ------------------------------------
+    createDemoTenant: async (
+      _p: unknown,
+      a: { input: { name: string; displayName?: string | null; ownerEmail?: string | null; pack: string; tier?: string | null }; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.identity.createDemoTenant({
+        name: a.input.name,
+        display_name: a.input.displayName ?? undefined,
+        owner_email: a.input.ownerEmail ?? undefined,
+        pack: a.input.pack,
+        tier: a.input.tier ?? undefined,
+      }, a.idempotencyKey);
+      return { __typename: "CreateTenantResult" as const, tenant: mapTenant(ctx, d.tenant), operationId: d.operation_id ?? null };
+    },
+
+    resetDemoTenant: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapTenant(ctx, await ctx.clients.identity.resetDemoTenant(a.id)),
+
+    cloneDemoTenant: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.identity.cloneDemoTenant(a.id);
+      const t = (d as { tenant?: unknown }).tenant ? (d as { tenant: never }).tenant : (d as never);
+      const op = (d as { operation_id?: string }).operation_id ?? null;
+      return { __typename: "CreateTenantResult" as const, tenant: mapTenant(ctx, t), operationId: op };
+    },
+
+    createPocTenant: async (
+      _p: unknown,
+      a: { input: { name: string; displayName?: string | null; ownerEmail?: string | null; pack?: string | null }; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.identity.createPocTenant({
+        name: a.input.name,
+        display_name: a.input.displayName ?? undefined,
+        owner_email: a.input.ownerEmail ?? undefined,
+        pack: a.input.pack ?? undefined,
+      }, a.idempotencyKey);
+      const t = (d as { tenant?: unknown }).tenant ? (d as { tenant: never }).tenant : (d as never);
+      const op = (d as { operation_id?: string }).operation_id ?? null;
+      return { __typename: "CreateTenantResult" as const, tenant: mapTenant(ctx, t), operationId: op };
+    },
+
+    setPocCriteria: async (_p: unknown, a: { tenantId: string; criteria: Array<{ key: string; description?: string | null; metricRef?: string | null; target: number; direction: string }> }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.setPocCriteria(a.tenantId, a.criteria.map((c) => ({
+        key: c.key,
+        description: c.description ?? undefined,
+        metric_ref: c.metricRef ?? undefined,
+        target: c.target,
+        direction: c.direction,
+      })));
+      return true;
+    },
+
+    setPocManualValue: async (_p: unknown, a: { tenantId: string; key: string; value: number }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.setPocManualValue(a.tenantId, a.key, a.value);
+      return true;
+    },
+
+    startTrial: async (_p: unknown, a: { id: string; trialDays?: number | null }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.startTrial(a.id, a.trialDays ?? undefined);
+      return true;
+    },
+
+    extendTrial: async (_p: unknown, a: { id: string; trialDays?: number | null }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.extendTrial(a.id, a.trialDays ?? undefined);
+      return true;
+    },
+
+    convertTrial: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.convertTrial(a.id);
+      return true;
+    },
+
+    exportPocReport: async (_p: unknown, a: { tenantId: string; idempotencyKey?: string }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.identity.exportPocReport(a.tenantId, a.idempotencyKey);
+      const row = (d as { data?: unknown }).data ?? d;
+      return mapPocReportExport(row as never);
+    },
+
     setTenantIdp: async (
       _p: unknown,
       a: { input: { issuer: string; clientId?: string; discoveryUrl?: string; enabled?: boolean }; idempotencyKey?: string },
@@ -2415,6 +2783,33 @@ export const resolvers = {
 
     revokeServiceAccount: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
       await ctx.clients.identity.revokeServiceAccount(a.id);
+      return true;
+    },
+
+    // ---- BRD 60 WS2: external-agent credential lifecycle ----------------------
+    registerExternalAgent: async (
+      _p: unknown,
+      a: {
+        input: { agentId: string; agentVersion?: number; scopes?: string[]; label?: string };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.identity.registerExternalAgent(
+        {
+          agent_id: a.input.agentId,
+          agent_version: a.input.agentVersion,
+          scopes: a.input.scopes,
+          label: a.input.label,
+        },
+        a.idempotencyKey,
+      );
+      // plaintext passes through verbatim — shown exactly once, never persisted.
+      return mapRegisteredExternalAgent(ctx, d);
+    },
+
+    revokeExternalAgent: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      await ctx.clients.identity.revokeExternalAgent(a.id);
       return true;
     },
 
@@ -2651,6 +3046,37 @@ export const resolvers = {
         throw new Error(`anomaly ${dismissed.id} was dismissed but no longer appears in the list`);
       }
       return mapAnomaly(ctx, found);
+    },
+
+    // ---- billing depth (BRD 67) ----------------------------------------------
+    acknowledgeReconciliation: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      const acked = await ctx.clients.usage.acknowledgeReconciliation(a.id);
+      // acknowledge's own response is thin ({id, status}); re-read the list
+      // for the full row (month/provider/reportUri) rather than fabricate
+      // the fields the route didn't echo — mirrors dismissAnomaly above.
+      const page = await ctx.clients.usage.reconciliations();
+      const found = (page.data ?? []).find((r) => r.id === acked.id);
+      if (!found) {
+        throw new Error(`reconciliation ${acked.id} was acknowledged but no longer appears in the list`);
+      }
+      return mapReconciliation(ctx, found);
+    },
+
+    createUsageAdjustment: async (
+      _p: unknown,
+      a: {
+        input: { meterKey: string; month: string; quantityDelta: number; usdDelta: number; reason: string };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.usage.createAdjustment({
+        meter_key: a.input.meterKey,
+        month: a.input.month,
+        quantity_delta: a.input.quantityDelta,
+        usd_delta: a.input.usdDelta,
+        reason: a.input.reason,
+      });
+      return mapUsageAdjustment(ctx, d);
     },
 
     // ---- value & ROI reporting (BRD 69) --------------------------------------
@@ -3109,6 +3535,112 @@ export const resolvers = {
       return mapErasureRequest(ctx, d);
     },
 
+    // ---- memory governance console (BRD 15) --------------------------------
+    writeMemory: async (
+      _p: unknown,
+      a: { input: WriteMemoryArgs },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.writeMemory(toWriteMemoryParams(a.input));
+      return mapMemoryWriteResult(ctx, d);
+    },
+
+    writeMemoryBatch: async (
+      _p: unknown,
+      a: { items: WriteMemoryArgs[] },
+      ctx: GraphQLContext,
+    ) => {
+      const rows = await ctx.clients.memory.writeMemoryBatch(a.items.map(toWriteMemoryParams));
+      return rows.map((d) => mapMemoryWriteResult(ctx, d));
+    },
+
+    updateMemory: (_p: unknown, a: { id: string; content: string }, ctx: GraphQLContext) =>
+      ctx.clients.memory.editMemory(a.id, a.content).then((d) => mapMemoryRecord(ctx, d)),
+
+    deleteMemory: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      await ctx.clients.memory.deleteMemory(a.id);
+      return true;
+    },
+
+    unquarantineMemory: (
+      _p: unknown,
+      a: { id: string; reason: string },
+      ctx: GraphQLContext,
+    ) => ctx.clients.memory.unquarantine(a.id, a.reason).then((d) => mapMemoryRecord(ctx, d)),
+
+    registerCorpus: async (
+      _p: unknown,
+      a: {
+        input: {
+          corpusKey: string; source?: Record<string, unknown>; chunking?: Record<string, unknown>;
+          embeddingModelVer?: string; refresh?: Record<string, unknown>;
+          anonymizationProfile?: Record<string, unknown>;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.registerCorpus({
+        corpusKey: a.input.corpusKey, source: a.input.source, chunking: a.input.chunking,
+        embeddingModelVer: a.input.embeddingModelVer, refresh: a.input.refresh,
+        anonymizationProfile: a.input.anonymizationProfile,
+      });
+      return mapRagCorpus(ctx, d);
+    },
+
+    updateCorpus: async (
+      _p: unknown,
+      a: {
+        corpusKey: string;
+        patch: {
+          source?: Record<string, unknown>; chunking?: Record<string, unknown>;
+          refresh?: Record<string, unknown>; anonymizationProfile?: Record<string, unknown>;
+          status?: string;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.patchCorpus(a.corpusKey, {
+        source: a.patch.source, chunking: a.patch.chunking, refresh: a.patch.refresh,
+        anonymizationProfile: a.patch.anonymizationProfile, status: a.patch.status,
+      });
+      return mapRagCorpus(ctx, d);
+    },
+
+    rebuildCorpus: (
+      _p: unknown,
+      a: { corpusKey: string; embeddingModelVer: string },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.memory
+        .rebuildCorpus(a.corpusKey, a.embeddingModelVer)
+        .then((d) => mapCorpusRebuildReport(ctx, d)),
+
+    pushCorpusDocument: async (
+      _p: unknown,
+      a: { sourceUrn: string; content: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.pushDocument(a.sourceUrn, a.content);
+      return { __typename: "CorpusDocumentPushResult" as const, sourceUrn: d.source_urn, chunks: d.chunks };
+    },
+
+    setMemoryPolicy: async (
+      _p: unknown,
+      a: {
+        input: {
+          ttlOverrides?: Record<string, string>; piiClasses?: string[];
+          injectionProfile?: string; corpusFlags?: Record<string, boolean>;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.memory.setPolicy({
+        ttlOverrides: a.input.ttlOverrides, piiClasses: a.input.piiClasses,
+        injectionProfile: a.input.injectionProfile, corpusFlags: a.input.corpusFlags,
+      });
+      return mapMemoryPolicy(ctx, d);
+    },
+
     // ==== Tier 2a: eval (eval-service) =======================================
     createEvalSuite: async (
       _p: unknown,
@@ -3408,6 +3940,24 @@ export const resolvers = {
       );
       return mapAiBudget(ctx, d);
     },
+
+    createAiSpendFreeze: async (
+      _p: unknown,
+      a: { scope: string; tenantId?: string | null; reason: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) =>
+      mapAiSpendFreeze(await ctx.clients.aiGateway.createSpendFreeze(
+        { scope: a.scope as "platform" | "tenant", tenant_id: a.tenantId ?? undefined, reason: a.reason },
+        a.idempotencyKey,
+      )),
+
+    clearAiSpendFreeze: async (_p: unknown, a: { scope: string; tenantId?: string | null }, ctx: GraphQLContext) => {
+      const d = await ctx.clients.aiGateway.clearSpendFreeze(a.scope, a.tenantId ?? undefined);
+      return { __typename: "AiSpendFreezeCleared" as const, scope: d.scope, cleared: d.cleared };
+    },
+
+    clearAiCache: (_p: unknown, a: { scope: string; workspaceId?: string | null }, ctx: GraphQLContext) =>
+      ctx.clients.aiGateway.clearCache(a.scope as "tenant" | "workspace", a.workspaceId ?? undefined),
 
     updateAiBudget: (
       _p: unknown,
@@ -3838,6 +4388,49 @@ export const resolvers = {
     cancelQueryExecution: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       mapQueryExecution(ctx, await ctx.clients.query.cancelExecution(a.id)),
 
+    // ---- query governance + dry-run + result export (query-service) ----------
+    setQueryLimits: async (
+      _p: unknown,
+      a: {
+        input: {
+          maxScanBytes?: number; maxRuntimeS?: number; maxResultBytes?: number;
+          maxResultRows?: number; concurrentSlots?: number; warehousePrimary?: boolean;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      // PUT answers only the stored overrides; re-read GET /limits so the
+      // caller gets the recomputed effective user/agent ceilings.
+      await ctx.clients.query.putLimits({
+        max_scan_bytes: a.input.maxScanBytes,
+        max_runtime_s: a.input.maxRuntimeS,
+        max_result_bytes: a.input.maxResultBytes,
+        max_result_rows: a.input.maxResultRows,
+        concurrent_slots: a.input.concurrentSlots,
+        warehouse_primary: a.input.warehousePrimary,
+      });
+      return mapQueryLimits(await ctx.clients.query.limits());
+    },
+
+    dryRunSql: async (
+      _p: unknown,
+      a: { input: { sql: string; limit?: number; engineHint?: string } },
+      ctx: GraphQLContext,
+    ) =>
+      mapSqlDryRun(
+        await ctx.clients.query.dryRun({
+          sql: a.input.sql,
+          limit: a.input.limit,
+          engine_hint: a.input.engineHint,
+        }),
+      ),
+
+    exportQueryExecution: async (
+      _p: unknown,
+      a: { id: string; format?: string },
+      ctx: GraphQLContext,
+    ) => mapQueryExportDescriptor(await ctx.clients.query.exportExecution(a.id, a.format ?? "csv")),
+
     // ---- dataset archive/restore (JWT passthrough) ---------------------------
     archiveDataset: async (
       _p: unknown,
@@ -4097,6 +4690,76 @@ export const resolvers = {
 
     deleteChart: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
       await ctx.clients.chart.deleteChart(a.id);
+      return true;
+    },
+
+    // ---- chart export + dashboard portability + links (chart-service) --------
+    exportChart: async (
+      _p: unknown,
+      a: { id: string; format: string; request?: Record<string, unknown> },
+      ctx: GraphQLContext,
+    ) => {
+      // 202 carries only {operation_id}; immediately re-read the operation so
+      // the caller gets its REAL current state (mirrors exportCases).
+      const { operation_id } = await ctx.clients.chart.exportChart(a.id, {
+        format: a.format,
+        request: a.request,
+      });
+      return mapChartOperation(await ctx.clients.chart.operation(operation_id));
+    },
+
+    exportDashboardBundle: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.chart.exportBundle(a.id),
+
+    importDashboard: async (
+      _p: unknown,
+      a: { bundle: Record<string, unknown>; urnMapping?: Record<string, string>; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      // The backend requires a workspace; source it from the caller's verified
+      // JWT claim and fail closed, exactly like createDashboard.
+      const workspaceId = String(ctx.identity.claims.workspace_id ?? "").trim();
+      if (!workspaceId) {
+        throw gqlError(ErrorCode.VALIDATION_FAILED, "importDashboard: no workspace in caller token", {
+          field: "workspace_id",
+        });
+      }
+      const r = await ctx.clients.chart.importBundle(
+        { bundle: a.bundle, workspace_id: workspaceId, url_mapping: a.urnMapping },
+        a.idempotencyKey,
+      );
+      return { dashboardId: r.dashboard_id, chartsCreated: r.charts_created ?? 0 };
+    },
+
+    setChartLink: async (
+      _p: unknown,
+      a: {
+        chartId: string;
+        input: {
+          childChartId: string;
+          linkedColumns?: Array<{ parentCol: string; childCol: string }>;
+          linkType?: number;
+        };
+      },
+      ctx: GraphQLContext,
+    ) =>
+      mapChartLink(
+        await ctx.clients.chart.createLink(a.chartId, {
+          child_chart_id: a.input.childChartId,
+          linked_columns: a.input.linkedColumns?.map((c) => ({
+            parent_col: c.parentCol,
+            child_col: c.childCol,
+          })),
+          link_type: a.input.linkType,
+        }),
+      ),
+
+    deleteChartLink: async (
+      _p: unknown,
+      a: { chartId: string; childChartId: string },
+      ctx: GraphQLContext,
+    ) => {
+      await ctx.clients.chart.removeLink(a.chartId, a.childChartId);
       return true;
     },
 
@@ -4402,6 +5065,22 @@ export const resolvers = {
       const d = await ctx.clients.experiment.upsertRunNote(a.runId, a.description);
       return mapRunNote(d);
     },
+
+    patchRun: async (
+      _p: unknown,
+      a: { runId: string; name?: string | null; note?: string | null; tags?: Record<string, unknown> | null },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.experiment.patchRun(a.runId, {
+        ...(a.name != null ? { name: a.name } : {}),
+        ...(a.note != null ? { note: a.note } : {}),
+        ...(a.tags != null ? { tags: a.tags } : {}),
+      });
+      return mapRun(ctx, d);
+    },
+
+    deleteRun: (_p: unknown, a: { runId: string }, ctx: GraphQLContext) =>
+      ctx.clients.experiment.deleteRun(a.runId),
 
     deleteRunNote: async (_p: unknown, a: { runId: string }, ctx: GraphQLContext) => {
       const d = await ctx.clients.experiment.deleteRunNote(a.runId);
@@ -5142,6 +5821,146 @@ export const resolvers = {
         updatedBy: d.updated_by ?? null,
       })),
 
+    // ---- BRD 14/68: agent lifecycle controls (operator/ai.agent.admin) ------
+    registerAgentDefinition: async (
+      _p: unknown,
+      a: {
+        input: { agentKey: string; displayName: string; description?: string; ownerTeam?: string; defaultWriteMode?: string };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.registerAgentDefinition(
+        {
+          agent_key: a.input.agentKey,
+          display_name: a.input.displayName,
+          description: a.input.description,
+          owner_team: a.input.ownerTeam,
+          default_write_mode: a.input.defaultWriteMode,
+        },
+        a.idempotencyKey,
+      );
+      return { agentKey: d.agent_key, status: d.status };
+    },
+
+    createAgentVersion: async (
+      _p: unknown,
+      a: {
+        agentKey: string;
+        input: {
+          version: number;
+          graphRef: string;
+          promptRefs?: unknown[];
+          toolset?: unknown[];
+          modelConfig?: Record<string, unknown>;
+          evalGate?: Record<string, unknown>;
+          evalGateResultId?: string;
+        };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.createAgentVersion(
+        a.agentKey,
+        {
+          version: a.input.version,
+          graph_ref: a.input.graphRef,
+          prompt_refs: a.input.promptRefs,
+          toolset: a.input.toolset,
+          model_config: a.input.modelConfig,
+          eval_gate: a.input.evalGate,
+          eval_gate_result_id: a.input.evalGateResultId,
+        },
+        a.idempotencyKey,
+      );
+      return { agentKey: d.agent_key, version: d.version, status: d.status };
+    },
+
+    startAgentRollout: async (
+      _p: unknown,
+      a: {
+        input: {
+          agentKey: string;
+          mode: string;
+          candidateVersion: number;
+          baselineVersion: number;
+          pct?: number;
+          cell?: string;
+          tenantFilter?: Record<string, unknown>;
+        };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.startRollout(
+        {
+          agent_key: a.input.agentKey,
+          mode: a.input.mode,
+          candidate_version: a.input.candidateVersion,
+          baseline_version: a.input.baselineVersion,
+          pct: a.input.pct,
+          cell: a.input.cell,
+          tenant_filter: a.input.tenantFilter,
+        },
+        a.idempotencyKey,
+      );
+      return { rolloutId: d.rollout_id, status: d.status };
+    },
+
+    promoteAgentRollout: (
+      _p: unknown,
+      a: { rolloutId: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.agent
+        .promoteRollout(a.rolloutId, a.idempotencyKey)
+        .then((d) => ({ rolloutId: d.rollout_id, status: d.status })),
+
+    rollbackAgentRollout: (
+      _p: unknown,
+      a: { rolloutId: string; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.agent
+        .rollbackRollout(a.rolloutId, a.idempotencyKey)
+        .then((d) => ({ rolloutId: d.rollout_id, status: d.status })),
+
+    createRetrainWatch: async (
+      _p: unknown,
+      a: {
+        input: {
+          modelUrn: string;
+          watchedAgentKey: string;
+          workspaceId?: string;
+          cadenceSeconds?: number;
+          correctionWindowHours?: number;
+          driftThreshold?: number;
+          minCorrections?: number;
+          enabled?: boolean;
+        };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.createRetrainWatch(
+        {
+          model_urn: a.input.modelUrn,
+          watched_agent_key: a.input.watchedAgentKey,
+          workspace_id: a.input.workspaceId,
+          cadence_seconds: a.input.cadenceSeconds,
+          correction_window_hours: a.input.correctionWindowHours,
+          drift_threshold: a.input.driftThreshold,
+          min_corrections: a.input.minCorrections,
+          enabled: a.input.enabled,
+        },
+        a.idempotencyKey,
+      );
+      return mapRetrainWatch(d);
+    },
+
+    deleteRetrainWatch: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.agent.deleteRetrainWatch(a.id).then((d) => ({ id: d.id, deleted: d.deleted })),
+
     // ---- BRD 54 inc2: governed decision tables ------------------------------
     createDecisionModel: async (
       _p: unknown,
@@ -5220,6 +6039,23 @@ export const resolvers = {
       );
       return mapDecisionModel(d);
     },
+
+    evaluateDecisionModel: async (
+      _p: unknown,
+      a: { id: string; caseId: string; dryRun?: boolean; fields?: Record<string, unknown> | null; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.evaluateDecisionModel(
+        a.id,
+        { case_id: a.caseId, fields: a.fields ?? undefined },
+        a.dryRun ?? true,
+        a.idempotencyKey,
+      );
+      return mapDecisionEvaluation(d);
+    },
+
+    terminateAgentChatSession: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapAgentChatSession(await ctx.clients.agent.terminateSession(a.id)),
 
     // ---- BRD 55: decision outcome monitoring --------------------------------
     markDecisionOutcome: async (

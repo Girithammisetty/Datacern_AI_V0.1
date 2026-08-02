@@ -9,7 +9,8 @@ import { Can } from "@/components/authz/Can";
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Input, Label } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { FEATURE_GATES } from "@/lib/authz/registry";
-import { useAiBudgets, useCreateAiBudget, useUpdateAiBudget, useDeleteAiBudget, useAiSpend, useAiCostBreakdown } from "@/lib/graphql/hooks";
+import { useAiBudgets, useCreateAiBudget, useUpdateAiBudget, useDeleteAiBudget, useAiSpend, useAiCostBreakdown,
+  useAiSpendFreezes, useCreateAiSpendFreeze, useClearAiSpendFreeze } from "@/lib/graphql/hooks";
 import type { AiBudget, AiCostRollup, PatchAiBudgetInput } from "@/lib/graphql/types";
 import { formatLocal } from "@/lib/utils";
 
@@ -153,6 +154,8 @@ export default function AiBudgetsPage() {
           if (toDelete) del.mutate(toDelete.id, { onSuccess: () => setToDelete(null) });
         }}
       />
+
+      <SpendFreezePanel />
     </div>
   );
 }
@@ -368,5 +371,81 @@ function EditBudgetForm({
       <Button type="submit" disabled={pending}>Save</Button>
       {error && <p className="w-full text-xs text-destructive">{error.message}</p>}
     </form>
+  );
+}
+
+
+/** The LLM spend kill-switch (ai-gateway /admin/spend-freezes): freeze the
+ * tenant's spend in an incident, see who froze what and why, lift when done.
+ * Platform-wide freezes are operator-scope downstream; the form here offers
+ * the caller's own tenant, which is the self-serve path. */
+function SpendFreezePanel() {
+  const freezes = useAiSpendFreezes();
+  const create = useCreateAiSpendFreeze();
+  const clear = useClearAiSpendFreeze();
+  const [reason, setReason] = useState("");
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle>Spend freezes</CardTitle>
+        <CardDescription>
+          The emergency brake: while a freeze is active, every LLM call in scope
+          is refused at admission. Freezing your tenant stops spend immediately.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <AsyncBoundary
+          isLoading={freezes.isLoading}
+          isError={freezes.isError}
+          error={freezes.error}
+          isEmpty={!freezes.isLoading && (freezes.data?.length ?? 0) === 0}
+          emptyTitle="No active freezes."
+          onRetry={() => freezes.refetch()}
+        >
+          <ul className="space-y-1 text-sm">
+            {(freezes.data ?? []).map((f) => (
+              <li key={f.scope} className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2">
+                <Badge variant="destructive">{f.scope}</Badge>
+                <span>{f.reason}</span>
+                <span className="text-xs text-muted-foreground">
+                  by {f.frozenBy ?? "?"}{f.frozenAt ? ` · ${formatLocal(f.frozenAt)}` : ""}
+                </span>
+                <Can gate={FEATURE_GATES.manageAiSpendFreeze}>
+                  <Button size="sm" variant="outline" className="ml-auto" disabled={clear.isPending}
+                    onClick={() => clear.mutate({ scope: f.scope.startsWith("tenant") ? "tenant" : "platform" })}>
+                    Lift freeze
+                  </Button>
+                </Can>
+              </li>
+            ))}
+          </ul>
+        </AsyncBoundary>
+        <Can gate={FEATURE_GATES.manageAiSpendFreeze}>
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const r = reason.trim();
+              if (!r || create.isPending) return;
+              create.mutate({ scope: "tenant", reason: r }, { onSuccess: () => setReason("") });
+            }}
+          >
+            <div className="grow">
+              <Label htmlFor="freeze-reason">Freeze this tenant&apos;s LLM spend — reason (required)</Label>
+              <Input id="freeze-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+            </div>
+            <Button type="submit" size="sm" variant="destructive" disabled={!reason.trim() || create.isPending}>
+              {create.isPending ? "Freezing…" : "Freeze spend"}
+            </Button>
+            {create.isError && (
+              <p className="w-full text-xs text-destructive">
+                {create.error instanceof Error ? create.error.message : "Freeze failed"}
+              </p>
+            )}
+          </form>
+        </Can>
+      </CardContent>
+    </Card>
   );
 }

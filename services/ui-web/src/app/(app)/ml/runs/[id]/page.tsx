@@ -3,6 +3,7 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tabs from "@radix-ui/react-tabs";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
@@ -22,7 +23,7 @@ import {
   useRunArtifacts,
   useRunArtifactUrl,
   useRunMetricHistory,
-} from "@/lib/graphql/hooks";
+ usePatchRun, useDeleteRun,} from "@/lib/graphql/hooks";
 import { GraphQLRequestError } from "@/lib/graphql/client";
 import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import { formatBytes, formatLocal } from "@/lib/utils";
@@ -87,6 +88,9 @@ export default function RunDetailPage({ params }: { params: Promise<{ id: string
   // resource_urn = the run's own URN; see routing.go's "experiment_run" rule).
   useHubTopics(run?.urn ? [`run-status:${run.urn}`] : []);
   const [registerOpen, setRegisterOpen] = useState(false);
+  const patchRun = usePatchRun();
+  const deleteRun = useDeleteRun();
+  const router = useRouter();
 
   return (
     <div>
@@ -113,6 +117,27 @@ export default function RunDetailPage({ params }: { params: Promise<{ id: string
                       </Button>
                     </Can>
                   )}
+                  <Can gate={FEATURE_GATES.updateRun}>
+                    <Button size="sm" variant="outline" disabled={patchRun.isPending}
+                      onClick={() => {
+                        const name = window.prompt("Rename run", run.name ?? "");
+                        if (name && name.trim() && name !== run.name) {
+                          patchRun.mutate({ runId: run.id, name: name.trim() });
+                        }
+                      }}>
+                      Rename
+                    </Button>
+                  </Can>
+                  <Can gate={FEATURE_GATES.deleteRun}>
+                    <Button size="sm" variant="destructive" disabled={deleteRun.isPending}
+                      onClick={() => {
+                        if (window.confirm("Delete this run? Its metrics and artifacts references are removed.")) {
+                          deleteRun.mutate(run.id, { onSuccess: () => router.push("/ml/experiments") });
+                        }
+                      }}>
+                      {deleteRun.isPending ? "Deleting…" : "Delete"}
+                    </Button>
+                  </Can>
                   <StatusChip status={run.status} live />
                 </div>
               }

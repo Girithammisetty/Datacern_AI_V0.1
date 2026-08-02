@@ -502,12 +502,181 @@ type ServiceAccountConnection {
   pageInfo: PageInfo!
 }
 
+"""
+A tenant-minted external-agent credential (identity-service GET
+/tenants/self/external-agents, BRD 60 WS2): a customer's OWN agent exchanges
+its key for a short-lived agent_autonomous token. Metadata only — the secret
+hash is never serialized and the plaintext key is unrecoverable after
+creation. The exchanged token always enters through the governed
+external-intent ingress (propose-only, four-eyes), so external agents can
+never auto-execute (BRD 68 ACT-FR-003).
+"""
+type ExternalAgent implements Node {
+  id: ID!
+  urn: String!
+  """The agent identity the exchanged token carries."""
+  agentId: String!
+  agentVersion: Int
+  """The tool/action allow-list the exchanged token is ceiling-limited to."""
+  scopes: [String!]!
+  """Admin-facing display label for the credential."""
+  label: String
+  """false once revoked — a revoked key can no longer be exchanged."""
+  active: Boolean!
+  createdBy: String
+  createdAt: DateTime
+  lastUsedAt: DateTime
+}
+
+"""
+A registered external agent WITH its plaintext key (identity-service POST
+/tenants/self/external-agents). The apiKey (wr_xa_<id>.<secret>) is returned
+EXACTLY ONCE here and is never retrievable again — the UI must surface it
+immediately and never persist it.
+"""
+type RegisteredExternalAgent {
+  externalAgent: ExternalAgent!
+  apiKey: String!
+}
+
+input RegisterExternalAgentInput {
+  agentId: String!
+  agentVersion: Int
+  scopes: [String!]
+  label: String
+}
+
 """Tenant compute quotas (identity-service domain.Quotas)."""
 type TenantQuotas {
   cpu: Int
   memory: String
   processingCpu: Int
   processingMemory: String
+}
+
+"""
+One provisioning-saga step (identity-service, compensable 7-step saga).
+status: pending|running|succeeded|failed|compensated; compensation names the
+recorded rollback path when one ran.
+"""
+type ProvisioningStep {
+  id: ID!
+  stepIndex: Int!
+  stepName: String!
+  status: String!
+  attempt: Int
+  error: String
+  compensation: String
+  startedAt: String
+  completedAt: String
+}
+
+"""
+createTenant result: the tenant, plus the saga operation id when
+publish=true started provisioning immediately (202 downstream).
+"""
+type CreateTenantResult {
+  tenant: Tenant!
+  operationId: ID
+}
+
+"""
+reactivateTenant result: the tenant plus any config drift detected while
+it was suspended (passthrough JSON; null when clean).
+"""
+type ReactivateTenantResult {
+  tenant: Tenant!
+  drift: JSON
+}
+
+"""
+One POC success criterion (identity SuccessCriterion, DSP-FR-020).
+manualValue is only meaningful when metricRef is manual — null means "not
+yet reported", rendered inconclusive, never a fabricated 0.
+"""
+type PocCriterion {
+  key: String!
+  description: String
+  metricRef: String
+  target: Float
+  "gte | lte"
+  direction: String
+  manualValue: Float
+}
+
+"""
+One criterion's live actual-vs-target (identity CriterionProgress),
+computed from real BRD 69 value data. outcome: met|missed|inconclusive;
+dataSource records where the actual came from — or the explicit gap reason
+when it is genuinely absent.
+"""
+type PocCriterionProgress {
+  key: String!
+  description: String
+  metricRef: String
+  target: Float
+  direction: String
+  manualValue: Float
+  actualValue: Float
+  outcome: String
+  dataSource: String
+}
+
+"""
+The live POC success dashboard data (identity GET
+/tenants/{id}/poc/progress, BRD 70 US-5).
+"""
+type PocProgress {
+  tenantId: ID!
+  windowStart: String
+  windowEnd: String
+  asOf: String
+  criteria: [PocCriterionProgress!]!
+}
+
+"""One generated poc-report.v1 export; jsonUrl is presigned (24h)."""
+type PocReportExport {
+  id: ID!
+  version: Int
+  jsonSha256: String
+  generatedBy: String
+  createdAt: String
+  jsonUrl: String
+}
+
+input PocCriterionInput {
+  key: String!
+  description: String
+  metricRef: String
+  target: Float!
+  direction: String!
+}
+
+input CreateDemoTenantInput {
+  name: String!
+  displayName: String
+  ownerEmail: String
+  "Names the deploy/demo/(pack)/ bundle to seed. Required (DSP-FR-011)."
+  pack: String!
+  tier: String
+}
+
+input CreatePocTenantInput {
+  name: String!
+  displayName: String
+  ownerEmail: String
+  "Optional demo bundle to seed walkable content (DSP-FR-020)."
+  pack: String
+}
+
+input CreateTenantInput {
+  name: String!
+  displayName: String
+  ownerEmail: String
+  tier: String
+  cloud: String
+  "Start the provisioning saga immediately."
+  publish: Boolean = false
 }
 
 """
@@ -657,6 +826,61 @@ type AuditEvent {
 type AuditEventConnection {
   nodes: [AuditEvent!]!
   pageInfo: PageInfo!
+}
+
+"""
+One audit event with its hash-chain position (audit-service GET
+/audit/events/{event_id}). `sealed` is true once the event's chain-day has
+been sealed by the daily WORM export — the record is then verifiable against
+its Object-Lock manifest.
+"""
+type AuditEventDetail {
+  event: AuditEvent!
+  """YYYY-MM-DD chain-day the event was sequenced into."""
+  chainDate: String!
+  chainSeq: Int!
+  sealed: Boolean!
+}
+
+"""
+One sealed WORM export batch (audit-service GET /exports, AUD-FR-023): a
+chain-day's tamper-evident manifest in Object-Lock storage. `downloadUrl`
+is a presigned manifest link (absent when signing was unavailable).
+"""
+type AuditExportBatch {
+  """YYYY-MM-DD chain-day the batch covers."""
+  date: String!
+  """
+  Manifest revision for the day (re-seals after supplements increment it).
+  """
+  revision: Int!
+  """The immutable s3:// object URI of the manifest."""
+  uri: String!
+  manifestSha256: String!
+  chainHead: String!
+  rowCount: Int!
+  sealedAt: DateTime
+  downloadUrl: String
+}
+
+enum AuditExportFormat {
+  CSV
+  NDJSON
+}
+
+"""
+Descriptor for a raw audit-trail file export (audit-service GET
+/audit/export, capability audit.event.export — a streaming CSV/NDJSON
+download of up to 100k rows). The file body never traverses GraphQL:
+`downloadPath` is the same-origin ui-web proxy route (/api/audit-export)
+that streams it from audit-service with the caller's session JWT. `from`/
+`to` echo the validated window the link will export.
+"""
+type AuditExportFile {
+  downloadPath: String!
+  format: AuditExportFormat!
+  from: DateTime!
+  to: DateTime!
 }
 
 enum SiemExportFormat {
@@ -1493,6 +1717,89 @@ type QueryStats {
 }
 
 """
+Effective execution ceilings (query-service domain.Ceilings). Byte/row
+counts are Float — they exceed GraphQL's 32-bit Int (50 GB scan cap).
+"""
+type QueryCeilings {
+  maxScanBytes: Float
+  maxRuntimeS: Float
+  maxResultBytes: Float
+  maxResultRows: Float
+}
+
+"""
+The tenant's stored override row (query-service domain.TenantLimits) —
+every field nullable; null means the platform default applies.
+"""
+type QueryLimitOverrides {
+  maxScanBytes: Float
+  maxRuntimeS: Float
+  maxResultBytes: Float
+  maxResultRows: Float
+  concurrentSlots: Int
+  warehousePrimary: Boolean
+  updatedBy: String
+}
+
+"""
+Tenant query governance (query-service GET /limits, QRY-FR-042/044): the
+stored overrides plus the recomputed effective ceilings for human and agent
+callers, and the platform maxima overrides may never exceed.
+"""
+type QueryLimits {
+  overrides: QueryLimitOverrides!
+  effectiveUser: QueryCeilings!
+  effectiveAgent: QueryCeilings!
+  platformMaxima: QueryCeilings!
+}
+
+"""
+PUT /limits body (query-service). Overrides may only LOWER ceilings — a value
+above the platform maximum 422s with the allowed range in details. Omitted
+fields keep their current override; concurrentSlots caps simultaneous
+executions per tenant (QRY-FR-044).
+"""
+input QueryLimitsInput {
+  maxScanBytes: Float
+  maxRuntimeS: Float
+  maxResultBytes: Float
+  maxResultRows: Float
+  concurrentSlots: Int
+  warehousePrimary: Boolean
+}
+
+"""
+Plan + cost estimate WITHOUT executing (query-service POST /sql/dry-run,
+QRY-FR-041). ceilingVerdict is ok | exceeded; partitionsPruned is a
+"pruned/total" summary string; confidence is high | low.
+"""
+type SqlDryRun {
+  engine: String
+  routingReason: String
+  estimatedScanBytes: Float
+  estimatedRows: Float
+  partitionsPruned: String
+  confidence: String
+  ceilingVerdict: String
+  ceilings: QueryCeilings
+  warnings: JSON
+}
+
+"""
+A signed result-export descriptor (query-service POST /executions/{id}/export,
+QRY-FR-062). downloadPath is the SERVICE-RELATIVE pre-authenticated path
+/api/v1/downloads/{token} — the UI streams it through its same-origin
+/api/query-export/{token} proxy (an HMAC-signed link, valid 24h; the download
+itself needs no JWT). Expired results answer 410 with a re-run hint.
+"""
+type QueryExportDescriptor {
+  """csv (parquet is a documented 501 stub downstream)."""
+  format: String!
+  downloadPath: String!
+  expiresAt: DateTime
+}
+
+"""
 A typed variable declaration (query-service QRY-FR-002). SQL references it
 as the named placeholder :name; every placeholder must be declared at save time.
 """
@@ -1645,6 +1952,90 @@ type ChartShapedData {
   artifact: JSON
   rowCount: Int
   truncated: Boolean
+}
+
+"""
+A page of RAW rows behind a clicked aggregate segment (chart-service POST
+/charts/{id}/drilldown, CHART-FR-040). columns/rows mirror query-service's
+execution-result shape; nextCursor pages forward.
+"""
+type ChartDrilldownRows {
+  columns: JSON
+  rows: JSON
+  nextCursor: String
+  hasMore: Boolean!
+}
+
+"""
+Drilldown request (chart-service resolve.DrilldownRequest): the clicked
+dimension/value is injected as a bind predicate over the chart's configured
+drilldown saved query (display_meta.drilldown.query_urn — 422 NO_DRILLDOWN
+when absent). filters use the same op whitelist as ChartFilterInput; limit
+caps at 200 (default 50).
+"""
+input ChartDrilldownInput {
+  dimension: String!
+  value: JSON
+  """
+  Series discriminator value when the chart splits by a dataseries column.
+  """
+  dataseriesValue: JSON
+  filters: [ChartFilterInput!]
+  cursor: String
+  limit: Int
+}
+
+"""
+An async chart-export operation (chart-service domain.Operation,
+CHART-FR-041). status: pending | running | completed | failed. artifactUrl is
+set once completed — FSStore mints a chart-service-relative signed path
+(/api/v1/exports/…?exp&sig); S3Store an absolute presigned URL. The UI
+downloads through its same-origin /api/chart-export/{operationId} proxy.
+"""
+type ChartExportOperation {
+  id: ID!
+  chartId: ID
+  kind: String
+  """csv | png (png is infra-gated on the headless renderer sidecar)."""
+  format: String
+  status: String!
+  artifactUrl: String
+  artifactUrn: String
+  error: String
+  expiresAt: DateTime
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+"""
+Result of importing a dashboard bundle (chart-service POST /dashboards/import).
+"""
+type DashboardImportResult {
+  dashboardId: ID!
+  chartsCreated: Int!
+}
+
+"""
+A parent→child chart cross-navigation link (chart-service PUT /charts/{id}/link,
+CHART-FR-015). linkType: 0 = shared-source, 1 = main-secondary.
+"""
+type ChartLink {
+  parentChartId: ID!
+  childChartId: ID!
+  linkType: Int!
+  linkedColumns: JSON
+}
+
+input ChartLinkColumnInput {
+  parentCol: String!
+  childCol: String!
+}
+
+input ChartLinkInput {
+  childChartId: ID!
+  linkedColumns: [ChartLinkColumnInput!]
+  """0 = shared-source, 1 = main-secondary (default 1)."""
+  linkType: Int
 }
 
 input CreateDashboardInput {
@@ -2910,6 +3301,182 @@ type ErasureRequest {
   completedAt: DateTime
 }
 
+"""
+Result of a governed memory write (memory-service WriteResult). `status`:
+active | quarantined | queued (embedding degraded, write pended) — batch rows
+may also be rejected, carrying `code`/`message` instead of failing the
+whole batch. `memoryId` is null for session-scope and queued writes.
+"""
+type MemoryWriteResult {
+  memoryId: ID
+  status: String!
+  """True when the write deduplicated into an existing similar record."""
+  merged: Boolean
+  """True for session-scope writes (Redis only, no durable record)."""
+  session: Boolean
+  """Rejection error code (batch rows only)."""
+  code: String
+  """Rejection error message (batch rows only)."""
+  message: String
+}
+
+"""
+Provenance of a memory write (memory-service ProvenanceIn). `sourceType`:
+agent_run | user_explicit | tool_output | admin.
+"""
+input MemoryProvenanceInput {
+  sourceType: String!
+  runId: String
+  agentKey: String
+  agentVersion: String
+  userId: String
+  toolId: String
+}
+
+input WriteMemoryInput {
+  """
+  session | user | workspace | tenant. Users may write only their own
+  user/session scope; tenant scope needs memory.corpus.admin.
+  """
+  scope: String!
+  scopeRef: String!
+  content: String!
+  provenance: MemoryProvenanceInput!
+  confidence: Float
+  tags: [String!]
+}
+
+input MemoryRetrievalTestInput {
+  queryText: String
+  """
+  Scopes to search: user | workspace | tenant (session is a separate
+  downstream path and is ignored here).
+  """
+  scopes: [String!]!
+  """
+  scope -> scope_ref map. Only `workspace` needs one (and the caller must
+  be a member); user/tenant refs are server-resolved from the principal.
+  """
+  scopeRefs: JSON
+  """RAG corpus keys to search alongside memory scopes."""
+  corpora: [String!]
+  topK: Int
+  minConfidence: Float
+  tags: [String!]
+  snapshotVer: String
+  includeDebug: Boolean
+}
+
+"""
+One ranked retrieval hit (memory-service POST /retrieve). `kind` is
+memory (scope/memoryId/provenance populated) or chunk (corpus/chunkId/
+sourceUrn/snapshotVer populated). `content` is UNTRUSTED model input
+(BR-12) — the downstream marks every hit contentDisposition "untrusted".
+"""
+type MemoryRetrievalHit {
+  kind: String!
+  content: String!
+  score: Float!
+  contentDisposition: String!
+  scope: String
+  memoryId: ID
+  provenance: JSON
+  corpus: String
+  chunkId: ID
+  sourceUrn: String
+  snapshotVer: String
+  """Ranking internals, only when includeDebug was set."""
+  debug: JSON
+}
+
+"""
+Retrieval tester result. `degraded` is the downstream envelope flag —
+true when ANN search ran in a degraded mode.
+"""
+type MemoryRetrievalResult {
+  hits: [MemoryRetrievalHit!]!
+  degraded: Boolean!
+}
+
+"""
+A tenant RAG corpus (memory-service _corpus_view). `status`: active |
+paused | rebuilding. `source`/`chunking`/`refresh`/`anonymizationProfile`
+are downstream config dicts passed through as JSON.
+"""
+type RagCorpus {
+  corpusKey: ID!
+  source: JSON
+  chunking: JSON
+  activeEmbeddingVer: String!
+  refresh: JSON
+  anonymizationProfile: JSON
+  status: String!
+}
+
+"""Corpus health (memory-service GET /corpora/{key}/status)."""
+type CorpusStatus {
+  corpusKey: ID!
+  status: String!
+  activeEmbeddingVer: String!
+  chunkCount: Int!
+}
+
+"""
+Report from a corpus re-embed (memory-service POST /corpora/{key}/rebuild).
+"""
+type CorpusRebuildReport {
+  corpusKey: ID!
+  activeEmbeddingVer: String!
+  chunksReembedded: Int!
+  oldChunksDropped: Int!
+}
+
+"""Result of pushing a document into the docs corpus."""
+type CorpusDocumentPushResult {
+  sourceUrn: String!
+  chunks: Int!
+}
+
+input RegisterCorpusInput {
+  corpusKey: String!
+  source: JSON
+  chunking: JSON
+  embeddingModelVer: String
+  refresh: JSON
+  anonymizationProfile: JSON
+}
+
+input CorpusPatchInput {
+  source: JSON
+  chunking: JSON
+  refresh: JSON
+  anonymizationProfile: JSON
+  """
+  active | paused (rebuilding is set by the rebuild flow, not patchable in
+  practice).
+  """
+  status: String
+}
+
+"""
+The tenant memory PII/retention policy (memory-service GET/PUT
+/policies/self). `ttlOverrides` maps scope -> ISO-8601 duration;
+`corpusFlags` maps corpus_key -> enabled.
+"""
+type MemoryPolicy {
+  ttlOverrides: JSON!
+  piiClasses: [String!]!
+  injectionProfile: String!
+  corpusFlags: JSON!
+}
+
+input MemoryPolicyInput {
+  ttlOverrides: JSON
+  piiClasses: [String!]
+  injectionProfile: String
+  corpusFlags: JSON
+}
+
 """An ML experiment (experiment-service GET /experiments/{id})."""
 type Experiment implements Node {
   id: ID!
@@ -3417,6 +3984,92 @@ input CreateRateCardInput {
   version: Int!
   effectiveFrom: Date!
   items: JSON!
+}
+
+"""
+One seeded meter-catalog entry (usage-service GET /meters, USG-FR-001/003).
+Platform-defined, versioned catalog — no tenant-defined meters in v1; the
+canonical `unit` never changes post-launch (USG-FR-005).
+"""
+type UsageMeter {
+  meterKey: String!
+  unit: String!
+  """sum | time_weighted_avg."""
+  aggregation: String!
+  description: String!
+  """
+  Dimension names carried on this meter's records (documentation of the
+  rollup contract, not a per-row guarantee).
+  """
+  dimensions: [String!]!
+  deprecated: Boolean!
+}
+
+"""
+One priced monthly chargeback row (usage-service GET /reports/chargeback,
+USG-FR-043). `usd` is quantity x pricePerUnitUsd at the rate card resolved
+for month start (BR-5); `totalUsd` folds in `adjustmentsUsd` (signed
+adjustment deltas recorded on the closed month). rateCardId is null when no
+rate card priced the meter.
+"""
+type ChargebackLine {
+  tenantId: String!
+  workspaceId: String
+  """YYYY-MM."""
+  month: String!
+  meterKey: String!
+  quantity: Float!
+  rateCardId: String
+  pricePerUnitUsd: Float!
+  usd: Float!
+  adjustmentsUsd: Float!
+  totalUsd: Float!
+}
+
+"""
+A monthly metered-vs-provider-bill reconciliation (usage-service GET
+/reconciliations, USG-FR-070). `status`: pending | matched | variance |
+adjusted | acknowledged. Chargeback for a month is blocked (409) while its
+reconciliation sits in variance (AC-9) until acknowledged/adjusted.
+"""
+type Reconciliation implements Node {
+  id: ID!
+  urn: String!
+  """YYYY-MM."""
+  month: String!
+  provider: String!
+  status: String!
+  reportUri: String!
+  createdAt: DateTime!
+}
+
+"""
+A recorded billing adjustment/credit (usage-service POST /adjustments 201
+echo, USG-FR-072). Append-only, actor-signed downstream; the route echoes
+only these fields (no createdAt/actor) — nothing here is fabricated.
+"""
+type UsageAdjustment implements Node {
+  id: ID!
+  urn: String!
+  meterKey: String!
+  """YYYY-MM (must already be finalized)."""
+  month: String!
+  quantityDelta: Float!
+  usdDelta: Float!
+  reason: String!
+}
+
+"""
+Record a billing adjustment/credit on a CLOSED month (usage-service POST
+/adjustments, USG-FR-072). `month` must be finalized — an open month 409s
+with reason month_open (BR-5). `usdDelta` is signed (negative = credit).
+"""
+input CreateUsageAdjustmentInput {
+  meterKey: String!
+  month: String!
+  quantityDelta: Float!
+  usdDelta: Float!
+  reason: String!
 }
 
 type ValueDecisions {
@@ -4190,6 +4843,24 @@ type AiBudgetConnection {
 }
 
 """
+One active LLM spend freeze (ai-gateway GET /admin/spend-freezes) — the
+emergency brake: while frozen, every completion/embedding call in scope is
+refused at admission. scope is "platform" or "tenant:{id}" as resolved
+server-side.
+"""
+type AiSpendFreeze {
+  scope: String!
+  reason: String
+  frozenBy: String
+  frozenAt: String
+}
+
+type AiSpendFreezeCleared {
+  scope: String!
+  cleared: Boolean!
+}
+
+"""
 Live spend against one ai-gateway budget (ai-gateway GET /admin/spend).
 """
 type AiSpendRow {
@@ -4759,6 +5430,121 @@ type AgentCeilings {
   updatedBy: String
 }
 
+"""The thin register response ({agent_key, status: "draft"})."""
+type AgentDefinitionRegisterResult {
+  agentKey: ID!
+  status: String!
+}
+
+input RegisterAgentDefinitionInput {
+  agentKey: String!
+  displayName: String!
+  description: String
+  """Defaults to "platform-ai" downstream."""
+  ownerTeam: String
+  """Defaults to "proposal" downstream."""
+  defaultWriteMode: String
+}
+
+"""
+The thin create-version response ({agent_key, version, status: "draft"}).
+"""
+type AgentVersionCreateResult {
+  agentKey: ID!
+  version: Int!
+  status: String!
+}
+
+input CreateAgentVersionInput {
+  version: Int!
+  graphRef: String!
+  promptRefs: JSON
+  toolset: JSON
+  modelConfig: JSON
+  evalGate: JSON
+  evalGateResultId: String
+}
+
+"""
+One rollout record (agent-runtime rollouts table). `mode` is
+direct | canary | shadow; `status` is active | promoted | rolled_back.
+`pct` is the canary traffic percentage (0 for direct/shadow).
+"""
+type AgentRollout {
+  rolloutId: ID!
+  agentKey: ID!
+  cell: String
+  mode: String!
+  candidateVersion: Int!
+  baselineVersion: Int!
+  pct: Int!
+  tenantFilter: JSON
+  status: String!
+}
+
+"""The thin rollout write response ({rollout_id, status})."""
+type AgentRolloutActionResult {
+  rolloutId: ID!
+  status: String!
+}
+
+input StartAgentRolloutInput {
+  agentKey: String!
+  """direct | canary | shadow."""
+  mode: String!
+  candidateVersion: Int!
+  baselineVersion: Int!
+  """Canary traffic percentage; defaults to 0 downstream."""
+  pct: Int
+  """Defaults to the runtime's own cell/env downstream."""
+  cell: String
+  tenantFilter: JSON
+}
+
+"""
+A standing drift watch on a deployed model (BRD 52 inc3): the scheduler
+counts human corrections to watchedAgentKey's proposals over the window on
+the cadence and, past driftThreshold, opens a four-eyes retrain proposal via
+the governance agent.
+"""
+type RetrainWatch {
+  id: ID!
+  modelUrn: String!
+  watchedAgentKey: String!
+  workspaceId: ID
+  cadenceSeconds: Int!
+  correctionWindowHours: Int!
+  """Correction ratio in [0,1] that trips the watch."""
+  driftThreshold: Float!
+  minCorrections: Int!
+  enabled: Boolean!
+  lastCheckedAt: String
+  """The scheduler's last computed signal (opaque passthrough)."""
+  lastSignal: JSON
+  createdBy: String
+}
+
+input CreateRetrainWatchInput {
+  modelUrn: String!
+  watchedAgentKey: String!
+  workspaceId: ID
+  """Defaults to 86400 (daily) downstream; minimum 60."""
+  cadenceSeconds: Int
+  """Defaults to 168 (7 days) downstream."""
+  correctionWindowHours: Int
+  """0..1; defaults to 0.3 downstream."""
+  driftThreshold: Float
+  """Defaults to 20 downstream."""
+  minCorrections: Int
+  enabled: Boolean
+}
+
+"""The thin delete response ({id, deleted: true})."""
+type RetrainWatchDeleteResult {
+  id: ID!
+  deleted: Boolean!
+}
+
 """
 One row in the tenant run history (agent-runtime GET /runs, Tier 2b).
 Deliberately lighter than AgentRun — no per-row trace/tokenStream fan-out;
@@ -4953,6 +5739,25 @@ type AgentFleetSummary {
   periodDecisions: Int
 }
 
+"One semantic-discovery hit (score = cosine similarity, higher is closer)."
+type ToolDiscoveryHit {
+  toolId: ID!
+  version: String
+  score: Float!
+  tier: String
+  description: String
+}
+
+"One platform action-catalog entry (the closed authz vocabulary)."
+type RbacAction {
+  action: ID!
+  service: String
+  resource: String
+  verb: String
+  workspaceScoped: Boolean
+  description: String
+}
+
 type Query {
   """The authenticated viewer (from the JWT; no downstream call)."""
   me: Viewer!
@@ -5012,6 +5817,12 @@ type Query {
   """
   roles(first: Int = 50, after: String): RoleConnection!
   """
+  The platform action catalog (rbac-service GET /actions; any
+  authenticated principal): the closed service.resource.verb vocabulary
+  behind every role editor.
+  """
+  rbacActions(first: Int = 500, after: String): [RbacAction!]!
+  """
   The real authz decision trace for a subject+action(+resource) tuple
   (rbac-service POST /authz/explain) — a debug tool for "why was I denied".
   Needs audit.log.read.
@@ -5025,6 +5836,12 @@ type Query {
   contentGrants(resourceUrn: String!): [EffectiveAccessEntry!]!
   """Service accounts (identity-service GET /service-accounts). Admin only."""
   serviceAccounts(first: Int = 50, after: String): ServiceAccountConnection!
+  """
+  The caller tenant's registered external-agent credentials (identity-service
+  GET /tenants/self/external-agents, BRD 60 WS2), metadata only. Needs
+  identity.user.admin.
+  """
+  externalAgents: [ExternalAgent!]!
   """
   The caller's tenant UI label overrides as a list (identity-service GET
   /tenants/self/labels). Member-visible read; editing needs identity.user.admin.
@@ -5040,6 +5857,27 @@ type Query {
   """
   tenants(limit: Int): [Tenant!]!
   """
+  The provisioning saga's step-by-step state for one tenant
+  (identity-service GET /tenants/{id}/provisioning). Platform operator only
+  (identity requireSuperAdmin downstream).
+  """
+  tenantProvisioning(id: ID!): [ProvisioningStep!]!
+  """
+  The POC's agreed success criteria (identity GET /tenants/{id}/poc/
+  criteria, DSP-FR-020). Tenant-admin (cross-tenant guarded) or operator.
+  """
+  pocCriteria(tenantId: ID!): [PocCriterion!]!
+  """
+  Live actual-vs-target per criterion (GET /tenants/{id}/poc/progress) —
+  the POC sponsor dashboard of BRD 70 US-5. Never fabricates an actual.
+  """
+  pocProgress(tenantId: ID!): PocProgress!
+  """
+  Prior POC report exports (GET /tenants/{id}/poc-reports); jsonUrl is a
+  24h presigned artifact link minted downstream. Tenant admin.
+  """
+  pocReports(tenantId: ID!): [PocReportExport!]!
+  """
   BRD 66 slice 3 (CPL-FR-033): the tenant's commercial plane (plan,
   trial, effective entitlements) for gating + upsell UI. Reachable by ANY
   authenticated caller in the tenant (returns the minimal
@@ -5054,6 +5892,41 @@ type Query {
   days (audit enforces a 92-day max window). Filters are exact-match.
   """
   auditEvents(from: DateTime, to: DateTime, eventType: String, action: String, actorId: String, actorType: String, resourceUrn: String, first: Int = 50, after: String): AuditEventConnection!
+  """
+  Dual-attribution activity for ONE agent (audit-service GET
+  /audit/agent-activity): every event the agent performed, each row carrying
+  who it acted on behalf of (viaAgentId = the agent, actorId = the human
+  principal on OBO rows). `oboUserId` narrows to a single on-behalf-of
+  user; `includeAutonomous` adds rows with no human principal. `from`/
+  `to` default to the backend's max 92-day window. Capped at 200 rows,
+  newest first — the downstream route never paginates, so pageInfo.hasMore
+  is always false. Needs audit.event.read.
+  """
+  auditAgentActivity(agentId: ID!, oboUserId: String, from: DateTime, to: DateTime, includeAutonomous: Boolean = false): AuditEventConnection!
+  """
+  One audit event by id with its chain position (audit-service GET
+  /audit/events/{event_id}). Null for cross-tenant and nonexistent alike —
+  the downstream 404s both identically (MASTER-FR-003). Needs
+  audit.event.read.
+  """
+  auditEvent(id: ID!): AuditEventDetail
+  """
+  Previously generated WORM export batches (audit-service GET /exports):
+  the sealed per-day Object-Lock manifests, optionally narrowed to one
+  YYYY-MM-DD day. Bounded list — the downstream route never paginates.
+  Needs audit.export.read.
+  """
+  auditExports(date: String): [AuditExportBatch!]!
+  """
+  Descriptor for a raw audit-trail export download (audit-service GET
+  /audit/export — streaming CSV/NDJSON, capability audit.event.export). The
+  BFF validates the window against the downstream's real rules (from/to
+  required there, max 92 days; defaults to the last 7 days) and returns the
+  same-origin `downloadPath` that ui-web's zero-logic proxy
+  (/api/audit-export) streams the file through — the body itself is never
+  proxied through GraphQL. Filters mirror auditEvents.
+  """
+  auditExportFile(from: DateTime, to: DateTime, eventType: String, action: String, actorId: String, actorType: String, resourceUrn: String, format: AuditExportFormat = CSV): AuditExportFile!
   """
   Poll an async compliance-pack build job (audit-service GET
   /operations/{id}). Needs audit.compliance.read.
@@ -5165,6 +6038,12 @@ type Query {
   default last 7 days). Needs query.stats.read.
   """
   queryStats(since: DateTime, limit: Int): QueryStats!
+  """
+  The tenant's query-governance ceilings + concurrency (query-service GET
+  /limits, QRY-FR-042/044): stored overrides, effective user/agent ceilings,
+  platform maxima. Needs query.limits.read.
+  """
+  queryLimits: QueryLimits!
   dashboard(id: ID!): Dashboard
   dashboards(workspaceId: ID!, first: Int = 50, after: String): DashboardConnection!
   """
@@ -5192,6 +6071,19 @@ type Query {
   Preview an UNSAVED chart spec for the live editor (chart-service POST /charts/preview).
   """
   chartPreview(input: CreateChartInput!): ChartShapedData!
+  """
+  Raw rows behind a clicked aggregate segment (chart-service POST
+  /charts/{id}/drilldown, CHART-FR-040). A Query, not a Mutation: the
+  downstream handler is side-effect free — it wraps the chart's drilldown
+  saved query with a bind predicate and reads. 422 NO_DRILLDOWN when the
+  chart declares none. Needs chart.chart.read.
+  """
+  chartDrilldown(chartId: ID!, input: ChartDrilldownInput!): ChartDrilldownRows!
+  """
+  An async chart-export operation's status + artifact link (chart-service
+  GET /operations/{id}) — poll after exportChart until completed|failed.
+  """
+  chartExportOperation(id: ID!): ChartExportOperation
   """
   Semantic models for the editor's field pickers (semantic-service GET /models).
   Headers only — list items carry empty dimensions/measures; use semanticModel(name)
@@ -5455,6 +6347,25 @@ type Query {
   """
   anomalies(status: String): [Anomaly!]!
   """
+  The seeded platform meter catalog (usage-service GET /meters,
+  USG-FR-003). Needs usage.meter.read.
+  """
+  usageMeters: [UsageMeter!]!
+  """
+  Priced monthly chargeback rollups for a finalized month (usage-service
+  GET /reports/chargeback, USG-FR-043). `month` is YYYY-MM. 409s verbatim
+  with reason reconciliation_variance while that month's reconciliation
+  variance is unresolved (AC-9). Needs usage.report.read.
+  """
+  chargebackReport(month: String!): [ChargebackLine!]!
+  """
+  Monthly metered-vs-provider-bill reconciliations (usage-service GET
+  /reconciliations, USG-FR-070) — not server-paginated (fixed 100-row cap
+  downstream). Platform-only — needs usage.reconciliation.read AND a
+  platform-operator token; a tenant admin gets a real 403, never faked.
+  """
+  reconciliations: [Reconciliation!]!
+  """
   Value/ROI summary for a period (usage-service GET /api/v1/value/summary,
   BRD 69 ROI-FR-010). `period` is YYYY-MM. Needs usage.report.read.
   """
@@ -5550,6 +6461,23 @@ type Query {
   """
   memoryStats: JSON!
   """
+  Retrieval tester — "what would the agent recall for this query" (memory-service
+  POST /retrieve; read-only despite the POST). Scope refs are server-verified:
+  user/tenant resolve from the caller, workspace requires membership. Needs
+  memory.memory.read.
+  """
+  memoryRetrievalTest(input: MemoryRetrievalTestInput!): MemoryRetrievalResult!
+  """
+  Corpus health: status + active embedding version + chunk count
+  (memory-service GET /corpora/{key}/status). Needs memory.corpus.admin.
+  """
+  corpusStatus(corpusKey: String!): CorpusStatus
+  """
+  The caller's tenant memory PII/retention policy (memory-service GET
+  /policies/self). Needs memory.policy.read.
+  """
+  memoryPolicy: MemoryPolicy!
+  """
   A suite by id (+optional version; latest when omitted). Needs eval.suite.update
   (eval-service requires the write scope even to read a suite).
   """
@@ -5627,6 +6555,11 @@ type Query {
   """
   aiSpend(scopeType: String!, scopeRef: String!, window: String): [AiSpendRow!]!
   """
+  Active spend freezes (ai-gateway GET /admin/spend-freezes). Needs
+  ai.budget.read.
+  """
+  aiSpendFreezes: [AiSpendFreeze!]!
+  """
   Cost-detail breakdown (by provider / model / request-class) over the last
   `windowHours` (ai-gateway GET /admin/spend/breakdown). Needs ai.spend.read.
   """
@@ -5691,6 +6624,13 @@ type Query {
   """
   tools(first: Int = 50, after: String, ownerService: String): ToolConnection!
   """
+  Semantic tool discovery (tool-plane POST /discovery/search, TPL-FR-020):
+  the query is embedded with the real model and ranked by pgvector cosine
+  over the tenant's ENABLED tools only — a killed or disabled tool never
+  appears. Needs tool.tool.read.
+  """
+  discoverTools(query: String!, topK: Int = 5, tierFilter: [String!]): [ToolDiscoveryHit!]!
+  """
   Per-version status + SLA + rolling health for one tool (GET
   /tools/{id}/health) — the per-tool version list. Needs tool.tool.read.
   """
@@ -5729,6 +6669,18 @@ type Query {
   first. Any tenant principal; tenant-scoped downstream by RLS.
   """
   agentRuns(agentKey: String, first: Int = 50): AgentRunListItemConnection!
+  """
+  Rollout records, newest first (agent-runtime GET /registry/rollouts),
+  optionally filtered by agentKey/status. Control-plane read gated like the
+  kill-switch list (ai.agent.read downstream) — the writes (start/promote/
+  rollback mutations) are operator-only.
+  """
+  agentRollouts(agentKey: String, status: String): [AgentRollout!]!
+  """
+  The caller-tenant's scheduled drift/retrain watches (agent-runtime GET
+  /registry/retrain-watches, BRD 52 inc3). Needs ai.agent.admin downstream.
+  """
+  retrainWatches: [RetrainWatch!]!
   """
   ACT-FR-001. Requires agent.registry.read downstream (enforced as
   ai.agent.read by agent-runtime today — see docs/initiatives/
@@ -5906,6 +6858,39 @@ type BatchEvaluateResult {
   proposed: Boolean!
   summary: BatchEvaluateSummary!
   results: [BatchEvaluateRow!]!
+}
+
+"""
+One decision-table evaluation against a case (agent-runtime POST
+/decision-models/{id}/evaluate). dryRun=true is a pure preview — the fired
+rule and outcome with NO side effect (DM-FR-030); dryRun=false mints the
+governed four-eyes proposal on a match (proposalId set, DM-FR-020).
+"""
+type DecisionEvaluation {
+  matched: Boolean!
+  "Index of the fired rule; null when the default outcome (or nothing) fired."
+  ruleIndex: Int
+  "Plain-language explanation naming the fired rule — the explainability leg."
+  explanation: String
+  outcome: DecisionOutcome
+  proposalId: ID
+  dryRun: Boolean!
+}
+
+"""
+An agent chat session (agent-runtime). Sessions are CREATED implicitly by
+the chat path; this type exists for the explicit terminate control.
+"""
+type AgentChatSession {
+  id: ID!
+  agentKey: String
+  agentVersion: Int
+  contextUrn: String
+  "active | idle | expired | terminated"
+  status: String
+  createdAt: String
+  lastActivityAt: String
+  expiresHardAt: String
 }
 
 enum DecisionEffectivenessBy {
@@ -6358,6 +7343,95 @@ type Mutation {
   """
   setEmbedConfig(tenantId: ID!, allowedOrigins: [String!]!, idempotencyKey: String): SetEmbedConfigResult!
   """
+  Provision a tenant (identity-service POST /tenants; 202+operationId when
+  publish=true). Platform operator only.
+  """
+  createTenant(input: CreateTenantInput!, idempotencyKey: String): CreateTenantResult!
+  """
+  Edit tenant attributes (PATCH /tenants/{id}; passthrough JSON body of
+  the fields to change). Platform operator only.
+  """
+  patchTenant(id: ID!, patch: JSON!): Tenant!
+  """
+  Archive or destroy a tenant (DELETE /tenants/{id}?mode=&force=,
+  IDN-FR-008). mode=archive keeps data recoverable; destroy is terminal and
+  needs force. Platform operator only.
+  """
+  deleteTenant(id: ID!, mode: String!, force: Boolean = false): Tenant!
+  """
+  Start the provisioning saga for a drafted tenant (POST
+  /tenants/{id}/publish, 202). Returns the operation id. Operator only.
+  """
+  publishTenant(id: ID!): ID!
+  """
+  Suspend a tenant — data intact, access off (POST /tenants/{id}/suspend).
+  Operator only.
+  """
+  suspendTenant(id: ID!): Tenant!
+  """
+  Reactivate a suspended tenant; reports config drift detected while
+  suspended (POST /tenants/{id}/reactivate). Operator only.
+  """
+  reactivateTenant(id: ID!): ReactivateTenantResult!
+  """
+  Retry a failed provisioning saga (POST /tenants/{id}/provisioning/retry,
+  202). Returns the operation id. Operator only.
+  """
+  retryTenantProvisioning(id: ID!): ID!
+  """
+  Re-activate a deactivated user (identity-service POST
+  /users/{id}/activate). Needs identity.user.admin.
+  """
+  activateUser(id: ID!): User!
+  """
+  Provision + seed a demo sandbox from a deploy/demo pack bundle
+  (identity POST /demo-tenants, 202; DSP-FR-010). Always publishes; demo
+  tenants are TTL-reaped and excluded from billing. Operator only.
+  """
+  createDemoTenant(input: CreateDemoTenantInput!, idempotencyKey: String): CreateTenantResult!
+  """
+  Reset a demo sandbox to its post-seed snapshot (POST /demo-tenants/{id}/
+  reset, DSP-FR-012 — idempotent re-seed). Operator only.
+  """
+  resetDemoTenant(id: ID!): Tenant!
+  """
+  Clone a fresh sibling sandbox with fresh persona credentials (POST
+  /demo-tenants/{id}/clone). Operator only.
+  """
+  cloneDemoTenant(id: ID!): CreateTenantResult!
+  """
+  Provision a POC tenant (identity POST /poc-tenants, DSP-FR-020; pack
+  optional). Operator only.
+  """
+  createPocTenant(input: CreatePocTenantInput!, idempotencyKey: String): CreateTenantResult!
+  """
+  Set the POC's agreed success criteria (PUT /poc-tenants/{id}/criteria).
+  Operator only.
+  """
+  setPocCriteria(tenantId: ID!, criteria: [PocCriterionInput!]!): Boolean!
+  """
+  Record a manually-measured criterion value (PATCH /tenants/{id}/poc/
+  criteria/{key}/manual-value; audited, DSP-FR-021). Tenant admin.
+  """
+  setPocManualValue(tenantId: ID!, key: String!, value: Float!): Boolean!
+  """
+  Start a trial (identity POST /tenants/{id}/trial, CPL-FR-021). 409 on an
+  illegal commercial transition — demo/poc tenants have no edge into trial.
+  Operator only.
+  """
+  startTrial(id: ID!, trialDays: Int): Boolean!
+  """
+  Extend a running trial (POST /tenants/{id}/trial/extend). Operator only.
+  """
+  extendTrial(id: ID!, trialDays: Int): Boolean!
+  """Convert a trial to paid (POST /tenants/{id}/convert). Operator only."""
+  convertTrial(id: ID!): Boolean!
+  """
+  Generate a poc-report.v1 export (POST /tenants/{id}/poc-reports) — the
+  decision-meeting artifact, checksummed and audited. Tenant admin.
+  """
+  exportPocReport(tenantId: ID!, idempotencyKey: String): PocReportExport!
+  """
   Register/update the caller tenant's OIDC IdP (BYO-P4, PUT /tenants/self/
   idp). The issuer must be globally unique. Needs the tenant-admin scope.
   """
@@ -6484,6 +7558,19 @@ type Mutation {
   """
   revokeServiceAccount(id: ID!): Boolean!
   """
+  Register an external agent — mint its credential (identity-service POST
+  /tenants/self/external-agents, 201; BRD 60 WS2). The returned apiKey
+  (wr_xa_<id>.<secret>) is shown EXACTLY ONCE and is never retrievable again.
+  Needs identity.user.admin.
+  """
+  registerExternalAgent(input: RegisterExternalAgentInput!, idempotencyKey: String): RegisteredExternalAgent!
+  """
+  Revoke an external-agent credential (identity-service DELETE
+  /tenants/self/external-agents/{id}, 204) — the key stops exchanging
+  immediately. Needs identity.user.admin.
+  """
+  revokeExternalAgent(id: ID!): Boolean!
+  """
   Edit a workspace's name/description/public flag (rbac-service PATCH
   /workspaces/{id}). Needs rbac.workspace.update.
   """
@@ -6594,6 +7681,21 @@ type Mutation {
   /anomalies/{id}/dismiss). Needs usage.anomaly.update.
   """
   dismissAnomaly(id: ID!): Anomaly!
+  """
+  Acknowledge a reconciliation variance (usage-service POST
+  /reconciliations/{id}/acknowledge, USG-FR-070/071) — unblocks chargeback
+  for that month. Only a row in `variance` can be acknowledged (anything
+  else 404s downstream, surfaced verbatim). Platform-only — needs
+  usage.reconciliation.update AND a platform-operator token.
+  """
+  acknowledgeReconciliation(id: ID!): Reconciliation!
+  """
+  Record a signed billing adjustment/credit on a CLOSED month
+  (usage-service POST /adjustments, USG-FR-072). An open month 409s with
+  reason month_open (BR-5), surfaced verbatim. Platform-only — needs
+  usage.reconciliation.update AND a platform-operator token.
+  """
+  createUsageAdjustment(input: CreateUsageAdjustmentInput!): UsageAdjustment!
   """
   Edit value-reporting assumptions (usage-service PUT /value/assumptions,
   BRD 69 ROI-FR-002). Needs usage.assumptions.update — a stronger grant than
@@ -6922,6 +8024,30 @@ type Mutation {
   """
   cancelQueryExecution(id: ID!): QueryExecution!
   """
+  Set the tenant's query-governance overrides (query-service PUT /limits,
+  QRY-FR-042/044). Values may only LOWER the platform maxima (422 above
+  them). The PUT answers only the stored overrides, so this re-reads GET
+  /limits to return the recomputed effective view. Needs query.limits.update.
+  """
+  setQueryLimits(input: QueryLimitsInput!): QueryLimits!
+  """
+  Plan + estimate ad-hoc SQL WITHOUT executing (query-service POST
+  /sql/dry-run, QRY-FR-041): engine routing, estimated scan bytes/rows,
+  ceiling verdict. A ceiling-exceeding statement can also 422
+  COST_CEILING_EXCEEDED with the estimate in error details. Needs
+  query.execution.execute.
+  """
+  dryRunSql(input: RunSqlInput!): SqlDryRun!
+  """
+  Mint a signed CSV download link for a SUCCEEDED execution's results
+  (query-service POST /executions/{id}/export, QRY-FR-062). The descriptor's
+  downloadPath is pre-authenticated by HMAC signature (24h) — stream it
+  through the UI's same-origin /api/query-export/{token} proxy, not GraphQL.
+  409 while the execution is not succeeded; 410 once results expired. Needs
+  query.execution.export.
+  """
+  exportQueryExecution(id: ID!, format: String): QueryExportDescriptor!
+  """
   Archive a dataset (dataset-service DELETE /datasets/{id}, sets deleted_at;
   200 with a small summary, not 204). dataset-service exposes no archived-only
   list read, so this only works when the caller already knows the id (e.g.
@@ -7007,6 +8133,43 @@ type Mutation {
   updateChart(id: ID!, input: UpdateChartInput!, idempotencyKey: String): Chart!
   """Delete a chart (chart-service DELETE /charts/{id})."""
   deleteChart(id: ID!): Boolean!
+  """
+  Start an async CSV/PNG chart export (chart-service POST /charts/{id}/export,
+  CHART-FR-041; 202, capped at 5 concurrent exports/tenant → 429
+  EXPORT_LIMIT). The 202 carries only {operation_id}; this re-reads the
+  operation so the caller gets its REAL current state — poll
+  chartExportOperation until completed|failed, then download the artifact via
+  the UI's /api/chart-export/{operationId} proxy. PNG is infra-gated on the
+  renderer sidecar (documented failure). Needs chart.chart.export.
+  """
+  exportChart(id: ID!, format: String!, request: JSON): ChartExportOperation!
+  """
+  Export a dashboard + its charts as a self-contained portable JSON bundle
+  (chart-service POST /dashboards/{id}/export-bundle, CHART-FR-005). Plain
+  JSON — the UI offers it as a client-side file download, no proxy needed.
+  Needs chart.dashboard.export.
+  """
+  exportDashboardBundle(id: ID!): JSON!
+  """
+  Import a dashboard bundle into the caller's workspace (chart-service POST
+  /dashboards/import, CHART-FR-005/BR-10). urnMapping remaps the bundle's
+  source URNs to this tenant's; any unmapped URN fails atomically with 422
+  UNMAPPED_URN before anything is written. The target workspace comes from
+  the caller's JWT `workspace_id` claim (as createDashboard). Needs
+  chart.dashboard.create.
+  """
+  importDashboard(bundle: JSON!, urnMapping: JSON, idempotencyKey: String): DashboardImportResult!
+  """
+  Create/replace a parent→child chart cross-navigation link (chart-service
+  PUT /charts/{id}/link, CHART-FR-015) — transactional with cycle detection
+  (409 on a cycle). Authorized downstream as chart.chart.update.
+  """
+  setChartLink(chartId: ID!, input: ChartLinkInput!): ChartLink!
+  """
+  Remove a chart link + clear the child back-reference (chart-service
+  DELETE /charts/{id}/link, 204). Needs chart.chart.update.
+  """
+  deleteChartLink(chartId: ID!, childChartId: ID!): Boolean!
   """
   Create a pipeline template (pipeline-orchestrator POST /pipelines). The owning
   workspace is taken from the caller's JWT `workspace_id` claim (as the backend
@@ -7149,6 +8312,16 @@ type Mutation {
   experiment.run.update.
   """
   deleteRunNote(runId: ID!): Boolean!
+  """
+  Edit a run's metadata (experiment-service PATCH /runs/{id}: name, note,
+  tags — exclude_unset). Needs experiment.run.update.
+  """
+  patchRun(runId: ID!, name: String, note: String, tags: JSON): Run!
+  """
+  Delete a run (experiment-service DELETE /runs/{id}). Needs
+  experiment.run.delete.
+  """
+  deleteRun(runId: ID!): Boolean!
   """
   Update the human overlay of a model card (experiment-service PATCH
   /models/{id}/versions/{v}/card — any subset of the 4 overlay fields; auto
@@ -7349,6 +8522,64 @@ type Mutation {
   """
   requestMemoryErasure(subjectId: String!, subjectType: String): ErasureRequest!
   """
+  Governed memory write (memory-service POST /memories). Scope rules are
+  enforced downstream: users may write only their own user/session scope;
+  tenant-scope grounding additionally needs memory.corpus.admin. Needs
+  memory.memory.create.
+  """
+  writeMemory(input: WriteMemoryInput!): MemoryWriteResult!
+  """
+  Batch memory write (memory-service POST /memories/batch) — per-item
+  results; rejected items carry code/message instead of failing the batch.
+  Needs memory.memory.create.
+  """
+  writeMemoryBatch(items: [WriteMemoryInput!]!): [MemoryWriteResult!]!
+  """
+  Edit a memory record's content (memory-service PATCH /memories/{id});
+  returns the full updated record. Needs memory.memory.update.
+  """
+  updateMemory(id: ID!, content: String!): MemoryRecord!
+  """
+  Delete a memory record (memory-service DELETE /memories/{id}, 204).
+  Needs memory.memory.delete.
+  """
+  deleteMemory(id: ID!): Boolean!
+  """
+  Release a quarantined memory record back to active (memory-service POST
+  /memories/{id}/unquarantine). `reason` is REQUIRED downstream and audited.
+  Needs memory.memory.update.
+  """
+  unquarantineMemory(id: ID!, reason: String!): MemoryRecord!
+  """
+  Register a tenant RAG corpus (memory-service POST /corpora, 201).
+  Needs memory.corpus.admin.
+  """
+  registerCorpus(input: RegisterCorpusInput!): RagCorpus!
+  """
+  Patch a corpus' source/chunking/refresh/anonymization/status
+  (memory-service PATCH /corpora/{key}). Needs memory.corpus.admin.
+  """
+  updateCorpus(corpusKey: String!, patch: CorpusPatchInput!): RagCorpus!
+  """
+  Re-embed a corpus under a NEW embedding model version (memory-service POST
+  /corpora/{key}/rebuild, 202) — runs synchronously downstream and 409s when
+  the version is unchanged or a rebuild is already in progress. Needs
+  memory.corpus.admin.
+  """
+  rebuildCorpus(corpusKey: String!, embeddingModelVer: String!): CorpusRebuildReport!
+  """
+  Push a document into the "docs" corpus (memory-service POST
+  /corpora/docs/documents, 201) — replaces any prior chunks for the same
+  sourceUrn. Needs memory.corpus.admin.
+  """
+  pushCorpusDocument(sourceUrn: String!, content: String!): CorpusDocumentPushResult!
+  """
+  Replace the tenant memory PII/retention policy (memory-service PUT
+  /policies/self) — a full-document PUT, not a merge: omitted fields reset to
+  downstream defaults. Needs memory.policy.update.
+  """
+  setMemoryPolicy(input: MemoryPolicyInput!): MemoryPolicy!
+  """
   Register a new eval suite version (eval-service POST /suites, 201).
   BR-1: the gate rule must reference >=1 deterministic scorer. Needs eval.suite.update.
   """
@@ -7463,6 +8694,25 @@ type Mutation {
   A platform-scoped budget additionally needs the platform-operator scope. Needs ai.budget.update.
   """
   createAiBudget(input: CreateAiBudgetInput!, idempotencyKey: String): AiBudget!
+  """
+  Freeze LLM spend (ai-gateway POST /admin/spend-freezes, 201): scope
+  "tenant" freezes the caller's own tenant (ai.budget.update); "platform" or
+  another tenant's id needs ai.platform.admin. Every in-scope LLM call is
+  refused until lifted.
+  """
+  createAiSpendFreeze(scope: String!, tenantId: String, reason: String!, idempotencyKey: String): AiSpendFreeze!
+  """
+  Lift a spend freeze (ai-gateway DELETE /admin/spend-freezes). Same authz
+  split as create. Returns whether anything was actually cleared.
+  """
+  clearAiSpendFreeze(scope: String!, tenantId: String): AiSpendFreezeCleared!
+  """
+  Purge the tenant's LLM response cache (ai-gateway DELETE /admin/cache;
+  scope tenant or one workspace). Use after a guardrail/policy change so
+  stale cached answers cannot serve. Returns entries purged. Needs
+  ai.cache.delete.
+  """
+  clearAiCache(scope: String! = "tenant", workspaceId: String): Int!
   """
   Patch an ai-gateway budget's limit/degrade-threshold/status (ai-gateway
   PATCH /admin/budgets/{id}). Needs ai.budget.update.
@@ -7643,6 +8893,46 @@ type Mutation {
   """
   setAgentCeilings(maxBudgetTokens: Int!, maxTier: String!): AgentCeilings!
   """
+  Register an agent definition, status "draft" (agent-runtime POST
+  /registry/agents). Platform-OPERATOR-only downstream (registry.py
+  _require_operator) — a tenant admin cannot pass this one.
+  """
+  registerAgentDefinition(input: RegisterAgentDefinitionInput!, idempotencyKey: String): AgentDefinitionRegisterResult!
+  """
+  Create an IMMUTABLE draft version of an agent (POST /registry/agents/
+  {key}/versions; 409 if the version exists). Publish it afterwards via
+  publishAgentVersion (eval-gate-guarded). Operator-only downstream
+  (_require_operator).
+  """
+  createAgentVersion(agentKey: String!, input: CreateAgentVersionInput!, idempotencyKey: String): AgentVersionCreateResult!
+  """
+  Start a direct|canary|shadow rollout of a candidate version against a
+  baseline (POST /registry/rollouts). Operator-only downstream
+  (_require_operator).
+  """
+  startAgentRollout(input: StartAgentRolloutInput!, idempotencyKey: String): AgentRolloutActionResult!
+  """
+  Promote an active rollout — the candidate wins (POST /registry/rollouts/
+  {id}/promote). Operator-only downstream (_require_operator).
+  """
+  promoteAgentRollout(rolloutId: ID!, idempotencyKey: String): AgentRolloutActionResult!
+  """
+  Roll a rollout back to its baseline (POST /registry/rollouts/{id}/
+  rollback). Operator-only downstream (_require_operator).
+  """
+  rollbackAgentRollout(rolloutId: ID!, idempotencyKey: String): AgentRolloutActionResult!
+  """
+  Register a scheduled drift watch that opens four-eyes retrain proposals
+  past the threshold (POST /registry/retrain-watches, BRD 52 inc3). Returns
+  the full stored watch. Needs ai.agent.admin downstream.
+  """
+  createRetrainWatch(input: CreateRetrainWatchInput!, idempotencyKey: String): RetrainWatch!
+  """
+  Delete a retrain watch (DELETE /registry/retrain-watches/{id}; 404 if it
+  is not the caller-tenant's). Needs ai.agent.admin downstream.
+  """
+  deleteRetrainWatch(id: ID!): RetrainWatchDeleteResult!
+  """
   Author + publish a decision table (agent-runtime POST /decision-models).
   Outcome disposition_codes are validated against the workspace catalog. Needs
   case.disposition.create.
@@ -7666,6 +8956,22 @@ type Mutation {
   the prior version is never mutated. Needs case.disposition.create.
   """
   newDecisionModelVersion(id: ID!, input: CreateDecisionModelInput!, idempotencyKey: String): DecisionModel!
+  """
+  Evaluate a PUBLISHED decision table against one case (agent-runtime POST
+  /decision-models/{id}/evaluate). dryRun=true (default) previews the fired
+  rule + outcome with no side effect; dryRun=false opens the four-eyes
+  proposal on a match — never an autonomous execution. Needs
+  case.disposition.read (evaluate) / the proposal path's own gates on
+  dryRun=false.
+  """
+  evaluateDecisionModel(id: ID!, caseId: ID!, dryRun: Boolean = true, fields: JSON, idempotencyKey: String): DecisionEvaluation!
+  """
+  Terminate an agent chat session (agent-runtime POST
+  /sessions/{id}/terminate; 404 on unknown/cross-tenant). Ends a runaway or
+  finished copilot conversation immediately — the session refuses further
+  turns.
+  """
+  terminateAgentChatSession(id: ID!): AgentChatSession!
   """
   Record the REALIZED outcome of a decision (agent-runtime POST
   /decisions/{ref}/outcome, OM-FR-010 human path). When decisionRef is a

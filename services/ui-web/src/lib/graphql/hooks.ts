@@ -18,6 +18,8 @@ import type {
   CreateCasesInput,
   CreateCasesResult,
   AuditEventsFilter,
+  AuditAgentActivityFilter,
+  AuditExportFormat,
   CaseFilter,
   CasePatchInput,
   Connection,
@@ -49,16 +51,23 @@ import type {
   CreateRoleInput,
   UpdateRoleInput,
   CreateServiceAccountInput,
+  RegisterExternalAgentInput,
   CreateContentGrantInput,
   CreateBudgetInput,
   UpdateBudgetInput,
   CreateRateCardInput,
+  CreateUsageAdjustmentInput,
   UpdateValueAssumptionsInput,
   CreateIngestionInput,
   CreateUploadInput,
   CompleteUploadInput,
   // Tier 4a: data-plane secondary CRUD/lifecycle.
   SavedQueryInput,
+  // Query governance + chart export/drilldown/portability.
+  QueryLimitsInput,
+  ChartDrilldownInput,
+  ChartExportOperation,
+  ChartLinkInput,
   UpdateConnectionInput,
   ConnectionPreviewInput,
   CreateIngestionScheduleInput,
@@ -78,6 +87,10 @@ import type {
   CreateSemanticModelInput,
   CompileSemanticModelInput,
   ErasureRequest,
+  MemoryRetrievalTestInput,
+  RegisterCorpusInput,
+  CorpusPatchInput,
+  MemoryPolicyInput,
   ExplainAuthzInput,
   ComplianceJob,
   CreateEvalSuiteInput,
@@ -444,6 +457,254 @@ export function useNewDecisionModelVersion() {
         id: vars.id, input: vars.input, idempotencyKey: crypto.randomUUID(),
       }).then((r) => r.newDecisionModelVersion),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.decisionModels() }),
+  });
+}
+
+/** Edit a run's metadata (name/note/tags). */
+export function usePatchRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { runId: string; name?: string; note?: string }) =>
+      graphqlRequest<ops.PatchRunResult>(ops.PATCH_RUN, vars).then((r) => r.patchRun),
+    onSuccess: (_d, vars) => {
+      client.invalidateQueries({ queryKey: qk.run(vars.runId) });
+      client.invalidateQueries({ queryKey: qk.runNote(vars.runId) });
+    },
+  });
+}
+
+/** Delete a run (experiment.run.delete). */
+export function useDeleteRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) =>
+      graphqlRequest<ops.DeleteRunResult>(ops.DELETE_RUN, { runId }).then((r) => r.deleteRun),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["ml"] }),
+  });
+}
+
+/** Purge the tenant's LLM response cache (returns entries purged). */
+export function useClearAiCache() {
+  return useMutation({
+    mutationFn: (vars: { scope: "tenant" | "workspace"; workspaceId?: string }) =>
+      graphqlRequest<ops.ClearAiCacheResult>(ops.CLEAR_AI_CACHE, vars).then((r) => r.clearAiCache),
+  });
+}
+
+/** Live POC actual-vs-target (the BRD 70 US-5 sponsor dashboard data). */
+export function usePocProgress(tenantId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.pocProgress(tenantId),
+    queryFn: () => graphqlRequest<ops.PocProgressResult>(ops.POC_PROGRESS, { tenantId })
+      .then((r) => r.pocProgress),
+    enabled: enabled && !!tenantId,
+  });
+}
+
+/** Semantic tool discovery over the tenant's enabled tools. */
+export function useDiscoverTools(query: string, enabled = false) {
+  return useQuery({
+    queryKey: qk.discoverTools(query),
+    queryFn: () => graphqlRequest<ops.DiscoverToolsResult>(ops.DISCOVER_TOOLS, { query, topK: 8 })
+      .then((r) => r.discoverTools),
+    enabled: enabled && query.trim().length > 0,
+  });
+}
+
+/** The platform action catalog — the closed authz vocabulary. */
+export function useRbacActions(enabled = true) {
+  return useQuery({
+    queryKey: qk.rbacActions(),
+    queryFn: () => graphqlRequest<ops.RbacActionsResult>(ops.RBAC_ACTIONS).then((r) => r.rbacActions),
+    enabled,
+    staleTime: 300_000,
+  });
+}
+
+export function usePocReports(tenantId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.pocReports(tenantId),
+    queryFn: () => graphqlRequest<ops.PocReportsResult>(ops.POC_REPORTS, { tenantId })
+      .then((r) => r.pocReports),
+    enabled: enabled && !!tenantId,
+  });
+}
+
+export function useExportPocReport() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (tenantId: string) =>
+      graphqlRequest<ops.ExportPocReportResult>(ops.EXPORT_POC_REPORT, {
+        tenantId, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.exportPocReport),
+    onSuccess: (_d, tenantId) => client.invalidateQueries({ queryKey: qk.pocReports(tenantId) }),
+  });
+}
+
+export function useCreateDemoTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; displayName?: string; ownerEmail?: string; pack: string }) =>
+      graphqlRequest<ops.CreateDemoTenantResult>(ops.CREATE_DEMO_TENANT, {
+        input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createDemoTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useResetDemoTenant() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ResetDemoTenantResult>(ops.RESET_DEMO_TENANT, { id }).then((r) => r.resetDemoTenant),
+  });
+}
+
+export function useCreatePocTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; displayName?: string; ownerEmail?: string; pack?: string }) =>
+      graphqlRequest<ops.CreatePocTenantResult>(ops.CREATE_POC_TENANT, {
+        input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createPocTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useSetPocManualValue() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { tenantId: string; key: string; value: number }) =>
+      graphqlRequest<ops.SetPocManualValueResult>(ops.SET_POC_MANUAL_VALUE, vars)
+        .then((r) => r.setPocManualValue),
+    onSuccess: (_d, vars) => client.invalidateQueries({ queryKey: qk.pocProgress(vars.tenantId) }),
+  });
+}
+
+export function useStartTrial() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; trialDays?: number }) =>
+      graphqlRequest<ops.StartTrialResult>(ops.START_TRIAL, vars).then((r) => r.startTrial),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useConvertTrial() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ConvertTrialResult>(ops.CONVERT_TRIAL, { id }).then((r) => r.convertTrial),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+/** Provisioning-saga steps for one tenant (operator only). */
+export function useTenantProvisioning(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.tenantProvisioning(id),
+    queryFn: () => graphqlRequest<ops.TenantProvisioningResult>(
+      ops.TENANT_PROVISIONING, { id }).then((r) => r.tenantProvisioning),
+    enabled: enabled && !!id,
+  });
+}
+
+/** Provision a tenant (optionally publish=true to start the saga now). */
+export function useCreateTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; displayName?: string; ownerEmail?: string; tier?: string; cloud?: string; publish?: boolean }) =>
+      graphqlRequest<ops.CreateTenantResult2>(ops.CREATE_TENANT, {
+        input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function usePublishTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.PublishTenantResult>(ops.PUBLISH_TENANT, { id }).then((r) => r.publishTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useSuspendTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.SuspendTenantResult>(ops.SUSPEND_TENANT, { id }).then((r) => r.suspendTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useReactivateTenant() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ReactivateTenantResult>(ops.REACTIVATE_TENANT, { id }).then((r) => r.reactivateTenant),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tenants() }),
+  });
+}
+
+export function useRetryTenantProvisioning() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.RetryTenantProvisioningResult>(ops.RETRY_TENANT_PROVISIONING, { id })
+        .then((r) => r.retryTenantProvisioning),
+    onSuccess: (_d, id) => client.invalidateQueries({ queryKey: qk.tenantProvisioning(id) }),
+  });
+}
+
+/** Active LLM spend freezes (the emergency brake state). */
+export function useAiSpendFreezes() {
+  return useQuery({
+    queryKey: qk.aiSpendFreezes(),
+    queryFn: () => graphqlRequest<ops.AiSpendFreezesResult>(ops.AI_SPEND_FREEZES)
+      .then((r) => r.aiSpendFreezes),
+  });
+}
+
+/** Freeze LLM spend (tenant self-serve; platform/other-tenant = operator). */
+export function useCreateAiSpendFreeze() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { scope: "platform" | "tenant"; tenantId?: string; reason: string }) =>
+      graphqlRequest<ops.CreateAiSpendFreezeResult>(ops.CREATE_AI_SPEND_FREEZE, {
+        ...vars, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createAiSpendFreeze),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.aiSpendFreezes() }),
+  });
+}
+
+/** Lift a spend freeze. */
+export function useClearAiSpendFreeze() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { scope: string; tenantId?: string }) =>
+      graphqlRequest<ops.ClearAiSpendFreezeResult>(ops.CLEAR_AI_SPEND_FREEZE, vars)
+        .then((r) => r.clearAiSpendFreeze),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.aiSpendFreezes() }),
+  });
+}
+
+/** Dry-run (or propose from) a published decision table against one case. */
+export function useEvaluateDecisionModel() {
+  return useMutation({
+    mutationFn: (vars: { id: string; caseId: string; dryRun: boolean }) =>
+      graphqlRequest<ops.EvaluateDecisionModelResult>(ops.EVALUATE_DECISION_MODEL, {
+        ...vars, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.evaluateDecisionModel),
+  });
+}
+
+/** Terminate an agent chat session — the conversation refuses further turns. */
+export function useTerminateAgentChatSession() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.TerminateAgentChatSessionResult>(
+        ops.TERMINATE_AGENT_CHAT_SESSION, { id }).then((r) => r.terminateAgentChatSession),
   });
 }
 
@@ -1131,6 +1392,51 @@ export function useQueryStats(since?: string) {
     queryKey: qk.queryStats(since),
     queryFn: () =>
       graphqlRequest<ops.QueryStatsResult>(ops.QUERY_STATS, { since }).then((r) => r.queryStats),
+  });
+}
+
+/* ------- query governance: limits, dry-run, result export ------- */
+/** Tenant ceilings + concurrency (query-service GET /limits). */
+export function useQueryLimits(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.queryLimits(),
+    queryFn: () =>
+      graphqlRequest<ops.QueryLimitsResult>(ops.QUERY_LIMITS).then((r) => r.queryLimits),
+    enabled: options.enabled ?? true,
+  });
+}
+
+/** Lower tenant ceilings/concurrency (query-service PUT /limits); values above
+ * the platform maxima are rejected downstream (422). */
+export function useSetQueryLimits() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: QueryLimitsInput) =>
+      graphqlRequest<ops.SetQueryLimitsResult>(ops.SET_QUERY_LIMITS, { input }).then(
+        (r) => r.setQueryLimits,
+      ),
+    onSuccess: (d) => client.setQueryData(qk.queryLimits(), d),
+  });
+}
+
+/** Plan + cost estimate WITHOUT executing (query-service POST /sql/dry-run). */
+export function useDryRunSql() {
+  return useMutation({
+    mutationFn: (input: ops.RunSqlInput) =>
+      graphqlRequest<ops.DryRunSqlResult>(ops.DRY_RUN_SQL, { input }).then((r) => r.dryRunSql),
+  });
+}
+
+/** Mint a signed CSV download link for a succeeded execution's results
+ * (query-service POST /executions/{id}/export). The descriptor's downloadPath
+ * is streamed through the same-origin /api/query-export/{token} proxy. */
+export function useExportQueryExecution() {
+  return useMutation({
+    mutationFn: (vars: { id: string; format?: string }) =>
+      graphqlRequest<ops.ExportQueryExecutionResult>(ops.EXPORT_QUERY_EXECUTION, {
+        id: vars.id,
+        format: vars.format ?? "csv",
+      }).then((r) => r.exportQueryExecution),
   });
 }
 
@@ -2745,6 +3051,105 @@ export function useDeleteChart(dashboardId: string) {
   });
 }
 
+/* ------- chart drilldown + export + dashboard portability + links ------- */
+/** Raw rows behind a clicked aggregate segment (chart-service drilldown,
+ * CHART-FR-040) — enabled once a segment is selected. */
+export function useChartDrilldown(
+  chartId: string | null,
+  input: ChartDrilldownInput | null,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: qk.chartDrilldown(chartId ?? "", input),
+    queryFn: () =>
+      graphqlRequest<ops.ChartDrilldownResult>(ops.CHART_DRILLDOWN, { chartId, input }).then(
+        (r) => r.chartDrilldown,
+      ),
+    enabled: (options.enabled ?? true) && !!chartId && !!input,
+  });
+}
+
+/** Start an async CSV/PNG chart export. The result carries the operation's
+ * REAL polled state — hand its id to useChartExportOperation. */
+export function useExportChart() {
+  return useMutation({
+    mutationFn: (vars: { id: string; format?: string }) =>
+      graphqlRequest<ops.ExportChartResult>(ops.EXPORT_CHART, {
+        id: vars.id,
+        format: vars.format ?? "csv",
+      }).then((r) => r.exportChart),
+  });
+}
+
+/** Poll an async chart-export operation until it settles. */
+export function useChartExportOperation(
+  id: string | null,
+  options: {
+    refetchInterval?:
+      | number
+      | false
+      | ((query: { state: { data?: ChartExportOperation | null } }) => number | false);
+  } = {},
+) {
+  return useQuery({
+    queryKey: qk.chartExportOperation(id ?? ""),
+    queryFn: () =>
+      graphqlRequest<ops.ChartExportOperationResult>(ops.CHART_EXPORT_OPERATION, { id }).then(
+        (r) => r.chartExportOperation,
+      ),
+    enabled: !!id,
+    refetchInterval: options.refetchInterval as never,
+  });
+}
+
+/** Export a dashboard as a portable JSON bundle (client-side file download —
+ * plain JSON, no proxy needed). */
+export function useExportDashboardBundle() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ExportDashboardBundleResult>(ops.EXPORT_DASHBOARD_BUNDLE, { id }).then(
+        (r) => r.exportDashboardBundle,
+      ),
+  });
+}
+
+/** Import a portable dashboard bundle into the caller's workspace; unmapped
+ * source URNs fail atomically downstream (422 UNMAPPED_URN). */
+export function useImportDashboard() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { bundle: JSONValue; urnMapping?: JSONValue }) =>
+      graphqlRequest<ops.ImportDashboardResult>(ops.IMPORT_DASHBOARD, {
+        bundle: vars.bundle,
+        urnMapping: vars.urnMapping,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.importDashboard),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["dashboards", "list"] }),
+  });
+}
+
+/** Create/replace a parent→child chart cross-navigation link (CHART-FR-015). */
+export function useSetChartLink(dashboardId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { chartId: string; input: ChartLinkInput }) =>
+      graphqlRequest<ops.SetChartLinkResult>(ops.SET_CHART_LINK, vars).then((r) => r.setChartLink),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.dashboard(dashboardId) }),
+  });
+}
+
+/** Remove a chart link + clear the child back-reference. */
+export function useDeleteChartLink(dashboardId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { chartId: string; childChartId: string }) =>
+      graphqlRequest<ops.DeleteChartLinkResult>(ops.DELETE_CHART_LINK, vars).then(
+        (r) => r.deleteChartLink,
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.dashboard(dashboardId) }),
+  });
+}
+
 /* ------- semantic model authoring ------- */
 /** Real columns of a dataset version — the entity/dimension/measure editor's
  * column picker binds to these instead of free-typed strings. */
@@ -3195,6 +3600,67 @@ export function useDismissAnomaly() {
   });
 }
 
+/* ------- billing depth (BRD 67) ------- */
+
+/** The seeded platform meter catalog (usage-service GET /meters, USG-FR-003).
+ * Static reference data — no invalidation path needed. */
+export function useUsageMeters() {
+  return useQuery({
+    queryKey: qk.usageMeters(),
+    queryFn: () => graphqlRequest<ops.UsageMetersResult>(ops.USAGE_METERS, {}).then((r) => r.usageMeters),
+  });
+}
+
+/** Priced monthly chargeback rollups (usage-service GET /reports/chargeback,
+ * USG-FR-043). A month whose reconciliation sits in variance CONFLICTs
+ * downstream (AC-9) — the error is surfaced, never swallowed. */
+export function useChargebackReport(month: string) {
+  return useQuery({
+    queryKey: qk.chargebackReport(month),
+    queryFn: () =>
+      graphqlRequest<ops.ChargebackReportResult>(ops.CHARGEBACK_REPORT, { month }).then((r) => r.chargebackReport),
+    enabled: !!month,
+    retry: false, // the 409 is a state, not a flake — don't hammer retries
+  });
+}
+
+/** Metered-vs-provider-bill reconciliations (usage-service GET
+ * /reconciliations, USG-FR-070). Platform-only — a plain list, not paginated. */
+export function useReconciliations() {
+  return useQuery({
+    queryKey: qk.reconciliations(),
+    queryFn: () =>
+      graphqlRequest<ops.ReconciliationsResult>(ops.RECONCILIATIONS, {}).then((r) => r.reconciliations),
+  });
+}
+
+export function useAcknowledgeReconciliation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.AcknowledgeReconciliationResult>(ops.ACKNOWLEDGE_RECONCILIATION, { id }).then(
+        (r) => r.acknowledgeReconciliation,
+      ),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: qk.reconciliations() });
+      // Acknowledging a variance unblocks chargeback for that month (AC-9).
+      client.invalidateQueries({ queryKey: ["usage", "chargeback"] });
+    },
+  });
+}
+
+export function useCreateUsageAdjustment() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateUsageAdjustmentInput) =>
+      graphqlRequest<ops.CreateUsageAdjustmentResult>(ops.CREATE_USAGE_ADJUSTMENT, { input }).then(
+        (r) => r.createUsageAdjustment,
+      ),
+    // Adjustments fold into chargeback's adjustments_usd/total_usd columns.
+    onSuccess: () => client.invalidateQueries({ queryKey: ["usage", "chargeback"] }),
+  });
+}
+
 /* ------- value & ROI reporting (BRD 69) ------- */
 
 /** Value/ROI summary for a period (usage-service GET /value/summary,
@@ -3557,6 +4023,40 @@ export function useRevokeServiceAccount() {
     mutationFn: (id: string) =>
       graphqlRequest<ops.RevokeServiceAccountResult>(ops.REVOKE_SERVICE_ACCOUNT, { id }),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.serviceAccounts() }),
+  });
+}
+
+/** BRD 60 WS2: the caller tenant's external-agent credentials (metadata only —
+ * the plaintext key is unrecoverable after registration). identity.user.admin. */
+export function useExternalAgents() {
+  return useQuery({
+    queryKey: qk.externalAgents(),
+    queryFn: () =>
+      graphqlRequest<ops.ExternalAgentsResult>(ops.EXTERNAL_AGENTS).then((r) => r.externalAgents),
+  });
+}
+
+/** Register an external agent. The response's apiKey is the ONLY time the
+ * secret exists client-side — surfaced once via SecretBanner, never
+ * cached/persisted. */
+export function useRegisterExternalAgent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RegisterExternalAgentInput) =>
+      graphqlRequest<ops.RegisterExternalAgentResult>(ops.REGISTER_EXTERNAL_AGENT, {
+        input,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.registerExternalAgent),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.externalAgents() }),
+  });
+}
+
+export function useRevokeExternalAgent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.RevokeExternalAgentResult>(ops.REVOKE_EXTERNAL_AGENT, { id }),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.externalAgents() }),
   });
 }
 
@@ -3924,6 +4424,57 @@ export function useAuditEvents(vars: AuditEventsFilter = {}) {
   });
 }
 
+/** Dual-attribution activity for ONE agent (audit-service GET
+ * /audit/agent-activity): which agent acted, on whose behalf. Bounded at 200
+ * rows (no cursor — the downstream never paginates), so a plain query, not an
+ * infinite one. Disabled until an agentId is entered. */
+export function useAuditAgentActivity(vars: AuditAgentActivityFilter) {
+  return useQuery({
+    queryKey: qk.auditAgentActivity(vars),
+    queryFn: () =>
+      graphqlRequest<ops.AuditAgentActivityResult>(ops.AUDIT_AGENT_ACTIVITY, { ...vars }).then(
+        (r) => r.auditAgentActivity,
+      ),
+    enabled: !!vars.agentId,
+  });
+}
+
+/** One audit event by id + its chain position (audit-service GET
+ * /audit/events/{event_id}) — the /admin/audit/events/{id} deep link. Null
+ * for cross-tenant and nonexistent alike (the downstream 404s both). */
+export function useAuditEvent(id: string | null) {
+  return useQuery({
+    queryKey: qk.auditEvent(id ?? ""),
+    queryFn: () => graphqlRequest<ops.AuditEventResult>(ops.AUDIT_EVENT, { id }).then((r) => r.auditEvent),
+    enabled: !!id,
+  });
+}
+
+/** Previously generated (sealed) WORM export batches (audit-service GET
+ * /exports), optionally narrowed to one YYYY-MM-DD day. */
+export function useAuditExports(date?: string) {
+  return useQuery({
+    queryKey: qk.auditExports(date),
+    queryFn: () =>
+      graphqlRequest<ops.AuditExportsResult>(ops.AUDIT_EXPORTS, { date: date || undefined }).then(
+        (r) => r.auditExports,
+      ),
+  });
+}
+
+/** Descriptor for a raw CSV/NDJSON audit export of the current filters — the
+ * BFF validates the window and returns the same-origin /api/audit-export
+ * download path; the file itself never traverses GraphQL. */
+export function useAuditExportFile(vars: AuditEventsFilter & { format?: AuditExportFormat } = {}) {
+  return useQuery({
+    queryKey: qk.auditExportFile(vars),
+    queryFn: () =>
+      graphqlRequest<ops.AuditExportFileResult>(ops.AUDIT_EXPORT_FILE, { ...vars }).then(
+        (r) => r.auditExportFile,
+      ),
+  });
+}
+
 /* ------- kill switches (agent-runtime + tool-plane, emergency stop) ------- */
 export function useAgentKillSwitches() {
   return useQuery({
@@ -4083,6 +4634,133 @@ export function useRequestMemoryErasure() {
       graphqlRequest<ops.RequestMemoryErasureResult>(ops.REQUEST_MEMORY_ERASURE, vars).then(
         (r) => r.requestMemoryErasure,
       ),
+  });
+}
+
+/* ------- memory governance console (BRD 15): row actions, retrieval tester,
+   corpora, tenant policy --------------------------------------------------- */
+/** Edit a memory record's content. Needs memory.memory.update. */
+export function useUpdateMemory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; content: string }) =>
+      graphqlRequest<ops.UpdateMemoryResult>(ops.UPDATE_MEMORY, vars).then((r) => r.updateMemory),
+    onSuccess: (_d, vars) => {
+      void client.invalidateQueries({ queryKey: qk.memory(vars.id) });
+      void client.invalidateQueries({ queryKey: ["admin", "memories"] });
+    },
+  });
+}
+
+/** Delete a memory record. Needs memory.memory.delete. */
+export function useDeleteMemory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.DeleteMemoryResult>(ops.DELETE_MEMORY, { id }).then((r) => r.deleteMemory),
+    onSuccess: (_d, id) => {
+      void client.invalidateQueries({ queryKey: qk.memory(id) });
+      void client.invalidateQueries({ queryKey: ["admin", "memories"] });
+    },
+  });
+}
+
+/** Release a quarantined memory record back to active — `reason` is required
+ * and audited downstream. Needs memory.memory.update. */
+export function useUnquarantineMemory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; reason: string }) =>
+      graphqlRequest<ops.UnquarantineMemoryResult>(ops.UNQUARANTINE_MEMORY, vars).then(
+        (r) => r.unquarantineMemory,
+      ),
+    onSuccess: (_d, vars) => {
+      void client.invalidateQueries({ queryKey: qk.memory(vars.id) });
+      void client.invalidateQueries({ queryKey: ["admin", "memories"] });
+    },
+  });
+}
+
+/** Run the retrieval tester on demand ("what would the agent recall" —
+ * memory-service POST /retrieve, a Query field server-side, no state changes).
+ * Needs memory.memory.read. */
+export function useMemoryRetrievalTest() {
+  return useMutation({
+    mutationFn: (input: MemoryRetrievalTestInput) =>
+      graphqlRequest<ops.MemoryRetrievalTestResult>(ops.MEMORY_RETRIEVAL_TEST, { input }).then(
+        (r) => r.memoryRetrievalTest,
+      ),
+  });
+}
+
+/** Corpus health: status + active embedding version + chunk count.
+ * Needs memory.corpus.admin. */
+export function useCorpusStatus(corpusKey: string | null) {
+  return useQuery({
+    queryKey: qk.corpusStatus(corpusKey ?? ""),
+    queryFn: () =>
+      graphqlRequest<ops.CorpusStatusResult>(ops.CORPUS_STATUS, { corpusKey }).then(
+        (r) => r.corpusStatus,
+      ),
+    enabled: !!corpusKey,
+  });
+}
+
+/** Register a tenant RAG corpus. Needs memory.corpus.admin. */
+export function useRegisterCorpus() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RegisterCorpusInput) =>
+      graphqlRequest<ops.RegisterCorpusResult>(ops.REGISTER_CORPUS, { input }).then(
+        (r) => r.registerCorpus,
+      ),
+    onSuccess: (d) => void client.invalidateQueries({ queryKey: qk.corpusStatus(String(d.corpusKey)) }),
+  });
+}
+
+/** Patch a corpus (source/chunking/refresh/anonymization/status).
+ * Needs memory.corpus.admin. */
+export function useUpdateCorpus() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { corpusKey: string; patch: CorpusPatchInput }) =>
+      graphqlRequest<ops.UpdateCorpusResult>(ops.UPDATE_CORPUS, vars).then((r) => r.updateCorpus),
+    onSuccess: (_d, vars) =>
+      void client.invalidateQueries({ queryKey: qk.corpusStatus(vars.corpusKey) }),
+  });
+}
+
+/** Re-embed a corpus under a NEW embedding model version (409s when unchanged
+ * or already rebuilding). Needs memory.corpus.admin. */
+export function useRebuildCorpus() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { corpusKey: string; embeddingModelVer: string }) =>
+      graphqlRequest<ops.RebuildCorpusResult>(ops.REBUILD_CORPUS, vars).then((r) => r.rebuildCorpus),
+    onSuccess: (_d, vars) =>
+      void client.invalidateQueries({ queryKey: qk.corpusStatus(vars.corpusKey) }),
+  });
+}
+
+/** The tenant memory PII/retention policy. Needs memory.policy.read. */
+export function useMemoryPolicy() {
+  return useQuery({
+    queryKey: qk.memoryPolicy(),
+    queryFn: () =>
+      graphqlRequest<ops.MemoryPolicyResult>(ops.MEMORY_POLICY).then((r) => r.memoryPolicy),
+  });
+}
+
+/** Replace the tenant memory policy (full-document PUT downstream — omitted
+ * fields reset to defaults). Needs memory.policy.update. */
+export function useSetMemoryPolicy() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MemoryPolicyInput) =>
+      graphqlRequest<ops.SetMemoryPolicyResult>(ops.SET_MEMORY_POLICY, { input }).then(
+        (r) => r.setMemoryPolicy,
+      ),
+    onSuccess: () => void client.invalidateQueries({ queryKey: qk.memoryPolicy() }),
   });
 }
 
@@ -5064,6 +5742,85 @@ export function useSetAgentCeilings() {
         (r) => r.setAgentCeilings,
       ),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.agentCeilings() }),
+  });
+}
+
+/* -- BRD 14/68: agent lifecycle controls (rollouts + retrain watches) ------ */
+export function useAgentRollouts(filters?: { agentKey?: string; status?: string }) {
+  return useQuery({
+    queryKey: qk.agentRollouts(filters ?? {}),
+    queryFn: () =>
+      graphqlRequest<ops.AgentRolloutsResult>(ops.AGENT_ROLLOUTS, {
+        agentKey: filters?.agentKey,
+        status: filters?.status,
+      }).then((r) => r.agentRollouts),
+  });
+}
+
+export function useStartAgentRollout() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ops.StartAgentRolloutInput) =>
+      graphqlRequest<ops.StartAgentRolloutResult>(ops.START_AGENT_ROLLOUT, {
+        input,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.startAgentRollout),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["agentic", "rollouts"] }),
+  });
+}
+
+export function usePromoteAgentRollout() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (rolloutId: string) =>
+      graphqlRequest<ops.PromoteAgentRolloutResult>(ops.PROMOTE_AGENT_ROLLOUT, {
+        rolloutId,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.promoteAgentRollout),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["agentic", "rollouts"] }),
+  });
+}
+
+export function useRollbackAgentRollout() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (rolloutId: string) =>
+      graphqlRequest<ops.RollbackAgentRolloutResult>(ops.ROLLBACK_AGENT_ROLLOUT, {
+        rolloutId,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.rollbackAgentRollout),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["agentic", "rollouts"] }),
+  });
+}
+
+export function useRetrainWatches() {
+  return useQuery({
+    queryKey: qk.retrainWatches(),
+    queryFn: () =>
+      graphqlRequest<ops.RetrainWatchesResult>(ops.RETRAIN_WATCHES).then((r) => r.retrainWatches),
+  });
+}
+
+export function useCreateRetrainWatch() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ops.CreateRetrainWatchInput) =>
+      graphqlRequest<ops.CreateRetrainWatchResult>(ops.CREATE_RETRAIN_WATCH, {
+        input,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.createRetrainWatch),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.retrainWatches() }),
+  });
+}
+
+export function useDeleteRetrainWatch() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.DeleteRetrainWatchResult>(ops.DELETE_RETRAIN_WATCH, { id }).then(
+        (r) => r.deleteRetrainWatch,
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.retrainWatches() }),
   });
 }
 

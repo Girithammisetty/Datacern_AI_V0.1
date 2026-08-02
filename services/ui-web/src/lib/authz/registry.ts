@@ -331,6 +331,24 @@ export const FEATURE_GATES = {
   viewAnomalies: cap("usage.anomaly.read"),
   /** Dismiss a detected anomaly (usage-service POST /anomalies/{id}/dismiss). */
   dismissAnomaly: cap("usage.anomaly.update"),
+  /** View the seeded meter catalog (usage-service GET /meters, USG-FR-003). */
+  viewMeters: cap("usage.meter.read"),
+  /** View the priced monthly chargeback report (usage-service GET
+   * /reports/chargeback, USG-FR-043) — same usage.report.read grant as
+   * viewCostPanel (chargeback is a report read, not a separate action). */
+  viewChargeback: cap("usage.report.read"),
+  /** View metered-vs-provider-bill reconciliations (usage-service GET
+   * /reconciliations, USG-FR-070). Platform-only — no seeded tenant role
+   * holds this; hidden for every tenant persona by design. */
+  viewReconciliations: cap("usage.reconciliation.read"),
+  /** Acknowledge a reconciliation variance (usage-service POST
+   * /reconciliations/{id}/acknowledge). Platform-only. */
+  acknowledgeReconciliation: cap("usage.reconciliation.update"),
+  /** Record a billing adjustment/credit on a closed month (usage-service POST
+   * /adjustments, USG-FR-072). Platform-only — shares
+   * usage.reconciliation.update with acknowledge (adjustments are the
+   * reconciliation workflow's write surface downstream). */
+  createUsageAdjustment: cap("usage.reconciliation.update"),
   /** Edit value-reporting assumptions (usage-service PUT /value/assumptions,
    * BRD 69 ROI-FR-002). Read access to the whole /admin/value page reuses
    * viewCostPanel (usage.report.read) above per design §2.7 — this gate only
@@ -448,6 +466,19 @@ export const FEATURE_GATES = {
    * compliance-sensitive, IRREVERSIBLE. Gated on memory.erasure.create.
    */
   requestMemoryErasure: cap("memory.erasure.create"),
+  /** Edit a memory record's content or release it from quarantine
+   * (memory-service PATCH /memories/{id}, POST /memories/{id}/unquarantine). */
+  editMemory: cap("memory.memory.update"),
+  /** Delete a memory record (memory-service DELETE /memories/{id}). */
+  deleteMemory: cap("memory.memory.delete"),
+  /** Administer tenant RAG corpora — register/edit/status/rebuild
+   * (memory-service /corpora*). */
+  manageMemoryCorpora: cap("memory.corpus.admin"),
+  /** View the tenant memory PII/retention policy (memory-service GET
+   * /policies/self). */
+  viewMemoryPolicy: cap("memory.policy.read"),
+  /** Replace the tenant memory policy (memory-service PUT /policies/self). */
+  editMemoryPolicy: cap("memory.policy.update"),
 
   /** Run the authz "why was I denied" debug trace (rbac-service POST
    * /authz/explain). Needs audit.log.read. */
@@ -517,6 +548,15 @@ export const FEATURE_GATES = {
    * /admin/budgets); a platform-scoped budget additionally needs the
    * platform-operator scope. */
   manageAiBudgets: cap("ai.budget.write"),
+  /** Freeze/unfreeze LLM spend (ai-gateway spend kill-switch; matches the
+   * downstream require("ai.budget.update") exactly). */
+  manageAiSpendFreeze: cap("ai.budget.update"),
+  /** Purge the tenant LLM response cache (ai-gateway DELETE /admin/cache,
+   * ai.cache.delete). ai.cache.* is absent from the canonical rbac catalog
+   * today (catalog.go documents the reconciliation as a follow-up), so the
+   * platform gate is the working path; the capability lights up for tenant
+   * admins when the catalog lands. */
+  clearAiCache: anyOf(platformGate, cap("ai.cache.delete")),
   /** Read live spend against ai-gateway budgets (ai-gateway GET /admin/spend). */
   viewAiSpend: cap("ai.spend.read"),
   /** Read the virtual-key list (ai-gateway GET /admin/keys) — never carries secrets. */
@@ -613,6 +653,17 @@ export const FEATURE_GATES = {
    * principal downstream; the browse page reuses the proposal-inbox read
    * gate so it appears exactly for personas who work with agent activity. */
   viewAgentRunHistory: cap("ai.proposal.read"),
+  // BRD 14/68: agent lifecycle controls (Control Tower management side).
+  /** Rollout records list (agent-runtime GET /registry/rollouts —
+   * ai.agent.read downstream, same bar as the kill-switch/fleet reads). */
+  viewAgentRollouts: cap("ai.agent.read"),
+  /** Start/promote/rollback a rollout (POST /registry/rollouts* — platform
+   * OPERATOR scope downstream, registry.py _require_operator; same UI bar as
+   * publishAgentVersion above). */
+  manageAgentRollouts: role(ADMIN_ROLE),
+  /** Drift retrain watches (GET/POST/DELETE /registry/retrain-watches —
+   * ai.agent.admin downstream, BRD 52 inc3). */
+  manageRetrainWatches: cap("ai.agent.admin"),
 
   // ==========================================================================
   // BRD 68 slice 1: Agent Control Tower fleet table (docs/initiatives/
@@ -651,6 +702,24 @@ export const FEATURE_GATES = {
   cancelQueryExecution: cap("query.execution.execute"),
   /** Tenant query-stats rollup (GET /stats/queries). */
   viewQueryStats: cap("query.stats.read"),
+  /** View the tenant's query-governance ceilings + concurrency (query-service
+   * GET /limits, QRY-FR-042/044). */
+  viewQueryLimits: cap("query.limits.read"),
+  /** Lower tenant ceilings/concurrency (PUT /limits — overrides above the
+   * platform maxima 422 downstream). */
+  updateQueryLimits: cap("query.limits.update"),
+  /** Export a succeeded execution's results as CSV via a signed link
+   * (query-service POST /executions/{id}/export, QRY-FR-062). */
+  exportQueryResults: cap("query.execution.export"),
+  /** Start an async CSV/PNG chart export + poll/download its artifact
+   * (chart-service POST /charts/{id}/export, CHART-FR-041). */
+  exportChart: cap("chart.chart.export"),
+  /** Export a dashboard as a portable JSON bundle (chart-service POST
+   * /dashboards/{id}/export-bundle, CHART-FR-005). */
+  exportDashboardBundle: cap("chart.dashboard.export"),
+  /** Import a portable dashboard bundle (chart-service POST /dashboards/import
+   * — creates a dashboard, so it rides the create verb). */
+  importDashboard: cap("chart.dashboard.create"),
 
   /** Edit a saved connection (ingestion-service PATCH /connections/{id});
    * secrets merge write-only. */
@@ -747,6 +816,10 @@ export const FEATURE_GATES = {
   /** Create/rotate/revoke a service account (identity-service POST
    * /service-accounts, POST .../rotate, DELETE). The api_key is shown ONCE. */
   manageServiceAccounts: cap("identity.service_account.admin"),
+  /** List/register/revoke the tenant's external-agent credentials (identity-
+   * service GET|POST /tenants/self/external-agents, DELETE .../{id} — BRD 60
+   * WS2). The plaintext key is shown ONCE at registration. */
+  manageExternalAgents: cap("identity.user.admin"),
   /** Edit a workspace's name/description/public flag + link/unlink content
    * groups (rbac-service PATCH /workspaces/{id}, PUT|DELETE
    * .../content-groups/{gid}). */
@@ -786,6 +859,8 @@ export const FEATURE_GATES = {
   /** Set/delete a run's note (experiment-service PUT|DELETE /runs/{id}/note —
    * both authorized as experiment.run.update). */
   updateRun: cap("experiment.run.update"),
+  /** Delete a training run (experiment-service DELETE /runs/{id}). */
+  deleteRun: cap("experiment.run.delete"),
   /** Edit a model card's human overlay (experiment-service PATCH
    * /models/{id}/versions/{v}/card). */
   updateModelCard: cap("experiment.model_card.update"),

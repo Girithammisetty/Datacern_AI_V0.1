@@ -6,11 +6,13 @@ import { Can } from "@/components/authz/Can";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Textarea, Badge } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { FEATURE_GATES } from "@/lib/authz/registry";
-import { useAiGuardrailPolicy, usePutAiGuardrailPolicy } from "@/lib/graphql/hooks";
+import { useAiGuardrailPolicy, usePutAiGuardrailPolicy, useClearAiCache } from "@/lib/graphql/hooks";
 
 export default function AiGuardrailsPage() {
   const query = useAiGuardrailPolicy();
   const put = usePutAiGuardrailPolicy();
+  const clearCache = useClearAiCache();
+  const [purged, setPurged] = useState<number | null>(null);
   const [text, setText] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
 
@@ -55,6 +57,33 @@ export default function AiGuardrailsPage() {
           </CardContent>
         </Card>
       </AsyncBoundary>
+
+      <Can gate={FEATURE_GATES.clearAiCache}>
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Response cache</CardTitle>
+            <CardDescription>
+              Purge the tenant&apos;s cached LLM responses after a guardrail or
+              policy change, so a stale cached answer can never serve under the
+              new rules.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center gap-3">
+            <Button size="sm" variant="outline" disabled={clearCache.isPending}
+              onClick={() => clearCache.mutate({ scope: "tenant" }, { onSuccess: setPurged })}>
+              {clearCache.isPending ? "Purging…" : "Purge tenant cache"}
+            </Button>
+            {purged != null && (
+              <span className="text-xs text-muted-foreground">{purged} entr{purged === 1 ? "y" : "ies"} purged</span>
+            )}
+            {clearCache.isError && (
+              <span className="text-xs text-destructive">
+                {clearCache.error instanceof Error ? clearCache.error.message : "Purge failed"}
+              </span>
+            )}
+          </CardContent>
+        </Card>
+      </Can>
     </div>
   );
 }
