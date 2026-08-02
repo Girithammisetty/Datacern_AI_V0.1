@@ -472,20 +472,27 @@ def test_unbound_dataset_is_a_failed_install_here_even_though_the_cli_tolerates_
     assert failed == 1 and ("failed" if failed else "installed") == "failed"
 
 
-def test_drift_ignores_components_that_were_never_materialized(tmp_path):
-    """A component the install deliberately did not create cannot have drifted.
+def test_drift_separates_never_created_from_awaiting_approval(tmp_path):
+    """Three outcomes, and only one of them is drift.
 
-    Drift compares what the install PUT into Core against what is there now.
-    A dataset the tenant has not bound, and every component blocked behind it,
-    was never put anywhere — so looking it up and finding nothing is the
-    expected state, not evidence that somebody deleted it.
+    Drift compares what the install PUT into Core against what is there now, and
+    `missing` has to keep meaning "somebody deleted this" or the check stops
+    raising the one signal it exists for. Two ledger actions break that:
 
-    Counting them made a correct install read as broken: journey-packs on
-    53a115c4 reported drifted=11 / missing=11 for exactly the 11 components
-    awaiting a dataset binding, and "a freshly installed pack reads in_sync"
-    went red against a system behaving as designed. `missing` has to keep
-    meaning "somebody deleted this" or the check stops raising the one signal
-    it exists for.
+      never created  — requires_binding / awaiting_binding / after_approval /
+                       deferred / blocked. Nothing was put anywhere, so there is
+                       nothing to compare. Absent from the report entirely.
+
+      submitted      — a governed DRAFT. The semantic model or verified query is
+                       real and in Core, awaiting a steward's four-eyes approval,
+                       but it is not in the PUBLISHED listing _existing_names
+                       reads. `unverified`, not `missing`.
+
+    The second one is what actually failed. journey-packs on PR #45 reported
+    drifted=11 missing=11 against an install whose own summary said created=55,
+    submitted=9, failed=0 — the 11 were the drafts and the dashboards behind
+    them. A first pass here assumed unbound datasets and skipped the wrong set,
+    which changed nothing.
     """
     src = tmp_path / "pack"
     _write_case_field_pack(src, "1.0.0", ["lc_alpha"], "V1")
@@ -496,13 +503,14 @@ def test_drift_ignores_components_that_were_never_materialized(tmp_path):
     ledger = [
         {"kind": "case_fields", "identity": "lc_alpha", "tombstoned": False,
          "target_id": "a", "origin": "o", "action": "create"},
-        # the tenant owes data for this one, and two components wait on it
+        # never created
         {"kind": "datasets", "identity": "fwa_claims", "tombstoned": False,
          "target_id": None, "origin": "o", "action": "requires_binding"},
-        {"kind": "semantic_models", "identity": "fwa_core", "tombstoned": False,
-         "target_id": None, "origin": "o", "action": "awaiting_binding"},
         {"kind": "dashboards", "identity": "fwa_overview", "tombstoned": False,
          "target_id": None, "origin": "o", "action": "after_approval"},
+        # created, but as a governed draft awaiting approval
+        {"kind": "semantic_models", "identity": "fwa_core", "tombstoned": False,
+         "target_id": "s1", "origin": "o", "action": "submitted"},
         # a real deletion must STILL be caught
         {"kind": "case_fields", "identity": "lc_deleted", "tombstoned": False,
          "target_id": "d", "origin": "o", "action": "create"},
@@ -510,13 +518,18 @@ def test_drift_ignores_components_that_were_never_materialized(tmp_path):
     rows = installer.detect_drift(client, ledger, manifest)
     by = {r["identity"]: r for r in rows}
 
-    assert set(by) == {"lc_alpha", "lc_deleted"}, (
-        "only materialized components belong in a drift report; got " + str(sorted(by))
+    assert "fwa_claims" not in by and "fwa_overview" not in by, (
+        "components that were never created do not belong in a drift report"
+    )
+    assert by["fwa_core"]["status"] == "unverified", (
+        "a submitted draft exists in Core — reporting it missing calls a healthy "
+        "install drifted, which is the bug this test pins"
     )
     assert by["lc_alpha"]["status"] == "in_sync"
     assert by["lc_deleted"]["status"] == "missing", (
-        "a genuinely deleted object must still read missing — the skip is scoped "
-        "to actions that never created anything, not to everything inconvenient"
+        "a genuinely deleted object must still read missing — the exemptions are "
+        "scoped to actions that never published anything, not to everything "
+        "inconvenient"
     )
     drifted = sum(1 for r in rows if r["status"] in ("modified", "missing"))
-    assert drifted == 1
+    assert drifted == 1, f"only the deletion is drift; got {drifted}"

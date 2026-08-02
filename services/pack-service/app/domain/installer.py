@@ -964,6 +964,13 @@ NEVER_MATERIALIZED = frozenset({
     "requires_binding", "awaiting_binding", "deferred", "after_approval", "blocked", "failed",
 })
 
+# Actions whose object DOES exist in Core but not where _existing_names looks.
+# `submitted` is a governed draft — a semantic model or verified query authored
+# and awaiting a steward's four-eyes approval (see _semantic_draft's own wording:
+# "submitted — awaiting a steward's four-eyes approval"). Presence-checking these
+# against the PUBLISHED listing reports `missing` on a perfectly healthy install.
+PENDING_APPROVAL = frozenset({"submitted"})
+
 
 def detect_drift(client, ledger: list[dict], manifest) -> list[dict]:
     """Compare each non-tombstoned ledger object to Core's current state. Returns
@@ -985,17 +992,30 @@ def detect_drift(client, ledger: list[dict], manifest) -> list[dict]:
     for r in ledger:
         if r.get("tombstoned"):
             continue
-        if r.get("action") in NEVER_MATERIALIZED:
-            # Never created, so it cannot have drifted. Drift compares what the
-            # install PUT in Core against what is there now; a component the
-            # tenant has not bound data for was deliberately not put anywhere.
+        action = r.get("action")
+        if action in NEVER_MATERIALIZED:
+            # Nothing was created, so nothing can have drifted. `missing` has to
+            # keep meaning "somebody deleted this" — the one signal this check
+            # exists to raise — so a component that was deliberately never put
+            # into Core does not belong in the report at all.
+            continue
+        if action in PENDING_APPROVAL:
+            # Governed DRAFTS: semantic models and verified queries are authored
+            # and submitted, NOT approved — a pack must not bypass four-eyes, so
+            # a human steward approves them in the normal review UI. They exist
+            # in Core, but not in the PUBLISHED listing `_existing_names` reads,
+            # so presence-checking them reports `missing` on a healthy install.
             #
-            # Counting these as `missing` made a correct install read as
-            # drifted: journey-packs on 53a115c4 reported drifted=11 missing=11
-            # for exactly the 11 components awaiting a dataset binding, and
-            # "a freshly installed pack reads in_sync" went red on a system
-            # behaving as designed. `missing` has to keep meaning "somebody
-            # deleted this", which is the signal the check exists to raise.
+            # That is what actually failed. journey-packs on PR #45 reported
+            # drifted=11 missing=11 against an install whose own summary said
+            # created=55, submitted=9, failed=0 — the 11 were the drafts and the
+            # dashboards waiting behind them, never the unbound datasets a first
+            # pass here assumed. `unverified` is the honest status: the object is
+            # real, and this check cannot see it from where it is looking.
+            rows.append(_drift_row(r, "unverified", False,
+                                   "submitted as a governed draft — awaiting a "
+                                   "steward's approval, not visible in the "
+                                   "published listing"))
             continue
         kind, name = r["kind"], r["identity"]
         spec = intended.get((kind, name))
