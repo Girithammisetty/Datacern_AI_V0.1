@@ -702,6 +702,24 @@ export const FEATURE_GATES = {
   cancelQueryExecution: cap("query.execution.execute"),
   /** Tenant query-stats rollup (GET /stats/queries). */
   viewQueryStats: cap("query.stats.read"),
+  /** View the tenant's query-governance ceilings + concurrency (query-service
+   * GET /limits, QRY-FR-042/044). */
+  viewQueryLimits: cap("query.limits.read"),
+  /** Lower tenant ceilings/concurrency (PUT /limits — overrides above the
+   * platform maxima 422 downstream). */
+  updateQueryLimits: cap("query.limits.update"),
+  /** Export a succeeded execution's results as CSV via a signed link
+   * (query-service POST /executions/{id}/export, QRY-FR-062). */
+  exportQueryResults: cap("query.execution.export"),
+  /** Start an async CSV/PNG chart export + poll/download its artifact
+   * (chart-service POST /charts/{id}/export, CHART-FR-041). */
+  exportChart: cap("chart.chart.export"),
+  /** Export a dashboard as a portable JSON bundle (chart-service POST
+   * /dashboards/{id}/export-bundle, CHART-FR-005). */
+  exportDashboardBundle: cap("chart.dashboard.export"),
+  /** Import a portable dashboard bundle (chart-service POST /dashboards/import
+   * — creates a dashboard, so it rides the create verb). */
+  importDashboard: cap("chart.dashboard.create"),
 
   /** Edit a saved connection (ingestion-service PATCH /connections/{id});
    * secrets merge write-only. */

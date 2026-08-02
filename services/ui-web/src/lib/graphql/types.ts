@@ -764,6 +764,64 @@ export interface RunSqlInput {
   engineHint?: string;
 }
 
+/** Effective execution ceilings (query-service domain.Ceilings). */
+export interface QueryCeilings {
+  maxScanBytes?: number | null;
+  maxRuntimeS?: number | null;
+  maxResultBytes?: number | null;
+  maxResultRows?: number | null;
+}
+
+/** The tenant's stored override row — null means the platform default applies. */
+export interface QueryLimitOverrides extends QueryCeilings {
+  concurrentSlots?: number | null;
+  warehousePrimary?: boolean | null;
+  updatedBy?: string | null;
+}
+
+/** Tenant query governance (query-service GET /limits, QRY-FR-042/044). */
+export interface QueryLimits {
+  overrides: QueryLimitOverrides;
+  effectiveUser: QueryCeilings;
+  effectiveAgent: QueryCeilings;
+  platformMaxima: QueryCeilings;
+}
+
+/** PUT /limits body — overrides may only LOWER the platform maxima. */
+export interface QueryLimitsInput {
+  maxScanBytes?: number;
+  maxRuntimeS?: number;
+  maxResultBytes?: number;
+  maxResultRows?: number;
+  concurrentSlots?: number;
+  warehousePrimary?: boolean;
+}
+
+/** Plan + cost estimate without executing (query-service POST /sql/dry-run). */
+export interface SqlDryRun {
+  engine?: string | null;
+  routingReason?: string | null;
+  estimatedScanBytes?: number | null;
+  estimatedRows?: number | null;
+  /** "pruned/total" summary string. */
+  partitionsPruned?: string | null;
+  /** high | low. */
+  confidence?: string | null;
+  /** ok | exceeded. */
+  ceilingVerdict?: string | null;
+  ceilings?: QueryCeilings | null;
+  warnings?: JSONValue;
+}
+
+/** A signed result-export descriptor (query-service POST /executions/{id}/export).
+ * downloadPath is the service-relative signed path /api/v1/downloads/{token} —
+ * downloaded through the same-origin /api/query-export/{token} proxy. */
+export interface QueryExportDescriptor {
+  format: string;
+  downloadPath: string;
+  expiresAt?: string | null;
+}
+
 /** One immutable saved-query version (query-service). */
 export interface SavedQueryVersion {
   id: ID;
@@ -863,6 +921,63 @@ export interface Dashboard {
   module?: string | null;
   archived: boolean;
   charts: Chart[];
+}
+
+/** A page of raw rows behind a clicked aggregate segment (chart-service
+ * POST /charts/{id}/drilldown, CHART-FR-040). */
+export interface ChartDrilldownRows {
+  columns?: JSONValue;
+  rows?: JSONValue;
+  nextCursor?: string | null;
+  hasMore: boolean;
+}
+
+export interface ChartDrilldownInput {
+  dimension: string;
+  value?: JSONValue;
+  dataseriesValue?: JSONValue;
+  filters?: Array<{ field: string; op: string; value: JSONValue; origin?: ID }>;
+  cursor?: string;
+  limit?: number;
+}
+
+/** An async chart-export operation (chart-service domain.Operation). Download
+ * the completed artifact through /api/chart-export/{operationId}. */
+export interface ChartExportOperation {
+  id: ID;
+  chartId?: ID | null;
+  kind?: string | null;
+  /** csv | png (png is infra-gated on the renderer sidecar). */
+  format?: string | null;
+  /** pending | running | completed | failed. */
+  status: string;
+  artifactUrl?: string | null;
+  artifactUrn?: string | null;
+  error?: string | null;
+  expiresAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+/** Result of importing a portable dashboard bundle. */
+export interface DashboardImportResult {
+  dashboardId: ID;
+  chartsCreated: number;
+}
+
+/** A parent→child chart cross-navigation link (chart-service CHART-FR-015). */
+export interface ChartLink {
+  parentChartId: ID;
+  childChartId: ID;
+  /** 0 = shared-source, 1 = main-secondary. */
+  linkType: number;
+  linkedColumns?: JSONValue;
+}
+
+export interface ChartLinkInput {
+  childChartId: ID;
+  linkedColumns?: Array<{ parentCol: string; childCol: string }>;
+  linkType?: number;
 }
 
 /* ---------- charts: type catalog, semantic models, authoring (no-code editor) ---------- */

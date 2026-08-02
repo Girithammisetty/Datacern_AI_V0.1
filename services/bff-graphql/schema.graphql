@@ -1717,6 +1717,89 @@ type QueryStats {
 }
 
 """
+Effective execution ceilings (query-service domain.Ceilings). Byte/row
+counts are Float — they exceed GraphQL's 32-bit Int (50 GB scan cap).
+"""
+type QueryCeilings {
+  maxScanBytes: Float
+  maxRuntimeS: Float
+  maxResultBytes: Float
+  maxResultRows: Float
+}
+
+"""
+The tenant's stored override row (query-service domain.TenantLimits) —
+every field nullable; null means the platform default applies.
+"""
+type QueryLimitOverrides {
+  maxScanBytes: Float
+  maxRuntimeS: Float
+  maxResultBytes: Float
+  maxResultRows: Float
+  concurrentSlots: Int
+  warehousePrimary: Boolean
+  updatedBy: String
+}
+
+"""
+Tenant query governance (query-service GET /limits, QRY-FR-042/044): the
+stored overrides plus the recomputed effective ceilings for human and agent
+callers, and the platform maxima overrides may never exceed.
+"""
+type QueryLimits {
+  overrides: QueryLimitOverrides!
+  effectiveUser: QueryCeilings!
+  effectiveAgent: QueryCeilings!
+  platformMaxima: QueryCeilings!
+}
+
+"""
+PUT /limits body (query-service). Overrides may only LOWER ceilings — a value
+above the platform maximum 422s with the allowed range in details. Omitted
+fields keep their current override; concurrentSlots caps simultaneous
+executions per tenant (QRY-FR-044).
+"""
+input QueryLimitsInput {
+  maxScanBytes: Float
+  maxRuntimeS: Float
+  maxResultBytes: Float
+  maxResultRows: Float
+  concurrentSlots: Int
+  warehousePrimary: Boolean
+}
+
+"""
+Plan + cost estimate WITHOUT executing (query-service POST /sql/dry-run,
+QRY-FR-041). ceilingVerdict is ok | exceeded; partitionsPruned is a
+"pruned/total" summary string; confidence is high | low.
+"""
+type SqlDryRun {
+  engine: String
+  routingReason: String
+  estimatedScanBytes: Float
+  estimatedRows: Float
+  partitionsPruned: String
+  confidence: String
+  ceilingVerdict: String
+  ceilings: QueryCeilings
+  warnings: JSON
+}
+
+"""
+A signed result-export descriptor (query-service POST /executions/{id}/export,
+QRY-FR-062). downloadPath is the SERVICE-RELATIVE pre-authenticated path
+/api/v1/downloads/{token} — the UI streams it through its same-origin
+/api/query-export/{token} proxy (an HMAC-signed link, valid 24h; the download
+itself needs no JWT). Expired results answer 410 with a re-run hint.
+"""
+type QueryExportDescriptor {
+  """csv (parquet is a documented 501 stub downstream)."""
+  format: String!
+  downloadPath: String!
+  expiresAt: DateTime
+}
+
+"""
 A typed variable declaration (query-service QRY-FR-002). SQL references it
 as the named placeholder :name; every placeholder must be declared at save time.
 """
@@ -1869,6 +1952,90 @@ type ChartShapedData {
   artifact: JSON
   rowCount: Int
   truncated: Boolean
+}
+
+"""
+A page of RAW rows behind a clicked aggregate segment (chart-service POST
+/charts/{id}/drilldown, CHART-FR-040). columns/rows mirror query-service's
+execution-result shape; nextCursor pages forward.
+"""
+type ChartDrilldownRows {
+  columns: JSON
+  rows: JSON
+  nextCursor: String
+  hasMore: Boolean!
+}
+
+"""
+Drilldown request (chart-service resolve.DrilldownRequest): the clicked
+dimension/value is injected as a bind predicate over the chart's configured
+drilldown saved query (display_meta.drilldown.query_urn — 422 NO_DRILLDOWN
+when absent). filters use the same op whitelist as ChartFilterInput; limit
+caps at 200 (default 50).
+"""
+input ChartDrilldownInput {
+  dimension: String!
+  value: JSON
+  """
+  Series discriminator value when the chart splits by a dataseries column.
+  """
+  dataseriesValue: JSON
+  filters: [ChartFilterInput!]
+  cursor: String
+  limit: Int
+}
+
+"""
+An async chart-export operation (chart-service domain.Operation,
+CHART-FR-041). status: pending | running | completed | failed. artifactUrl is
+set once completed — FSStore mints a chart-service-relative signed path
+(/api/v1/exports/…?exp&sig); S3Store an absolute presigned URL. The UI
+downloads through its same-origin /api/chart-export/{operationId} proxy.
+"""
+type ChartExportOperation {
+  id: ID!
+  chartId: ID
+  kind: String
+  """csv | png (png is infra-gated on the headless renderer sidecar)."""
+  format: String
+  status: String!
+  artifactUrl: String
+  artifactUrn: String
+  error: String
+  expiresAt: DateTime
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+"""
+Result of importing a dashboard bundle (chart-service POST /dashboards/import).
+"""
+type DashboardImportResult {
+  dashboardId: ID!
+  chartsCreated: Int!
+}
+
+"""
+A parent→child chart cross-navigation link (chart-service PUT /charts/{id}/link,
+CHART-FR-015). linkType: 0 = shared-source, 1 = main-secondary.
+"""
+type ChartLink {
+  parentChartId: ID!
+  childChartId: ID!
+  linkType: Int!
+  linkedColumns: JSON
+}
+
+input ChartLinkColumnInput {
+  parentCol: String!
+  childCol: String!
+}
+
+input ChartLinkInput {
+  childChartId: ID!
+  linkedColumns: [ChartLinkColumnInput!]
+  """0 = shared-source, 1 = main-secondary (default 1)."""
+  linkType: Int
 }
 
 input CreateDashboardInput {
@@ -5846,6 +6013,12 @@ type Query {
   default last 7 days). Needs query.stats.read.
   """
   queryStats(since: DateTime, limit: Int): QueryStats!
+  """
+  The tenant's query-governance ceilings + concurrency (query-service GET
+  /limits, QRY-FR-042/044): stored overrides, effective user/agent ceilings,
+  platform maxima. Needs query.limits.read.
+  """
+  queryLimits: QueryLimits!
   dashboard(id: ID!): Dashboard
   dashboards(workspaceId: ID!, first: Int = 50, after: String): DashboardConnection!
   """
@@ -5873,6 +6046,19 @@ type Query {
   Preview an UNSAVED chart spec for the live editor (chart-service POST /charts/preview).
   """
   chartPreview(input: CreateChartInput!): ChartShapedData!
+  """
+  Raw rows behind a clicked aggregate segment (chart-service POST
+  /charts/{id}/drilldown, CHART-FR-040). A Query, not a Mutation: the
+  downstream handler is side-effect free — it wraps the chart's drilldown
+  saved query with a bind predicate and reads. 422 NO_DRILLDOWN when the
+  chart declares none. Needs chart.chart.read.
+  """
+  chartDrilldown(chartId: ID!, input: ChartDrilldownInput!): ChartDrilldownRows!
+  """
+  An async chart-export operation's status + artifact link (chart-service
+  GET /operations/{id}) — poll after exportChart until completed|failed.
+  """
+  chartExportOperation(id: ID!): ChartExportOperation
   """
   Semantic models for the editor's field pickers (semantic-service GET /models).
   Headers only — list items carry empty dimensions/measures; use semanticModel(name)
@@ -7806,6 +7992,30 @@ type Mutation {
   """
   cancelQueryExecution(id: ID!): QueryExecution!
   """
+  Set the tenant's query-governance overrides (query-service PUT /limits,
+  QRY-FR-042/044). Values may only LOWER the platform maxima (422 above
+  them). The PUT answers only the stored overrides, so this re-reads GET
+  /limits to return the recomputed effective view. Needs query.limits.update.
+  """
+  setQueryLimits(input: QueryLimitsInput!): QueryLimits!
+  """
+  Plan + estimate ad-hoc SQL WITHOUT executing (query-service POST
+  /sql/dry-run, QRY-FR-041): engine routing, estimated scan bytes/rows,
+  ceiling verdict. A ceiling-exceeding statement can also 422
+  COST_CEILING_EXCEEDED with the estimate in error details. Needs
+  query.execution.execute.
+  """
+  dryRunSql(input: RunSqlInput!): SqlDryRun!
+  """
+  Mint a signed CSV download link for a SUCCEEDED execution's results
+  (query-service POST /executions/{id}/export, QRY-FR-062). The descriptor's
+  downloadPath is pre-authenticated by HMAC signature (24h) — stream it
+  through the UI's same-origin /api/query-export/{token} proxy, not GraphQL.
+  409 while the execution is not succeeded; 410 once results expired. Needs
+  query.execution.export.
+  """
+  exportQueryExecution(id: ID!, format: String): QueryExportDescriptor!
+  """
   Archive a dataset (dataset-service DELETE /datasets/{id}, sets deleted_at;
   200 with a small summary, not 204). dataset-service exposes no archived-only
   list read, so this only works when the caller already knows the id (e.g.
@@ -7891,6 +8101,43 @@ type Mutation {
   updateChart(id: ID!, input: UpdateChartInput!, idempotencyKey: String): Chart!
   """Delete a chart (chart-service DELETE /charts/{id})."""
   deleteChart(id: ID!): Boolean!
+  """
+  Start an async CSV/PNG chart export (chart-service POST /charts/{id}/export,
+  CHART-FR-041; 202, capped at 5 concurrent exports/tenant → 429
+  EXPORT_LIMIT). The 202 carries only {operation_id}; this re-reads the
+  operation so the caller gets its REAL current state — poll
+  chartExportOperation until completed|failed, then download the artifact via
+  the UI's /api/chart-export/{operationId} proxy. PNG is infra-gated on the
+  renderer sidecar (documented failure). Needs chart.chart.export.
+  """
+  exportChart(id: ID!, format: String!, request: JSON): ChartExportOperation!
+  """
+  Export a dashboard + its charts as a self-contained portable JSON bundle
+  (chart-service POST /dashboards/{id}/export-bundle, CHART-FR-005). Plain
+  JSON — the UI offers it as a client-side file download, no proxy needed.
+  Needs chart.dashboard.export.
+  """
+  exportDashboardBundle(id: ID!): JSON!
+  """
+  Import a dashboard bundle into the caller's workspace (chart-service POST
+  /dashboards/import, CHART-FR-005/BR-10). urnMapping remaps the bundle's
+  source URNs to this tenant's; any unmapped URN fails atomically with 422
+  UNMAPPED_URN before anything is written. The target workspace comes from
+  the caller's JWT `workspace_id` claim (as createDashboard). Needs
+  chart.dashboard.create.
+  """
+  importDashboard(bundle: JSON!, urnMapping: JSON, idempotencyKey: String): DashboardImportResult!
+  """
+  Create/replace a parent→child chart cross-navigation link (chart-service
+  PUT /charts/{id}/link, CHART-FR-015) — transactional with cycle detection
+  (409 on a cycle). Authorized downstream as chart.chart.update.
+  """
+  setChartLink(chartId: ID!, input: ChartLinkInput!): ChartLink!
+  """
+  Remove a chart link + clear the child back-reference (chart-service
+  DELETE /charts/{id}/link, 204). Needs chart.chart.update.
+  """
+  deleteChartLink(chartId: ID!, childChartId: ID!): Boolean!
   """
   Create a pipeline template (pipeline-orchestrator POST /pipelines). The owning
   workspace is taken from the caller's JWT `workspace_id` claim (as the backend

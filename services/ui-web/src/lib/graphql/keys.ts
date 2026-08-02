@@ -47,6 +47,7 @@ export const qk = {
   queryExecutions: (filters: unknown) => ["data", "queryExecutions", filters] as const,
   queryExecution: (id: string) => ["data", "queryExecution", id] as const,
   queryStats: (since?: string) => ["data", "queryStats", since ?? null] as const,
+  queryLimits: () => ["data", "queryLimits"] as const,
 
   ingestionSchedules: () => ["data", "ingestionSchedules"] as const,
   ingestionSchedule: (id: string) => ["data", "ingestionSchedule", id] as const,
@@ -114,6 +115,9 @@ export const qk = {
   dashboard: (id: string) => ["dashboards", "dashboard", id] as const,
   chartDrillTarget: (chartId: string, dimension: string) =>
     ["dashboards", "chartDrillTarget", chartId, dimension] as const,
+  chartDrilldown: (chartId: string, vars: unknown) =>
+    ["dashboards", "chartDrilldown", chartId, vars] as const,
+  chartExportOperation: (id: string) => ["dashboards", "chartExportOperation", id] as const,
   archivedDashboards: (workspaceId: string) => ["dashboards", "archived", workspaceId] as const,
   chartTypes: () => ["dashboards", "chartTypes"] as const,
   semanticModels: (workspaceId: string) => ["dashboards", "semanticModels", workspaceId] as const,

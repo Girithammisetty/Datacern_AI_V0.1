@@ -63,6 +63,11 @@ import type {
   CompleteUploadInput,
   // Tier 4a: data-plane secondary CRUD/lifecycle.
   SavedQueryInput,
+  // Query governance + chart export/drilldown/portability.
+  QueryLimitsInput,
+  ChartDrilldownInput,
+  ChartExportOperation,
+  ChartLinkInput,
   UpdateConnectionInput,
   ConnectionPreviewInput,
   CreateIngestionScheduleInput,
@@ -1367,6 +1372,51 @@ export function useQueryStats(since?: string) {
     queryKey: qk.queryStats(since),
     queryFn: () =>
       graphqlRequest<ops.QueryStatsResult>(ops.QUERY_STATS, { since }).then((r) => r.queryStats),
+  });
+}
+
+/* ------- query governance: limits, dry-run, result export ------- */
+/** Tenant ceilings + concurrency (query-service GET /limits). */
+export function useQueryLimits(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.queryLimits(),
+    queryFn: () =>
+      graphqlRequest<ops.QueryLimitsResult>(ops.QUERY_LIMITS).then((r) => r.queryLimits),
+    enabled: options.enabled ?? true,
+  });
+}
+
+/** Lower tenant ceilings/concurrency (query-service PUT /limits); values above
+ * the platform maxima are rejected downstream (422). */
+export function useSetQueryLimits() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: QueryLimitsInput) =>
+      graphqlRequest<ops.SetQueryLimitsResult>(ops.SET_QUERY_LIMITS, { input }).then(
+        (r) => r.setQueryLimits,
+      ),
+    onSuccess: (d) => client.setQueryData(qk.queryLimits(), d),
+  });
+}
+
+/** Plan + cost estimate WITHOUT executing (query-service POST /sql/dry-run). */
+export function useDryRunSql() {
+  return useMutation({
+    mutationFn: (input: ops.RunSqlInput) =>
+      graphqlRequest<ops.DryRunSqlResult>(ops.DRY_RUN_SQL, { input }).then((r) => r.dryRunSql),
+  });
+}
+
+/** Mint a signed CSV download link for a succeeded execution's results
+ * (query-service POST /executions/{id}/export). The descriptor's downloadPath
+ * is streamed through the same-origin /api/query-export/{token} proxy. */
+export function useExportQueryExecution() {
+  return useMutation({
+    mutationFn: (vars: { id: string; format?: string }) =>
+      graphqlRequest<ops.ExportQueryExecutionResult>(ops.EXPORT_QUERY_EXECUTION, {
+        id: vars.id,
+        format: vars.format ?? "csv",
+      }).then((r) => r.exportQueryExecution),
   });
 }
 
@@ -2977,6 +3027,105 @@ export function useDeleteChart(dashboardId: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => graphqlRequest<ops.DeleteChartResult>(ops.DELETE_CHART, { id }),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.dashboard(dashboardId) }),
+  });
+}
+
+/* ------- chart drilldown + export + dashboard portability + links ------- */
+/** Raw rows behind a clicked aggregate segment (chart-service drilldown,
+ * CHART-FR-040) — enabled once a segment is selected. */
+export function useChartDrilldown(
+  chartId: string | null,
+  input: ChartDrilldownInput | null,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: qk.chartDrilldown(chartId ?? "", input),
+    queryFn: () =>
+      graphqlRequest<ops.ChartDrilldownResult>(ops.CHART_DRILLDOWN, { chartId, input }).then(
+        (r) => r.chartDrilldown,
+      ),
+    enabled: (options.enabled ?? true) && !!chartId && !!input,
+  });
+}
+
+/** Start an async CSV/PNG chart export. The result carries the operation's
+ * REAL polled state — hand its id to useChartExportOperation. */
+export function useExportChart() {
+  return useMutation({
+    mutationFn: (vars: { id: string; format?: string }) =>
+      graphqlRequest<ops.ExportChartResult>(ops.EXPORT_CHART, {
+        id: vars.id,
+        format: vars.format ?? "csv",
+      }).then((r) => r.exportChart),
+  });
+}
+
+/** Poll an async chart-export operation until it settles. */
+export function useChartExportOperation(
+  id: string | null,
+  options: {
+    refetchInterval?:
+      | number
+      | false
+      | ((query: { state: { data?: ChartExportOperation | null } }) => number | false);
+  } = {},
+) {
+  return useQuery({
+    queryKey: qk.chartExportOperation(id ?? ""),
+    queryFn: () =>
+      graphqlRequest<ops.ChartExportOperationResult>(ops.CHART_EXPORT_OPERATION, { id }).then(
+        (r) => r.chartExportOperation,
+      ),
+    enabled: !!id,
+    refetchInterval: options.refetchInterval as never,
+  });
+}
+
+/** Export a dashboard as a portable JSON bundle (client-side file download —
+ * plain JSON, no proxy needed). */
+export function useExportDashboardBundle() {
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ExportDashboardBundleResult>(ops.EXPORT_DASHBOARD_BUNDLE, { id }).then(
+        (r) => r.exportDashboardBundle,
+      ),
+  });
+}
+
+/** Import a portable dashboard bundle into the caller's workspace; unmapped
+ * source URNs fail atomically downstream (422 UNMAPPED_URN). */
+export function useImportDashboard() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { bundle: JSONValue; urnMapping?: JSONValue }) =>
+      graphqlRequest<ops.ImportDashboardResult>(ops.IMPORT_DASHBOARD, {
+        bundle: vars.bundle,
+        urnMapping: vars.urnMapping,
+        idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.importDashboard),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["dashboards", "list"] }),
+  });
+}
+
+/** Create/replace a parent→child chart cross-navigation link (CHART-FR-015). */
+export function useSetChartLink(dashboardId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { chartId: string; input: ChartLinkInput }) =>
+      graphqlRequest<ops.SetChartLinkResult>(ops.SET_CHART_LINK, vars).then((r) => r.setChartLink),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.dashboard(dashboardId) }),
+  });
+}
+
+/** Remove a chart link + clear the child back-reference. */
+export function useDeleteChartLink(dashboardId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { chartId: string; childChartId: string }) =>
+      graphqlRequest<ops.DeleteChartLinkResult>(ops.DELETE_CHART_LINK, vars).then(
+        (r) => r.deleteChartLink,
+      ),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.dashboard(dashboardId) }),
   });
 }

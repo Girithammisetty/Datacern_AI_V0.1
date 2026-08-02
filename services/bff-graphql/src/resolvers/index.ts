@@ -35,6 +35,10 @@ import {
   mapIngestion, mapUpload, mapLineage, mapSavedQuery, mapQueryResult,
   // Tier 4a: data-plane secondary CRUD/lifecycle.
   mapSavedQueryVersion, mapQueryExecution, mapQueryStats,
+  // Query governance + dry-run + result export (QRY-FR-041/042/044/062).
+  mapQueryLimits, mapSqlDryRun, mapQueryExportDescriptor,
+  // Chart drilldown + export + links (CHART-FR-005/015/040/041).
+  mapChartDrilldown, mapChartOperation, mapChartLink,
   mapIngestionSchedule,
   mapCaseStream, mapScheduleRunNow, mapConnectionPreview,
   mapDatasetConsumers, mapSimilarDataset, mapDatasetVersion, mapReprofile,
@@ -1239,6 +1243,10 @@ export const resolvers = {
       ctx: GraphQLContext,
     ) => mapQueryStats(await ctx.clients.query.stats(a.since, a.limit ?? undefined)),
 
+    // Tenant governance ceilings + concurrency (query-service GET /limits).
+    queryLimits: async (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      mapQueryLimits(await ctx.clients.query.limits()),
+
     dashboard: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.chart.dashboard(a.id).then((d) => mapDashboard(ctx, d))),
 
@@ -1301,6 +1309,34 @@ export const resolvers = {
       });
       return mapChartShapedData(d);
     },
+
+    // ---- chart drilldown + export operation polling (JWT passthrough) --------
+    // A Query, not a Mutation: the downstream drilldown handler is side-effect
+    // free (it wraps the chart's drilldown saved query with a bind predicate).
+    chartDrilldown: async (
+      _p: unknown,
+      a: {
+        chartId: string;
+        input: {
+          dimension: string; value?: unknown; dataseriesValue?: unknown;
+          filters?: Array<{ field: string; op: string; value: unknown }>;
+          cursor?: string; limit?: number;
+        };
+      },
+      ctx: GraphQLContext,
+    ) =>
+      mapChartDrilldown(
+        await ctx.clients.chart.drilldown(a.chartId, {
+          clicked: { dimension: a.input.dimension, value: a.input.value },
+          dataseries_value: a.input.dataseriesValue,
+          filters: a.input.filters?.map((f) => ({ field: f.field, op: f.op, value: f.value })),
+          cursor: a.input.cursor,
+          limit: a.input.limit,
+        }),
+      ),
+
+    chartExportOperation: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.chart.operation(a.id).then(mapChartOperation)),
 
     // ---- semantic models: field pickers for the chart editor (JWT passthrough)
     semanticModels: (_p: unknown, a: { workspaceId?: string }, ctx: GraphQLContext) =>
@@ -4338,6 +4374,49 @@ export const resolvers = {
     cancelQueryExecution: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       mapQueryExecution(ctx, await ctx.clients.query.cancelExecution(a.id)),
 
+    // ---- query governance + dry-run + result export (query-service) ----------
+    setQueryLimits: async (
+      _p: unknown,
+      a: {
+        input: {
+          maxScanBytes?: number; maxRuntimeS?: number; maxResultBytes?: number;
+          maxResultRows?: number; concurrentSlots?: number; warehousePrimary?: boolean;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      // PUT answers only the stored overrides; re-read GET /limits so the
+      // caller gets the recomputed effective user/agent ceilings.
+      await ctx.clients.query.putLimits({
+        max_scan_bytes: a.input.maxScanBytes,
+        max_runtime_s: a.input.maxRuntimeS,
+        max_result_bytes: a.input.maxResultBytes,
+        max_result_rows: a.input.maxResultRows,
+        concurrent_slots: a.input.concurrentSlots,
+        warehouse_primary: a.input.warehousePrimary,
+      });
+      return mapQueryLimits(await ctx.clients.query.limits());
+    },
+
+    dryRunSql: async (
+      _p: unknown,
+      a: { input: { sql: string; limit?: number; engineHint?: string } },
+      ctx: GraphQLContext,
+    ) =>
+      mapSqlDryRun(
+        await ctx.clients.query.dryRun({
+          sql: a.input.sql,
+          limit: a.input.limit,
+          engine_hint: a.input.engineHint,
+        }),
+      ),
+
+    exportQueryExecution: async (
+      _p: unknown,
+      a: { id: string; format?: string },
+      ctx: GraphQLContext,
+    ) => mapQueryExportDescriptor(await ctx.clients.query.exportExecution(a.id, a.format ?? "csv")),
+
     // ---- dataset archive/restore (JWT passthrough) ---------------------------
     archiveDataset: async (
       _p: unknown,
@@ -4597,6 +4676,76 @@ export const resolvers = {
 
     deleteChart: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
       await ctx.clients.chart.deleteChart(a.id);
+      return true;
+    },
+
+    // ---- chart export + dashboard portability + links (chart-service) --------
+    exportChart: async (
+      _p: unknown,
+      a: { id: string; format: string; request?: Record<string, unknown> },
+      ctx: GraphQLContext,
+    ) => {
+      // 202 carries only {operation_id}; immediately re-read the operation so
+      // the caller gets its REAL current state (mirrors exportCases).
+      const { operation_id } = await ctx.clients.chart.exportChart(a.id, {
+        format: a.format,
+        request: a.request,
+      });
+      return mapChartOperation(await ctx.clients.chart.operation(operation_id));
+    },
+
+    exportDashboardBundle: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      ctx.clients.chart.exportBundle(a.id),
+
+    importDashboard: async (
+      _p: unknown,
+      a: { bundle: Record<string, unknown>; urnMapping?: Record<string, string>; idempotencyKey?: string },
+      ctx: GraphQLContext,
+    ) => {
+      // The backend requires a workspace; source it from the caller's verified
+      // JWT claim and fail closed, exactly like createDashboard.
+      const workspaceId = String(ctx.identity.claims.workspace_id ?? "").trim();
+      if (!workspaceId) {
+        throw gqlError(ErrorCode.VALIDATION_FAILED, "importDashboard: no workspace in caller token", {
+          field: "workspace_id",
+        });
+      }
+      const r = await ctx.clients.chart.importBundle(
+        { bundle: a.bundle, workspace_id: workspaceId, url_mapping: a.urnMapping },
+        a.idempotencyKey,
+      );
+      return { dashboardId: r.dashboard_id, chartsCreated: r.charts_created ?? 0 };
+    },
+
+    setChartLink: async (
+      _p: unknown,
+      a: {
+        chartId: string;
+        input: {
+          childChartId: string;
+          linkedColumns?: Array<{ parentCol: string; childCol: string }>;
+          linkType?: number;
+        };
+      },
+      ctx: GraphQLContext,
+    ) =>
+      mapChartLink(
+        await ctx.clients.chart.createLink(a.chartId, {
+          child_chart_id: a.input.childChartId,
+          linked_columns: a.input.linkedColumns?.map((c) => ({
+            parent_col: c.parentCol,
+            child_col: c.childCol,
+          })),
+          link_type: a.input.linkType,
+        }),
+      ),
+
+    deleteChartLink: async (
+      _p: unknown,
+      a: { chartId: string; childChartId: string },
+      ctx: GraphQLContext,
+    ) => {
+      await ctx.clients.chart.removeLink(a.chartId, a.childChartId);
       return true;
     },
 

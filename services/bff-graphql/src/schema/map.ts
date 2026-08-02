@@ -8,6 +8,8 @@ import type {
 } from "../clients/dataset.js";
 import type {
   SavedQueryDTO, ExecutionDTO, ResultsDTO, SavedQueryVersionDTO, QueryStatDTO,
+  // Governance + dry-run + result export (QRY-FR-041/042/044/062).
+  CeilingsDTO, QueryLimitsDTO, DryRunDTO, ExecutionExportDTO,
 } from "../clients/query.js";
 import type {
   CaseDTO,
@@ -15,7 +17,11 @@ import type {
   CaseCommentDTO, CaseActivityDTO, CaseOperationDTO, DispositionDTO, CaseFieldDTO, CaseSlaPolicyDTO,
   CaseSchemaDTO, CaseFormDTO, CaseFormFieldDTO, QueueIntelligenceDTO,
 } from "../clients/case.js";
-import type { DashboardDTO, ChartDTO, ChartTypeDTO, ChartShapedDataDTO } from "../clients/chart.js";
+import type {
+  DashboardDTO, ChartDTO, ChartTypeDTO, ChartShapedDataDTO,
+  // Drilldown + export + portability + links (CHART-FR-005/015/040/041).
+  ChartDrilldownDTO, ChartOperationDTO, ChartLinkDTO,
+} from "../clients/chart.js";
 import type {
   ReportSubscriptionDTO,
   // Tier 2b: notification-service (inbox/preferences/rules/webhooks/templates/ops).
@@ -807,6 +813,61 @@ export function mapQueryExecution(ctx: GraphQLContext, d: ExecutionDTO) {
   };
 }
 
+/** Map query-service domain.Ceilings (snake) → QueryCeilings (camel). */
+function mapCeilings(c?: CeilingsDTO) {
+  return {
+    maxScanBytes: c?.max_scan_bytes ?? null,
+    maxRuntimeS: c?.max_runtime_s ?? null,
+    maxResultBytes: c?.max_result_bytes ?? null,
+    maxResultRows: c?.max_result_rows ?? null,
+  };
+}
+
+/** Map GET /limits (overrides + effective + maxima) → QueryLimits. */
+export function mapQueryLimits(d: QueryLimitsDTO) {
+  const o = d.overrides ?? {};
+  return {
+    overrides: {
+      maxScanBytes: o.max_scan_bytes ?? null,
+      maxRuntimeS: o.max_runtime_s ?? null,
+      maxResultBytes: o.max_result_bytes ?? null,
+      maxResultRows: o.max_result_rows ?? null,
+      concurrentSlots: o.concurrent_slots ?? null,
+      warehousePrimary: o.warehouse_primary ?? null,
+      updatedBy: o.updated_by ?? null,
+    },
+    effectiveUser: mapCeilings(d.effective_user),
+    effectiveAgent: mapCeilings(d.effective_agent),
+    platformMaxima: mapCeilings(d.platform_maxima),
+  };
+}
+
+/** Map POST /sql/dry-run → SqlDryRun (QRY-FR-041). */
+export function mapSqlDryRun(d: DryRunDTO) {
+  return {
+    engine: d.engine ?? null,
+    routingReason: d.routing_reason ?? null,
+    estimatedScanBytes: d.estimated_scan_bytes ?? null,
+    estimatedRows: d.estimated_rows ?? null,
+    partitionsPruned: d.partitions_pruned ?? null,
+    confidence: d.confidence ?? null,
+    ceilingVerdict: d.ceiling_verdict ?? null,
+    ceilings: mapCeilings(d.ceilings),
+    warnings: d.warnings ?? null,
+  };
+}
+
+/** Map POST /executions/{id}/export → QueryExportDescriptor. The service's
+ * `url` IS the service-relative signed path (/api/v1/downloads/{token}) —
+ * passed through untouched as downloadPath. */
+export function mapQueryExportDescriptor(d: ExecutionExportDTO) {
+  return {
+    format: d.format ?? "csv",
+    downloadPath: d.url ?? "",
+    expiresAt: d.expires_at ?? null,
+  };
+}
+
 export function mapQueryStats(d: { since?: string; top_queries?: QueryStatDTO[] }) {
   return {
     since: d.since ?? null,
@@ -1123,6 +1184,43 @@ export function mapChartType(d: ChartTypeDTO) {
     dataClass: d.data_class ?? null,
     requiredFields: d.required_fields ?? [],
     configSchema: d.config_schema ?? null,
+  };
+}
+
+/** Map a POST /charts/{id}/drilldown {data,page} envelope → ChartDrilldownRows. */
+export function mapChartDrilldown(d: ChartDrilldownDTO) {
+  return {
+    columns: d.data?.columns ?? null,
+    rows: d.data?.rows ?? null,
+    nextCursor: d.page?.next_cursor ?? null,
+    hasMore: d.page?.has_more ?? false,
+  };
+}
+
+/** Map a chart-service export operation (domain.Operation) → ChartExportOperation. */
+export function mapChartOperation(d: ChartOperationDTO) {
+  return {
+    id: d.id,
+    chartId: d.chart_id ?? null,
+    kind: d.kind ?? null,
+    format: d.format ?? null,
+    status: d.status ?? "pending",
+    artifactUrl: d.artifact_url ?? null,
+    artifactUrn: d.artifact_urn ?? null,
+    error: d.error ?? null,
+    expiresAt: d.expires_at ?? null,
+    createdAt: d.created_at ?? null,
+    updatedAt: d.updated_at ?? null,
+  };
+}
+
+/** Map PUT /charts/{id}/link → ChartLink. */
+export function mapChartLink(d: ChartLinkDTO) {
+  return {
+    parentChartId: d.parent_chart_id ?? "",
+    childChartId: d.child_chart_id ?? "",
+    linkType: d.link_type ?? 1,
+    linkedColumns: d.linked_columns ?? null,
   };
 }
 

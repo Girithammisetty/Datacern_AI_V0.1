@@ -73,6 +73,18 @@ import type {
   SavedQueryInput,
   QueryExecution,
   QueryStats,
+  // Query governance + dry-run + result export (query-service).
+  QueryLimits,
+  QueryLimitsInput,
+  SqlDryRun,
+  QueryExportDescriptor,
+  // Chart drilldown + export + portability + links (chart-service).
+  ChartDrilldownRows,
+  ChartDrilldownInput,
+  ChartExportOperation,
+  DashboardImportResult,
+  ChartLink,
+  ChartLinkInput,
   IngestionSchedule,
   CreateIngestionScheduleInput,
   UpdateIngestionScheduleInput,
@@ -1342,6 +1354,57 @@ export const QUERY_STATS = /* GraphQL */ `
 `;
 export interface QueryStatsResult {
   queryStats: QueryStats;
+}
+
+/* ---------- query governance: limits, dry-run, result export (query-service) ---------- */
+const QUERY_CEILING_FIELDS = /* GraphQL */ `
+  maxScanBytes maxRuntimeS maxResultBytes maxResultRows
+`;
+const QUERY_LIMITS_FIELDS = /* GraphQL */ `
+  overrides { ${QUERY_CEILING_FIELDS} concurrentSlots warehousePrimary updatedBy }
+  effectiveUser { ${QUERY_CEILING_FIELDS} }
+  effectiveAgent { ${QUERY_CEILING_FIELDS} }
+  platformMaxima { ${QUERY_CEILING_FIELDS} }
+`;
+
+export const QUERY_LIMITS = /* GraphQL */ `
+  query QueryLimits {
+    queryLimits { ${QUERY_LIMITS_FIELDS} }
+  }
+`;
+export interface QueryLimitsResult {
+  queryLimits: QueryLimits;
+}
+
+export const SET_QUERY_LIMITS = /* GraphQL */ `
+  mutation SetQueryLimits($input: QueryLimitsInput!) {
+    setQueryLimits(input: $input) { ${QUERY_LIMITS_FIELDS} }
+  }
+`;
+export interface SetQueryLimitsResult {
+  setQueryLimits: QueryLimits;
+}
+export type { QueryLimitsInput };
+
+export const DRY_RUN_SQL = /* GraphQL */ `
+  mutation DryRunSql($input: RunSqlInput!) {
+    dryRunSql(input: $input) {
+      engine routingReason estimatedScanBytes estimatedRows partitionsPruned
+      confidence ceilingVerdict ceilings { ${QUERY_CEILING_FIELDS} } warnings
+    }
+  }
+`;
+export interface DryRunSqlResult {
+  dryRunSql: SqlDryRun;
+}
+
+export const EXPORT_QUERY_EXECUTION = /* GraphQL */ `
+  mutation ExportQueryExecution($id: ID!, $format: String) {
+    exportQueryExecution(id: $id, format: $format) { format downloadPath expiresAt }
+  }
+`;
+export interface ExportQueryExecutionResult {
+  exportQueryExecution: QueryExportDescriptor;
 }
 
 /* ---------- pipelines: step catalog, templates, runs (no-code builder) ---------- */
@@ -2852,6 +2915,79 @@ export const DELETE_CHART = /* GraphQL */ `
 export interface DeleteChartResult {
   deleteChart: boolean;
 }
+
+/* ---------- chart drilldown + export + dashboard portability (chart-service) ---------- */
+export const CHART_DRILLDOWN = /* GraphQL */ `
+  query ChartDrilldown($chartId: ID!, $input: ChartDrilldownInput!) {
+    chartDrilldown(chartId: $chartId, input: $input) { columns rows nextCursor hasMore }
+  }
+`;
+export interface ChartDrilldownResult {
+  chartDrilldown: ChartDrilldownRows;
+}
+
+const CHART_EXPORT_OPERATION_FIELDS = /* GraphQL */ `
+  id chartId kind format status artifactUrl error expiresAt createdAt updatedAt
+`;
+
+export const EXPORT_CHART = /* GraphQL */ `
+  mutation ExportChart($id: ID!, $format: String!) {
+    exportChart(id: $id, format: $format) { ${CHART_EXPORT_OPERATION_FIELDS} }
+  }
+`;
+export interface ExportChartResult {
+  exportChart: ChartExportOperation;
+}
+
+export const CHART_EXPORT_OPERATION = /* GraphQL */ `
+  query ChartExportOperation($id: ID!) {
+    chartExportOperation(id: $id) { ${CHART_EXPORT_OPERATION_FIELDS} }
+  }
+`;
+export interface ChartExportOperationResult {
+  chartExportOperation: ChartExportOperation | null;
+}
+
+export const EXPORT_DASHBOARD_BUNDLE = /* GraphQL */ `
+  mutation ExportDashboardBundle($id: ID!) {
+    exportDashboardBundle(id: $id)
+  }
+`;
+export interface ExportDashboardBundleResult {
+  exportDashboardBundle: JSONValue;
+}
+
+export const IMPORT_DASHBOARD = /* GraphQL */ `
+  mutation ImportDashboard($bundle: JSON!, $urnMapping: JSON, $idempotencyKey: String) {
+    importDashboard(bundle: $bundle, urnMapping: $urnMapping, idempotencyKey: $idempotencyKey) {
+      dashboardId chartsCreated
+    }
+  }
+`;
+export interface ImportDashboardResult {
+  importDashboard: DashboardImportResult;
+}
+
+export const SET_CHART_LINK = /* GraphQL */ `
+  mutation SetChartLink($chartId: ID!, $input: ChartLinkInput!) {
+    setChartLink(chartId: $chartId, input: $input) {
+      parentChartId childChartId linkType linkedColumns
+    }
+  }
+`;
+export interface SetChartLinkResult {
+  setChartLink: ChartLink;
+}
+
+export const DELETE_CHART_LINK = /* GraphQL */ `
+  mutation DeleteChartLink($chartId: ID!, $childChartId: ID!) {
+    deleteChartLink(chartId: $chartId, childChartId: $childChartId)
+  }
+`;
+export interface DeleteChartLinkResult {
+  deleteChartLink: boolean;
+}
+
 export type {
   ChartType,
   SemanticModel,
@@ -2860,6 +2996,8 @@ export type {
   UpdateChartInput,
   CreateDashboardInput,
   UpdateDashboardInput,
+  ChartDrilldownInput,
+  ChartLinkInput,
 };
 
 export const WORKSPACE_COST_PANEL = /* GraphQL */ `

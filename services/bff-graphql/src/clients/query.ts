@@ -134,6 +134,58 @@ export interface RunSQLBody {
   cache?: boolean;
 }
 
+/** Effective execution ceilings (query-service domain.Ceilings). */
+export interface CeilingsDTO {
+  max_scan_bytes?: number;
+  max_runtime_s?: number;
+  max_result_bytes?: number;
+  max_result_rows?: number;
+}
+
+/** Tenant override row (query-service domain.TenantLimits) — every field is a
+ * pointer server-side; absent = platform default applies. */
+export interface TenantLimitsDTO {
+  max_scan_bytes?: number | null;
+  max_runtime_s?: number | null;
+  max_result_bytes?: number | null;
+  max_result_rows?: number | null;
+  concurrent_slots?: number | null;
+  warehouse_primary?: boolean;
+  updated_by?: string;
+}
+
+/** GET /limits response (handlers_stats.go handleGetLimits, QRY-FR-042/044). */
+export interface QueryLimitsDTO {
+  overrides?: TenantLimitsDTO | null;
+  effective_user?: CeilingsDTO;
+  effective_agent?: CeilingsDTO;
+  platform_maxima?: CeilingsDTO;
+}
+
+/** POST /sql/dry-run response (handlers_sql.go handleDryRun, QRY-FR-041). */
+export interface DryRunDTO {
+  engine?: string;
+  routing_reason?: string;
+  estimated_scan_bytes?: number;
+  estimated_rows?: number;
+  /** "pruned/total" partition summary string (exec.Estimate). */
+  partitions_pruned?: string;
+  /** high | low. */
+  confidence?: string;
+  /** ok | exceeded. */
+  ceiling_verdict?: string;
+  ceilings?: CeilingsDTO;
+  warnings?: unknown;
+}
+
+/** POST /executions/{id}/export response (handlers_executions.go, QRY-FR-062).
+ * `url` is the service-relative signed download path /api/v1/downloads/{token}. */
+export interface ExecutionExportDTO {
+  format?: string;
+  url?: string;
+  expires_at?: string;
+}
+
 export class QueryClient {
   constructor(private readonly http: ServiceClient) {}
 
@@ -260,5 +312,48 @@ export class QueryClient {
       { query: { since, limit } },
     );
     return r.data ?? {};
+  }
+
+  // ---- tenant governance: ceilings + concurrency (QRY-FR-042/044) ------------
+
+  /** GET /limits — the tenant's overrides + effective user/agent ceilings +
+   * platform maxima (needs query.limits.read). */
+  async limits(): Promise<QueryLimitsDTO> {
+    const r = await this.http.get<{ data: QueryLimitsDTO } | QueryLimitsDTO>("/api/v1/limits");
+    return unwrap<QueryLimitsDTO>(r);
+  }
+
+  /** PUT /limits — a TA lowers ceilings/concurrency; overrides above the
+   * platform maxima 422 (needs query.limits.update). Returns only {overrides} —
+   * callers wanting the recomputed effective view re-read limits(). */
+  async putLimits(body: TenantLimitsDTO): Promise<{ overrides?: TenantLimitsDTO }> {
+    const r = await this.http.put<{ data: { overrides?: TenantLimitsDTO } }>("/api/v1/limits", {
+      body,
+    });
+    return r.data ?? {};
+  }
+
+  // ---- dry-run + result export (QRY-FR-041/062) ------------------------------
+
+  /** POST /sql/dry-run — plan + cost estimate WITHOUT executing (needs
+   * query.execution.execute). A 422 COST_CEILING_EXCEEDED carries the estimate
+   * in the error details and bubbles as DownstreamError. */
+  async dryRun(body: RunSQLBody): Promise<DryRunDTO> {
+    const r = await this.http.post<{ data: DryRunDTO } | DryRunDTO>("/api/v1/sql/dry-run", {
+      body,
+    });
+    return unwrap<DryRunDTO>(r);
+  }
+
+  /** POST /executions/{id}/export — mint a signed CSV download link for a
+   * SUCCEEDED execution (201; needs query.execution.export). parquet is a
+   * documented 501 stub downstream; expired results answer 410 with a
+   * re-run hint. */
+  async exportExecution(id: string, format: string): Promise<ExecutionExportDTO> {
+    const r = await this.http.post<{ data: ExecutionExportDTO } | ExecutionExportDTO>(
+      `/api/v1/executions/${encodeURIComponent(id)}/export`,
+      { body: { format } },
+    );
+    return unwrap<ExecutionExportDTO>(r);
   }
 }

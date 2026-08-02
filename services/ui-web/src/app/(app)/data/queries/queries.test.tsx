@@ -71,6 +71,19 @@ beforeEach(() => {
           scanBytes: null, queuePosition: null, error: null },
       ], pageInfo: { nextCursor: null, hasMore: false } } };
     }
+    if (doc.includes("mutation DryRunSql")) {
+      return { dryRunSql: {
+        engine: "duckdb", routingReason: "small scan", estimatedScanBytes: 2048, estimatedRows: 100,
+        partitionsPruned: "3/8", confidence: "high", ceilingVerdict: "ok",
+        ceilings: { maxScanBytes: 53687091200, maxRuntimeS: 1600, maxResultBytes: 1073741824, maxResultRows: 5000000 },
+        warnings: null,
+      } };
+    }
+    if (doc.includes("mutation ExportQueryExecution")) {
+      return { exportQueryExecution: {
+        format: "csv", downloadPath: "/api/v1/downloads/tok.sig", expiresAt: "2026-08-03T00:00:00Z",
+      } };
+    }
     if (doc.includes("savedQueries")) return savedQueriesPage;
     if (doc.includes("runSql")) return runResult;
     return {};
@@ -95,6 +108,41 @@ describe("Queries page", () => {
     // The single result cell renders the returned value.
     expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByText(/duckdb/i)).toBeInTheDocument();
+  });
+
+  it("dry-runs the editor SQL and shows the real cost estimate before running", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<QueriesPage />);
+
+    await user.click(await screen.findByRole("button", { name: /dry run/i }));
+
+    const panel = await screen.findByTestId("dry-run-panel");
+    expect(panel).toHaveTextContent("Dry-run estimate");
+    // Real estimate fields from the dryRunSql mutation result.
+    expect(panel).toHaveTextContent("2.0 KiB"); // estimated scan (formatBytes)
+    expect(panel).toHaveTextContent("100"); // estimated rows
+    expect(panel).toHaveTextContent("3/8"); // partitions pruned
+    expect(panel).toHaveTextContent(/ceilings ok/i);
+    const call = requests.find((r) => r.doc.includes("mutation DryRunSql"));
+    expect(call?.vars?.input).toMatchObject({ sql: "SELECT 1 AS example", limit: 1000 });
+  });
+
+  it("exports a succeeded result as CSV through the signed-link proxy", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<QueriesPage />);
+
+    const runButtons = await screen.findAllByRole("button", { name: /^run/i });
+    await user.click(runButtons[0]);
+    await waitFor(() => expect(screen.getByText("example")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: /export csv/i }));
+
+    // The mutation minted /api/v1/downloads/{token}; the link goes through the
+    // same-origin proxy with just the token.
+    const link = await screen.findByRole("link", { name: /download csv/i });
+    expect(link).toHaveAttribute("href", "/api/query-export/tok.sig");
+    const call = requests.find((r) => r.doc.includes("mutation ExportQueryExecution"));
+    expect(call?.vars).toMatchObject({ id: "ex-1", format: "csv" });
   });
 
   it("saves the editor's SQL as a new governed query with real create variables", async () => {

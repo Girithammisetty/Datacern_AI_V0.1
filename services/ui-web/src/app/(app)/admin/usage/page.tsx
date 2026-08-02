@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Wallet, Receipt, X, TrendingUp, FileSpreadsheet, Scale, BookOpen } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { CostPanel } from "@/components/usage/CostPanel";
+import { QueryLimitsCard } from "@/components/admin/QueryLimitsCard";
 import { DataTable, type Column } from "@/components/primitives/DataTable";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
@@ -54,6 +55,12 @@ export default function AdminUsagePage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <CostPanel workspaceId={workspaceId} />
         <BudgetsCard workspaceId={workspaceId} />
+      </div>
+      {/* Per-tenant query concurrency + cost ceilings (query-service /limits). */}
+      <div className="mt-4">
+        <Can gate={FEATURE_GATES.viewQueryLimits}>
+          <QueryLimitsCard />
+        </Can>
       </div>
       <div className="mt-4">
         <ChargebackCard />
