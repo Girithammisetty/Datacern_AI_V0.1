@@ -75,7 +75,7 @@ import {
   mapProvisioningStep, mapPocCriterion, mapPocProgress, mapPocReportExport, mapToolDiscoveryHit, mapRbacAction,
   mapAgentRollout, mapRetrainWatch,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
-  mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
+  mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapOntologyEntityVersion, mapModelArchetype,
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
   mapPackDrift, mapPackTransition,
   // BRD 14 §6.5: SLM distillation cockpit (transcripts/SFT/training/adapters).
@@ -2523,6 +2523,13 @@ export const resolvers = {
         .ontologyEntities(a.workspaceId ?? undefined)
         .then((rows) => rows.map(mapOntologyEntity)),
 
+    ontologyVersions: (
+      _p: unknown, a: { entityKey: string; workspaceId: string }, ctx: GraphQLContext,
+    ) =>
+      ctx.clients.dataset
+        .ontologyVersions(a.entityKey, a.workspaceId)
+        .then((rows) => rows.map(mapOntologyEntityVersion)),
+
     // ---- inc16: model-archetype registry (governed blueprint editor) --------
     modelArchetypes: (_p: unknown, a: { workspaceId?: string }, ctx: GraphQLContext) =>
       ctx.clients.experiment
@@ -2575,6 +2582,61 @@ export const resolvers = {
     deleteOntologyEntity: (
       _p: unknown, a: { entityKey: string; workspaceId: string }, ctx: GraphQLContext,
     ) => ctx.clients.dataset.deleteOntologyEntity(a.entityKey, a.workspaceId),
+
+    // ---- WS3: ontology versioning + four-eyes update ------------------------
+    proposeOntologyUpdate: async (
+      _p: unknown,
+      a: {
+        input: {
+          workspaceId: string; entityKey: string; name?: string; description?: string;
+          attributes?: { name: string; dataType?: string }[];
+          relationships?: { name: string; target: string; cardinality?: string }[];
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const { input } = a;
+      const body: {
+        workspace_id: string; name?: string; description?: string;
+        attributes?: { name: string; data_type?: string }[];
+        relationships?: { name: string; target: string; cardinality?: string }[];
+      } = { workspace_id: input.workspaceId };
+      // Only forward fields the caller actually set, so unspecified fields keep
+      // the live definition (the downstream overlays only what's present).
+      if (input.name !== undefined) body.name = input.name;
+      if (input.description !== undefined) body.description = input.description;
+      if (input.attributes !== undefined) {
+        body.attributes = input.attributes.map((x) => ({ name: x.name, data_type: x.dataType }));
+      }
+      if (input.relationships !== undefined) {
+        body.relationships = input.relationships.map((x) => ({
+          name: x.name, target: x.target, cardinality: x.cardinality,
+        }));
+      }
+      return mapOntologyEntityVersion(await ctx.clients.dataset.proposeOntologyUpdate(input.entityKey, body));
+    },
+
+    approveOntologyUpdate: async (
+      _p: unknown,
+      a: { entityKey: string; workspaceId: string; versionNo: number; note?: string },
+      ctx: GraphQLContext,
+    ) =>
+      mapOntologyEntityVersion(
+        await ctx.clients.dataset.approveOntologyUpdate(a.entityKey, a.versionNo, {
+          workspace_id: a.workspaceId, note: a.note,
+        }),
+      ),
+
+    rejectOntologyUpdate: async (
+      _p: unknown,
+      a: { entityKey: string; workspaceId: string; versionNo: number; note?: string },
+      ctx: GraphQLContext,
+    ) =>
+      mapOntologyEntityVersion(
+        await ctx.clients.dataset.rejectOntologyUpdate(a.entityKey, a.versionNo, {
+          workspace_id: a.workspaceId, note: a.note,
+        }),
+      ),
 
     // ---- inc16: model-archetype registry writes -----------------------------
     createModelArchetype: async (

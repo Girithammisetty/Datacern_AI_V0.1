@@ -6011,6 +6011,58 @@ export function useDeleteOntologyEntity() {
   });
 }
 
+// ---- WS3: ontology versioning + four-eyes update ----------------------------
+export function useOntologyVersions(entityKey: string, workspaceId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.ontologyVersions(entityKey, workspaceId),
+    queryFn: () =>
+      graphqlRequest<ops.OntologyVersionsResult>(ops.ONTOLOGY_VERSIONS, { entityKey, workspaceId }).then(
+        (r) => r.ontologyVersions,
+      ),
+    enabled: enabled && !!entityKey && !!workspaceId,
+  });
+}
+
+/** Invalidate both the version history and the live entity list after any
+ * proposal/decision so the card's version + the review queue re-read. */
+function invalidateOntology(client: ReturnType<typeof useQueryClient>) {
+  client.invalidateQueries({ queryKey: ["data", "ontologyEntities"] });
+  client.invalidateQueries({ queryKey: ["data", "ontologyVersions"] });
+}
+
+export function useProposeOntologyUpdate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      workspaceId: string;
+      entityKey: string;
+      name?: string;
+      description?: string;
+      attributes?: { name: string; dataType?: string }[];
+      relationships?: { name: string; target: string; cardinality?: string }[];
+    }) => graphqlRequest<ops.ProposeOntologyUpdateResult>(ops.PROPOSE_ONTOLOGY_UPDATE, { input }),
+    onSuccess: () => invalidateOntology(client),
+  });
+}
+
+export function useApproveOntologyUpdate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { entityKey: string; workspaceId: string; versionNo: number; note?: string }) =>
+      graphqlRequest<ops.ApproveOntologyUpdateResult>(ops.APPROVE_ONTOLOGY_UPDATE, v),
+    onSuccess: () => invalidateOntology(client),
+  });
+}
+
+export function useRejectOntologyUpdate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { entityKey: string; workspaceId: string; versionNo: number; note?: string }) =>
+      graphqlRequest<ops.RejectOntologyUpdateResult>(ops.REJECT_ONTOLOGY_UPDATE, v),
+    onSuccess: () => invalidateOntology(client),
+  });
+}
+
 // ---- inc16: model-archetype registry (governed blueprint editor) ------------
 export function useModelArchetypes(workspaceId?: string) {
   return useQuery({

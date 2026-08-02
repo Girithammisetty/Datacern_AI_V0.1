@@ -4,7 +4,7 @@ import type {
   DatasetDTO, ProfileDTO, LineageDTO, DatasetVersionDTO, ProfileColumnDTO,
   DatasetConsumersDTO, SimilarDatasetDTO, ReprofileDTO,
   ResolveEntitiesDTO, ResolutionRunDTO, ResolutionRunDetailDTO, MergeCandidateDTO,
-  MaterializeResolvedDTO, OntologyEntityDTO,
+  MaterializeResolvedDTO, OntologyEntityDTO, OntologyEntityVersionDTO,
 } from "../clients/dataset.js";
 import type {
   SavedQueryDTO, ExecutionDTO, ResultsDTO, SavedQueryVersionDTO, QueryStatDTO,
@@ -3199,7 +3199,37 @@ export function mapOntologyEntity(d: OntologyEntityDTO) {
       target: r.target,
       cardinality: r.cardinality ?? null,
     })),
+    versionNo: d.version_no ?? null,
     createdAt: d.created_at ?? null,
+  };
+}
+
+export function mapOntologyEntityVersion(d: OntologyEntityVersionDTO) {
+  return {
+    __typename: "OntologyEntityVersion" as const,
+    entityKey: d.entity_key,
+    workspaceId: d.workspace_id,
+    versionNo: d.version_no,
+    status: d.status,
+    name: d.name,
+    description: d.description ?? "",
+    attributes: (d.attributes ?? []).map((a) => ({
+      __typename: "OntologyAttribute" as const,
+      name: a.name,
+      dataType: a.data_type ?? null,
+    })),
+    relationships: (d.relationships ?? []).map((r) => ({
+      __typename: "OntologyRelationship" as const,
+      name: r.name,
+      target: r.target,
+      cardinality: r.cardinality ?? null,
+    })),
+    diff: d.diff ?? null,
+    submittedBy: d.submitted_by,
+    approvedBy: d.approved_by ?? null,
+    decisionNote: d.decision_note ?? null,
+    createdAt: d.created_at ?? null,
+    decidedAt: d.decided_at ?? null,
   };
 }
 

@@ -244,10 +244,20 @@ reuse). Existing `test_ontology_api.py` unchanged and green; `ruff` clean; full
 dataset-service unit suite green (bar 3 pre-existing DuckDB-httpfs network-gated
 failures unrelated to this change).
 
-**Deferred (next slice):** BFF + UI surface for the review queue (the existing
-ontology page is read/create/delete — the propose/approve/reject controls are the
-immediate follow-on); making `relationship.target` navigable + SHACL-style
-attribute contracts is WS4.
+**BFF + UI (built).** The full stack is wired: BFF `ontologyVersions` query +
+`proposeOntologyUpdate` / `approveOntologyUpdate` / `rejectOntologyUpdate`
+mutations (schema snapshot regenerated; 4 resolver tests). On the ontology page
+each type card shows its current `vN` and a **History & review** panel
+(`OntologyVersionPanel`) that lazy-loads the history on expand, lets an author
+**Propose update** (name/description), and lets a distinct reviewer
+**Approve/Reject** an in-review proposal — a self-approve surfaces the real 403
+honestly, a duplicate proposal the real 409. Published rows show a compact diff
+summary. 3 component tests (lazy load + approve vars + propose vars). `tsc`/lint
+clean; ui-web 700 + BFF 420 unit tests green.
+
+**Deferred:** making `relationship.target` navigable + SHACL-style attribute
+contracts (WS4); linking the ontology `entity_key` to the semantic `Entity` and
+ER `entity_type` (WS2).
 
 ### Phasing
 WS1 (increment 1) proves the anti-hallucination thesis on the existing

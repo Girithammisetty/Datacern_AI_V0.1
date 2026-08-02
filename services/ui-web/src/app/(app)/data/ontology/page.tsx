@@ -13,6 +13,7 @@ import {
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { cap } from "@/lib/authz/registry";
 import { useSession } from "@/lib/session/SessionContext";
+import { OntologyVersionPanel } from "@/components/ontology/OntologyVersionPanel";
 
 /**
  * Domain ontology registry (inc11). Read view of the governed entity-TYPE
@@ -131,8 +132,11 @@ export default function OntologyPage() {
                       <Network className="size-4 shrink-0 text-muted-foreground" />
                       <span className="truncate">{e.name}</span>
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="flex items-center gap-2">
                       <code className="text-xs">{e.entityKey}</code>
+                      {e.versionNo != null && (
+                        <Badge variant="outline" className="text-[10px] tabular-nums">v{e.versionNo}</Badge>
+                      )}
                     </CardDescription>
                   </div>
                   {canDelete && (
@@ -183,6 +187,7 @@ export default function OntologyPage() {
                     </ul>
                   </div>
                 )}
+                <OntologyVersionPanel entity={e} />
               </CardContent>
             </Card>
           ))}
