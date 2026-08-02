@@ -13,6 +13,7 @@ import {
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { cap } from "@/lib/authz/registry";
 import { useSession } from "@/lib/session/SessionContext";
+import { OntologyVersionPanel } from "@/components/ontology/OntologyVersionPanel";
 
 /**
  * Domain ontology registry (inc11). Read view of the governed entity-TYPE
@@ -123,7 +124,7 @@ export default function OntologyPage() {
       >
         <div className="grid gap-4 md:grid-cols-2">
           {entities.map((e) => (
-            <Card key={e.id}>
+            <Card key={e.id} id={`onto-${e.entityKey}`} className="scroll-mt-20">
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -131,8 +132,11 @@ export default function OntologyPage() {
                       <Network className="size-4 shrink-0 text-muted-foreground" />
                       <span className="truncate">{e.name}</span>
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="flex items-center gap-2">
                       <code className="text-xs">{e.entityKey}</code>
+                      {e.versionNo != null && (
+                        <Badge variant="outline" className="text-[10px] tabular-nums">v{e.versionNo}</Badge>
+                      )}
                     </CardDescription>
                   </div>
                   {canDelete && (
@@ -174,7 +178,27 @@ export default function OntologyPage() {
                         <li key={r.name} className="flex items-center gap-1.5">
                           <span className="font-medium">{r.name}</span>
                           <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
-                          <code className="text-xs">{r.target}</code>
+                          {r.targetExists ? (
+                            // Navigable: jump to the target type's card.
+                            <a
+                              href={`#onto-${r.target}`}
+                              className="text-xs text-primary underline-offset-2 hover:underline"
+                              title={r.targetName ?? r.target}
+                            >
+                              {r.targetName ?? r.target}
+                            </a>
+                          ) : (
+                            // Dangling: the target type was never declared — flag it.
+                            <span className="flex items-center gap-1">
+                              <code className="text-xs text-muted-foreground line-through">{r.target}</code>
+                              <Badge
+                                variant="outline"
+                                className="border-destructive/40 text-[10px] text-destructive"
+                              >
+                                missing type
+                              </Badge>
+                            </span>
+                          )}
                           {r.cardinality && (
                             <Badge variant="secondary" className="text-[10px]">{r.cardinality}</Badge>
                           )}
@@ -183,6 +207,7 @@ export default function OntologyPage() {
                     </ul>
                   </div>
                 )}
+                <OntologyVersionPanel entity={e} />
               </CardContent>
             </Card>
           ))}

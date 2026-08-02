@@ -20,6 +20,7 @@ from app.domain.entities import (
     EntityResolutionRun,
     LineageEdge,
     OntologyEntity,
+    OntologyEntityVersion,
     Profile,
     ResolvedEntity,
     ResolvedEntityMember,
@@ -47,6 +48,8 @@ class MemoryState:
         self.merge_candidates: dict[str, EntityMergeCandidate] = {}
         # inc11: (workspace_id, entity_key) -> ontology entity type
         self.ontology: dict[tuple[str, str], OntologyEntity] = {}
+        # WS3: flat list of ontology entity versions (review queue + history).
+        self.ontology_versions: list[OntologyEntityVersion] = []
 
     def events_of_type(self, event_type: str) -> list[dict]:
         return [e for _, e in self.outbox if e["event_type"] == event_type]
@@ -481,5 +484,47 @@ class MemoryOntologyRepo:
     async def add(self, e: OntologyEntity):
         self.st.ontology[(e.workspace_id, e.entity_key)] = _copy(e)
 
+    async def update_entity(self, e: OntologyEntity):
+        if (e.workspace_id, e.entity_key) in self.st.ontology:
+            self.st.ontology[(e.workspace_id, e.entity_key)] = _copy(e)
+
     async def delete(self, workspace_id, entity_key):
+        self.st.ontology_versions = [
+            v for v in self.st.ontology_versions
+            if not (v.tenant_id == self.t and v.workspace_id == workspace_id
+                    and v.entity_key == entity_key)]
         return self.st.ontology.pop((workspace_id, entity_key), None) is not None
+
+    # ---- versions (WS3) ----------------------------------------------------
+
+    async def add_version(self, v: OntologyEntityVersion):
+        self.st.ontology_versions.append(_copy(v))
+
+    async def get_version(self, workspace_id, entity_key, version_no):
+        for v in self.st.ontology_versions:
+            if (v.tenant_id == self.t and v.workspace_id == workspace_id
+                    and v.entity_key == entity_key and v.version_no == version_no):
+                return _copy(v)
+        return None
+
+    async def get_version_by_status(self, workspace_id, entity_key, status):
+        matches = [v for v in self.st.ontology_versions
+                   if v.tenant_id == self.t and v.workspace_id == workspace_id
+                   and v.entity_key == entity_key and v.status == status]
+        if not matches:
+            return None
+        return _copy(max(matches, key=lambda v: v.version_no))
+
+    async def list_versions(self, workspace_id, entity_key):
+        matches = [v for v in self.st.ontology_versions
+                   if v.tenant_id == self.t and v.workspace_id == workspace_id
+                   and v.entity_key == entity_key]
+        return [_copy(v) for v in sorted(matches, key=lambda v: v.version_no, reverse=True)]
+
+    async def update_version(self, v: OntologyEntityVersion):
+        for i, existing in enumerate(self.st.ontology_versions):
+            if (existing.tenant_id == self.t and existing.workspace_id == v.workspace_id
+                    and existing.entity_key == v.entity_key
+                    and existing.version_no == v.version_no):
+                self.st.ontology_versions[i] = _copy(v)
+                return

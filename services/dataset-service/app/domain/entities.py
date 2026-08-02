@@ -238,6 +238,37 @@ class OntologyEntity:
     # relationships: [{name, target, cardinality}] e.g. {name: invoices, target:
     # invoice, cardinality: has_many}
     relationships: list = field(default_factory=list)
+    # The currently-PUBLISHED version this live row mirrors (WS3 governance).
+    # 1 for a freshly-created type; bumped when a four-eyes update is approved.
+    version_no: int = 1
     created_by: str = "unknown"
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+@dataclass(slots=True)
+class OntologyEntityVersion:
+    """One versioned revision of an ontology entity type (WS3 — govern the
+    ontology like semantic models). A proposed UPDATE lands as an ``in_review``
+    version; a DISTINCT approver publishes it (author≠approver), superseding the
+    prior published version and updating the live row. Every revision keeps its
+    definition + a machine diff vs the prior published one, for audit."""
+
+    id: str
+    tenant_id: str
+    workspace_id: str
+    entity_key: str
+    version_no: int
+    # in_review | published | superseded | rejected
+    status: str
+    name: str
+    description: str = ""
+    attributes: list = field(default_factory=list)
+    relationships: list = field(default_factory=list)
+    # Machine diff vs the prior published definition (filled at approve).
+    diff: dict | None = None
+    submitted_by: str = "unknown"
+    approved_by: str | None = None
+    decision_note: str | None = None
+    created_at: datetime | None = None
+    decided_at: datetime | None = None

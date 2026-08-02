@@ -151,6 +151,11 @@ roles:
       - dataset.ontology.list
       - dataset.ontology.create
       - dataset.ontology.delete
+      # WS3: govern the ontology like semantic models — propose a versioned
+      # update and approve/reject it (four-eyes; author≠approver enforced in
+      # dataset-service, so two distinct admins are needed to publish a change).
+      - dataset.ontology.update
+      - dataset.ontology.approve
       # BRD 23: browse the pack catalog + install/uninstall a vertical pack.
       - pack.pack.read
       - pack.install.read
