@@ -38,6 +38,10 @@ MANIFEST: list[str] = [
     "dataset.ontology.list",
     "dataset.ontology.create",
     "dataset.ontology.delete",
+    # WS3: govern the ontology like semantic models — propose a versioned update
+    # (author) and approve/reject it (a DISTINCT reviewer, four-eyes).
+    "dataset.ontology.update",
+    "dataset.ontology.approve",
 ]
 
 

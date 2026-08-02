@@ -206,46 +206,66 @@ the specific type for the case, not the whole workspace graph) — deferred to W
 once the semantic/ER links exist; semantic-layer NL→SQL ontology wiring (WS2);
 governance/versioning of the ontology (WS3).
 
-### Increment (WS2) — link the vertebrae on `entity_key` — BUILT (first slice)
+### Increment 2 (WS3) — govern the ontology like semantic models — BUILT (backend)
 
-Closes the first half of gap #2 ("the three layers are not linked"). Built
-2026-08-02:
+Closes gap #3 (governance asymmetry: semantic models had four-eyes versioning;
+the ontology had none — change = delete+recreate). The ontology now versions and
+updates through a four-eyes flow that mirrors the semantic-service state machine.
 
-- **ER → ontology (dataset-service).** A resolution run now resolves its
-  `entity_type` against the governed ontology registry in the dataset's
-  workspace and reports `ontology_linked` in the run summary + the
-  `dataset.entity_resolution.run` event. A miss is honest metadata, never an
-  error — free-string types and resolve-before-declare workflows keep working.
-  Tests: `test_ws2_ontology_links.py` (linked / undeclared / unknown-dataset
-  never claims a link).
-- **Semantic → ontology (semantic-service).** The semantic `Entity` gains an
-  optional `ontology_entity_key` — the canonical join key
-  (`OntologyEntity.entity_key`) — validated to the restricted name shape at
-  authoring (a typo'd key fails at save), round-tripping through the stored
-  definition, absent stays valid. Tests: `test_ontology_entity_key.py`.
-  Cross-service *existence* validation (does the key exist in the registry?) is
-  deferred — it needs a dataset-service ontology lookup from semantic-service's
-  authoring path; the format gate + the BFF/UI surface land first.
-- **BFF + UI.** `ResolveEntitiesResult.ontologyLinked: Boolean!` (absent
-  downstream → honest false); the ER page's run summary states "Linked to
-  ontology type …" or tells the steward exactly what to declare to link the run
-  into the domain model.
+**Built (dataset-service):**
+- **Schema (`0006_ontology_versioning.py`).** `ontology_entities.version_no` (the
+  live row's currently-published version) + a new `ontology_entity_versions`
+  table (every revision + the review queue: `in_review | published | superseded |
+  rejected`, definition snapshot, machine `diff`, submitter/approver/note),
+  RLS-forced like the rest. Existing types are **backfilled** with a v1
+  `published` version so history is complete from day one.
+- **State machine (`OntologyService`).** `create` now seeds a v1 published
+  version. `propose_update` opens an `in_review` revision (name/description/
+  attributes/relationships overlaid on the live definition) **without touching
+  the live type** — one open proposal at a time (409 otherwise), and the next
+  version number is one past the highest ever used so a rejected/superseded
+  number is never reused. `approve_update` publishes it — **author≠approver
+  enforced** (403 on self-approve), supersedes the prior published version,
+  updates the live row, and records a machine `diff` (name/description changed +
+  attributes/relationships added/removed/changed). `reject_update` closes a
+  proposal, live unchanged. Events: `update_proposed` / `updated` (with diff) /
+  `update_rejected`.
+- **API + RBAC.** `GET/POST /ontology/entities/{key}/versions`,
+  `POST .../versions/{n}/approve`, `POST .../versions/{n}/reject`, gated on new
+  actions `dataset.ontology.update` (propose) and `dataset.ontology.approve`
+  (decide), both granted to the use-case admin so two distinct admins are needed
+  to publish a change. Added to dataset-service's action MANIFEST.
 
-With this, one `entity_key` can be followed ontology type → resolution runs →
-semantic entity — the precondition for per-case typing, "measures of this
-type" queries, and an Entity-360 view.
+**Verified:** `test_ontology_versioning.py` — 11 cases: create seeds v1;
+propose leaves the live type unchanged; self-approve 403 (four-eyes); a distinct
+approver publishes + supersedes + updates the live row + diffs; reject leaves it
+unchanged; one-open-at-a-time 409; re-propose after reject bumps to v3 (no number
+reuse). Existing `test_ontology_api.py` unchanged and green; `ruff` clean; full
+dataset-service unit suite green (bar 3 pre-existing DuckDB-httpfs network-gated
+failures unrelated to this change).
 
-**Deferred in WS2:** existence validation of `ontology_entity_key` at semantic
-authoring; surfacing the semantic↔ontology link in the model-builder UI; the
-explicit ontology-attribute → dataset-column mapping.
+**BFF + UI (built).** The full stack is wired: BFF `ontologyVersions` query +
+`proposeOntologyUpdate` / `approveOntologyUpdate` / `rejectOntologyUpdate`
+mutations (schema snapshot regenerated; 4 resolver tests). On the ontology page
+each type card shows its current `vN` and a **History & review** panel
+(`OntologyVersionPanel`) that lazy-loads the history on expand, lets an author
+**Propose update** (name/description), and lets a distinct reviewer
+**Approve/Reject** an in-review proposal — a self-approve surfaces the real 403
+honestly, a duplicate proposal the real 409. Published rows show a compact diff
+summary. 3 component tests (lazy load + approve vars + propose vars). `tsc`/lint
+clean; ui-web 700 + BFF 420 unit tests green.
+
+**Deferred:** making `relationship.target` navigable + SHACL-style attribute
+contracts (WS4); linking the ontology `entity_key` to the semantic `Entity` and
+ER `entity_type` (WS2).
 
 ### Phasing
-WS1 (this increment) proves the anti-hallucination thesis on the existing
+WS1 (increment 1) proves the anti-hallucination thesis on the existing
 pipeline with the smallest build. WS2 links the layers (unlocks per-case typing +
-cross-dataset reasoning). WS3 closes the governance asymmetry. WS4 makes it a
-navigable, contract-enforcing graph with standards export. WS5 makes it
-self-improving. Each is independently shippable and documented as its own
-increment here.
+cross-dataset reasoning). WS3 (increment 2, backend built) closes the governance
+asymmetry. WS4 makes it a navigable, contract-enforcing graph with standards
+export. WS5 makes it self-improving. Each is independently shippable and
+documented as its own increment here.
 
 **Honest status:** analysis + design complete and code-grounded; **Increment 1
 (WS1) is built and unit-verified** (adapter + shared grounding helpers + both

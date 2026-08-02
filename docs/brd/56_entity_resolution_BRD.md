@@ -108,6 +108,23 @@ record, on what evidence), `merge_candidates` (ER-FR-030 below-auto probable mer
 four-eyes). Every table RLS-enforced (ENABLE + FORCE RLS + tenant_isolation policy).
 Tests: `test_entity_resolution_persistence.py`.
 
+## 5c. Increment 3 — matching-quality depth (per-field comparators)
+BUILT. inc1 scored every field with the Dice bigram — robust on free text but weak on
+short person/org names ("Smith"/"Smyth" spelled apart, single-letter transpositions).
+A `ScoringField` now carries a `comparator` (`app/domain/entity_resolution.py`), one of:
+**dice** (the DEFAULT — existing configs/runs resolve byte-for-byte unchanged),
+**jaro_winkler** (stronger on short names + transpositions), **phonetic** (classic
+Soundex — matches names by sound: "Smith"/"Smyth", "Claire"/"Clair"), **exact**
+(normalized equality as a scored signal for codes/ids) and **numeric** (magnitude
+closeness for amounts/counts). All pure + dependency-free + deterministic; an unknown
+comparator falls back to dice (never raises). The per-field evidence now records which
+comparator produced each score, so a steward reviewing a candidate sees WHY it matched
+(sound vs spelling). Threaded through the config persistence, the dataset-service API
+(`ScoringFieldIn.comparator`) and the BFF (`ScoringFieldInput.comparator`, default
+`"dice"`). Tests: `test_entity_resolution_comparators.py` (11 comparator cases),
+BFF `entity-resolution.test.ts` (comparator pass-through). Deferred: embedding-based
+blocking/scoring; address- and date-aware comparators.
+
 ## 5c. Increment 3 + steward UI — what shipped (materialize + review surface, live-verified 2026-07-18)
 BUILT + live-verified end-to-end (real UI → BFF → dataset-service/agent-runtime, no
 mocks). `build_golden_records` (`entity_resolution.py`) + route

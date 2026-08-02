@@ -4,7 +4,7 @@ import type {
   DatasetDTO, ProfileDTO, LineageDTO, DatasetVersionDTO, ProfileColumnDTO,
   DatasetConsumersDTO, SimilarDatasetDTO, ReprofileDTO,
   ResolveEntitiesDTO, ResolutionRunDTO, ResolutionRunDetailDTO, MergeCandidateDTO,
-  MaterializeResolvedDTO, OntologyEntityDTO,
+  MaterializeResolvedDTO, OntologyEntityDTO, OntologyEntityVersionDTO,
 } from "../clients/dataset.js";
 import type {
   SavedQueryDTO, ExecutionDTO, ResultsDTO, SavedQueryVersionDTO, QueryStatDTO,
@@ -99,6 +99,7 @@ import {
   budgetScopeString,
   type BudgetDTO, type RateCardDTO, type AnomalyDTO,
   type MeterDTO, type ChargebackLineDTO, type ReconciliationDTO, type AdjustmentDTO,
+  type BillingPeriodDTO,
 } from "../clients/usage.js";
 import type {
   ValueSummaryDTO, ValueTrendDTO, ValueAssumptionsDTO, ValueExportDTO, EstimatedValueDTO,
@@ -2329,6 +2330,41 @@ export function mapChargebackLine(d: ChargebackLineDTO) {
   };
 }
 
+/** A closed billing period joined with its export record. `gross`/`netBillable`
+ * are the priced and adjustment-folded totals; `export` is null until the close
+ * job records the period's artifacts. `pushedStatus` distinguishes pushed vs
+ * push-not-configured vs push-failed — surfaced verbatim, never inferred. */
+export function mapBillingPeriod(ctx: GraphQLContext, d: BillingPeriodDTO) {
+  const exp = d.export ?? null;
+  return {
+    __typename: "BillingPeriod" as const,
+    id: d.id,
+    urn: urn(ctx, "usage", "billing-period", d.id),
+    period: d.period,
+    version: d.version,
+    rateCardId: d.rate_card_id || null,
+    rateCardVersion: d.rate_card_version,
+    grossUsd: d.gross_usd,
+    netBillableUsd: d.net_billable_usd,
+    status: d.status,
+    closedAt: d.closed_at,
+    closedBy: d.closed_by || null,
+    export: exp
+      ? {
+          __typename: "BillingExport" as const,
+          csvKey: exp.csv_key || null,
+          csvSha256: exp.csv_sha256 || null,
+          jsonlKey: exp.jsonl_key || null,
+          jsonlSha256: exp.jsonl_sha256 || null,
+          pushedStatus: exp.pushed_status ?? null,
+          pushedReference: exp.pushed_reference ?? null,
+          pushedAt: exp.pushed_at ?? null,
+          createdAt: exp.created_at,
+        }
+      : null,
+  };
+}
+
 export function mapReconciliation(ctx: GraphQLContext, d: ReconciliationDTO) {
   return {
     __typename: "Reconciliation" as const,
@@ -3198,9 +3234,65 @@ export function mapOntologyEntity(d: OntologyEntityDTO) {
       name: r.name,
       target: r.target,
       cardinality: r.cardinality ?? null,
+      // Enriched across the full result set by linkOntologyGraph; the safe
+      // default (unresolved) holds for a single-entity map (e.g. a create echo).
+      targetExists: false,
+      targetName: null as string | null,
     })),
+    versionNo: d.version_no ?? null,
     createdAt: d.created_at ?? null,
   };
+}
+
+export function mapOntologyEntityVersion(d: OntologyEntityVersionDTO) {
+  return {
+    __typename: "OntologyEntityVersion" as const,
+    entityKey: d.entity_key,
+    workspaceId: d.workspace_id,
+    versionNo: d.version_no,
+    status: d.status,
+    name: d.name,
+    description: d.description ?? "",
+    attributes: (d.attributes ?? []).map((a) => ({
+      __typename: "OntologyAttribute" as const,
+      name: a.name,
+      dataType: a.data_type ?? null,
+    })),
+    relationships: (d.relationships ?? []).map((r) => ({
+      __typename: "OntologyRelationship" as const,
+      name: r.name,
+      target: r.target,
+      cardinality: r.cardinality ?? null,
+    })),
+    diff: d.diff ?? null,
+    submittedBy: d.submitted_by,
+    approvedBy: d.approved_by ?? null,
+    decisionNote: d.decision_note ?? null,
+    createdAt: d.created_at ?? null,
+    decidedAt: d.decided_at ?? null,
+  };
+}
+
+/** Resolve each relationship's `target` against the entity types present in the
+ * SAME result set, so the ontology reads as a navigable graph and a dangling
+ * target (a relationship to an undeclared type) is flagged, not silently inert
+ * (Knowledge Spine WS4 — "relationships are inert" gap). Mutates + returns the
+ * mapped entities. */
+export function linkOntologyGraph<
+  T extends {
+    entityKey: string;
+    name: string;
+    relationships: { target: string; targetExists: boolean; targetName: string | null }[];
+  },
+>(entities: T[]): T[] {
+  const nameByKey = new Map(entities.map((e) => [e.entityKey, e.name]));
+  for (const e of entities) {
+    for (const r of e.relationships) {
+      r.targetExists = nameByKey.has(r.target);
+      r.targetName = nameByKey.get(r.target) ?? null;
+    }
+  }
+  return entities;
 }
 
 /** A governed model archetype (experiment-service inc9 registry). */

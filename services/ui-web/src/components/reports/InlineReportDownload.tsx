@@ -23,8 +23,9 @@ import { downloadCsv } from "@/lib/export/csv";
 import { buildChargebackCsv, chargebackFilename } from "@/lib/export/chargeback";
 import { buildAgentInventoryCsv, agentInventoryFilename } from "@/lib/export/agentInventory";
 import { buildValueReportCsv, valueReportFilename } from "@/lib/export/value";
+import { buildBillingPeriodsCsv, billingPeriodsFilename } from "@/lib/export/billingPeriods";
 import { CaseExportButton } from "@/components/cases/CaseExportButton";
-import type { ChargebackLine, AgentFleetRow, ValueSummary } from "@/lib/graphql/types";
+import type { ChargebackLine, AgentFleetRow, ValueSummary, BillingPeriod } from "@/lib/graphql/types";
 
 /** Previous calendar month (UTC) — chargeback is only served for finalized
  * months, so the current month is never useful (mirrors admin/usage). */
@@ -168,6 +169,42 @@ function InlineValueDownload() {
   );
 }
 
+/** Billing periods — all closed periods for the tenant (no period filter), the
+ * finance-close view behind the invoice. Fetched on click; empty until B2's
+ * monthly close runs. */
+function InlineBillingPeriodsDownload() {
+  const qc = useQueryClient();
+  const toast = useDownloadToast();
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const rows = await qc.fetchQuery<BillingPeriod[]>({
+        queryKey: qk.billingPeriods(undefined),
+        queryFn: () =>
+          graphqlRequest<ops.BillingPeriodsResult>(ops.BILLING_PERIODS, {}).then((r) => r.billingPeriods),
+      });
+      if (!rows || rows.length === 0) {
+        toast.empty("No closed billing periods yet (the monthly close job hasn't run for this tenant).");
+        return;
+      }
+      downloadCsv(billingPeriodsFilename(), buildBillingPeriodsCsv(rows));
+    } catch (e) {
+      toast.failed(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Button variant="outline" size="sm" className="h-8 w-full" disabled={busy} onClick={run}>
+      {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Download className="size-3.5" aria-hidden />}
+      Download CSV
+    </Button>
+  );
+}
+
 /** Case export reuses the existing async export operation (kick off → poll →
  * download via the authed proxy) — the same control the /cases page uses, run
  * here without a status filter (the whole worklist). */
@@ -183,6 +220,7 @@ export const INLINE_RUNNERS: Record<string, React.ComponentType> = {
   chargeback: InlineChargebackDownload,
   "agent-inventory": InlineAgentInventoryDownload,
   "value-roi": InlineValueDownload,
+  "billing-periods": InlineBillingPeriodsDownload,
   "case-export": InlineCaseExport,
 };
 

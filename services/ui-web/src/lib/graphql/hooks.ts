@@ -3672,6 +3672,19 @@ export function useChargebackReport(month: string) {
   });
 }
 
+/** A tenant's closed billing periods, newest first, each joined with its export
+ * record (usage-service GET /billing/periods, BRD 67 slice 3). Empty until the
+ * monthly close job runs — never fabricated. */
+export function useBillingPeriods(period?: string, first?: number) {
+  return useQuery({
+    queryKey: qk.billingPeriods(period),
+    queryFn: () =>
+      graphqlRequest<ops.BillingPeriodsResult>(ops.BILLING_PERIODS, { period, first }).then(
+        (r) => r.billingPeriods,
+      ),
+  });
+}
+
 /** Metered-vs-provider-bill reconciliations (usage-service GET
  * /reconciliations, USG-FR-070). Platform-only — a plain list, not paginated. */
 export function useReconciliations() {
@@ -6008,6 +6021,58 @@ export function useDeleteOntologyEntity() {
     mutationFn: (v: { entityKey: string; workspaceId: string }) =>
       graphqlRequest<ops.DeleteOntologyEntityResult>(ops.DELETE_ONTOLOGY_ENTITY, v),
     onSuccess: () => client.invalidateQueries({ queryKey: ["data", "ontologyEntities"] }),
+  });
+}
+
+// ---- WS3: ontology versioning + four-eyes update ----------------------------
+export function useOntologyVersions(entityKey: string, workspaceId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.ontologyVersions(entityKey, workspaceId),
+    queryFn: () =>
+      graphqlRequest<ops.OntologyVersionsResult>(ops.ONTOLOGY_VERSIONS, { entityKey, workspaceId }).then(
+        (r) => r.ontologyVersions,
+      ),
+    enabled: enabled && !!entityKey && !!workspaceId,
+  });
+}
+
+/** Invalidate both the version history and the live entity list after any
+ * proposal/decision so the card's version + the review queue re-read. */
+function invalidateOntology(client: ReturnType<typeof useQueryClient>) {
+  client.invalidateQueries({ queryKey: ["data", "ontologyEntities"] });
+  client.invalidateQueries({ queryKey: ["data", "ontologyVersions"] });
+}
+
+export function useProposeOntologyUpdate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      workspaceId: string;
+      entityKey: string;
+      name?: string;
+      description?: string;
+      attributes?: { name: string; dataType?: string }[];
+      relationships?: { name: string; target: string; cardinality?: string }[];
+    }) => graphqlRequest<ops.ProposeOntologyUpdateResult>(ops.PROPOSE_ONTOLOGY_UPDATE, { input }),
+    onSuccess: () => invalidateOntology(client),
+  });
+}
+
+export function useApproveOntologyUpdate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { entityKey: string; workspaceId: string; versionNo: number; note?: string }) =>
+      graphqlRequest<ops.ApproveOntologyUpdateResult>(ops.APPROVE_ONTOLOGY_UPDATE, v),
+    onSuccess: () => invalidateOntology(client),
+  });
+}
+
+export function useRejectOntologyUpdate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { entityKey: string; workspaceId: string; versionNo: number; note?: string }) =>
+      graphqlRequest<ops.RejectOntologyUpdateResult>(ops.REJECT_ONTOLOGY_UPDATE, v),
+    onSuccess: () => invalidateOntology(client),
   });
 }
 

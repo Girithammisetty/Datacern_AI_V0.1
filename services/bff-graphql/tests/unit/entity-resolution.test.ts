@@ -122,6 +122,31 @@ describe("entity-resolution resolvers (BRD 56 steward surface)", () => {
     expect(call?.headers.authorization).toMatch(/^Bearer /);
   });
 
+  it("threads a scoring field's comparator through to the downstream config", async () => {
+    const server = makeApolloServer(cfg);
+    const { fetchImpl, requests } = downstream();
+    const ctx = await makeTestContext(fetchImpl);
+
+    const res = await server.executeOperation(
+      { query: `mutation {
+        resolveEntities(datasetId:"ds-1", input:{
+          pkColumn:"claim_id",
+          config:{ entityType:"claimant",
+            scoringFields:[{ column:"name", weight:2.0, comparator:"jaro_winkler" }, { column:"dob" }] }
+        }) { runId }
+      }` },
+      { contextValue: ctx },
+    );
+    const body = res.body.kind === "single" ? res.body.singleResult : null;
+    expect(body?.errors).toBeUndefined();
+    const call = requests.find((r) => r.path === "/api/v1/datasets/ds-1/entity-resolution");
+    expect((call?.body as any).config.scoring_fields).toEqual([
+      { column: "name", weight: 2.0, comparator: "jaro_winkler" },
+      // A field with no comparator defaults to "dice" at the schema layer.
+      { column: "dob", weight: 1.0, comparator: "dice" },
+    ]);
+  });
+
   it("resolutionRuns + resolutionRun expose runs, clusters and member lineage", async () => {
     const server = makeApolloServer(cfg);
     const { fetchImpl } = downstream();

@@ -20,7 +20,27 @@ export interface OntologyEntityDTO {
   description: string;
   attributes: OntologyAttributeDTO[];
   relationships: OntologyRelationshipDTO[];
+  version_no?: number;
   created_at?: string | null;
+}
+
+/** One versioned revision of an ontology type + the four-eyes review state
+ * (WS3). `status`: in_review | published | superseded | rejected. */
+export interface OntologyEntityVersionDTO {
+  entity_key: string;
+  workspace_id: string;
+  version_no: number;
+  status: string;
+  name: string;
+  description: string;
+  attributes: OntologyAttributeDTO[];
+  relationships: OntologyRelationshipDTO[];
+  diff?: Record<string, unknown> | null;
+  submitted_by: string;
+  approved_by?: string | null;
+  decision_note?: string | null;
+  created_at?: string | null;
+  decided_at?: string | null;
 }
 
 export interface DatasetDTO {
@@ -167,6 +187,8 @@ export interface LineageDTO {
 export interface ScoringFieldDTO {
   column: string;
   weight?: number;
+  /** dice (default) | jaro_winkler | phonetic | exact | numeric. */
+  comparator?: string;
 }
 
 /** Resolution config the steward runs (dataset-service ResolutionConfigIn). */
@@ -518,5 +540,59 @@ export class DatasetClient {
       { query: { "filter[workspace_id]": workspaceId } },
     );
     return true;
+  }
+
+  // ---- ontology versioning + four-eyes update (WS3) -------------------------
+
+  /** GET /ontology/entities/{key}/versions — revision history + any in-review
+   * proposal, newest first (needs dataset.ontology.read). */
+  async ontologyVersions(entityKey: string, workspaceId: string): Promise<OntologyEntityVersionDTO[]> {
+    const r = await this.http.get<{ data: OntologyEntityVersionDTO[] }>(
+      `/api/v1/ontology/entities/${encodeURIComponent(entityKey)}/versions`,
+      { query: { "filter[workspace_id]": workspaceId } },
+    );
+    return r.data ?? [];
+  }
+
+  /** POST /ontology/entities/{key}/versions — open an in-review update (needs
+   * dataset.ontology.update). The live type is unchanged until approved. */
+  async proposeOntologyUpdate(entityKey: string, body: {
+    workspace_id: string;
+    name?: string;
+    description?: string;
+    attributes?: OntologyAttributeDTO[];
+    relationships?: OntologyRelationshipDTO[];
+  }): Promise<OntologyEntityVersionDTO> {
+    const r = await this.http.post<{ data: OntologyEntityVersionDTO } | OntologyEntityVersionDTO>(
+      `/api/v1/ontology/entities/${encodeURIComponent(entityKey)}/versions`,
+      { body },
+    );
+    return unwrap<OntologyEntityVersionDTO>(r);
+  }
+
+  /** POST .../versions/{n}/approve — publish an in-review update (four-eyes:
+   * approver ≠ submitter, enforced downstream; needs dataset.ontology.approve). */
+  async approveOntologyUpdate(entityKey: string, versionNo: number, body: {
+    workspace_id: string;
+    note?: string;
+  }): Promise<OntologyEntityVersionDTO> {
+    const r = await this.http.post<{ data: OntologyEntityVersionDTO } | OntologyEntityVersionDTO>(
+      `/api/v1/ontology/entities/${encodeURIComponent(entityKey)}/versions/${versionNo}/approve`,
+      { body },
+    );
+    return unwrap<OntologyEntityVersionDTO>(r);
+  }
+
+  /** POST .../versions/{n}/reject — close an in-review update, live unchanged
+   * (needs dataset.ontology.approve). */
+  async rejectOntologyUpdate(entityKey: string, versionNo: number, body: {
+    workspace_id: string;
+    note?: string;
+  }): Promise<OntologyEntityVersionDTO> {
+    const r = await this.http.post<{ data: OntologyEntityVersionDTO } | OntologyEntityVersionDTO>(
+      `/api/v1/ontology/entities/${encodeURIComponent(entityKey)}/versions/${versionNo}/reject`,
+      { body },
+    );
+    return unwrap<OntologyEntityVersionDTO>(r);
   }
 }

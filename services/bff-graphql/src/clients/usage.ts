@@ -139,6 +139,36 @@ export interface ChargebackLineDTO {
   total_usd: number;
 }
 
+/** usage-service domain.BillingPeriodRecord (BRD 67 slice 3, VMB-FR-023): a
+ * persisted, closed billing period joined with its export artifact record.
+ * `export` is null when the period is closed but its artifacts haven't been
+ * recorded yet. Gross is the priced total; net_billable folds in adjustments. */
+export interface BillingExportDTO {
+  jsonl_key: string;
+  jsonl_sha256: string;
+  csv_key: string;
+  csv_sha256: string;
+  pushed_status?: string | null;
+  pushed_reference?: string | null;
+  pushed_at?: string | null;
+  created_at: string;
+}
+
+export interface BillingPeriodDTO {
+  id: string;
+  tenant_id: string;
+  period: string;
+  version: number;
+  rate_card_id: string;
+  rate_card_version: number;
+  gross_usd: number;
+  net_billable_usd: number;
+  status: string;
+  closed_at: string;
+  closed_by: string;
+  export?: BillingExportDTO | null;
+}
+
 /** usage-service domain.Reconciliation (USG-FR-070): monthly provider-bill vs
  * metered comparison. status: pending | matched | variance | adjusted |
  * acknowledged. */
@@ -227,6 +257,16 @@ export class UsageClient {
   chargebackReport(month: string): Promise<Page<ChargebackLineDTO>> {
     return this.http.get<Page<ChargebackLineDTO>>("/api/v1/reports/chargeback", {
       query: { month },
+    });
+  }
+
+  /** GET /billing/periods — a tenant's closed billing periods, newest first,
+   * each joined with its export record (BRD 67 slice 3; needs
+   * usage.report.read). Optional `period` (YYYY-MM) filter; `limit` default 50,
+   * max 200 downstream. Empty until the B2 close job runs for a month. */
+  billingPeriods(period?: string, limit?: number): Promise<Page<BillingPeriodDTO>> {
+    return this.http.get<Page<BillingPeriodDTO>>("/api/v1/billing/periods", {
+      query: { period, limit },
     });
   }
 
