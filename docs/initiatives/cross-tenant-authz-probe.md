@@ -1,6 +1,6 @@
 # Cross-tenant authorization probe ("pen-test-lite")
 
-**Status:** done — 2026-07-23
+**Status:** done — 2026-07-23 · **extended 2026-08-02** (memory-service + agent-runtime SFT-dataset by-id reads added after the gap-closure campaign widened the tenant-scoped surface; the new targets are wired into `cross_tenant_authz_probe.py` and syntax-verified, and need one live re-run against a booted stack to record fresh PASS evidence)
 **Commits:** (uncommitted; this change set)  ·  **Related:** BRD 58 production hardening (MASTER-FR-003 tenant isolation, AC-13 cross-tenant denial); the RLS-level `TestSiemConfigTwoTenantsNoCrossDelivery` in `services/audit-service/test/integration/siemconfig_isolation_test.go` (BRD 59 WS2) is the internal DB-level analogue of what this probe proves externally.
 
 ---

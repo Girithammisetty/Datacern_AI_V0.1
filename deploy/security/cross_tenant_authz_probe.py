@@ -70,6 +70,10 @@ PIPELINE_URL = os.environ.get("PIPELINE_URL", c.PIPELINE)
 # money-path boot (deploy/e2e/config.env's PORT_AUDIT comment) -- not in
 # common.py's service URL list, so it gets its own default here.
 AUDIT_URL = os.environ.get("AUDIT_URL", "http://localhost:8322")
+# Campaign surfaces (2026-08-02 gap closure): the new tenant-scoped by-id reads
+# a cross-tenant probe should now also exercise.
+MEMORY_URL = os.environ.get("MEMORY_URL", getattr(c, "MEMORY", "http://localhost:8307"))
+AGENT_RUNTIME_URL = os.environ.get("AGENT_RUNTIME_URL", getattr(c, "AGENT_RUNTIME", "http://localhost:8306"))
 
 PERSONAS_PATH = os.path.join(REPO_ROOT, "local", "run", "personas.json")
 MARKER = f"CROSS_TENANT_PROBE_{uuid.uuid4().hex[:12]}_SHOULD_NOT_APPLY"
@@ -242,6 +246,8 @@ def main():
         "dataset.dataset.read", "dataset.dataset.update",
         "pipeline.template.read", "pipeline.template.update",
         "audit.event.read",
+        # campaign surfaces:
+        "ai.memory.read", "ai.agent_session.read",
     ]
     tok_a = mint(persona_a, scopes)
     tok_b = mint(persona_b, scopes)
@@ -277,6 +283,25 @@ def main():
     run_service_probe(
         "audit-service", AUDIT_URL, audit_list_path, "/api/v1/audit/events/{id}", "event_id",
         ["audit.event.read"], sess_a, sess_b,
+        write=None,
+    )
+
+    # memory-service: a scoped memory read is one of the highest-sensitivity
+    # new by-id surfaces (agent recall + PII) -- tenant B's id must 404 for A.
+    # Read-only: the update path re-runs injection screening and is not a clean
+    # isolation signal.
+    run_service_probe(
+        "memory-service", MEMORY_URL, "/api/v1/memories?limit=5", "/api/v1/memories/{id}", "memory_id",
+        ["ai.memory.read"], sess_a, sess_b,
+        write=None,
+    )
+
+    # agent-runtime: an SFT dataset is a tenant's curated training corpus
+    # (consented transcripts) -- a cross-tenant read would leak training data.
+    run_service_probe(
+        "agent-runtime (sft-datasets)", AGENT_RUNTIME_URL,
+        "/api/v1/sft-datasets?limit=5", "/api/v1/sft-datasets/{id}", "dataset_id",
+        ["ai.agent_session.read"], sess_a, sess_b,
         write=None,
     )
 
