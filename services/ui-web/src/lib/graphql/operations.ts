@@ -150,6 +150,8 @@ import type {
   DecisionModel,
   CreateDecisionModelInput,
   BatchEvaluateResult,
+  DecisionOutcomeLabel,
+  DecisionEffectiveness,
   ResolutionRun,
   ResolutionRunDetail,
   MergeCandidate,
@@ -495,6 +497,38 @@ export const NEW_DECISION_MODEL_VERSION = /* GraphQL */ `
   }
 `;
 export interface NewDecisionModelVersionResult { newDecisionModelVersion: DecisionModel }
+
+// ---- BRD 55: decision outcome monitoring -----------------------------------
+const OUTCOME_LABEL_FIELDS = `
+  id decisionRef decisionType producer decidedOutcome realizedOutcome correct
+  labelSource note labeledBy
+`;
+
+export const DECISION_OUTCOME = /* GraphQL */ `
+  query DecisionOutcome($decisionRef: ID!) {
+    decisionOutcome(decisionRef: $decisionRef) { ${OUTCOME_LABEL_FIELDS} }
+  }
+`;
+export interface DecisionOutcomeResult { decisionOutcome: DecisionOutcomeLabel | null }
+
+export const DECISION_EFFECTIVENESS = /* GraphQL */ `
+  query DecisionEffectiveness($by: DecisionEffectivenessBy!, $decisionType: String) {
+    decisionEffectiveness(by: $by, decisionType: $decisionType) {
+      by labeledDecisions
+      groups { key total correct incorrect unknown effectivenessRate }
+    }
+  }
+`;
+export interface DecisionEffectivenessResult { decisionEffectiveness: DecisionEffectiveness }
+
+export const MARK_DECISION_OUTCOME = /* GraphQL */ `
+  mutation MarkDecisionOutcome($decisionRef: ID!, $input: MarkDecisionOutcomeInput!, $idempotencyKey: String!) {
+    markDecisionOutcome(decisionRef: $decisionRef, input: $input, idempotencyKey: $idempotencyKey) {
+      ${OUTCOME_LABEL_FIELDS}
+    }
+  }
+`;
+export interface MarkDecisionOutcomeResult { markDecisionOutcome: DecisionOutcomeLabel }
 
 // ---- BRD 56: entity resolution (steward surface) ---------------------------
 const RESOLUTION_RUN_FIELDS = /* GraphQL */ `
@@ -1519,6 +1553,15 @@ export interface EscalateCaseResult {
   escalateCase: Case;
 }
 
+export const CASE_COMMENTS = /* GraphQL */ `
+  query CaseComments($caseId: ID!, $limit: Int, $before: DateTime) {
+    caseComments(caseId: $caseId, limit: $limit, before: $before) {
+      id caseId authorId author { id fullName email } body editedAt createdAt
+    }
+  }
+`;
+export interface CaseCommentsResult { caseComments: CaseComment[] }
+
 export const ADD_CASE_COMMENT = /* GraphQL */ `
   mutation AddCaseComment($caseId: ID!, $body: String!, $idempotencyKey: String) {
     addCaseComment(caseId: $caseId, body: $body, idempotencyKey: $idempotencyKey) {
@@ -1532,7 +1575,7 @@ export interface AddCaseCommentResult {
 
 export const UPDATE_CASE_COMMENT = /* GraphQL */ `
   mutation UpdateCaseComment($id: ID!, $body: String!) {
-    updateCaseComment(id: $id, body: $body) { id body }
+    updateCaseComment(id: $id, body: $body) { id caseId authorId body editedAt createdAt }
   }
 `;
 export interface UpdateCaseCommentResult {

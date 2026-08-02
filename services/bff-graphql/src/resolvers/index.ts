@@ -12,7 +12,7 @@ import { draftCaseFields, type DraftCaseFieldsArgs } from "./draftFields.js";
 import type { ChartDataDTO, ChartDTO } from "../clients/chart.js";
 import type { ChartSourceInputBody } from "../clients/chart.js";
 import { budgetScopeString } from "../clients/usage.js";
-import type { AgentKillSwitchDTO, AgentDefinitionDTO, TenantAgentConfigDTO } from "../clients/agent.js";
+import type { AgentKillSwitchDTO, AgentDefinitionDTO, TenantAgentConfigDTO, AgentRolloutDTO } from "../clients/agent.js";
 import type { EvalGateResultDTO } from "../clients/eval.js";
 import {
   mapUser, mapDataset, mapProfile, mapCase, mapDashboard, mapChart,
@@ -57,7 +57,7 @@ import {
   mapWebhookEndpoint, mapWebhookDelivery, mapNotificationTemplate, mapEmailSuppression,
   mapTool, mapToolVersion, mapToolHealth, mapTenantToolSettings, mapByoSubmission,
   mapAgentDefinition, mapAgentVersionInfo, mapTenantAgentConfig, mapAgentRunListItem,
-  mapDecisionModel, mapBatchEvaluate,
+  mapDecisionModel, mapBatchEvaluate, mapOutcomeLabel, mapDecisionEffectiveness,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapModelArchetype,
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
@@ -515,6 +515,18 @@ async function buildAgentFleetRows(
     if (!existing || (k.created_at ?? "") > (existing.created_at ?? "")) activeKillByAgent.set(k.agent_key, k);
   }
 
+  // Live rollout state (agent-runtime GET /registry/rollouts): ONE call for
+  // the fleet, bucketed by agent. Unlike kills this column HAS an honest
+  // degraded value (UNKNOWN), so a failure here degrades the rollout chip
+  // instead of failing the query.
+  let activeRolloutByAgent: Map<string, AgentRolloutDTO> | null = null;
+  try {
+    const rollouts = await ctx.clients.agent.rollouts({ status: "active" });
+    activeRolloutByAgent = new Map(rollouts.filter((r) => r.agent_key).map((r) => [r.agent_key, r]));
+  } catch (e) {
+    if (!(e instanceof DownstreamError)) throw e;
+  }
+
   // Fleet-wide spend: ONE grouped call for the requested period + ONE for the
   // prior window of equal length (trend7dPct's diff), bucketed by agent_id
   // client-side — never one call per agent (ACT-NFR-001).
@@ -577,8 +589,17 @@ async function buildAgentFleetRows(
       const tenantConfig = tenantConfigSettled.ok ? tenantConfigSettled.value : null;
       const guardrailPolicy = tenantConfig?.guardrail_policy;
 
+      // PINNED wins (runtime resolve order gives a pin precedence over any
+      // rollout); else the active rollout record names the mode; else STABLE.
+      // UNKNOWN only when the rollouts read itself failed (degraded, not
+      // guessed).
+      const activeRollout = activeRolloutByAgent?.get(d.agent_key) ?? null;
       const rollout: FleetRow["activeVersion"]["rollout"] =
-        tenantConfig?.pinned_version != null ? "PINNED" : "UNKNOWN";
+        tenantConfig?.pinned_version != null ? "PINNED"
+        : activeRolloutByAgent == null ? "UNKNOWN"
+        : activeRollout?.mode === "canary" ? "CANARY"
+        : activeRollout?.mode === "shadow" ? "SHADOW"
+        : "STABLE";
 
       const gate = gateSettled.ok ? gateSettled.value : null;
       const evalUnavailable = !gateSettled.ok;
@@ -1426,6 +1447,15 @@ export const resolvers = {
       return toConnection(page, (d) => mapCaseActivity(ctx, d));
     },
 
+    caseComments: (
+      _p: unknown,
+      a: { caseId: string; limit?: number; before?: string | null },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.case
+        .listComments(a.caseId, { limit: a.limit ?? 50, before: a.before ?? undefined })
+        .then((rows) => rows.map((d) => mapCaseComment(ctx, d))),
+
     caseOperation: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.case.operation(a.id).then(mapCaseOperation)),
 
@@ -2062,6 +2092,19 @@ export const resolvers = {
 
     decisionModelVersions: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       ctx.clients.agent.decisionModelVersions(a.id).then((rows) => rows.map(mapDecisionModel)),
+
+    // ---- BRD 55: decision outcome monitoring --------------------------------
+    decisionOutcome: (_p: unknown, a: { decisionRef: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.agent.decisionOutcome(a.decisionRef).then(mapOutcomeLabel)),
+
+    decisionEffectiveness: (
+      _p: unknown,
+      a: { by: "DECISION_TYPE" | "PRODUCER"; decisionType?: string | null },
+      ctx: GraphQLContext,
+    ) =>
+      ctx.clients.agent
+        .decisionEffectiveness(a.by === "PRODUCER" ? "producer" : "decision_type", a.decisionType ?? undefined)
+        .then(mapDecisionEffectiveness),
 
     // ---- BRD 56: entity resolution (steward surface) ------------------------
     resolutionRuns: (_p: unknown, a: { datasetId: string; limit?: number }, ctx: GraphQLContext) =>
@@ -5176,6 +5219,38 @@ export const resolvers = {
         a.idempotencyKey,
       );
       return mapDecisionModel(d);
+    },
+
+    // ---- BRD 55: decision outcome monitoring --------------------------------
+    markDecisionOutcome: async (
+      _p: unknown,
+      a: {
+        decisionRef: string;
+        input: {
+          realizedOutcome: string;
+          labelSource?: string | null;
+          note?: string | null;
+          decisionType?: string | null;
+          producer?: string | null;
+          decidedOutcome?: string | null;
+        };
+        idempotencyKey?: string;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.markDecisionOutcome(
+        a.decisionRef,
+        {
+          realized_outcome: a.input.realizedOutcome,
+          label_source: a.input.labelSource ?? undefined,
+          note: a.input.note ?? undefined,
+          decision_type: a.input.decisionType ?? undefined,
+          producer: a.input.producer ?? undefined,
+          decided_outcome: a.input.decidedOutcome ?? undefined,
+        },
+        a.idempotencyKey,
+      );
+      return mapOutcomeLabel(d);
     },
 
     // ---- BRD 56: entity resolution (steward surface) ------------------------

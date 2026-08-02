@@ -97,6 +97,7 @@ func (s *Server) Router() http.Handler {
 			r.With(s.RequireAction(authz.ActionCaseRead), s.RequireCaseWorkspace).Get("/{id}", s.handleGetCase)
 			r.With(s.RequireAction(authz.ActionCaseUpdate), s.RequireCaseWorkspace).Patch("/{id}", s.handlePatchCase)
 			r.With(s.RequireAction(authz.ActionCaseRead), s.RequireCaseWorkspace).Get("/{id}/timeline", s.handleTimeline)
+			r.With(s.RequireAction(authz.ActionCaseRead), s.RequireCaseWorkspace).Get("/{id}/comments", s.handleListComments)
 			r.With(s.RequireAction(authz.ActionCaseComment), s.RequireCaseWorkspace).Post("/{id}/comments", s.handleAddComment)
 
 			// Evidence attachments (task #77): list/upload/download files on a case.

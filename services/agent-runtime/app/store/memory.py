@@ -204,6 +204,17 @@ class InMemoryStore:
     async def update_rollout(self, r: Rollout) -> None:
         self._rollouts[r.rollout_id] = copy.copy(r)
 
+    async def list_rollouts(self, agent_key: str | None = None, status: str | None = None,
+                            cell: str | None = None) -> list[Rollout]:
+        # Newest first: dict insertion order is creation order (update_rollout
+        # re-assigns in place, keeping the original slot), so reverse it —
+        # mirrors sql.py's ORDER BY created_at DESC.
+        rows = [r for r in self._rollouts.values()
+                if (agent_key is None or r.agent_key == agent_key)
+                and (status is None or r.status == status)
+                and (cell is None or r.cell == cell)]
+        return [copy.copy(r) for r in reversed(rows)]
+
     # ---- kill switches -----------------------------------------------------
     async def create_kill_switch(self, ks: KillSwitch) -> None:
         ks = copy.copy(ks)

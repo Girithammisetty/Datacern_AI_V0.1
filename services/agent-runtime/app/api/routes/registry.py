@@ -579,6 +579,29 @@ async def delete_retrain_watch(request: Request, watch_id: str):
     return {"data": {"id": watch_id, "deleted": True}}
 
 
+def _rollout_view(r: Rollout) -> dict:
+    return {"rollout_id": r.rollout_id, "agent_key": r.agent_key, "cell": r.cell,
+            "mode": r.mode, "candidate_version": r.candidate_version,
+            "baseline_version": r.baseline_version, "pct": r.pct,
+            "tenant_filter": r.tenant_filter, "status": r.status}
+
+
+@router.get("/rollouts")
+async def list_rollouts(request: Request, agent_key: str | None = None,
+                        status: str | None = None, cell: str | None = None):
+    """List rollouts, newest first, optionally filtered by agent_key/status/cell.
+    This is the live-rollout-state read the BFF's AgentFleetRollout enum needs
+    (bff-graphql schema.graphql: without it CANARY/SHADOW resolve to UNKNOWN).
+    Control-plane read feeding the tenant-facing Control Tower fleet view, so it
+    is gated like the kill-switch LIST (ai.agent.read capability — operator or
+    tenant admin), not operator-only like the rollout writes."""
+    principal = await principal_of(request)
+    await _require_agent_cap(request, principal, "ai.agent.read")
+    c = request.app.state.container
+    rows = await c.store.list_rollouts(agent_key=agent_key, status=status, cell=cell)
+    return {"data": [_rollout_view(r) for r in rows]}
+
+
 @router.post("/rollouts")
 async def create_rollout(request: Request, body: dict = Body(...)):
     principal = await principal_of(request)

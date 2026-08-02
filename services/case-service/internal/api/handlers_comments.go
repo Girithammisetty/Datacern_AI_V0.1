@@ -38,6 +38,33 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusCreated, c)
 }
 
+// handleListComments returns a case's non-deleted comments newest-first
+// (CASE-FR-024). Closes the BFF contract gap: previously a comment body was
+// only readable on the create response or via the timeline join. Paginated by
+// created_at via `limit` + `before` (RFC3339) query params.
+func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
+	tenant, id, ok := s.pathCase(w, r)
+	if !ok {
+		return
+	}
+	limit := atoiDefault(r.URL.Query().Get("limit"), 50)
+	var before *time.Time
+	if b := r.URL.Query().Get("before"); b != "" {
+		if t, err := time.Parse(time.RFC3339, b); err == nil {
+			before = &t
+		}
+	}
+	comments, err := s.Store.ListComments(r.Context(), tenant, id, limit, before)
+	if err != nil {
+		s.writeLookupErr(w, r, err)
+		return
+	}
+	if comments == nil {
+		comments = []domain.Comment{}
+	}
+	writeData(w, http.StatusOK, comments)
+}
+
 func (s *Server) handleEditComment(w http.ResponseWriter, r *http.Request) {
 	op, ok := opFrom(r)
 	if !ok {
@@ -70,7 +97,15 @@ func (s *Server) handleEditComment(w http.ResponseWriter, r *http.Request) {
 		s.writeLookupErr(w, r, err)
 		return
 	}
-	writeData(w, http.StatusOK, map[string]any{"id": cid, "body": req.Body})
+	// Echo the FULL updated comment (re-fetched, so body and edited_at are the
+	// stored values) — the BFF maps this response onto CaseComment, and a bare
+	// {id, body} echo left case_id/author_id/created_at null downstream.
+	updated, err := s.Store.GetComment(r.Context(), op.Tenant, cid)
+	if err != nil {
+		s.writeLookupErr(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, updated)
 }
 
 func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {

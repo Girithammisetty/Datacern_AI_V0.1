@@ -1866,11 +1866,9 @@ export const typeDefs = gql`
 
   # ============================ Tier 4b: case ops ==============================
   """
-  A case comment (case-service POST /cases/{id}/comments). CONTRACT GAP: the
-  service exposes NO "list comments" route — a body is only ever available on
-  the create response; the timeline carries comment ids only. \`caseId\`/
-  \`authorId\`/\`createdAt\` are null on the updateCaseComment response because
-  PATCH /comments/{cid} echoes only {id, body}.
+  A case comment (case-service GET /cases/{id}/comments + POST). Listable
+  newest-first via Query.caseComments; create AND update responses both carry
+  the full comment.
   """
   type CaseComment {
     id: ID!
@@ -1885,9 +1883,9 @@ export const typeDefs = gql`
 
   """
   One case timeline entry (case-service GET /cases/{id}/timeline, CASE-FR-025)
-  — the merged event+comment feed. \`comment.added\` events carry {comment_id}
-  in newValue (the body itself is NOT retrievable after creation; see
-  CaseComment). Needs case.case.read.
+  — the merged event+comment feed. \`comment.added\` events carry {comment_id,
+  body} in newValue (the service joins the live comment body in place); the
+  full comment list is Query.caseComments. Needs case.case.read.
   """
   type CaseActivity {
     id: ID!
@@ -4001,12 +3999,11 @@ export const typeDefs = gql`
   # ==========================================================================
   enum AgentFleetKind { PLATFORM CUSTOM EXTERNAL }
   enum AgentFleetLifecycle { ACTIVE KILLED QUARANTINED DEPRECATED }
-  """STABLE/CANARY/SHADOW/PINNED per the design; UNKNOWN is a deliberate
-  addition (docs/initiatives/agent-control-tower.md §2.6 flags NO backend GET
-  route exists for live rollout state — only PINNED is honestly derivable
-  today, from TenantAgentConfig.pinnedVersion). CANARY/SHADOW cannot be told
-  apart from STABLE without that route, so they resolve to UNKNOWN rather than
-  a fabricated STABLE guess."""
+  """Derived from live state: PINNED wins (TenantAgentConfig.pinnedVersion set,
+  highest precedence per the runtime's resolve order), else the agent's ACTIVE
+  rollout record (agent-runtime GET /registry/rollouts) yields CANARY or SHADOW,
+  else STABLE. UNKNOWN survives only for an honest degradation — the rollouts
+  read failing — never as a guess."""
   enum AgentFleetRollout { STABLE CANARY SHADOW PINNED UNKNOWN }
   enum EvalGateStatusValue { PASS FAIL STALE NONE }
 
@@ -4404,6 +4401,10 @@ export const typeDefs = gql`
     """A case's merged event+comment timeline, cursor-paginated newest-first
     (case-service GET /cases/{id}/timeline). Needs case.case.read."""
     caseTimeline(caseId: ID!, first: Int = 50, after: String): CaseActivityConnection!
+    """The case's comments, newest-first (case-service GET /cases/{id}/comments).
+    \`before\` (RFC3339) pages by created_at keyset. Needs case.case.read; 404 on
+    an unknown case surfaces as an error, not an empty list."""
+    caseComments(caseId: ID!, limit: Int = 50, before: DateTime): [CaseComment!]!
     """Poll an async case bulk/export operation (case-service GET
     /operations/{id}). Needs case.case.read."""
     caseOperation(id: ID!): CaseOperation
@@ -4749,6 +4750,16 @@ export const typeDefs = gql`
     """Change log: every version of one logical table, newest first."""
     decisionModelVersions(id: ID!): [DecisionModel!]!
 
+    # ---- BRD 55: decision outcome monitoring ----------------------------------
+    """The realized-outcome label on one decision (agent-runtime GET
+    /decisions/{ref}/outcome), or null when none is recorded. decisionRef is a
+    proposal id or decision URN. Needs case.case.read."""
+    decisionOutcome(decisionRef: ID!): DecisionOutcomeLabel
+    """Decision-effectiveness KPIs (agent-runtime GET /decision-effectiveness,
+    OM-FR-020): decided-vs-realized agreement grouped by DECISION_TYPE or
+    PRODUCER. Correlational only (BR-3). Needs case.case.read."""
+    decisionEffectiveness(by: DecisionEffectivenessBy! = DECISION_TYPE, decisionType: String): DecisionEffectiveness!
+
     # ---- BRD 56: entity resolution (steward surface) --------------------------
     """Prior entity-resolution runs for a dataset, newest first (dataset-service
     GET /datasets/{id}/resolution-runs). Needs dataset.entity.read."""
@@ -4836,6 +4847,54 @@ export const typeDefs = gql`
     proposed: Boolean!
     summary: BatchEvaluateSummary!
     results: [BatchEvaluateRow!]!
+  }
+
+  # ---- BRD 55: decision outcome monitoring ----------------------------------
+
+  enum DecisionEffectivenessBy { DECISION_TYPE PRODUCER }
+  """A realized-outcome label on a decision (agent-runtime outcome_labels, BRD
+  55). Labels annotate, never mutate, a closed decision (BR-1). correct is
+  null when there was no decided outcome to compare against; producer is the
+  agent key / decision table that produced the decision, joined from proposal
+  provenance when the ref is a proposal id."""
+  type DecisionOutcomeLabel {
+    id: ID!
+    decisionRef: ID!
+    decisionType: String
+    producer: String
+    decidedOutcome: String
+    realizedOutcome: String!
+    correct: Boolean
+    "human | sor | event"
+    labelSource: String
+    note: String
+    labeledBy: String
+  }
+  "One effectiveness bucket (groups sorted by total desc)."
+  type DecisionEffectivenessGroup {
+    key: String!
+    total: Int!
+    correct: Int!
+    incorrect: Int!
+    unknown: Int!
+    "correct / (correct+incorrect), null when nothing is comparable yet."
+    effectivenessRate: Float
+  }
+  type DecisionEffectiveness {
+    by: DecisionEffectivenessBy!
+    labeledDecisions: Int!
+    groups: [DecisionEffectivenessGroup!]!
+  }
+  input MarkDecisionOutcomeInput {
+    realizedOutcome: String!
+    "human (default) | sor | event"
+    labelSource: String
+    note: String
+    """Required when decisionRef is NOT a proposal id (no provenance to join);
+    ignored otherwise."""
+    decisionType: String
+    producer: String
+    decidedOutcome: String
   }
 
   # ---- BRD 56: entity resolution (steward surface) --------------------------
@@ -5382,13 +5441,10 @@ export const typeDefs = gql`
     escalateCase(id: ID!, to: String, reason: String): Case!
 
     """Add a comment (case-service POST /cases/{id}/comments, 201; body 1..8192
-    bytes). The returned body is the ONLY chance to read it — there is no list-
-    comments route (see CaseComment). Needs case.case.update."""
+    bytes). Needs case.case.update."""
     addCaseComment(caseId: ID!, body: String!, idempotencyKey: String): CaseComment!
     """Edit an own comment within 15 min (case-service PATCH /comments/{id};
-    403 otherwise). The route echoes ONLY {id, body}, so every other CaseComment
-    field resolves null here — the BFF never fabricates what the downstream
-    didn't return. Needs case.case.update."""
+    403 otherwise). Echoes the full updated comment. Needs case.case.update."""
     updateCaseComment(id: ID!, body: String!): CaseComment!
     """Delete an own comment within 15 min (case-service DELETE /comments/{id},
     204; 403 otherwise). Needs case.case.update."""
@@ -6156,6 +6212,14 @@ export const typeDefs = gql`
     """Edit a table as a new DRAFT version (POST /decision-models/{id}/versions);
     the prior version is never mutated. Needs case.disposition.create."""
     newDecisionModelVersion(id: ID!, input: CreateDecisionModelInput!, idempotencyKey: String): DecisionModel!
+
+    # ---- BRD 55: decision outcome monitoring ----------------------------------
+    """Record the REALIZED outcome of a decision (agent-runtime POST
+    /decisions/{ref}/outcome, OM-FR-010 human path). When decisionRef is a
+    proposal id the decided outcome + producer are joined from its provenance;
+    otherwise input.decisionType is required. Labels annotate, never mutate,
+    the decision. Needs case.case.update."""
+    markDecisionOutcome(decisionRef: ID!, input: MarkDecisionOutcomeInput!, idempotencyKey: String): DecisionOutcomeLabel!
 
     # ---- BRD 56: entity resolution (steward surface) --------------------------
     """Run + persist an entity-resolution run over a dataset (dataset-service

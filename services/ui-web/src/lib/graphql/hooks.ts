@@ -26,6 +26,7 @@ import type {
   CreateConnectionInput,
   CreateWritebackInput,
   CreateDecisionModelInput,
+  MarkDecisionOutcomeInput,
   ResolveEntitiesInput,
   ProposeEntityMergeInput,
   MaterializeResolvedInput,
@@ -443,6 +444,43 @@ export function useNewDecisionModelVersion() {
         id: vars.id, input: vars.input, idempotencyKey: crypto.randomUUID(),
       }).then((r) => r.newDecisionModelVersion),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.decisionModels() }),
+  });
+}
+
+// ---- BRD 55: decision outcome monitoring -----------------------------------
+
+/** The realized-outcome label on one decision (null until someone records it). */
+export function useDecisionOutcome(decisionRef: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.decisionOutcome(decisionRef),
+    queryFn: () => graphqlRequest<ops.DecisionOutcomeResult>(
+      ops.DECISION_OUTCOME, { decisionRef }).then((r) => r.decisionOutcome),
+    enabled: enabled && !!decisionRef,
+  });
+}
+
+/** Decided-vs-realized agreement grouped by decision type or producer. */
+export function useDecisionEffectiveness(by: "DECISION_TYPE" | "PRODUCER", decisionType?: string) {
+  return useQuery({
+    queryKey: qk.decisionEffectiveness(by, decisionType),
+    queryFn: () => graphqlRequest<ops.DecisionEffectivenessResult>(
+      ops.DECISION_EFFECTIVENESS, { by, decisionType: decisionType ?? null },
+    ).then((r) => r.decisionEffectiveness),
+  });
+}
+
+/** Record the realized outcome of a decision (annotates, never mutates it). */
+export function useMarkDecisionOutcome() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { decisionRef: string; input: MarkDecisionOutcomeInput }) =>
+      graphqlRequest<ops.MarkDecisionOutcomeResult>(ops.MARK_DECISION_OUTCOME, {
+        decisionRef: vars.decisionRef, input: vars.input, idempotencyKey: crypto.randomUUID(),
+      }).then((r) => r.markDecisionOutcome),
+    onSuccess: (label) => {
+      client.invalidateQueries({ queryKey: qk.decisionOutcome(label.decisionRef) });
+      client.invalidateQueries({ queryKey: ["data", "decisionEffectiveness"] });
+    },
   });
 }
 
@@ -1566,6 +1604,16 @@ export function useCaseTimeline(caseId: string) {
   });
 }
 
+/** The case's comments, newest-first (authoritative bodies + edit state). */
+export function useCaseComments(caseId: string) {
+  return useQuery({
+    queryKey: qk.caseComments(caseId),
+    queryFn: () => graphqlRequest<ops.CaseCommentsResult>(
+      ops.CASE_COMMENTS, { caseId, limit: 200 }).then((r) => r.caseComments),
+    enabled: !!caseId,
+  });
+}
+
 export function useAddCaseComment(caseId: string) {
   const client = useQueryClient();
   return useMutation({
@@ -1575,8 +1623,11 @@ export function useAddCaseComment(caseId: string) {
         body,
         idempotencyKey: crypto.randomUUID(),
       }),
-    // The new comment surfaces as a comment.added timeline row — refetch it.
-    onSuccess: () => client.invalidateQueries({ queryKey: qk.caseTimeline(caseId) }),
+    // The new comment surfaces as a comment.added timeline row — refetch both.
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: qk.caseTimeline(caseId) });
+      client.invalidateQueries({ queryKey: qk.caseComments(caseId) });
+    },
   });
 }
 
@@ -1585,7 +1636,10 @@ export function useUpdateCaseComment(caseId: string) {
   return useMutation({
     mutationFn: (vars: { id: string; body: string }) =>
       graphqlRequest<ops.UpdateCaseCommentResult>(ops.UPDATE_CASE_COMMENT, vars),
-    onSuccess: () => client.invalidateQueries({ queryKey: qk.caseTimeline(caseId) }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: qk.caseTimeline(caseId) });
+      client.invalidateQueries({ queryKey: qk.caseComments(caseId) });
+    },
   });
 }
 
@@ -1594,7 +1648,10 @@ export function useDeleteCaseComment(caseId: string) {
   return useMutation({
     mutationFn: (id: string) =>
       graphqlRequest<ops.DeleteCaseCommentResult>(ops.DELETE_CASE_COMMENT, { id }),
-    onSuccess: () => client.invalidateQueries({ queryKey: qk.caseTimeline(caseId) }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: qk.caseTimeline(caseId) });
+      client.invalidateQueries({ queryKey: qk.caseComments(caseId) });
+    },
   });
 }
 
