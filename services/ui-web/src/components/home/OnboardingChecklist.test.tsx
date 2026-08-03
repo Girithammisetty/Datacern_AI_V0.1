@@ -20,11 +20,13 @@ vi.mock("@/lib/graphql/client", async (importActual) => {
 });
 
 import { OnboardingChecklist } from "./OnboardingChecklist";
+import { useProductTour } from "@/stores/ui";
 
 beforeEach(() => {
   window.localStorage.clear();
   capabilities = ["case.case.read", "ai.proposal.read", "chart.dashboard.read"];
   roles = ["Case Analyst"];
+  useProductTour.setState({ active: false, stepIndex: 0 });
 });
 
 describe("OnboardingChecklist (role-aware getting started)", () => {
@@ -56,6 +58,15 @@ describe("OnboardingChecklist (role-aware getting started)", () => {
     expect(screen.queryByTestId("onboarding-checklist")).not.toBeInTheDocument();
     const stored = JSON.parse(window.localStorage.getItem("datacern.onboarding.t-acme.u")!);
     expect(stored.dismissed).toBe(true);
+  });
+
+  it("Take the tour starts the product tour at step one", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<OnboardingChecklist />);
+    await screen.findByTestId("onboarding-checklist");
+
+    await user.click(screen.getByRole("button", { name: "Take the tour" }));
+    expect(useProductTour.getState()).toMatchObject({ active: true, stepIndex: 0 });
   });
 
   it("disappears on its own once every step is checked off", async () => {
