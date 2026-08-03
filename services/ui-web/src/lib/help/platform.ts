@@ -19,7 +19,7 @@ export const PLATFORM_ARTICLES: HelpArticle[] = [
     related: ["worklist", "copilot", "notifications"],
     body: `
 Welcome to Datacern. This is a **governed decision-intelligence** workspace: you
-work cases, an AI copilot drafts recommendations, and a second person approves
+work cases, an AI assistant drafts recommendations, and a second person approves
 anything that changes a record. Nothing the AI suggests is applied automatically.
 
 ## What you see after you sign in
@@ -30,7 +30,7 @@ anything that changes a record. Nothing the AI suggests is applied automatically
   **Machine Learning**, and **Insights**. You only see the sections your role
   allows, so your sidebar may be shorter than a colleague's.
 - **Top bar** — the **use-case switcher** (top-left), and on the right: the
-  **Copilot** button, the **notifications bell**, the light/dark toggle, and
+  **Ask Jessie** button, the **notifications bell**, the light/dark toggle, and
   sign-out.
 
 ## Everyday moves
@@ -40,7 +40,7 @@ anything that changes a record. Nothing the AI suggests is applied automatically
 2. **Search / jump anywhere.** Press <kbd>⌘K</kbd> (Mac) or <kbd>Ctrl K</kbd>
    (Windows) to open the command palette — jump to any page or search across your
    work without leaving the keyboard.
-3. **Open the Copilot** from the top-right at any time to ask a question or run an
+3. **Open the assistant** from the top-right at any time to ask a question or run an
    assist on the case you're viewing.
 4. **Watch the bell** for approvals, assignments, and status changes — it updates
    live, no refresh needed.
@@ -71,7 +71,7 @@ plain language.
 | **Disposition** | The decision made on a case — e.g. *approve*, *deny*, *escalate*. |
 | **Proposal** | A recommendation drafted by the AI. It changes nothing until a person approves it. |
 | **Four-eyes approval** | The rule that a *different* person than the one who drafted (or asked for) a change must approve it before it takes effect. The AI can never approve its own work — and neither can you approve yours. |
-| **Copilot** | The assistant you can ask questions or delegate drafting to. Everything it does lands as a proposal, never as a direct change. |
+| **Jessie** | The AI assistant (the **Ask Jessie** button; previously labelled *Copilot*) you can ask questions or delegate drafting to. Everything it does lands as a proposal, never as a direct change. |
 | **Evidence pack** | The tamper-proof record behind a decision: who proposed it, who approved it, exactly what was done — the thing you hand an auditor. |
 | **Use case / workspace** | Your team's area. Cases, data and dashboards live inside one; switching use case (top-left menu) switches everything. |
 
@@ -81,8 +81,8 @@ plain language.
 |---|---|
 | **Dataset** | A governed table of data — rows and columns — brought in from a source system. |
 | **Source / connection** | The link to an outside system (a database, a file drop) that data is pulled from. |
-| **Semantic model** | The agreed business vocabulary over your data: which numbers are *measures* (things you count or sum, like "claim total") and which are *dimensions* (things you group by, like "region"). It guarantees a metric means the same thing in every chart and every copilot answer. |
-| **Verified query** | A question-and-answer pair a reviewer has approved, so the copilot answers that question the same trusted way every time. |
+| **Semantic model** | The agreed business vocabulary over your data: which numbers are *measures* (things you count or sum, like "claim total") and which are *dimensions* (things you group by, like "region"). It guarantees a metric means the same thing in every chart and every assistant answer. |
+| **Verified query** | A question-and-answer pair a reviewer has approved, so the assistant answers that question the same trusted way every time. |
 | **Chargeback** | The monthly statement of what each team's AI usage cost. |
 
 ## The domain model
@@ -103,7 +103,7 @@ plain language.
 | **Agent** | An AI worker with a defined job, a version number, and limits on what it may touch. All of its changes go through proposals. |
 | **Audit trail** | The permanent, tamper-evident log of everything that happened. It cannot be edited — by anyone. |
 
-> Missing a term? Ask the **Copilot** — "what does *disposition* mean here?" works.
+> Missing a term? Open **Ask Jessie** — "what does *disposition* mean here?" works.
 `,
   },
 
@@ -139,7 +139,7 @@ regulatory or SLA deadline applies. Rows with the tightest clocks sort to the to
 ## Pick up work
 
 - Click any row to open the **case cockpit** (see *Working a case*).
-- Statuses update **live** — if a colleague takes a case or the copilot finishes
+- Statuses update **live** — if a colleague takes a case or the assistant finishes
   a run, the row reflects it without a refresh.
 
 > **Who uses this:** everyone. Analysts and investigators live here; managers use
@@ -163,7 +163,7 @@ on one screen, framed in your domain's language.
 - **Header** — the case subject, type, severity, and any deadline clock.
 - **The record** — the key fields for this case (the "display projection"), so you
   don't have to go hunting in a source system.
-- **Recommendation** — if the copilot has run, its proposed disposition and its
+- **Recommendation** — if the assistant has run, its proposed disposition and its
   reasoning appear here as a **proposal** (never applied automatically).
 - **Evidence / Attachments** — supporting documents on the case (see *Evidence*).
 - **Activity** — the history of what's happened on the case.
@@ -171,7 +171,7 @@ on one screen, framed in your domain's language.
 ## Record a decision (a "disposition")
 
 1. Review the record and the evidence.
-2. (Optional) Run or read the **Copilot** recommendation.
+2. (Optional) Run or read **Ask Jessie** recommendation.
 3. Choose a **disposition** from the list your pack defines (e.g. *Resolve in the
    customer's favor*, *Deny — no error found*, *Escalate*). Most require a **note**.
 4. **Save.** Depending on the disposition and your pack's rules, this either
@@ -211,7 +211,7 @@ recommendation.
 ## Use evidence
 
 - **View / download** any attachment from the list.
-- When you run the **Copilot**, it can read the attached documents (extract text
+- When you run **Ask Jessie**, it can read the attached documents (extract text
   from PDFs, parse structured files) and cite them in its reasoning — so its
   recommendation is grounded in the actual evidence, not guesses.
 
@@ -221,20 +221,20 @@ recommendation.
   },
   {
     slug: "copilot",
-    title: "The Copilot and AI agents",
+    title: "Jessie — your AI assistant",
     summary: "Ask questions and run an AI assist that drafts a recommendation — as a proposal you review.",
     area: "casework",
     audience: "all",
     order: 4,
     related: ["case-cockpit", "approvals", "evidence"],
     body: `
-The **Copilot** is your AI assistant. On a case it can triage, summarize evidence,
+**Jessie** is your AI assistant. On a case it can triage, summarize evidence,
 and **draft a disposition with reasoning** — but it works in **proposal mode**: it
 never changes a record on its own. You (and an approver) stay in control.
 
 ## Run an assist on a case
 
-1. Open the case, then open the **Copilot** (top-right, or the on-case action).
+1. Open the case, then open **Ask Jessie** (top-right, or the on-case action).
 2. Ask a question, or run the pack's assist (e.g. "triage this dispute").
 3. The agent reads the case record and its **evidence**, applies your pack's
    grounding (regulatory rules, policies), and returns a **recommended
@@ -424,7 +424,7 @@ They compose in the order data actually flows:
    **proposal** a person still approves.
 3. **Pipelines turn history into a model.** For the part of the decision that
    isn't a clean rule (fraud likelihood, risk scoring), train a model on your
-   historical data. The Copilot and agents use the trained model to ground their
+   historical data. The assistant and agents use the trained model to ground their
    recommendations — again, always as a proposal, never an auto-applied decision.
 
 ## A worked example
@@ -439,7 +439,7 @@ Say you want to auto-escalate high-value claims for review:
    ingested, instead of waiting to be found in a queue.
 3. **Optional: sharpen it with a model.** If "high-value" alone isn't precise
    enough, train a classifier in **Pipelines** on your labeled claim history and
-   let the Copilot cite its score alongside the decision-table outcome.
+   let the assistant cite its score alongside the decision-table outcome.
 4. Every disposition that comes out of this — rule-driven, model-informed, or a
    human's own judgment — still goes through [four-eyes approval](/help/approvals)
    before anything writes back. Automation changes how work *arrives* and what
@@ -587,7 +587,7 @@ it (logged to MLflow) — no code required.
     body: `
 A **semantic model** is the governed vocabulary over your data — the **dimensions**
 (claim type, vendor…) and **measures** (count, total amount, win rate…) that
-dashboards, charts, and the copilot all compile against. Define a metric once,
+dashboards, charts, and the assistant all compile against. Define a metric once,
 use it everywhere, consistently.
 
 ## Browse
@@ -607,7 +607,7 @@ Models are versioned and reviewed like everything else:
    supersedes the previous one.
 
 > **Who uses this:** data-science / model-builder roles author models; everyone
-> consumes them through dashboards and the copilot.
+> consumes them through dashboards and the assistant.
 `,
   },
   {

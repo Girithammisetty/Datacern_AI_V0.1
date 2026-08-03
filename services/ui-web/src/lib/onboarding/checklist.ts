@@ -50,8 +50,10 @@ export const CHECKLIST_TRACKS: ChecklistTrack[] = [
         gate: cap("ai.proposal.read"),
       },
       {
+        // Key stays "ask-copilot" — it is persisted in localStorage progress;
+        // only the LABEL changed with the Jessie rename.
         key: "ask-copilot",
-        title: "Ask the copilot a question",
+        title: "Ask Jessie",
         description: "Plain-language answers from your governed data.",
         href: "/copilot",
         gate: publicGate,

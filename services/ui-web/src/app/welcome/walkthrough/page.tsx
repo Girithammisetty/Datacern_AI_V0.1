@@ -9,7 +9,7 @@ import WalkthroughContent from "./walkthrough-content";
 export const metadata: Metadata = {
   title: "Demo walkthrough — Datacern AI",
   description:
-    "Follow one governed decision through Datacern AI, end to end: worklist, copilot triage, four-eyes approval, learning loop, audit trail.",
+    "Follow one governed decision through Datacern AI, end to end: worklist, Jessie triage, four-eyes approval, learning loop, audit trail.",
 };
 
 export default function WalkthroughPage() {
