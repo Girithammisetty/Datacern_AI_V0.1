@@ -42,8 +42,10 @@ test("login → case → copilot → inbox approve, with AI label + provenance",
   await page.getByRole("tab", { name: /proposals/i }).click();
   await expect(page.getByRole("button", { name: /AI-generated/i }).first()).toBeVisible();
 
-  // --- Open the copilot drawer: persistent AI label + context URN, then stream ---
-  await page.getByRole("button", { name: /copilot/i }).first().click();
+  // --- Open the assistant drawer ("Ask Jessie"): persistent AI label +
+  // context URN, then stream. The label is tenant-overridable i18n, so match
+  // the drawer trigger by its stable default label.
+  await page.getByRole("button", { name: /ask jessie/i }).first().click();
   const drawer = page.locator('[data-copilot-drawer="open"]');
   await expect(drawer).toBeVisible();
   // AC-3: context URN present + non-suppressible AI disclosure before streaming.
