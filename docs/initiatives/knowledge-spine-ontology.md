@@ -286,8 +286,15 @@ graph slice). Built 2026-08-03:
   on hover; the builder's attribute-map editor flags required attributes so a
   steward sees what must be mapped before submit says so.
 
-**Deferred:** the OWL/JSON-LD export projection (the other WS4 leg); a UI runner
-for the contract check (BFF-exposed, not yet surfaced as a button).
+**Built since:** the contract-check UI runner — a "Data contract" panel on each
+ontology type's card (`ContractCheckPanel`): pick a dataset, map attributes to
+its real columns (with a case-insensitive "Match by name" convenience), run the
+check, and read the engine's verdict verbatim — pass with rows/attributes
+counted, or violations in the engine's own vocabulary with bounded
+worst-offender examples. The UI never pre-judges: an unmapped required
+attribute is the ENGINE's violation to report, not the form's to block.
+
+**Deferred:** the OWL/JSON-LD export projection (the other WS4 leg).
 
 ### Increment 5 (WS5) — the missing-knowledge steward loop — BUILT (first slice)
 

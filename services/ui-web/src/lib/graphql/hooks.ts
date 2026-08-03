@@ -6090,6 +6090,24 @@ export function useRejectOntologyUpdate() {
   });
 }
 
+/** WS4 contract runner: enforce the type's required/enum constraints against a
+ * dataset's REAL rows through an attribute -> column map. Read-only despite
+ * being a mutation (it reads bounded rows on demand) — nothing to invalidate. */
+export function useCheckOntologyContract() {
+  return useMutation({
+    mutationFn: (input: {
+      workspaceId: string;
+      entityKey: string;
+      datasetId: string;
+      attributeMap?: Record<string, string>;
+      rowLimit?: number;
+    }) =>
+      graphqlRequest<ops.CheckOntologyContractResult>(ops.CHECK_ONTOLOGY_CONTRACT, { input }).then(
+        (r) => r.checkOntologyContract,
+      ),
+  });
+}
+
 // ---- inc16: model-archetype registry (governed blueprint editor) ------------
 export function useModelArchetypes(workspaceId?: string) {
   return useQuery({

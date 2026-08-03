@@ -5904,6 +5904,37 @@ export const REJECT_ONTOLOGY_UPDATE = /* GraphQL */ `
   }
 `;
 
+// ---- WS4: data-contract check (attribute constraints vs a dataset's rows) ---
+export interface OntologyContractViolation {
+  attribute: string;
+  /** required_unmapped | column_missing | nulls_in_required | value_not_in_enum */
+  kind: string;
+  column: string | null;
+  count: number | null;
+  /** Worst offending values first, bounded — evidence, not a dump. */
+  examples: string[];
+}
+export interface OntologyContractResult {
+  entityKey: string;
+  datasetId: string;
+  checkedRows: number;
+  checkedAttributes: string[];
+  violations: OntologyContractViolation[];
+  passed: boolean;
+}
+export interface CheckOntologyContractResult {
+  checkOntologyContract: OntologyContractResult;
+}
+
+export const CHECK_ONTOLOGY_CONTRACT = /* GraphQL */ `
+  mutation CheckOntologyContract($input: CheckOntologyContractInput!) {
+    checkOntologyContract(input: $input) {
+      entityKey datasetId checkedRows checkedAttributes passed
+      violations { attribute kind column count examples }
+    }
+  }
+`;
+
 // ---- inc16: model-archetype registry (governed blueprint editor) ------------
 
 export interface ModelArchetype {

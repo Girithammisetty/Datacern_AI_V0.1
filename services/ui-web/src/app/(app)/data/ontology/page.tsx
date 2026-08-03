@@ -14,6 +14,7 @@ import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { cap } from "@/lib/authz/registry";
 import { useSession } from "@/lib/session/SessionContext";
 import { OntologyVersionPanel } from "@/components/ontology/OntologyVersionPanel";
+import { ContractCheckPanel } from "@/components/ontology/ContractCheckPanel";
 import { KnowledgeGapsPanel } from "@/components/ontology/KnowledgeGapsPanel";
 
 /**
@@ -218,6 +219,7 @@ export default function OntologyPage() {
                     </ul>
                   </div>
                 )}
+                <ContractCheckPanel entity={e} />
                 <OntologyVersionPanel entity={e} />
               </CardContent>
             </Card>
