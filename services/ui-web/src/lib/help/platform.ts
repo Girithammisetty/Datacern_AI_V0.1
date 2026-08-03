@@ -50,6 +50,63 @@ anything that changes a record. Nothing the AI suggests is applied automatically
 `,
   },
 
+  {
+    slug: "glossary",
+    title: "Glossary — what the words mean",
+    summary: "Plain-language definitions of every term you'll meet in the product, no jargon required.",
+    area: "getting-started",
+    audience: "all",
+    order: 3,
+    related: ["getting-started", "approvals", "copilot"],
+    body: `
+Datacern uses a handful of terms that mean something precise here. You don't
+need any of the technical background — this page says what each one means in
+plain language.
+
+## Everyday work
+
+| Term | What it means |
+|---|---|
+| **Case** | One item of work — a claim, an alert, a dispute. It moves through statuses until it's resolved. |
+| **Disposition** | The decision made on a case — e.g. *approve*, *deny*, *escalate*. |
+| **Proposal** | A recommendation drafted by the AI. It changes nothing until a person approves it. |
+| **Four-eyes approval** | The rule that a *different* person than the one who drafted (or asked for) a change must approve it before it takes effect. The AI can never approve its own work — and neither can you approve yours. |
+| **Copilot** | The assistant you can ask questions or delegate drafting to. Everything it does lands as a proposal, never as a direct change. |
+| **Evidence pack** | The tamper-proof record behind a decision: who proposed it, who approved it, exactly what was done — the thing you hand an auditor. |
+| **Use case / workspace** | Your team's area. Cases, data and dashboards live inside one; switching use case (top-left menu) switches everything. |
+
+## Data & reporting
+
+| Term | What it means |
+|---|---|
+| **Dataset** | A governed table of data — rows and columns — brought in from a source system. |
+| **Source / connection** | The link to an outside system (a database, a file drop) that data is pulled from. |
+| **Semantic model** | The agreed business vocabulary over your data: which numbers are *measures* (things you count or sum, like "claim total") and which are *dimensions* (things you group by, like "region"). It guarantees a metric means the same thing in every chart and every copilot answer. |
+| **Verified query** | A question-and-answer pair a reviewer has approved, so the copilot answers that question the same trusted way every time. |
+| **Chargeback** | The monthly statement of what each team's AI usage cost. |
+
+## The domain model
+
+| Term | What it means |
+|---|---|
+| **Ontology** | The catalog of the *kinds of things* your business works with — Vendor, Invoice, Claim — with the facts each kind carries and how kinds relate ("a Vendor has many Invoices"). |
+| **Attribute** | One fact an ontology kind carries (a Vendor's *tax id*). A **required** attribute must always be present; an attribute with **allowed values** may only take those values. |
+| **Entity resolution** | Working out that records from different systems are the same real-world thing — "V. Petrov" in one file and "Viktor Petrov" in another. Uncertain matches are proposed for a person to review, never merged silently. |
+| **Golden record** | The single combined view of a resolved entity across all its records. |
+
+## Behind the scenes (you'll see these words, rarely need them)
+
+| Term | What it means |
+|---|---|
+| **Capability / role** | What your account is allowed to see and do. If a page or button is missing, your role doesn't include it — ask your admin. |
+| **Pack** | A pre-built industry package (fraud, claims, AML…) that installs the cases, dashboards, agents and vocabulary for that domain. |
+| **Agent** | An AI worker with a defined job, a version number, and limits on what it may touch. All of its changes go through proposals. |
+| **Audit trail** | The permanent, tamper-evident log of everything that happened. It cannot be edited — by anyone. |
+
+> Missing a term? Ask the **Copilot** — "what does *disposition* mean here?" works.
+`,
+  },
+
   // ── Casework ─────────────────────────────────────────────────────────────
   {
     slug: "worklist",
