@@ -75,7 +75,8 @@ import {
   mapProvisioningStep, mapPocCriterion, mapPocProgress, mapPocReportExport, mapToolDiscoveryHit, mapRbacAction,
   mapAgentRollout, mapRetrainWatch,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
-  mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapOntologyEntityVersion, mapModelArchetype,
+  mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapOntologyEntityVersion,
+  linkOntologyGraph, mapModelArchetype,
 
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
   mapPackDrift, mapPackTransition,

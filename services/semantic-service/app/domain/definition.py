@@ -47,6 +47,11 @@ class Entity:
     # canonical join key across the ontology / semantic / resolution layers).
     # Optional: a semantic entity without a declared domain type stays valid.
     ontology_entity_key: str | None = None
+    # WS2 remainder: the EXPLICIT ontology-attribute -> dataset-column mapping
+    # ({attribute_name: column_name}). Requires ontology_entity_key; columns are
+    # always validated against the bound dataset schema, attribute names against
+    # the registry when it is reachable.
+    ontology_attribute_map: dict | None = None
 
 
 @dataclass(slots=True)
@@ -145,6 +150,25 @@ def parse_definition(doc: dict, *, settings=None) -> Definition:
                 f"entity {name!r}: ontology_entity_key must match ^[a-z][a-z0-9_]{{0,62}}$",
                 [{"field": "ontology_entity_key", "value": onto_key}],
             )
+        # WS2 remainder: explicit attribute -> column map. Shape-checked here;
+        # the column/attribute existence checks run in full validation.
+        onto_map = e.get("ontology_attribute_map")
+        if onto_map is not None:
+            if not isinstance(onto_map, dict) or not all(
+                isinstance(k, str) and k and isinstance(v, str) and v
+                for k, v in onto_map.items()
+            ):
+                raise ValidationFailed(
+                    f"entity {name!r}: ontology_attribute_map must map attribute "
+                    "names to column names (non-empty strings)",
+                    [{"field": "ontology_attribute_map"}],
+                )
+            if not onto_key:
+                raise ValidationFailed(
+                    f"entity {name!r}: ontology_attribute_map requires "
+                    "ontology_entity_key (the map is meaningless without a type)",
+                    [{"field": "ontology_attribute_map"}],
+                )
         entities[name] = Entity(
             name=name,
             dataset_urn=e.get("dataset_urn") or "",
@@ -153,6 +177,7 @@ def parse_definition(doc: dict, *, settings=None) -> Definition:
             dataset_version_policy=policy,
             description=e.get("description"),
             ontology_entity_key=onto_key,
+            ontology_attribute_map=onto_map,
         )
 
     dimensions: dict[str, Dimension] = {}
@@ -295,17 +320,44 @@ def _validate_expr_metric_ast(node: dict) -> None:
         "derived measures may only combine measures with + - * / and nullif()")
 
 
-def validate_definition(defn: Definition, dataset_lookup) -> list[dict]:
+def validate_definition(defn: Definition, dataset_lookup, ontology_lookup=None) -> list[dict]:
     """Full validation (submit guard): bindings, references, join graph.
 
     `dataset_lookup(dataset_urn) -> {"exists": bool, "schema": {col: type}} | None`.
-    Returns a list of problems; empty means valid.
+    `ontology_lookup(entity_key) -> {"exists": bool, "attributes": [names]} | None`
+    (WS2): a definitive registry answer with `exists: False` fails the save (a
+    typo'd or undeclared domain type is an authoring error), and a present
+    `ontology_attribute_map` is checked against the declared attribute names —
+    while None means the registry couldn't be checked, which SKIPS both checks:
+    the link is optional metadata, so a registry outage must never block
+    authoring. Mapped COLUMNS are always checked against the bound dataset
+    schema (definitive regardless of the registry). Omitted -> no ontology
+    checks. Returns a list of problems; empty means valid.
     """
     problems: list[dict] = []
     schemas: dict[str, dict] = {}
     all_names: set[str] = set()
 
     for entity in defn.entities.values():
+        if entity.ontology_entity_key and ontology_lookup is not None:
+            onto = ontology_lookup(entity.ontology_entity_key)
+            if onto is not None and not onto.get("exists"):
+                problems.append({
+                    "object": f"entity/{entity.name}",
+                    "problem": (f"ontology type {entity.ontology_entity_key!r} is not "
+                                "declared in the workspace ontology"),
+                })
+            elif onto is not None and entity.ontology_attribute_map:
+                # Registry reachable + type declared: mapped attribute names must
+                # be real attributes of the governed type.
+                declared = set(onto.get("attributes") or [])
+                for attr in sorted(entity.ontology_attribute_map):
+                    if attr not in declared:
+                        problems.append({
+                            "object": f"entity/{entity.name}",
+                            "problem": (f"ontology attribute {attr!r} is not declared on "
+                                        f"type {entity.ontology_entity_key!r}"),
+                        })
         info = dataset_lookup(entity.dataset_urn) if entity.dataset_urn else None
         if not info or not info.get("exists"):
             problems.append({"object": f"entity/{entity.name}",
@@ -317,6 +369,15 @@ def validate_definition(defn: Definition, dataset_lookup) -> list[dict]:
             if col not in schema:
                 problems.append({"object": f"entity/{entity.name}",
                                  "problem": f"primary key column {col!r} not in dataset schema"})
+        # WS2 remainder: mapped columns must exist in the bound dataset schema —
+        # a DEFINITIVE check (independent of registry availability).
+        for attr, col in sorted((entity.ontology_attribute_map or {}).items()):
+            if col not in schema:
+                problems.append({
+                    "object": f"entity/{entity.name}",
+                    "problem": (f"ontology_attribute_map column {col!r} (for attribute "
+                                f"{attr!r}) not in dataset schema"),
+                })
         all_names.add(entity.name)
 
     def check_columns(owner: str, entity_name: str, columns: set[str]) -> None:

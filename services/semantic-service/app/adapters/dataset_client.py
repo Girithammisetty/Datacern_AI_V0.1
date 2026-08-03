@@ -22,6 +22,9 @@ class StaticDatasetClient:
 
     def __init__(self):
         self._datasets: dict[tuple[str, str], dict] = {}
+        # WS2: (tenant, workspace) -> {entity_key: [attribute names]}. None as
+        # the whole registry simulates an unreachable registry (get -> None).
+        self._ontology: dict[tuple[str, str], dict[str, list[str]]] | None = {}
 
     def register(self, tenant_id: str, dataset_urn: str, *, table: str,
                  schema: dict[str, str], primary_key: list[str] | None = None,
@@ -36,6 +39,25 @@ class StaticDatasetClient:
 
     async def get_dataset(self, tenant_id: str, dataset_urn: str) -> dict | None:
         return self._datasets.get((tenant_id, dataset_urn))
+
+    def register_ontology_type(self, tenant_id: str, workspace_id: str, entity_key: str,
+                               attributes: list[str] | None = None) -> None:
+        assert self._ontology is not None
+        registry = self._ontology.setdefault((tenant_id, workspace_id), {})
+        registry[entity_key] = list(attributes or [])
+
+    def simulate_ontology_outage(self) -> None:
+        self._ontology = None
+
+    async def get_ontology_type(
+        self, tenant_id: str, workspace_id: str, entity_key: str
+    ) -> dict | None:
+        if self._ontology is None:
+            return None  # registry unreachable -> caller fails soft
+        declared = self._ontology.get((tenant_id, workspace_id), {})
+        if entity_key not in declared:
+            return {"exists": False, "attributes": []}
+        return {"exists": True, "attributes": declared[entity_key]}
 
 
 class HttpDatasetClient:
@@ -106,3 +128,25 @@ class HttpDatasetClient:
             "primary_key": body.get("primary_key") or [],
             "top_values": profile.get("top_values") or {},
         }
+
+    async def get_ontology_type(
+        self, tenant_id: str, workspace_id: str, entity_key: str
+    ) -> dict | None:
+        """WS2: the workspace's governed ontology entry for ``entity_key`` —
+        ``{"exists": bool, "attributes": [names]}`` from a definitive registry
+        answer; None when the registry is unreachable, in which case the caller
+        fails SOFT (the link is optional metadata, so an outage must not block
+        authoring), while a definitive ``exists: False`` fails the save. The
+        attribute names validate an ontology-attribute -> dataset-column map."""
+        try:
+            resp = await self._http().get(
+                f"{self.base_url}/internal/v1/ontology/{workspace_id}/{entity_key}",
+                headers=self._headers(tenant_id),
+            )
+            if resp.status_code != 200:
+                return None
+            data = resp.json().get("data", {})
+            return {"exists": bool(data.get("exists")),
+                    "attributes": [str(a) for a in (data.get("attributes") or [])]}
+        except httpx.HTTPError:
+            return None

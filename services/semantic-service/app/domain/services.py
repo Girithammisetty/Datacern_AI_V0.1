@@ -316,14 +316,31 @@ class VersionService(_Base):
             await uow.commit()
             return version
 
-    async def _validate_full(self, ctx: CallCtx, definition: dict) -> Definition:
+    async def _validate_full(self, ctx: CallCtx, definition: dict,
+                             workspace_id: str | None = None) -> Definition:
         defn = parse_definition(definition, settings=self.settings)
         lookups: dict[str, dict | None] = {}
         for entity in defn.entities.values():
             if entity.dataset_urn not in lookups:
                 lookups[entity.dataset_urn] = await self.deps.dataset_client.get_dataset(
                     ctx.tenant_id, entity.dataset_urn)
-        problems = validate_definition(defn, lambda urn: lookups.get(urn))
+        # WS2: prefetch ontology-type existence for every declared link. Any
+        # transport/adapter failure -> None (check skipped): the link is optional
+        # metadata, so a registry outage never blocks authoring — only a
+        # DEFINITIVE "not declared" fails validation.
+        onto: dict[str, dict | None] = {}
+        if workspace_id:
+            for entity in defn.entities.values():
+                key = entity.ontology_entity_key
+                if key and key not in onto:
+                    try:
+                        onto[key] = await self.deps.dataset_client.get_ontology_type(
+                            ctx.tenant_id, workspace_id, key)
+                    except Exception:  # noqa: BLE001 - fail-soft by design
+                        onto[key] = None
+        problems = validate_definition(
+            defn, lambda urn: lookups.get(urn),
+            ontology_lookup=(lambda key: onto.get(key)) if workspace_id else None)
         if problems:
             raise ValidationFailed("definition validation failed", problems)
         return defn
@@ -335,7 +352,7 @@ class VersionService(_Base):
             if version is None:
                 raise NotFound("version not found")
             check_version_transition(version.status, "in_review")
-            await self._validate_full(ctx, version.definition)
+            await self._validate_full(ctx, version.definition, workspace_id=model.workspace_id)
             version.status = "in_review"
             version.submitted_by = ctx.subject
             await uow.versions.update(version)
@@ -358,7 +375,8 @@ class VersionService(_Base):
                 raise PermissionDenied(
                     "author cannot approve their own version (SEM-FR-007)")
             # Publication guard: bindings must still be valid
-            defn = await self._validate_full(ctx, version.definition)
+            defn = await self._validate_full(ctx, version.definition,
+                                             workspace_id=model.workspace_id)
 
             previous_definition = None
             if model.published_version_id:
