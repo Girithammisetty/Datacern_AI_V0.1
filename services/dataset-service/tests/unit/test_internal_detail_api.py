@@ -177,7 +177,12 @@ class TestInternalOntologyType:
         )
         assert resp.status_code == 200
         assert resp.json()["data"] == {
-            "exists": True, "name": "Vendor", "attributes": ["vendor_id", "tax_id"]}
+            "exists": True, "name": "Vendor", "attributes": ["vendor_id", "tax_id"],
+            # WS4: constraint specs for the binding-contract check.
+            "attribute_specs": [
+                {"name": "vendor_id", "required": False, "enum": []},
+                {"name": "tax_id", "required": False, "enum": []},
+            ]}
 
     async def test_undeclared_type_is_a_definitive_miss_not_an_error(self, client):
         ws = await self._declare(client)
@@ -187,7 +192,8 @@ class TestInternalOntologyType:
         # 200 with exists:false — so the caller can tell "not declared" apart
         # from "registry unreachable" (a transport error).
         assert resp.status_code == 200
-        assert resp.json()["data"] == {"exists": False, "name": None, "attributes": []}
+        assert resp.json()["data"] == {
+            "exists": False, "name": None, "attributes": [], "attribute_specs": []}
 
     async def test_lookup_is_tenant_scoped(self, client):
         ws = await self._declare(client)

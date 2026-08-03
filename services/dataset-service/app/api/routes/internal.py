@@ -166,10 +166,16 @@ async def internal_ontology_type(
     try:
         e = await c.ontology_service.get(ctx, workspace_id, entity_key)
     except NotFound:
-        return {"data": {"exists": False, "name": None, "attributes": []}}
-    attrs = [str(a.get("name")) for a in (e.attributes or [])
-             if isinstance(a, dict) and a.get("name")]
-    return {"data": {"exists": True, "name": e.name, "attributes": attrs}}
+        return {"data": {"exists": False, "name": None, "attributes": [],
+                         "attribute_specs": []}}
+    valid = [a for a in (e.attributes or []) if isinstance(a, dict) and a.get("name")]
+    attrs = [str(a["name"]) for a in valid]
+    # WS4: constraint specs so the semantic layer can enforce the binding
+    # contract (a required attribute must be mapped to a column).
+    specs = [{"name": str(a["name"]), "required": bool(a.get("required")),
+              "enum": list(a.get("enum") or [])} for a in valid]
+    return {"data": {"exists": True, "name": e.name, "attributes": attrs,
+                     "attribute_specs": specs}}
 
 
 @router.get("/datasets/{dataset_id}/rows")

@@ -41,10 +41,16 @@ class StaticDatasetClient:
         return self._datasets.get((tenant_id, dataset_urn))
 
     def register_ontology_type(self, tenant_id: str, workspace_id: str, entity_key: str,
-                               attributes: list[str] | None = None) -> None:
+                               attributes: list[str] | None = None,
+                               specs: list[dict] | None = None) -> None:
         assert self._ontology is not None
         registry = self._ontology.setdefault((tenant_id, workspace_id), {})
-        registry[entity_key] = list(attributes or [])
+        registry[entity_key] = {
+            "attributes": list(attributes or []),
+            "specs": list(specs if specs is not None
+                          else [{"name": a, "required": False, "enum": []}
+                                for a in (attributes or [])]),
+        }
 
     def simulate_ontology_outage(self) -> None:
         self._ontology = None
@@ -56,8 +62,9 @@ class StaticDatasetClient:
             return None  # registry unreachable -> caller fails soft
         declared = self._ontology.get((tenant_id, workspace_id), {})
         if entity_key not in declared:
-            return {"exists": False, "attributes": []}
-        return {"exists": True, "attributes": declared[entity_key]}
+            return {"exists": False, "attributes": [], "specs": []}
+        entry = declared[entity_key]
+        return {"exists": True, "attributes": entry["attributes"], "specs": entry["specs"]}
 
 
 class HttpDatasetClient:
@@ -147,6 +154,9 @@ class HttpDatasetClient:
                 return None
             data = resp.json().get("data", {})
             return {"exists": bool(data.get("exists")),
-                    "attributes": [str(a) for a in (data.get("attributes") or [])]}
+                    "attributes": [str(a) for a in (data.get("attributes") or [])],
+                    # WS4: constraint specs ({name, required, enum}) for the
+                    # binding-contract check at submit/approve.
+                    "specs": list(data.get("attribute_specs") or [])}
         except httpx.HTTPError:
             return None

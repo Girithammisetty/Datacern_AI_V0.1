@@ -7255,10 +7255,16 @@ input MarkDecisionOutcomeInput {
   decidedOutcome: String
 }
 
-"One attribute of a domain entity type (a named, typed field)."
+"""
+An ontology attribute + its WS4 contract constraints: `required` (must
+be mapped + non-blank in bound data) and `enumValues` (allowed values;
+empty = unconstrained).
+"""
 type OntologyAttribute {
   name: String!
   dataType: String
+  required: Boolean!
+  enumValues: [String!]!
 }
 
 """
@@ -7320,6 +7326,8 @@ type OntologyEntityVersion {
 input OntologyAttributeInput {
   name: String!
   dataType: String
+  required: Boolean
+  enumValues: [String!]
 }
 
 input OntologyRelationshipInput {
@@ -7335,6 +7343,41 @@ input CreateOntologyEntityInput {
   description: String
   attributes: [OntologyAttributeInput!]
   relationships: [OntologyRelationshipInput!]
+}
+
+"""
+One WS4 contract violation found in a dataset's real rows. `kind`:
+required_unmapped | column_missing | nulls_in_required | value_not_in_enum.
+"""
+type OntologyContractViolation {
+  attribute: String!
+  kind: String!
+  column: String
+  count: Int
+  """Worst offending values first, bounded — evidence, not a dump."""
+  examples: [String!]!
+}
+
+"""
+The outcome of enforcing an ontology type's attribute constraints against
+a dataset's real rows through an attribute -> column map (WS4).
+"""
+type OntologyContractResult {
+  entityKey: ID!
+  datasetId: ID!
+  checkedRows: Int!
+  checkedAttributes: [String!]!
+  violations: [OntologyContractViolation!]!
+  passed: Boolean!
+}
+
+input CheckOntologyContractInput {
+  workspaceId: ID!
+  entityKey: ID!
+  datasetId: ID!
+  """attribute name -> dataset column name (the WS2 map)."""
+  attributeMap: JSON
+  rowLimit: Int = 20000
 }
 
 """
@@ -7698,6 +7741,13 @@ type Mutation {
   dataset.ontology.approve.
   """
   rejectOntologyUpdate(entityKey: ID!, workspaceId: ID!, versionNo: Int!, note: String): OntologyEntityVersion!
+  """
+  Enforce an ontology type's attribute constraints (required/enum) against
+  a dataset's REAL rows through an attribute -> column map (WS4 data
+  contracts). Read-only despite being a mutation (it reads bounded rows on
+  demand). Needs dataset.dataset.read.
+  """
+  checkOntologyContract(input: CheckOntologyContractInput!): OntologyContractResult!
   """
   Register a governed model archetype (idempotent by archetypeKey within the
   workspace). Needs experiment.archetype.create.

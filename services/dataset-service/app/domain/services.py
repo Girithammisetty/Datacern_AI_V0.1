@@ -623,6 +623,70 @@ class DatasetService(_Base):
             "iceberg_table": dataset.iceberg_table,
         }
 
+    async def check_ontology_contract(
+        self, ctx: CallCtx, workspace_id: str, entity_key: str, dataset_id: str, *,
+        attribute_map: dict | None = None, row_limit: int = 20000,
+    ) -> dict:
+        """WS4 data contracts: enforce an ontology type's attribute constraints
+        (``required``, ``enum``) against a dataset's REAL rows, through the
+        explicit attribute -> column map (WS2). Read-only; reports violations
+        honestly — a required attribute with no mapped column is itself a
+        violation (the contract cannot be satisfied invisibly), an unmapped
+        OPTIONAL attribute is simply not checked, and blanks are the required
+        check's business (the enum check skips them, so one bad cell never
+        double-counts)."""
+        async with self.uow(ctx.tenant_id) as uow:
+            onto = await uow.ontology.get(workspace_id, entity_key)
+        if onto is None:
+            raise NotFound(f"ontology entity {entity_key!r} not found")
+        attr_map = dict(attribute_map or {})
+        columns, rows = await self.read_rows(ctx.tenant_id, dataset_id, row_limit)
+
+        def _blank(v) -> bool:
+            return v is None or str(v).strip() == ""
+
+        violations: list[dict] = []
+        checked: list[str] = []
+        for a in onto.attributes or []:
+            name = str(a.get("name") or "")
+            required = bool(a.get("required"))
+            enum = a.get("enum") or []
+            col = attr_map.get(name)
+            if required and not col:
+                violations.append({"attribute": name, "kind": "required_unmapped",
+                                   "column": None, "count": None, "examples": []})
+                continue
+            if not col:
+                continue
+            if col not in columns:
+                violations.append({"attribute": name, "kind": "column_missing",
+                                   "column": col, "count": None, "examples": []})
+                continue
+            checked.append(name)
+            if required:
+                blanks = sum(1 for r in rows if _blank(r.get(col)))
+                if blanks:
+                    violations.append({"attribute": name, "kind": "nulls_in_required",
+                                       "column": col, "count": blanks, "examples": []})
+            if enum:
+                allowed = {str(v) for v in enum}
+                bad: dict[str, int] = {}
+                for r in rows:
+                    v = r.get(col)
+                    if _blank(v):
+                        continue
+                    if str(v) not in allowed:
+                        bad[str(v)] = bad.get(str(v), 0) + 1
+                if bad:
+                    violations.append({
+                        "attribute": name, "kind": "value_not_in_enum", "column": col,
+                        "count": sum(bad.values()),
+                        # Worst offenders first, bounded — evidence, not a dump.
+                        "examples": sorted(bad, key=lambda k: -bad[k])[:5]})
+        return {"entity_key": entity_key, "dataset_id": dataset_id,
+                "checked_rows": len(rows), "checked_attributes": checked,
+                "violations": violations, "passed": not violations}
+
     async def link_merge_proposal(self, tenant_id: str, candidate_id: str,
                                   proposal_id: str) -> None:
         """Record the governed proposal a steward opened over a pending candidate
@@ -1585,6 +1649,27 @@ class RetentionService(_Base):
 # ---------------------------------------------------------------------------
 
 
+def _validate_ontology_attributes(attributes: list) -> None:
+    """WS4 contracts: attributes may carry constraints — ``required: bool`` and
+    ``enum: [scalar values]`` — that the data-contract checker enforces against
+    bound data. Shape-check them at authoring so a malformed constraint can
+    never silently disable enforcement."""
+    for a in attributes:
+        if not isinstance(a, dict) or not str(a.get("name") or "").strip():
+            raise ValidationFailed("each attribute needs a non-empty name")
+        if "required" in a and not isinstance(a["required"], bool):
+            raise ValidationFailed(
+                f"attribute {a['name']!r}: 'required' must be a boolean")
+        if "enum" in a:
+            vals = a["enum"]
+            if (not isinstance(vals, list) or not vals
+                    or not all(isinstance(v, (str, int, float)) and not isinstance(v, bool)
+                               for v in vals)):
+                raise ValidationFailed(
+                    f"attribute {a['name']!r}: 'enum' must be a non-empty list "
+                    "of scalar values")
+
+
 def _named_diff(old: list, new: list) -> dict:
     """Diff two lists of {name, ...} dicts by name → added/removed/changed
     (changed = same name, different rest). Order-insensitive; dependency-free."""
@@ -1618,6 +1703,7 @@ class OntologyService(_Base):
         name = str(payload.get("name") or "").strip()
         if not key or not name:
             raise ValidationFailed("entity_key and name are required")
+        _validate_ontology_attributes(list(payload.get("attributes") or []))
         now = self.clock.now()
         async with self.uow(ctx.tenant_id) as uow:
             existing = await uow.ontology.get(workspace_id, key)
@@ -1684,6 +1770,8 @@ class OntologyService(_Base):
                 raise Conflict(
                     f"version {open_v.version_no} is already in review; "
                     "decide it before proposing another")
+            if "attributes" in patch:
+                _validate_ontology_attributes(list(patch["attributes"] or []))
             # Next version number is one past the HIGHEST ever used (not the live
             # one) so a rejected/superseded number is never reused — the
             # (tenant, workspace, key, version_no) uniqueness holds.

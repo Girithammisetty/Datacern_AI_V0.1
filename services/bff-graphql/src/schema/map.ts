@@ -4,7 +4,7 @@ import type {
   DatasetDTO, ProfileDTO, LineageDTO, DatasetVersionDTO, ProfileColumnDTO,
   DatasetConsumersDTO, SimilarDatasetDTO, ReprofileDTO,
   ResolveEntitiesDTO, ResolutionRunDTO, ResolutionRunDetailDTO, MergeCandidateDTO,
-  MaterializeResolvedDTO, OntologyEntityDTO, OntologyEntityVersionDTO,
+  MaterializeResolvedDTO, OntologyEntityDTO, OntologyEntityVersionDTO, OntologyContractResultDTO,
 } from "../clients/dataset.js";
 import type {
   SavedQueryDTO, ExecutionDTO, ResultsDTO, SavedQueryVersionDTO, QueryStatDTO,
@@ -3228,6 +3228,8 @@ export function mapOntologyEntity(d: OntologyEntityDTO) {
       __typename: "OntologyAttribute" as const,
       name: a.name,
       dataType: a.data_type ?? null,
+      required: !!a.required,
+      enumValues: (a.enum ?? []).map(String),
     })),
     relationships: (d.relationships ?? []).map((r) => ({
       __typename: "OntologyRelationship" as const,
@@ -3244,6 +3246,27 @@ export function mapOntologyEntity(d: OntologyEntityDTO) {
   };
 }
 
+/** WS4: contract-check outcome — violations of required/enum constraints
+ * found in a dataset's real rows. */
+export function mapOntologyContract(d: OntologyContractResultDTO) {
+  return {
+    __typename: "OntologyContractResult" as const,
+    entityKey: d.entity_key,
+    datasetId: d.dataset_id,
+    checkedRows: d.checked_rows,
+    checkedAttributes: d.checked_attributes ?? [],
+    violations: (d.violations ?? []).map((v) => ({
+      __typename: "OntologyContractViolation" as const,
+      attribute: v.attribute,
+      kind: v.kind,
+      column: v.column ?? null,
+      count: v.count ?? null,
+      examples: v.examples ?? [],
+    })),
+    passed: !!d.passed,
+  };
+}
+
 export function mapOntologyEntityVersion(d: OntologyEntityVersionDTO) {
   return {
     __typename: "OntologyEntityVersion" as const,
@@ -3257,6 +3280,8 @@ export function mapOntologyEntityVersion(d: OntologyEntityVersionDTO) {
       __typename: "OntologyAttribute" as const,
       name: a.name,
       dataType: a.data_type ?? null,
+      required: !!a.required,
+      enumValues: (a.enum ?? []).map(String),
     })),
     relationships: (d.relationships ?? []).map((r) => ({
       __typename: "OntologyRelationship" as const,

@@ -207,7 +207,14 @@ function AttributeMapEditor({
       <div className="grid gap-1.5 sm:grid-cols-2">
         {attributes.map((a) => (
           <div key={a.name} className="flex items-center gap-2">
-            <code className="w-28 shrink-0 truncate text-xs" title={a.name}>{a.name}</code>
+            <code
+              className="w-28 shrink-0 truncate text-xs"
+              // WS4: a required attribute MUST be mapped — submit enforces it.
+              title={a.required ? `${a.name} (required — must be mapped)` : a.name}
+            >
+              {a.name}
+              {a.required && <span className="text-destructive" aria-label="required">*</span>}
+            </code>
             <select
               aria-label={`Map attribute ${a.name}`}
               className={SELECT_CLS}

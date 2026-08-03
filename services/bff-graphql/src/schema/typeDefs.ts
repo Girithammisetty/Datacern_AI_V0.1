@@ -6008,8 +6008,10 @@ export const typeDefs = gql`
 
   # ---- BRD 56: entity resolution (steward surface) --------------------------
 
-  "One attribute of a domain entity type (a named, typed field)."
-  type OntologyAttribute { name: String! dataType: String }
+  """An ontology attribute + its WS4 contract constraints: \`required\` (must
+  be mapped + non-blank in bound data) and \`enumValues\` (allowed values;
+  empty = unconstrained)."""
+  type OntologyAttribute { name: String! dataType: String required: Boolean! enumValues: [String!]! }
   """A typed relationship from one entity type to another (e.g. Vendor has_many
   Invoice). \`targetExists\` is true when \`target\` resolves to a real entity
   type in the same result set — the ontology becomes a NAVIGABLE graph, and a
@@ -6057,7 +6059,7 @@ export const typeDefs = gql`
     createdAt: String
     decidedAt: String
   }
-  input OntologyAttributeInput { name: String! dataType: String }
+  input OntologyAttributeInput { name: String! dataType: String required: Boolean enumValues: [String!] }
   input OntologyRelationshipInput { name: String! target: String! cardinality: String }
   input CreateOntologyEntityInput {
     workspaceId: ID!
@@ -6067,6 +6069,35 @@ export const typeDefs = gql`
     attributes: [OntologyAttributeInput!]
     relationships: [OntologyRelationshipInput!]
   }
+  """One WS4 contract violation found in a dataset's real rows. \`kind\`:
+  required_unmapped | column_missing | nulls_in_required | value_not_in_enum."""
+  type OntologyContractViolation {
+    attribute: String!
+    kind: String!
+    column: String
+    count: Int
+    """Worst offending values first, bounded — evidence, not a dump."""
+    examples: [String!]!
+  }
+  """The outcome of enforcing an ontology type's attribute constraints against
+  a dataset's real rows through an attribute -> column map (WS4)."""
+  type OntologyContractResult {
+    entityKey: ID!
+    datasetId: ID!
+    checkedRows: Int!
+    checkedAttributes: [String!]!
+    violations: [OntologyContractViolation!]!
+    passed: Boolean!
+  }
+  input CheckOntologyContractInput {
+    workspaceId: ID!
+    entityKey: ID!
+    datasetId: ID!
+    """attribute name -> dataset column name (the WS2 map)."""
+    attributeMap: JSON
+    rowLimit: Int = 20000
+  }
+
   """A proposed update to an ontology type's definition (WS3). Only the provided
   fields are overlaid on the live definition; the live type is unchanged until a
   DISTINCT approver publishes the proposal."""
@@ -6343,6 +6374,11 @@ export const typeDefs = gql`
     """Reject an in-review ontology update; the live type is unchanged. Needs
     dataset.ontology.approve."""
     rejectOntologyUpdate(entityKey: ID!, workspaceId: ID!, versionNo: Int!, note: String): OntologyEntityVersion!
+    """Enforce an ontology type's attribute constraints (required/enum) against
+    a dataset's REAL rows through an attribute -> column map (WS4 data
+    contracts). Read-only despite being a mutation (it reads bounded rows on
+    demand). Needs dataset.dataset.read."""
+    checkOntologyContract(input: CheckOntologyContractInput!): OntologyContractResult!
     """Register a governed model archetype (idempotent by archetypeKey within the
     workspace). Needs experiment.archetype.create."""
     createModelArchetype(input: CreateModelArchetypeInput!): ModelArchetype!

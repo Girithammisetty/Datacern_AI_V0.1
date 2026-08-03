@@ -160,9 +160,17 @@ export default function OntologyPage() {
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {e.attributes.map((a) => (
-                        <Badge key={a.name} variant="outline">
+                        <Badge
+                          key={a.name}
+                          variant="outline"
+                          title={a.enumValues.length > 0 ? `allowed: ${a.enumValues.join(", ")}` : undefined}
+                        >
                           {a.name}
+                          {a.required && <span className="text-destructive" aria-label="required">*</span>}
                           {a.dataType && <span className="ml-1 opacity-60">{a.dataType}</span>}
+                          {a.enumValues.length > 0 && (
+                            <span className="ml-1 opacity-60">enum({a.enumValues.length})</span>
+                          )}
                         </Badge>
                       ))}
                     </div>
