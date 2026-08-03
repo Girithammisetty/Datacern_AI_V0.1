@@ -85,3 +85,23 @@ export const useToasts = create<ToastState>((set) => ({
     set((s) => ({ toasts: [...s.toasts, { ...t, id: Math.random().toString(36).slice(2) }] })),
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) })),
 }));
+
+/* ---- Product tour (ease-of-use): which tour step is active ---- */
+/** Ephemeral by design: a tour is a momentary walk-through, not state worth
+ * persisting — the Getting-started checklist persists what matters. */
+interface ProductTourState {
+  active: boolean;
+  stepIndex: number;
+  start: () => void;
+  next: () => void;
+  prev: () => void;
+  stop: () => void;
+}
+export const useProductTour = create<ProductTourState>()((set) => ({
+  active: false,
+  stepIndex: 0,
+  start: () => set({ active: true, stepIndex: 0 }),
+  next: () => set((s) => ({ stepIndex: s.stepIndex + 1 })),
+  prev: () => set((s) => ({ stepIndex: Math.max(0, s.stepIndex - 1) })),
+  stop: () => set({ active: false, stepIndex: 0 }),
+}));

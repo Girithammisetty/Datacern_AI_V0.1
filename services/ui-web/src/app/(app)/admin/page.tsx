@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Users, UsersRound, Boxes, Building2, KeyRound, KeySquare, ScrollText, Archive, Wallet, ShieldCheck, Siren, Brain, Router, Wrench, BellRing, ArrowLeftRight, Blocks, Globe, Sparkles } from "lucide-react";
+import { Users, UsersRound, Boxes, Building2, KeyRound, KeySquare, ScrollText, Archive, Wallet, ShieldCheck, Siren, Brain, Router, Wrench, BellRing, ArrowLeftRight, Blocks, Globe, Sparkles, Braces } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/primitives";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
@@ -48,6 +48,7 @@ const SECTIONS: { title: string; links: AdminLink[] }[] = [
       { href: "/admin/notifications", title: "Notification settings", description: "Subscription rules, webhooks, templates, and delivery health.", icon: BellRing, gate: ADMIN },
       { href: "/admin/writebacks", title: "Decision write-backs", description: "Governed sync of platform decisions to a tenant's system of record.", icon: ArrowLeftRight, gate: ADMIN },
       { href: "/admin/audit", title: "Audit search", description: "Search the audit log with dual-attribution.", icon: ScrollText, gate: ADMIN },
+      { href: "/admin/api", title: "API explorer", description: "Every GraphQL query and mutation, read live from the deployment — searchable and copy-paste ready.", icon: Braces, gate: ADMIN },
       { href: "/admin/tenant", title: "Tenant settings", description: "Tenant profile, provisioning status, isolation tier.", icon: Building2, gate: ADMIN },
       { href: "/packs", title: "Capability packs", description: "Install a full vertical solution as one governed, reversible bundle.", icon: Blocks, gate: ADMIN },
       { href: "/admin/archive", title: "Archive", description: "Soft-deleted resources and restore.", icon: Archive, gate: ADMIN },

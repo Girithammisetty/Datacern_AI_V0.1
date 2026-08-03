@@ -7,6 +7,7 @@ import { CommandPalette } from "./CommandPalette";
 import { CopilotDrawer } from "@/components/copilot/CopilotDrawer";
 import { DemoWatermarkBanner } from "@/components/demo/DemoWatermarkBanner";
 import { WalkthroughOverlay } from "@/components/demo/WalkthroughOverlay";
+import { ProductTourOverlay } from "@/components/tours/ProductTourOverlay";
 import { SessionProvider, type SessionInfo } from "@/lib/session/SessionContext";
 import { useProposalsInbox } from "@/lib/graphql/hooks";
 import { useCostPanel, useMe } from "@/lib/graphql/hooks";
@@ -105,6 +106,7 @@ function ShellInner({ children, session }: { children: React.ReactNode; session:
       <ToastHost />
       <CommandPalette />
       <WalkthroughOverlay />
+      <ProductTourOverlay />
     </div>
   );
 }
