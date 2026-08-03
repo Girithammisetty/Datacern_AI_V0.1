@@ -354,21 +354,25 @@ WS5 routes that signal into the governed ontology flow. Built 2026-08-03:
   so an agent reads "this PDF is about a policy", not just bytes. Untagged
   evidence is untouched everywhere; the reader never guesses a type.
 
-**Built since — richer gap→proposal shapes.** The steward queue now closes a
-gap in the shape it actually calls for, not only as a description note:
-**knowledge note** (unchanged — WS3 four-eyes proposal on a type's
-description), **new attribute** (the gap becomes a proposed attribute on a
-type; the proposal re-sends the type's existing attributes byte-for-byte,
-constraints included, so the WS3 diff shows exactly one addition; attribute
-names are slug-checked client-side before any call), and **new type** (the gap
-seeds a whole new entity type, gated on `dataset.ontology.create` and
-honestly labelled "created", never "proposed" — registry creation has never
-been four-eyes, same as the page's New-entity-type button).
+**Built since — per-row entity linkage for mixed-type standards datasets:**
+each mixed-meaning decoder already writes a per-row discriminator column
+(x12 `transaction_set`, FHIR `resource_type`, HL7v2 `message_type`), so the
+ingestion consumer now reads a bounded head (20k rows, `rows_scanned`
+disclosed) of the event's EXACT snapshot and records the discriminator values
+ACTUALLY OBSERVED — value, row count, the entity kind such a row instantiates
+(837→claim, 835→claim_payment, 271→eligibility_benefit, 277→claim_status,
+834→enrollment, 999→acknowledgment; FHIR resource types to snake_case;
+ADT→patient_event, ORU→observation), and whether the workspace registry
+declares that kind — as `custom_metadata.standards.row_entities`, tagging
+`ontology:<key>` per observed-AND-declared kind. Never the format's full
+catalog of possibilities: an 835-only file cannot earn `ontology:claim`. An
+unmapped value records `entity_key: null`; an unreadable snapshot or missing
+column skips linkage with a warning and never blocks registration.
 
-**Still deferred in WS5:** per-row entity linkage for mixed-type standards
-datasets (x12/fhir/hl7v2) — in flight on its own branch; server-side registry
-existence check on the evidence upload path (the UI feeds from the registry;
-case-service shape-checks only); marking a gap as handled/dismissed (the queue
+**Still deferred in WS5:** server-side registry existence check on the evidence
+upload path (the UI feeds from the registry; case-service shape-checks only);
+richer gap→proposal shapes (e.g. proposing a new attribute or a new type
+instead of a description note); marking a gap as handled/dismissed (the queue
 is read-only over the transcript corpus today, so a proposed gap still lists).
 
 ### Increment 3 (WS2) — link the vertebrae on `entity_key` — BUILT (slices 1+2)
