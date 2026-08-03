@@ -2548,6 +2548,11 @@ export const resolvers = {
         .ontologyVersions(a.entityKey, a.workspaceId)
         .then((rows) => rows.map(mapOntologyEntityVersion)),
 
+    // WS4 interop leg: the JSON-LD document passes through VERBATIM — any
+    // reshaping here would make the export lie about what the service serves.
+    ontologyJsonLd: (_p: unknown, a: { workspaceId: string }, ctx: GraphQLContext) =>
+      ctx.clients.dataset.ontologyJsonLd(a.workspaceId),
+
     // ---- WS5: the missing-knowledge steward queue ---------------------------
     knowledgeGaps: async (_p: unknown, a: { limit?: number }, ctx: GraphQLContext) => {
       const page = await ctx.clients.agent.knowledgeGaps(a.limit ?? 50);

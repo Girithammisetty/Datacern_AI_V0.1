@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Network, Plus, Trash2, ArrowRight } from "lucide-react";
+import { Network, Plus, Trash2, ArrowRight, Download, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,9 @@ import {
 import {
   useOntologyEntities, useCreateOntologyEntity, useDeleteOntologyEntity,
 } from "@/lib/graphql/hooks";
+import { graphqlRequest } from "@/lib/graphql/client";
+import { ONTOLOGY_JSONLD, type OntologyJsonLdResult } from "@/lib/graphql/operations";
+import { useToasts } from "@/stores/ui";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { cap } from "@/lib/authz/registry";
 import { useSession } from "@/lib/session/SessionContext";
@@ -39,6 +42,35 @@ export default function OntologyPage() {
   const [form, setForm] = useState({ entityKey: "", name: "", description: "" });
   const [err, setErr] = useState<string | null>(null);
 
+  // WS4 interop leg: download the workspace ontology as one OWL + SHACL
+  // document in JSON-LD — the document arrives verbatim from the service and
+  // is saved as-is; a failure is a toast, never a fabricated file.
+  const [exporting, setExporting] = useState(false);
+  const pushToast = useToasts((s) => s.push);
+  const exportJsonLd = async () => {
+    setExporting(true);
+    try {
+      const r = await graphqlRequest<OntologyJsonLdResult>(ONTOLOGY_JSONLD, { workspaceId });
+      const blob = new Blob([JSON.stringify(r.ontologyJsonLd, null, 2)], {
+        type: "application/ld+json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ontology-${workspaceId}.jsonld`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      pushToast({
+        title: "Export failed",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const submit = async () => {
     setErr(null);
     const entityKey = form.entityKey.trim();
@@ -62,11 +94,19 @@ export default function OntologyPage() {
         title="Ontology"
         description="The governed domain model — entity types with their attributes and typed relationships. Capability packs install these; agents reason over them."
         actions={
-          canCreate ? (
-            <Button size="sm" onClick={() => setOpen((v) => !v)}>
-              <Plus className="size-4" /> New entity type
-            </Button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {entities.length > 0 && (
+              <Button size="sm" variant="outline" onClick={exportJsonLd} disabled={exporting}>
+                {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                Export JSON-LD
+              </Button>
+            )}
+            {canCreate && (
+              <Button size="sm" onClick={() => setOpen((v) => !v)}>
+                <Plus className="size-4" /> New entity type
+              </Button>
+            )}
+          </div>
         }
       />
 
