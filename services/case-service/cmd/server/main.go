@@ -188,6 +188,22 @@ func main() {
 		env("JWKS_URL", "http://identity-service/api/v1/.well-known/jwks.json"),
 		os.Getenv("JWT_ISSUER"), os.Getenv("JWT_AUDIENCE"))
 
+	// Shared dataset-service client (service-JWT authed): trigger row reads +
+	// the WS5 evidence entity_key registry check. With no signing key the
+	// client can't mint — the registry check then fails soft (never blocking
+	// an upload) and triggers stay disabled, both logging why.
+	var dsKey *rsa.PrivateKey
+	if pem := os.Getenv("REGISTER_SIGNING_KEY_PEM"); pem != "" {
+		if k, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(pem)); err == nil {
+			dsKey = k
+		} else {
+			slog.Warn("dataset client: signing key parse failed (registry check + triggers disabled)", "err", err)
+		}
+	}
+	datasetClient := triggers.NewDatasetHTTP(os.Getenv("DATASET_URL"),
+		os.Getenv("JWT_ISSUER"), os.Getenv("JWT_AUDIENCE"),
+		os.Getenv("REGISTER_SIGNING_KID"), dsKey)
+
 	srv := &api.Server{
 		Store:      st,
 		Search:     searchClient,
@@ -197,6 +213,7 @@ func main() {
 		RowFetcher: api.NewHTTPRowFetcher(os.Getenv("QUERY_SERVICE_URL")),
 		Snapshots:  snapshots,
 		Evidence:   evidence,
+		Ontology:   datasetClient,
 		Redis:      redisx.NewFromEnv(env("REDIS_ADDR", "localhost:6379"), os.Getenv), // bulk concurrency gate (CASE-FR-032)
 		// Same Redis, different projection: the commercial plane's
 		// entitlements_flat blob gates the realtime-case-streams add-on.
@@ -258,19 +275,9 @@ func main() {
 		// Inbound consumers: inference auto-case + identity unassign (§6) +
 		// tenant-authored case triggers on ingestion.completed (INC-1).
 		creator := &creatorAdapter{store: st}
-		var trigKey *rsa.PrivateKey
-		if pem := os.Getenv("REGISTER_SIGNING_KEY_PEM"); pem != "" {
-			if k, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(pem)); err == nil {
-				trigKey = k
-			} else {
-				slog.Warn("trigger dataset client: signing key parse failed (triggers disabled)", "err", err)
-			}
-		}
 		applier := &triggers.Applier{
 			Store: st,
-			Rows: triggers.NewDatasetHTTP(os.Getenv("DATASET_URL"),
-				os.Getenv("JWT_ISSUER"), os.Getenv("JWT_AUDIENCE"),
-				os.Getenv("REGISTER_SIGNING_KID"), trigKey),
+			Rows:  datasetClient,
 			// Same object store as human evidence uploads: intake snapshots are
 			// governed evidence, not a side channel.
 			Blob: evidence,

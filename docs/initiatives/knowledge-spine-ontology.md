@@ -391,8 +391,19 @@ through `decideKnowledgeGap`/`KnowledgeGap.gapStatus` in the BFF and a
 upserts — triage is working state; the WORM audit spine covers the actual
 ontology proposals a gap produced.
 
-**Still deferred in WS5:** server-side registry existence check on the evidence
-upload path (the UI feeds from the registry; case-service shape-checks only).
+**Built since — the evidence-upload registry check (closes WS5's last
+deferral).** case-service now verifies an upload's `entity_key` against the
+governed registry server-side, reusing its existing service-JWT dataset-service
+client (the triggers client — no new mesh plumbing) against the public
+ontology GET. Three-way semantics mirroring semantic-service's authoring
+validation: **declared** → tag stored; **definitive miss** (the registry
+answered 404) → 422 naming the key, before any bytes are stored — typo/rogue-
+client protection, since the UI feeds the field from the registry; **registry
+outage** → fail SOFT with a logged warning, keeping the shape-checked tag,
+because the tag is optional metadata and an outage must never block evidence
+upload. A missing signing key or URL degrades to fail-soft the same honest
+way. Nothing in the knowledge-spine plan remains deferred — all five
+workstreams are complete.
 
 ### Increment 3 (WS2) — link the vertebrae on `entity_key` — BUILT (slices 1+2)
 
