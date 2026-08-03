@@ -35,7 +35,7 @@ export default function AdminValuePage() {
     <div>
       <PageHeader
         title="Value & ROI"
-        description="Governed decisions, hours saved and cost-per-decision for this tenant — every derived figure discloses the assumption behind it."
+        description="What the platform is delivering — decisions governed, hours saved, cost per decision. Estimated figures always show the assumption behind them."
         actions={
           <label className="flex items-center gap-2 text-xs">
             <span className="text-muted-foreground">Period</span>

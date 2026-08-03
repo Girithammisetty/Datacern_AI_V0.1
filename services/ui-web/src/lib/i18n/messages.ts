@@ -74,12 +74,13 @@ export const en = {
   "ai.provenance.title": "AI provenance",
 
   "inbox.title": "Approval inbox",
-  "inbox.pending": "{count} pending",
+  "inbox.pending": "{count} waiting for your review — nothing changes until a person approves it.",
   "inbox.rejectReasonRequired": "A reason is required to reject",
   "inbox.bulkExcludesDestructive": "Destructive proposals are excluded from bulk approval",
   "inbox.bulkConfirm": "Approve {count} proposals?",
 
   "copilot.title": "Copilot",
+  "copilot.subtitle": "Ask about your work in plain language. Answers come from your governed data, and anything the copilot wants to change goes to a person for approval.",
   "copilot.placeholder": "Ask about what you're looking at…",
   "copilot.context": "Context: {urn}",
   "copilot.send": "Send",
@@ -298,7 +299,7 @@ export const en = {
   "dashboards.deleteDashboardConfirm": "Delete dashboard “{name}”? This permanently removes it and its charts.",
 
   "reports.title": "Team reports",
-  "reports.subtitle": "Subscribe a dashboard to a scheduled email digest of its charts' live data.",
+  "reports.subtitle": "Every report the platform can produce, in one place — run one now, or schedule a dashboard email digest.",
   "reports.empty": "No report subscriptions yet",
   "reports.create": "New subscription",
   "reports.createTitle": "New report subscription",

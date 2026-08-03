@@ -39,6 +39,7 @@ export default function CopilotPage() {
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-3xl flex-col">
       <PageHeader
         title={t("copilot.title")}
+        description={t("copilot.subtitle")}
         actions={
           <div className="flex items-center gap-2">
             <label htmlFor="copilot-agent" className="text-xs text-muted-foreground">

@@ -52,7 +52,7 @@ export default function AdminUsagePage() {
     <div>
       <PageHeader
         title="Usage & budgets"
-        description="Per-workspace AI spend with live budget thresholds (80/95/100)."
+        description="What AI is costing each team, with live alerts as budgets pass 80, 95 and 100%."
       />
       <div className="grid gap-4 lg:grid-cols-2">
         <CostPanel workspaceId={workspaceId} />
