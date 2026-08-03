@@ -81,6 +81,27 @@ describe("DefinitionEditor — entity/dimension/measure authoring bound to real 
     });
   });
 
+  it("a SINGLE edit autosaves (regression: the old skip-flag ate the first edit after mount)", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<DefinitionEditor modelId="sm-1" version={DRAFT_VERSION} onSubmitted={() => {}} />);
+    const measureName = await screen.findByDisplayValue("claim_count");
+    // Exactly ONE doc change — select-all + one keystroke replaces the text in
+    // a single onChange. Before the fix this never saved (the consume-on-run
+    // guard was re-armed by a later effect on mount, eating the first edit) —
+    // so an edit-once-then-submit flow submitted the stale server draft.
+    await user.click(measureName);
+    await user.keyboard("{Control>}a{/Control}x");
+
+    await waitFor(
+      () => {
+        const call = requests.find((r) => r.doc.includes("mutation UpdateSemanticModelDraft"));
+        expect(call?.vars.definition.measures[0].name).toBe("x");
+      },
+      { timeout: 3000 },
+    );
+    expect(await screen.findByText("Draft saved.")).toBeInTheDocument();
+  });
+
   it("debounces autosave: editing a field posts updateSemanticModelDraft with the edited definition", async () => {
     const user = userEvent.setup();
     renderWithProviders(<DefinitionEditor modelId="sm-1" version={DRAFT_VERSION} onSubmitted={() => {}} />);
