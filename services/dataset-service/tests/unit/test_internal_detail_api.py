@@ -151,3 +151,44 @@ class TestInternalDetail:
             f"/internal/v1/datasets/{ds['id']}", headers=_sem_headers(TENANT_B)
         )
         assert resp.status_code == 404
+
+
+class TestInternalOntologyType:
+    """WS2: GET /internal/v1/ontology/{workspace}/{key} — the existence check
+    semantic-service uses to validate Entity.ontology_entity_key at authoring."""
+
+    async def _declare(self, client, key="vendor", name="Vendor"):
+        from tests.conftest import WORKSPACE, auth
+
+        r = await client.post(
+            "/api/v1/ontology/entities",
+            json={"workspace_id": WORKSPACE, "entity_key": key, "name": name},
+            headers=auth(),
+        )
+        assert r.status_code == 201, r.text
+        return WORKSPACE
+
+    async def test_declared_type_exists_with_name(self, client):
+        ws = await self._declare(client)
+        resp = await client.get(
+            f"/internal/v1/ontology/{ws}/vendor", headers=_sem_headers()
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"] == {"exists": True, "name": "Vendor"}
+
+    async def test_undeclared_type_is_a_definitive_miss_not_an_error(self, client):
+        ws = await self._declare(client)
+        resp = await client.get(
+            f"/internal/v1/ontology/{ws}/mystery", headers=_sem_headers()
+        )
+        # 200 with exists:false — so the caller can tell "not declared" apart
+        # from "registry unreachable" (a transport error).
+        assert resp.status_code == 200
+        assert resp.json()["data"] == {"exists": False, "name": None}
+
+    async def test_lookup_is_tenant_scoped(self, client):
+        ws = await self._declare(client)
+        resp = await client.get(
+            f"/internal/v1/ontology/{ws}/vendor", headers=_sem_headers(TENANT_B)
+        )
+        assert resp.json()["data"]["exists"] is False

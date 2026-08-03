@@ -2,7 +2,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { Input, Label } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
-import { useDatasets, flatten } from "@/lib/graphql/hooks";
+import { useDatasets, flatten, useOntologyEntities } from "@/lib/graphql/hooks";
 import { newEntity } from "@/lib/semantic/definition";
 import type { SemanticDefinitionDoc } from "@/lib/graphql/types";
 import { t } from "@/lib/i18n/messages";
@@ -30,6 +30,10 @@ export function EntitiesSection({
 }) {
   const datasetsQuery = useDatasets();
   const datasets = flatten(datasetsQuery.data?.pages ?? []);
+  // WS2: the workspace's governed domain types, so an entity can declare which
+  // ontology type it instantiates (existence-validated again at submit).
+  const ontologyQuery = useOntologyEntities();
+  const ontologyTypes = ontologyQuery.data ?? [];
 
   const update = (i: number, patch: Partial<SemanticDefinitionDoc["entities"][number]>) => {
     const entities = doc.entities.map((e, idx) => (idx === i ? { ...e, ...patch } : e));
@@ -109,6 +113,26 @@ export function EntitiesSection({
                     }
                     placeholder="claim_id"
                   />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`entity-ontology-${i}`}>{t("semantic.entity.ontologyType")}</Label>
+                  <select
+                    id={`entity-ontology-${i}`}
+                    className={SELECT_CLS}
+                    value={entity.ontology_entity_key ?? ""}
+                    onChange={(e) =>
+                      // Clearing drops the key entirely (JSON.stringify strips
+                      // undefined), so an unlinked entity stays exactly as before.
+                      update(i, { ontology_entity_key: e.target.value || undefined })
+                    }
+                  >
+                    <option value="">{t("semantic.entity.noOntologyType")}</option>
+                    {ontologyTypes.map((o) => (
+                      <option key={o.entityKey} value={o.entityKey}>
+                        {o.name} ({o.entityKey})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               {rowErrors.length > 0 && (
