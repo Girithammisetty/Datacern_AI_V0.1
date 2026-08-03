@@ -110,9 +110,9 @@ const CAPS = [
     key: "copilot",
     icon: MessageSquareText,
     eyebrow: "Conversational",
-    title: "A copilot that knows your role",
+    title: "An assistant that knows your role",
     body:
-      "Ask in plain language and get an answer grounded in your governed data and your permissions. Need a change made? The copilot proposes it for a human to approve — it can't do anything you couldn't.",
+      "Ask in plain language and get an answer grounded in your governed data and your permissions. Need a change made? The assistant proposes it for a human to approve — it can't do anything you couldn't.",
     points: ["Grounded in your metrics, not guesses", "Aware of what you're allowed to see", "Turns a question into a governed action"],
   },
   {
@@ -167,7 +167,7 @@ const CAPS = [
  * are intentionally not surfaced here.) */
 const AGENTS: [string, string][] = [
   ["Claims Triage Agent", "reads each case and drafts the disposition"],
-  ["Analytics Copilot", "answers data questions in plain language"],
+  ["Analytics assistant", "answers data questions in plain language"],
   ["Governance & Compliance Agent", "checks every action against policy"],
   ["Data Onboarding Agent", "profiles new data and gets it decision-ready"],
   ["Reporting Designer Agent", "builds the dashboards your team needs"],
@@ -486,7 +486,7 @@ const FAQ = [
   ["How is it different from just using an LLM or an ML model?",
     "An LLM or model gives you an output; you still have to ground it, govern it, route the work, capture the audit trail and close the loop. Datacern is that surrounding system — grounding on your governed data, four-eyes approval, immutable audit, and a correction-to-retrain loop — with the models plugged in where they help."],
   ["Does the AI ever act on its own?",
-    "No. Agents draft recommendations and the copilot proposes changes, but a person approves, adjusts or rejects every outcome. Sensitive changes require a second reviewer (four-eyes) before they go live."],
+    "No. Agents draft recommendations and the assistant proposes changes, but a person approves, adjusts or rejects every outcome. Sensitive changes require a second reviewer (four-eyes) before they go live."],
   ["Do the agents replace my team?",
     "No — they do the reading and drafting so your experts spend their time on judgment, not busywork. People stay accountable for every determination; the routine gets automated and the hard calls get more attention."],
   ["How do you prevent hallucinations and wrong decisions?",

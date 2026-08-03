@@ -37,7 +37,7 @@ run the whole desk.
     {
       label: "AI & grounding",
       items: [
-        "A dispute-intake triage copilot and a dispute-operations analytics agent",
+        "A dispute-intake triage assistant and a dispute-operations analytics agent",
         "Reg E / Reg Z and network-rule grounding memories",
         "Transaction-anomaly and dispute-outcome training pipelines",
       ],
@@ -56,9 +56,9 @@ clocks start ticking the moment they do.
    provisional-credit deadlines wait for no one. *(See “Your worklist”.)*
 2. **Open a dispute.** You get the **decision cockpit**: cardholder, transaction,
    merchant, amount, reason, and the deadline clock. *(See “Working a case”.)*
-3. **Run the triage Copilot.** It reads the case and any **evidence**, applies the
+3. **Run the triage assistant.** It reads the case and any **evidence**, applies the
    Reg E/Z grounding, and drafts a recommended disposition with reasoning — as a
-   **proposal**. *(See “The Copilot”.)*
+   **proposal**. *(See “The assistant”.)*
 4. **Attach evidence** if the cardholder sent statements or receipts, so the
    recommendation is grounded in the real documents. *(See “Evidence”.)*
 5. **Record your disposition.** For a clear error, propose *Resolve in cardholder's
@@ -82,7 +82,7 @@ friendly fraud.
    *Escalate to fraud* status. *(See “Your worklist”.)*
 2. **Investigate on the cockpit.** Review the transaction history, the
    cardholder–merchant relationship, and the **evidence** attached to the case.
-   Use the Copilot to summarize prior disputes and cite the documents.
+   Use the assistant to summarize prior disputes and cite the documents.
    *(See “Working a case” and “Evidence”.)*
 3. **Look for patterns.** Open the **Dispute Command Center** dashboard and
    **click** a segment (e.g. a merchant or reason code) to cross-filter the rest —
@@ -105,8 +105,8 @@ When the issuer eats a loss it can recover, you drive the network **chargeback**
 1. **Work the chargeback queue.** Filter to disputes dispositioned *File
    chargeback*.
 2. **Build the case.** On the cockpit, confirm the **reason code** and assemble the
-   **evidence** the network requires; the Copilot grounds the reason-code choice in
-   the network rules. *(See “Evidence” and “The Copilot”.)*
+   **evidence** the network requires; the assistant grounds the reason-code choice in
+   the network rules. *(See “Evidence” and “The assistant”.)*
 3. **Track recovery.** The **Chargeback Recovery** dashboard shows win rate and
    open exposure; cross-filter by reason code to see where you're winning and
    losing. *(See “Dashboards”.)*

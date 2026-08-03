@@ -11,7 +11,7 @@ describe("WalkthroughContent", () => {
   it("renders the five steps in order", () => {
     render(<WalkthroughContent />);
     expect(screen.getByRole("heading", { name: /the worklist/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /copilot triage/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /jessie triage/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /approval — four eyes/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /the learning loop/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /the audit trail/i })).toBeInTheDocument();
