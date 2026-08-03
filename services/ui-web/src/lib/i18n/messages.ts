@@ -433,6 +433,9 @@ export const en = {
   "semantic.entity.remove": "Remove entity",
   "semantic.entity.ontologyType": "Ontology type",
   "semantic.entity.noOntologyType": "None — not linked to the domain model",
+  "semantic.entity.attributeMap": "Attribute mapping",
+  "semantic.entity.attributeMapHint": "Map the type's attributes to this entity's dataset columns (validated at submit).",
+  "semantic.entity.unmapped": "Not mapped",
   "semantic.entity.none": "No entities yet — add one bound to a real dataset to get started.",
 
   "semantic.dimensions": "Dimensions",

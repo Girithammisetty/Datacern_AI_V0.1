@@ -328,7 +328,7 @@ class VersionService(_Base):
         # transport/adapter failure -> None (check skipped): the link is optional
         # metadata, so a registry outage never blocks authoring — only a
         # DEFINITIVE "not declared" fails validation.
-        onto: dict[str, bool | None] = {}
+        onto: dict[str, dict | None] = {}
         if workspace_id:
             for entity in defn.entities.values():
                 key = entity.ontology_entity_key
