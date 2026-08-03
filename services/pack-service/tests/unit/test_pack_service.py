@@ -379,8 +379,9 @@ class _DriftClient:
         case="c", rbac="r", query="q", agent="a", semantic="s", chart="ch",
         dataset="d", ingestion="i", memory="m", pipeline="p", identity="id")
 
-    def __init__(self, fields):
+    def __init__(self, fields, datasets=None):
         self._fields = fields
+        self._datasets = datasets or []
 
     def author_token(self):
         return "tok"
@@ -388,6 +389,8 @@ class _DriftClient:
     def _req(self, method, url, tok, **kw):
         if "/case-fields" in url:
             return _DriftResp({"data": self._fields})
+        if "/datasets" in url:
+            return _DriftResp({"data": self._datasets})
         return _DriftResp({"data": []})
 
 
@@ -533,3 +536,55 @@ def test_drift_separates_never_created_from_awaiting_approval(tmp_path):
     )
     drifted = sum(1 for r in rows if r["status"] in ("modified", "missing"))
     assert drifted == 1, f"only the deletion is drift; got {drifted}"
+
+
+def test_bound_dataset_resolves_by_urn_not_by_the_packs_declared_name(tmp_path):
+    """A bound dataset is not missing just because the tenant named it something else.
+
+    The install records a dataset under the PACK's declared name
+    (_rec("datasets", ds["name"], ...)), while _existing_names lists the TENANT's
+    dataset names. Bind to a tenant dataset called anything else and the name
+    lookup cannot find it, so a live, bound, working dataset reads `missing`.
+
+    That is what journey-packs hit on 680d3182: missing=4, for exactly the four
+    datasets the same run had just landed, bound, and asserted were present.
+
+    target_urn is what the install actually bound, so it settles the question the
+    name cannot. Strictly a fallback — the name lookup still runs first, and a
+    dataset whose URN is also gone from the tenant listing still reads missing.
+    """
+    src = tmp_path / "pack"
+    _write_case_field_pack(src, "1.0.0", ["lc_alpha"], "V1")
+    manifest = _load(src)
+
+    client = _DriftClient(
+        [{"name": "lc_alpha", "data_type": "string", "purpose": "both", "field_meta": {}}],
+        # The tenant's dataset is called `tenant_claims_2026`, NOT `fwa_claims`.
+        datasets=[{"name": "tenant_claims_2026", "urn": "wr:t1:dataset/abc"}],
+    )
+    ledger = [
+        {"kind": "case_fields", "identity": "lc_alpha", "tombstoned": False,
+         "target_id": "a", "origin": "o", "action": "create"},
+        # bound: pack calls it fwa_claims, tenant calls it something else
+        {"kind": "datasets", "identity": "fwa_claims", "tombstoned": False,
+         "target_urn": "wr:t1:dataset/abc", "target_id": "abc", "origin": "o",
+         "action": "bind"},
+        # a dataset whose URN is NOT in the tenant listing really is gone
+        {"kind": "datasets", "identity": "fwa_deleted", "tombstoned": False,
+         "target_urn": "wr:t1:dataset/gone", "target_id": "gone", "origin": "o",
+         "action": "bind"},
+    ]
+    rows = installer.detect_drift(client, ledger, manifest)
+    by = {r["identity"]: r for r in rows}
+
+    assert by["fwa_claims"]["status"] == "in_sync", (
+        "a bound dataset present under the tenant's own name is not drift — this "
+        "is the missing=4 journey-packs reported against a healthy install"
+    )
+    assert by["fwa_deleted"]["status"] == "missing", (
+        "the URN fallback must not swallow a real deletion: no name match AND no "
+        "URN match still means somebody deleted it"
+    )
+    assert by["lc_alpha"]["status"] == "in_sync"
+    drifted = sum(1 for r in rows if r["status"] in ("modified", "missing"))
+    assert drifted == 1, f"only the real deletion is drift; got {drifted}"
