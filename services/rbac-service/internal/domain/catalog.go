@@ -102,7 +102,10 @@ var canonicalSpecs = []resourceSpec{
 	{"dataset", "profile", []string{VerbRead, VerbExecute}, true, "profiling"},
 	{"dataset", "lineage", []string{VerbRead}, true, "lineage graph"},
 	{"dataset", "entity", []string{VerbExecute, VerbRead, VerbMerge}, true, "entity resolution"},
-	{"dataset", "ontology", []string{VerbRead, VerbList, VerbCreate, VerbDelete}, true, "domain ontology (entity types, inc11)"},
+	// update/approve are the WS3 four-eyes pair: propose a versioned change
+	// (POST /ontology/entities/{key}/versions) and publish it as a DISTINCT
+	// admin (.../versions/{n}/approve). Same shape as semantic.model above.
+	{"dataset", "ontology", []string{VerbRead, VerbList, VerbCreate, VerbUpdate, VerbDelete, VerbApprove}, true, "domain ontology (entity types, inc11)"},
 	// query
 	{"query", "query", []string{VerbRead, VerbList, VerbCreate, VerbUpdate, VerbDelete, VerbExecute, VerbShare}, true, "saved queries"},
 	{"query", "execution", []string{VerbRead, VerbList, VerbExecute, VerbExport}, true, "query executions"},
