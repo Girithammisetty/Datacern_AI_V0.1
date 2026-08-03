@@ -988,6 +988,7 @@ def detect_drift(client, ledger: list[dict], manifest) -> list[dict]:
 
     present = _existing_names(client)          # presence per kind (reused)
     content_live: dict[str, dict] = {}         # per content-kind live objects (lazy)
+    tenant_urns: set[str] | None = None        # dataset URNs, resolved lazily
     rows: list[dict] = []
     for r in ledger:
         if r.get("tombstoned"):
@@ -1037,11 +1038,45 @@ def detect_drift(client, ledger: list[dict], manifest) -> list[dict]:
         elif kind in present:
             if name in present[kind]:
                 rows.append(_drift_row(r, "in_sync", False, "present (content not compared)"))
-            else:
-                rows.append(_drift_row(r, "missing", True, "object deleted in Core"))
+                continue
+            # A BOUND dataset is recorded under the PACK's declared name
+            # (_rec("datasets", ds["name"], ...)), but `present` lists the
+            # TENANT's dataset names. Bind to a tenant dataset called anything
+            # else and the name lookup cannot find it — journey-packs read
+            # missing=4 for exactly the 4 datasets it had just bound and
+            # asserted were landed.
+            #
+            # target_urn is what the install actually bound, so resolve by that
+            # before calling it deleted. Strictly a FALLBACK: the name lookup is
+            # unchanged and runs first, so a genuinely deleted dataset (URN gone
+            # from the tenant listing too) still reads missing.
+            if kind == "datasets" and r.get("target_urn"):
+                if tenant_urns is None:
+                    tenant_urns = _tenant_dataset_urns(client)
+                if r["target_urn"] in tenant_urns:
+                    rows.append(_drift_row(r, "in_sync", False,
+                                           "present by bound URN (pack-declared name "
+                                           "differs from the tenant dataset's name)"))
+                    continue
+            rows.append(_drift_row(r, "missing", True, "object deleted in Core"))
         else:
             rows.append(_drift_row(r, "unverified", False, "no drift reader for this kind yet"))
     return rows
+
+
+def _tenant_dataset_urns(client) -> set[str]:
+    """Every dataset URN visible to the tenant, for resolving a bound dataset
+    whose tenant-side name differs from the pack's declared name."""
+    r = client._req("GET", f"{client.endpoints.dataset}/api/v1/datasets"
+                           f"?workspace_id={client.workspace_id}", client.author_token())
+    if r.status_code != 200:
+        return set()
+    out: set[str] = set()
+    for d in (r.json().get("data") or []):
+        for key in ("urn", "dataset_urn"):
+            if d.get(key):
+                out.add(str(d[key]))
+    return out
 
 
 def _drift_row(r: dict, status: str, content_checked: bool, detail: str) -> dict:

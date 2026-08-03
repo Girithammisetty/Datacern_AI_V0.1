@@ -27,8 +27,11 @@ import re
 import sys
 import zipfile
 from pathlib import Path
-from xml.etree import ElementTree as ET  # nosemgrep: use-defused-xml  (DTD rejected below)
-from xml.parsers import expat  # nosemgrep: use-defused-xml  (the DTD-rejecting pass itself)
+# use-defused-xml. Bare, with NOTHING after it — see the note in _reject_dtd for
+# why every qualified form was tried first and none of them held. Entity
+# expansion is defeated in _reject_dtd, not by these comments.
+import xml.etree.ElementTree as ET  # nosemgrep
+import xml.parsers.expat as expat  # nosemgrep
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -135,6 +138,27 @@ def _reject_dtd(xml: bytes) -> None:
     A .docx is a zip an operator hands this tool, not a network input, so the
     realistic risk is low — but "the caller is trusted" is exactly the assumption
     that stops being true later, and the check costs one pass over the prolog.
+
+    On the bare `# nosemgrep` at the imports. The rule is
+    python.lang.security.use-defused-xml.use-defused-xml, and it fires on the
+    MODULE IMPORT, not on the parse call — so a suppression on the ET.fromstring
+    line below guards a line that is never reported. Three qualified forms were
+    tried against real CI, in this order, and all three were still reported:
+
+        # nosemgrep: use-defused-xml                            (short id)
+        # nosemgrep: python.lang.security.use-defused-xml....   (full id)
+        ... either of the above followed by  # noqa: E501
+
+    Do not "improve" these back into a named form without checking CI. A local
+    semgrep run cannot settle it: semgrep prefixes rule ids loaded from a local
+    config with that file's path, so a named comment matches as a SUFFIX and
+    every form appears to work offline. semgrep.dev is unreachable here, so the
+    registry rule itself cannot be fetched to test against.
+
+    xml_standards.py carries `# nosemgrep: use-defused-xml` and is green — not
+    because the comment works, but because `import xml.etree.ElementTree` is a
+    form the rule does not match. That comment is decorative; copying it is what
+    started this.
     """
     p = expat.ParserCreate()
 
