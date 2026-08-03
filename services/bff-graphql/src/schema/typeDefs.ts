@@ -2227,6 +2227,10 @@ export const typeDefs = gql`
     contentType: String!
     sizeBytes: Float!
     uploadedBy: String
+    """The governed ontology entity type this document instantiates (Knowledge
+    Spine WS5) — set by the uploader from the workspace registry; null when
+    untagged."""
+    entityKey: ID
     createdAt: DateTime
   }
 

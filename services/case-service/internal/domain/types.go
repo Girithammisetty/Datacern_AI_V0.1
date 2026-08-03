@@ -142,7 +142,13 @@ type CaseEvidence struct {
 	SizeBytes   int64     `json:"size_bytes"`
 	StorageKey  string    `json:"-"` // object-store key; never exposed to clients
 	UploadedBy  string    `json:"uploaded_by"`
-	CreatedAt   time.Time `json:"created_at"`
+	// EntityKey optionally names the governed ontology entity type this
+	// document instantiates (Knowledge Spine WS5) — e.g. a loss-run PDF is
+	// about a "policy". Shape-checked at upload; the key's registry lives in
+	// dataset-service, and the UI offers only keys the workspace declares.
+	// Empty = untagged (stored as NULL).
+	EntityKey string    `json:"entity_key,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // CaseField is a custom field definition (CASE-FR-022).

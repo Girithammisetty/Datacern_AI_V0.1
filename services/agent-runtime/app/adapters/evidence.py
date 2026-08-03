@@ -117,6 +117,12 @@ class EvidenceReader:
             size = int(m.get("size_bytes") or 0)
             rec = {"id": eid, "filename": filename, "content_type": content_type,
                    "size_bytes": size, "text": "", "extracted": False, "note": ""}
+            # WS5: when the uploader tagged the document with the governed
+            # ontology type it instantiates, grounding gets to see it — the
+            # agent reads "this PDF is about a policy", not just bytes. Absent
+            # when untagged; never guessed here.
+            if m.get("entity_key"):
+                rec["entity_key"] = m["entity_key"]
             budget = min(self._max_chars_per_doc, max(0, self._max_total_chars - total))
             if budget <= 0:
                 rec["note"] = "skipped — evidence text budget exhausted"

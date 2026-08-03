@@ -64,6 +64,9 @@ export interface CaseEvidenceDTO {
   content_type?: string;
   size_bytes?: number;
   uploaded_by?: string;
+  /** WS5: the governed ontology entity type this document instantiates
+   * (optional; case-service omits it when untagged). */
+  entity_key?: string;
   created_at?: string;
 }
 

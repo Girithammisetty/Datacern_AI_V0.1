@@ -6626,6 +6626,7 @@ export const resolvers = {
         contentType: e.content_type ?? "application/octet-stream",
         sizeBytes: e.size_bytes ?? 0,
         uploadedBy: e.uploaded_by ?? null,
+        entityKey: e.entity_key ?? null,
         createdAt: e.created_at ?? null,
       }));
     },

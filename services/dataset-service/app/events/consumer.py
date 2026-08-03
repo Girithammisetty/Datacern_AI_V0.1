@@ -26,6 +26,16 @@ from app.domain.state import transition_dataset
 from app.domain.urn import dataset_urn, parse_urn, version_urn
 from app.events.envelope import make_envelope
 
+#: The interop standards ingestion-service decodes (its decode.py allow-list).
+STANDARDS_FORMATS = ("x12", "fhir", "hl7v2", "iso20022", "acord")
+
+#: Formats whose decoder emits rows with ONE documented meaning (see
+#: ingestion-service app/domain/xml_standards.py: ISO 20022 = one row per
+#: statement entry; ACORD = one row per policy-bearing element). x12/fhir/hl7v2
+#: are deliberately absent — their row meaning varies per transaction set /
+#: resourceType / message type, so a dataset-level hint would be a guess.
+STANDARDS_ROW_ENTITY = {"iso20022": "bank_statement_entry", "acord": "policy"}
+
 logger = logging.getLogger(__name__)
 
 INGESTION_TOPIC = "ingestion.events.v1"
@@ -162,6 +172,36 @@ class IngestionEventHandler:
             logger.warning("ignoring foreign/non-dataset dataset_urn %r", raw_urn)
         return None
 
+    async def _standards_provenance(
+        self, ctx: CallCtx, payload: dict,
+    ) -> tuple[list[str], dict | None]:
+        """Knowledge Spine WS5: a dataset decoded from an interop standard says
+        so, and — where the decoder's row meaning is single and documented —
+        links to the governed ontology type its rows instantiate.
+
+        Honesty rules: the ``standard:<format>`` tag states only what the
+        decoder ran. An ``ontology:<key>`` tag is added ONLY when the workspace
+        registry actually declares the key (checked here, in the service that
+        owns the registry) — a miss is recorded as ``ontology_linked: false``
+        in custom_metadata, never fabricated into a tag. x12/fhir/hl7v2 mix row
+        meanings per transaction set / resourceType / message type, so they get
+        NO dataset-level entity hint (a guess is worse than silence; per-row
+        linkage is the future slice).
+        """
+        fmt = payload.get("file_format")
+        if fmt not in STANDARDS_FORMATS:
+            return [], None
+        tags = [f"standard:{fmt}"]
+        hint = STANDARDS_ROW_ENTITY.get(fmt)
+        linked = False
+        if hint and payload.get("workspace_id"):
+            async with self.deps.uow_factory(ctx.tenant_id) as uow:
+                linked = await uow.ontology.get(payload["workspace_id"], hint) is not None
+            if linked:
+                tags.append(f"ontology:{hint}")
+        meta = {"standards": {"format": fmt, "entity_key": hint, "ontology_linked": linked}}
+        return tags, meta
+
     async def _resolve_dataset(self, ctx: CallCtx, payload: dict):
         dataset_id = self._event_dataset_id(ctx, payload)
         async with self.deps.uow_factory(ctx.tenant_id) as uow:
@@ -187,13 +227,16 @@ class IngestionEventHandler:
         # dataset id (it is embedded in the bronze table name and in every
         # dataset_urn it handed out), so the row must carry that exact id —
         # minting a fresh one here is the URN drift this fixes.
+        std_tags, std_meta = await self._standards_provenance(ctx, payload)
         base = {
             "id": dataset_id,  # None -> DatasetService mints one (API path)
             "workspace_id": payload["workspace_id"],
             "iceberg_table": payload.get("iceberg_table"),
             "visibility": Visibility.WORKSPACE,
-            "tags": payload.get("tags") or [],
+            "tags": [*(payload.get("tags") or []), *std_tags],
         }
+        if std_meta:
+            base["custom_metadata"] = std_meta
         name = payload.get("dataset_name") or f"ingestion-{payload['ingestion_id']}"
         try:
             return await self.datasets.create(ctx, {**base, "name": name})

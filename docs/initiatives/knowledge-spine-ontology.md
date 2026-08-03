@@ -330,11 +330,36 @@ WS5 routes that signal into the governed ontology flow. Built 2026-08-03:
   `in_review` proposal that a DISTINCT admin must publish (four-eyes). The gap
   never mutates the ontology directly.
 
-**Deferred in WS5:** entity-linking standards-decoded rows + case evidence to
-`entity_key` (the other WS5 leg); richer gap→proposal shapes (e.g. proposing a
-new attribute or a new type instead of a description note); marking a gap as
-handled/dismissed (the queue is read-only over the transcript corpus today, so
-a proposed gap still lists).
+**Built since — the entity-linking leg (unstructured/standards → `entity_key`):**
+
+- **Standards-decoded datasets (dataset-service ingestion consumer).** The
+  `ingestion.completed` payload already carried `file_format` and the consumer
+  discarded it; now a dataset decoded from an interop standard is tagged
+  `standard:<format>` (x12/fhir/hl7v2/iso20022/acord) with the full record in
+  `custom_metadata.standards`. Where the decoder's row meaning is single and
+  documented — ISO 20022 = one row per statement entry, ACORD = one row per
+  policy — the consumer resolves that hint against the workspace ontology
+  registry IT OWNS and adds `ontology:<key>` ONLY when the type is declared
+  (a miss is `ontology_linked: false`, never a fabricated tag). x12/fhir/hl7v2
+  deliberately get no dataset-level entity hint: their row meaning varies per
+  transaction set / resourceType / message type, and a guess is worse than
+  silence (per-row linkage is the future slice).
+- **Case evidence (case-service → BFF → UI → grounding).** `case_evidence`
+  gains a nullable `entity_key` (migration 000009): the uploader optionally
+  names the governed type the document instantiates via a select fed by the
+  workspace registry (never free text), shape-checked server-side against the
+  ontology key grammar. It surfaces as `CaseEvidence.entityKey` in GraphQL, an
+  "about: <key>" badge on the attachments tab, and — closing the loop to WS1 —
+  the agent-runtime `EvidenceReader` now carries `entity_key` into grounding,
+  so an agent reads "this PDF is about a policy", not just bytes. Untagged
+  evidence is untouched everywhere; the reader never guesses a type.
+
+**Still deferred in WS5:** per-row entity linkage for mixed-type standards
+datasets (x12/fhir/hl7v2); server-side registry existence check on the evidence
+upload path (the UI feeds from the registry; case-service shape-checks only);
+richer gap→proposal shapes (e.g. proposing a new attribute or a new type
+instead of a description note); marking a gap as handled/dismissed (the queue
+is read-only over the transcript corpus today, so a proposed gap still lists).
 
 ### Increment 3 (WS2) — link the vertebrae on `entity_key` — BUILT (slices 1+2)
 

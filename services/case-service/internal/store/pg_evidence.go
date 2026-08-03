@@ -10,12 +10,12 @@ import (
 	"github.com/datacern-ai/case-service/internal/domain"
 )
 
-const evidenceCols = `id, tenant_id, workspace_id, case_id, filename, content_type, size_bytes, storage_key, uploaded_by, created_at`
+const evidenceCols = `id, tenant_id, workspace_id, case_id, filename, content_type, size_bytes, storage_key, uploaded_by, COALESCE(entity_key,''), created_at`
 
 func scanEvidence(row pgx.Row) (*domain.CaseEvidence, error) {
 	var e domain.CaseEvidence
 	if err := row.Scan(&e.ID, &e.TenantID, &e.WorkspaceID, &e.CaseID, &e.Filename,
-		&e.ContentType, &e.SizeBytes, &e.StorageKey, &e.UploadedBy, &e.CreatedAt); err != nil {
+		&e.ContentType, &e.SizeBytes, &e.StorageKey, &e.UploadedBy, &e.EntityKey, &e.CreatedAt); err != nil {
 		return nil, err
 	}
 	return &e, nil
@@ -27,9 +27,9 @@ func (s *PG) InsertEvidence(ctx context.Context, op domain.Op, e *domain.CaseEvi
 	return s.withTenant(ctx, op.Tenant, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO case_evidence
-			  (id, tenant_id, workspace_id, case_id, filename, content_type, size_bytes, storage_key, uploaded_by)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-			e.ID, e.TenantID, e.WorkspaceID, e.CaseID, e.Filename, e.ContentType, e.SizeBytes, e.StorageKey, e.UploadedBy)
+			  (id, tenant_id, workspace_id, case_id, filename, content_type, size_bytes, storage_key, uploaded_by, entity_key)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULLIF($10,''))`,
+			e.ID, e.TenantID, e.WorkspaceID, e.CaseID, e.Filename, e.ContentType, e.SizeBytes, e.StorageKey, e.UploadedBy, e.EntityKey)
 		return err
 	})
 }
