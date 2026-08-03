@@ -14,6 +14,7 @@ import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { cap } from "@/lib/authz/registry";
 import { useSession } from "@/lib/session/SessionContext";
 import { OntologyVersionPanel } from "@/components/ontology/OntologyVersionPanel";
+import { KnowledgeGapsPanel } from "@/components/ontology/KnowledgeGapsPanel";
 
 /**
  * Domain ontology registry (inc11). Read view of the governed entity-TYPE
@@ -113,6 +114,8 @@ export default function OntologyPage() {
         </Card>
       )}
 
+      <KnowledgeGapsPanel entities={entities} />
+
       <AsyncBoundary
         isLoading={q.isLoading}
         isError={q.isError}
@@ -160,9 +163,17 @@ export default function OntologyPage() {
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {e.attributes.map((a) => (
-                        <Badge key={a.name} variant="outline">
+                        <Badge
+                          key={a.name}
+                          variant="outline"
+                          title={a.enumValues.length > 0 ? `allowed: ${a.enumValues.join(", ")}` : undefined}
+                        >
                           {a.name}
+                          {a.required && <span className="text-destructive" aria-label="required">*</span>}
                           {a.dataType && <span className="ml-1 opacity-60">{a.dataType}</span>}
+                          {a.enumValues.length > 0 && (
+                            <span className="ml-1 opacity-60">enum({a.enumValues.length})</span>
+                          )}
                         </Badge>
                       ))}
                     </div>

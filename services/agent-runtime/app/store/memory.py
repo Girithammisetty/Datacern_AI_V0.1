@@ -382,6 +382,15 @@ class InMemoryStore:
         out.sort(key=lambda t: t.created_at, reverse=True)
         return [copy.copy(t) for t in out[:limit]]
 
+    async def list_knowledge_gaps(self, tenant_id: str, *, limit: int = 50) -> list[Transcript]:
+        """WS5 (knowledge spine): decided transcripts where the human named
+        MISSING knowledge — the signal the steward loop turns into governed
+        ontology proposals. Newest decisions first."""
+        out = [t for t in self._transcripts.values()
+               if t.tenant_id == tenant_id and (t.feedback or {}).get("missing_knowledge")]
+        out.sort(key=lambda t: (t.decided_at or t.created_at), reverse=True)
+        return [copy.copy(t) for t in out[:limit]]
+
     # ---- SLM SFT datasets (milestone 2) ------------------------------------
     async def next_sft_version(self, tenant_id: str, agent_key: str) -> int:
         existing = [d.version for d in self._sft_datasets.values()

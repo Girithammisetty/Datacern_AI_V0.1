@@ -39,6 +39,7 @@ export const qk = {
   ontologyEntities: (workspaceId: string) => ["data", "ontologyEntities", workspaceId] as const,
   ontologyVersions: (entityKey: string, workspaceId: string) =>
     ["data", "ontologyVersions", entityKey, workspaceId] as const,
+  knowledgeGaps: () => ["data", "knowledgeGaps"] as const,
   modelArchetypes: (workspaceId: string) => ["ml", "modelArchetypes", workspaceId] as const,
   packs: () => ["packs", "catalog"] as const,
   pack: (name: string) => ["packs", "pack", name] as const,

@@ -44,6 +44,32 @@ async def list_transcripts(
             "page": {"next_cursor": None, "has_more": False}}
 
 
+@router.get("/knowledge-gaps")
+async def list_knowledge_gaps(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    """WS5 (knowledge spine): the missing-knowledge signals humans recorded at
+    decision time, projected as a steward queue — each gap names knowledge the
+    agent lacked, so a steward can turn it into a governed ontology proposal.
+    Text was PII-redacted at capture."""
+    principal = await principal_of(request)
+    c = request.app.state.container
+    rows = await c.store.list_knowledge_gaps(principal.tenant_id, limit=limit)
+    return {"data": [
+        {
+            "transcript_id": t.transcript_id, "run_id": t.run_id,
+            "agent_key": t.agent_key, "agent_version": t.agent_version,
+            "missing_knowledge": (t.feedback or {}).get("missing_knowledge"),
+            "knowledge_relevance": (t.feedback or {}).get("knowledge_relevance"),
+            "adoption": (t.feedback or {}).get("adoption"),
+            "decided_by": t.decided_by,
+            "decided_at": t.decided_at.isoformat() if t.decided_at else None,
+        }
+        for t in rows
+    ], "page": {"next_cursor": None, "has_more": False}}
+
+
 @router.get("/transcripts/{transcript_id}")
 async def get_transcript(request: Request, transcript_id: str):
     principal = await principal_of(request)
