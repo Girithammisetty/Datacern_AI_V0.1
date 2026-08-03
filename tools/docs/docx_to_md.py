@@ -27,10 +27,11 @@ import re
 import sys
 import zipfile
 from pathlib import Path
-# Both suppressions name the rule IN FULL. A short id does NOT suppress — see the
-# note in _reject_dtd. XXE/entity expansion is defeated there, not here.
-import xml.etree.ElementTree as ET  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml  # noqa: E501
-import xml.parsers.expat as expat  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml  # noqa: E501
+# use-defused-xml. Bare, with NOTHING after it — see the note in _reject_dtd for
+# why every qualified form was tried first and none of them held. Entity
+# expansion is defeated in _reject_dtd, not by these comments.
+import xml.etree.ElementTree as ET  # nosemgrep
+import xml.parsers.expat as expat  # nosemgrep
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -138,17 +139,26 @@ def _reject_dtd(xml: bytes) -> None:
     realistic risk is low — but "the caller is trusted" is exactly the assumption
     that stops being true later, and the check costs one pass over the prolog.
 
-    On the suppressions at the imports: semgrep's `nosemgrep: <id>` matches the
-    rule id in FULL. A short id silently suppresses nothing, which is easy to
-    miss because it reads exactly like a working one. xml_standards.py carries
-    `# nosemgrep: use-defused-xml` and is green — not because that comment works,
-    but because `import xml.etree.ElementTree` is a form the rule does not match
-    at all. Copying that comment onto a `from xml.etree import ElementTree` line
-    is what put two ERROR findings on main. Measured, one file per case:
+    On the bare `# nosemgrep` at the imports. The rule is
+    python.lang.security.use-defused-xml.use-defused-xml, and it fires on the
+    MODULE IMPORT, not on the parse call — so a suppression on the ET.fromstring
+    line below guards a line that is never reported. Three qualified forms were
+    tried against real CI, in this order, and all three were still reported:
 
-        # nosemgrep: use-defused-xml                       -> still reported
-        # nosemgrep                                        -> suppressed
-        # nosemgrep: python.lang.security.use-defused-...  -> suppressed
+        # nosemgrep: use-defused-xml                            (short id)
+        # nosemgrep: python.lang.security.use-defused-xml....   (full id)
+        ... either of the above followed by  # noqa: E501
+
+    Do not "improve" these back into a named form without checking CI. A local
+    semgrep run cannot settle it: semgrep prefixes rule ids loaded from a local
+    config with that file's path, so a named comment matches as a SUFFIX and
+    every form appears to work offline. semgrep.dev is unreachable here, so the
+    registry rule itself cannot be fetched to test against.
+
+    xml_standards.py carries `# nosemgrep: use-defused-xml` and is green — not
+    because the comment works, but because `import xml.etree.ElementTree` is a
+    form the rule does not match. That comment is decorative; copying it is what
+    started this.
     """
     p = expat.ParserCreate()
 
