@@ -646,10 +646,21 @@ export class AgentClient {
   /** GET /knowledge-gaps (Knowledge Spine WS5) — the missing-knowledge signals
    * humans recorded at decision time, projected as a steward queue. Text was
    * PII-redacted at capture. */
-  knowledgeGaps(limit: number): Promise<Page<KnowledgeGapDTO>> {
+  knowledgeGaps(limit: number, includeDecided = false): Promise<Page<KnowledgeGapDTO>> {
     return this.http.get<Page<KnowledgeGapDTO>>("/api/v1/knowledge-gaps", {
-      query: { limit },
+      query: { limit, include_decided: includeDecided ? "true" : undefined },
     });
+  }
+
+  /** POST /knowledge-gaps/{id}/decision — steward triage (WS5): handled |
+   * dismissed. 404 downstream when the transcript is no gap; 422 on a made-up
+   * status — both surface verbatim. */
+  async decideKnowledgeGap(transcriptId: string, status: string): Promise<KnowledgeGapDecisionDTO> {
+    const r = await this.http.post<{ data: KnowledgeGapDecisionDTO }>(
+      `/api/v1/knowledge-gaps/${encodeURIComponent(transcriptId)}/decision`,
+      { body: { status } },
+    );
+    return r.data;
   }
 
   sftDatasets(params: { agentKey?: string; limit: number }): Promise<Page<SftDatasetDTO>> {
@@ -1015,6 +1026,18 @@ export interface KnowledgeGapDTO {
   knowledge_relevance?: string | null;
   adoption?: string | null;
   decided_by?: string | null;
+  decided_at?: string | null;
+  /** Steward triage (WS5): handled | dismissed; null while the gap is open. */
+  gap_status?: string | null;
+  gap_decided_by?: string | null;
+  gap_decided_at?: string | null;
+}
+
+/** POST /knowledge-gaps/{id}/decision response (WS5 steward triage). */
+export interface KnowledgeGapDecisionDTO {
+  transcript_id: string;
+  status: string;
+  decided_by: string;
   decided_at?: string | null;
 }
 

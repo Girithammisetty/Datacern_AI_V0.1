@@ -767,16 +767,66 @@ class SqlStore:
             rows = (await s.execute(text(q), params)).mappings().all()
         return [_transcript(r) for r in rows]
 
-    async def list_knowledge_gaps(self, tenant_id: str, *, limit: int = 50) -> list[Transcript]:
+    async def list_knowledge_gaps(
+        self, tenant_id: str, *, limit: int = 50, include_decided: bool = False,
+    ) -> list[Transcript]:
         """WS5: decided transcripts carrying the missing-knowledge signal
-        (feedback->>'missing_knowledge'), newest decisions first."""
+        (feedback->>'missing_knowledge'), newest decisions first. Triaged
+        (handled/dismissed) gaps are excluded unless ``include_decided`` —
+        the decisions subselect is RLS-scoped like everything else."""
         q = ("SELECT * FROM agent_transcripts "
              "WHERE feedback->>'missing_knowledge' IS NOT NULL "
-             "AND feedback->>'missing_knowledge' <> '' "
-             "ORDER BY decided_at DESC NULLS LAST, created_at DESC LIMIT :lim")
+             "AND feedback->>'missing_knowledge' <> '' ")
+        if not include_decided:
+            q += ("AND transcript_id NOT IN "
+                  "(SELECT transcript_id FROM knowledge_gap_decisions) ")
+        q += "ORDER BY decided_at DESC NULLS LAST, created_at DESC LIMIT :lim"
         async with self._tenant(tenant_id) as s:
             rows = (await s.execute(text(q), {"lim": limit})).mappings().all()
         return [_transcript(r) for r in rows]
+
+    async def decide_knowledge_gap(
+        self, tenant_id: str, transcript_id: str, *, status: str, decided_by: str,
+    ) -> dict | None:
+        """Record the steward's triage of a gap (handled | dismissed). Returns
+        None when the transcript doesn't exist in this tenant or doesn't carry
+        the missing-knowledge signal — there is no gap to decide. Re-deciding
+        upserts (triage is working state; the audit spine covers the proposals
+        a gap produced)."""
+        async with self._tenant(tenant_id) as s:
+            found = (await s.execute(text(
+                "SELECT 1 FROM agent_transcripts WHERE transcript_id = :tid "
+                "AND feedback->>'missing_knowledge' IS NOT NULL "
+                "AND feedback->>'missing_knowledge' <> ''"),
+                {"tid": transcript_id})).first()
+            if not found:
+                return None
+            r = (await s.execute(text(
+                "INSERT INTO knowledge_gap_decisions "
+                "  (transcript_id, tenant_id, status, decided_by, decided_at) "
+                "VALUES (:tid, :tenant, :status, :by, now()) "
+                "ON CONFLICT (transcript_id) DO UPDATE SET "
+                "  status = EXCLUDED.status, decided_by = EXCLUDED.decided_by, "
+                "  decided_at = now() "
+                "RETURNING transcript_id, status, decided_by, decided_at"),
+                {"tid": transcript_id, "tenant": tenant_id,
+                 "status": status, "by": decided_by})).mappings().first()
+        return dict(r) if r else None
+
+    async def gap_decisions(
+        self, tenant_id: str, transcript_ids: list[str],
+    ) -> dict[str, dict]:
+        """Triage state for the given gaps, keyed by transcript_id (absent =
+        still open)."""
+        if not transcript_ids:
+            return {}
+        async with self._tenant(tenant_id) as s:
+            rows = (await s.execute(text(
+                "SELECT transcript_id, status, decided_by, decided_at "
+                "FROM knowledge_gap_decisions "
+                "WHERE transcript_id = ANY(:ids)"),
+                {"ids": transcript_ids})).mappings().all()
+        return {str(r["transcript_id"]): dict(r) for r in rows}
 
     # ---- SLM SFT datasets (milestone 2) ------------------------------------
     async def next_sft_version(self, tenant_id: str, agent_key: str) -> int:

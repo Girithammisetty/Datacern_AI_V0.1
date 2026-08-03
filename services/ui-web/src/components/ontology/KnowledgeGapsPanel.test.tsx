@@ -46,7 +46,8 @@ function gap(over: Record<string, unknown> = {}) {
     transcriptId: "tr-1", runId: "run-1", agentKey: "case-triage", agentVersion: 2,
     missingKnowledge: "the policy exclusion for cosmetic claims",
     knowledgeRelevance: "irrelevant", adoption: "reject",
-    decidedBy: "analyst-1", decidedAt: "2026-08-01T00:00:00Z", ...over,
+    decidedBy: "analyst-1", decidedAt: "2026-08-01T00:00:00Z",
+    gapStatus: null, gapDecidedBy: null, gapDecidedAt: null, ...over,
   };
 }
 
@@ -153,6 +154,80 @@ describe("KnowledgeGapsPanel (WS5 steward loop)", () => {
       expect(useToasts.getState().toasts.some((t) => /lowercase slug/.test(t.title))).toBe(true),
     );
     expect(requests.some((r) => r.doc.includes("mutation ProposeOntologyUpdate"))).toBe(false);
+  });
+
+  it("acting on a gap marks it handled — only after the proposal succeeded", async () => {
+    handler = (doc) => {
+      if (/query Me\b/.test(doc)) return meResult;
+      if (doc.includes("query KnowledgeGaps")) return { knowledgeGaps: [gap()] };
+      if (doc.includes("mutation ProposeOntologyUpdate")) return PROPOSE_OK;
+      if (doc.includes("mutation DecideKnowledgeGap")) {
+        return { decideKnowledgeGap: { transcriptId: "tr-1", status: "handled", decidedBy: "u" } };
+      }
+      return {};
+    };
+    const user = userEvent.setup();
+    renderWithProviders(<KnowledgeGapsPanel entities={ENTITIES} />);
+    await screen.findByText(/policy exclusion/);
+
+    await user.selectOptions(await screen.findByLabelText(/Target type for gap tr-1/), "claim");
+    await user.click(screen.getByRole("button", { name: /propose update/i }));
+
+    const decideCall = await waitFor(() => {
+      const c = requests.find((r) => r.doc.includes("mutation DecideKnowledgeGap"));
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    expect(decideCall.vars).toEqual({ transcriptId: "tr-1", status: "handled" });
+    // The propose ran FIRST — handled is a fact, not an intent.
+    const proposeIdx = requests.findIndex((r) => r.doc.includes("mutation ProposeOntologyUpdate"));
+    const decideIdx = requests.findIndex((r) => r.doc.includes("mutation DecideKnowledgeGap"));
+    expect(proposeIdx).toBeGreaterThanOrEqual(0);
+    expect(decideIdx).toBeGreaterThan(proposeIdx);
+  });
+
+  it("Dismiss triages a gap without proposing anything", async () => {
+    handler = (doc) => {
+      if (/query Me\b/.test(doc)) return meResult;
+      if (doc.includes("query KnowledgeGaps")) return { knowledgeGaps: [gap()] };
+      if (doc.includes("mutation DecideKnowledgeGap")) {
+        return { decideKnowledgeGap: { transcriptId: "tr-1", status: "dismissed", decidedBy: "u" } };
+      }
+      return {};
+    };
+    const user = userEvent.setup();
+    renderWithProviders(<KnowledgeGapsPanel entities={ENTITIES} />);
+    await screen.findByText(/policy exclusion/);
+
+    await user.click(await screen.findByRole("button", { name: /Dismiss gap tr-1/ }));
+    await waitFor(() => {
+      const c = requests.find((r) => r.doc.includes("mutation DecideKnowledgeGap"));
+      expect(c?.vars).toEqual({ transcriptId: "tr-1", status: "dismissed" });
+    });
+    expect(requests.some((r) => r.doc.includes("mutation ProposeOntologyUpdate"))).toBe(false);
+  });
+
+  it("Show resolved lists triaged gaps read-only with their state", async () => {
+    handler = (doc, vars) => {
+      if (/query Me\b/.test(doc)) return meResult;
+      if (doc.includes("query KnowledgeGaps")) {
+        // Open view: empty. Resolved view: one dismissed gap.
+        if (vars?.includeDecided) {
+          return { knowledgeGaps: [gap({ gapStatus: "dismissed", gapDecidedBy: "steward-1" })] };
+        }
+        return { knowledgeGaps: [gap()] };
+      }
+      return {};
+    };
+    const user = userEvent.setup();
+    renderWithProviders(<KnowledgeGapsPanel entities={ENTITIES} />);
+    await screen.findByText(/policy exclusion/);
+
+    await user.click(screen.getByRole("button", { name: /show resolved/i }));
+    expect(await screen.findByText(/dismissed by steward-1/)).toBeInTheDocument();
+    // Triaged rows are history — no shape controls, no dismiss.
+    expect(screen.queryByLabelText(/Proposal shape for gap tr-1/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Dismiss gap tr-1/ })).not.toBeInTheDocument();
   });
 
   it("creates a new type seeded from the gap — created, never claimed as proposed", async () => {

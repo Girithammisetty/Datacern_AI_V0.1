@@ -5826,16 +5826,32 @@ export interface KnowledgeGap {
   adoption: string | null;
   decidedBy: string | null;
   decidedAt: string | null;
+  /** Steward triage (WS5): handled | dismissed; null while the gap is open. */
+  gapStatus: string | null;
+  gapDecidedBy: string | null;
+  gapDecidedAt: string | null;
 }
 export interface KnowledgeGapsResult {
   knowledgeGaps: KnowledgeGap[];
 }
+export interface DecideKnowledgeGapResult {
+  decideKnowledgeGap: { transcriptId: string; status: string; decidedBy: string };
+}
 
 export const KNOWLEDGE_GAPS = /* GraphQL */ `
-  query KnowledgeGaps($limit: Int) {
-    knowledgeGaps(limit: $limit) {
+  query KnowledgeGaps($limit: Int, $includeDecided: Boolean) {
+    knowledgeGaps(limit: $limit, includeDecided: $includeDecided) {
       transcriptId runId agentKey agentVersion missingKnowledge
       knowledgeRelevance adoption decidedBy decidedAt
+      gapStatus gapDecidedBy gapDecidedAt
+    }
+  }
+`;
+
+export const DECIDE_KNOWLEDGE_GAP = /* GraphQL */ `
+  mutation DecideKnowledgeGap($transcriptId: ID!, $status: String!) {
+    decideKnowledgeGap(transcriptId: $transcriptId, status: $status) {
+      transcriptId status decidedBy
     }
   }
 `;
