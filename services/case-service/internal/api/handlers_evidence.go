@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -16,6 +18,39 @@ import (
 // entityKeyRe mirrors the restricted name shape the ontology registry enforces
 // on entity keys (dataset-service; same shape semantic-service validates).
 var entityKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+
+// OntologyChecker resolves whether a workspace declares an entity type
+// (dataset-service's governed registry). (false, nil) is a DEFINITIVE miss;
+// a non-nil error means the registry was unreachable — callers fail soft.
+type OntologyChecker interface {
+	OntologyTypeExists(ctx context.Context, tenant uuid.UUID,
+		workspaceID uuid.UUID, entityKey string) (bool, error)
+}
+
+// checkEvidenceEntityKey applies the WS5 registry check to an upload's
+// optional entity_key. Semantics mirror semantic-service's authoring
+// validation: a DEFINITIVE "not declared" is a client error naming the key
+// (typo protection — the UI feeds this field from the registry, so a miss
+// means staleness or a rogue client); a registry outage fails SOFT and keeps
+// the shape-checked tag, because the tag is optional metadata and an outage
+// must never block evidence upload. A nil checker disables the check.
+func checkEvidenceEntityKey(ctx context.Context, ontology OntologyChecker,
+	tenant, workspaceID uuid.UUID, entityKey string) *domain.Error {
+	if entityKey == "" || ontology == nil {
+		return nil
+	}
+	declared, err := ontology.OntologyTypeExists(ctx, tenant, workspaceID, entityKey)
+	if err != nil {
+		slog.Warn("evidence entity_key registry check skipped (registry unreachable)",
+			"entity_key", entityKey, "err", err)
+		return nil
+	}
+	if !declared {
+		return domain.EValidation(fmt.Sprintf(
+			"entity_key %q is not declared in this workspace's ontology", entityKey), nil)
+	}
+	return nil
+}
 
 // maxEvidenceBytes caps a single evidence upload (25 MiB): claim photos, PDFs,
 // scanned reports. Large enough for real documents, small enough to hold in
@@ -78,6 +113,13 @@ func (s *Server) handleAddEvidence(w http.ResponseWriter, r *http.Request) {
 	if entityKey != "" && !entityKeyRe.MatchString(entityKey) {
 		writeErr(w, r, domain.EValidation(
 			"entity_key must match the ontology key shape (lowercase slug)", nil))
+		return
+	}
+	// WS5 registry check: a definitive "not declared" is rejected before any
+	// bytes are stored; a registry outage fails soft inside the helper.
+	if verr := checkEvidenceEntityKey(
+		r.Context(), s.Ontology, op.Tenant, c0.WorkspaceID, entityKey); verr != nil {
+		writeErr(w, r, verr)
 		return
 	}
 

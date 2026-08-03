@@ -68,6 +68,10 @@ func NewDatasetHTTP(baseURL, issuer, audience, kid string, key *rsa.PrivateKey) 
 }
 
 func (d *DatasetHTTP) mint(tenant uuid.UUID) (string, error) {
+	return d.mintScopes(tenant, []string{"dataset.dataset.read"})
+}
+
+func (d *DatasetHTTP) mintScopes(tenant uuid.UUID, scopes []string) (string, error) {
 	if d.Key == nil {
 		return "", fmt.Errorf("dataset client signing key not configured")
 	}
@@ -76,7 +80,7 @@ func (d *DatasetHTTP) mint(tenant uuid.UUID) (string, error) {
 		"sub":       "svc:case-service",
 		"typ":       "service",
 		"tenant_id": tenant.String(),
-		"scopes":    []string{"dataset.dataset.read"},
+		"scopes":    scopes,
 		"iss":       d.Issuer,
 		"aud":       d.Audience,
 		"iat":       now.Unix(),
@@ -88,6 +92,46 @@ func (d *DatasetHTTP) mint(tenant uuid.UUID) (string, error) {
 		tok.Header["kid"] = d.KID
 	}
 	return tok.SignedString(d.Key)
+}
+
+// OntologyTypeExists asks dataset-service's public ontology API whether the
+// workspace declares entity_key (Knowledge Spine WS5 — the evidence-upload
+// registry check). Three-way contract mirroring semantic-service's authoring
+// validation: (true, nil) declared; (false, nil) a DEFINITIVE miss (the
+// registry answered 404); (false, err) the registry was unreachable or errored
+// — the caller fails SOFT on err, because the tag is optional metadata and an
+// outage must never block evidence upload.
+func (d *DatasetHTTP) OntologyTypeExists(ctx context.Context, tenant uuid.UUID,
+	workspaceID uuid.UUID, entityKey string) (bool, error) {
+	if d.BaseURL == "" {
+		return false, fmt.Errorf("dataset-service not configured (DATASET_URL)")
+	}
+	tok, err := d.mintScopes(tenant, []string{"dataset.ontology.read"})
+	if err != nil {
+		return false, err
+	}
+	u := fmt.Sprintf("%s/api/v1/ontology/entities/%s?filter[workspace_id]=%s",
+		strings.TrimRight(d.BaseURL, "/"), url.PathEscape(entityKey),
+		url.QueryEscape(workspaceID.String()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := d.client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	switch {
+	case resp.StatusCode == http.StatusOK:
+		return true, nil
+	case resp.StatusCode == http.StatusNotFound:
+		return false, nil // definitive: the registry answered, the key is not declared
+	default:
+		return false, fmt.Errorf("dataset-service returned %d", resp.StatusCode)
+	}
 }
 
 // BrowseRows fetches up to limit rows with the trigger's conditions pushed

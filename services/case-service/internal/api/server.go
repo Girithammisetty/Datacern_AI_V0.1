@@ -36,6 +36,10 @@ type Server struct {
 	RowFetcher RowFetcher
 	Snapshots  SnapshotStore
 	Evidence   EvidenceStore // object storage for case evidence attachments (task #77)
+	// Ontology checks an evidence entity_key against the governed registry
+	// (Knowledge Spine WS5). nil disables the check (tags stay shape-checked
+	// only) — misconfiguration degrades honestly instead of blocking uploads.
+	Ontology OntologyChecker
 	// Redis backs the per-tenant bulk concurrency gate (CASE-FR-032). Nil
 	// disables the gate (unit tests); the runtime always wires it.
 	Redis *redisx.Client
