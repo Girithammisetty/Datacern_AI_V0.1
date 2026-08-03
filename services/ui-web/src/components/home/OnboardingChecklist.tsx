@@ -8,7 +8,7 @@
  * card for good. The card also disappears on its own once everything is done.
  */
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Circle, Rocket, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, Circle, Compass, Rocket, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/primitives";
@@ -16,11 +16,13 @@ import { visibleTracks } from "@/lib/onboarding/checklist";
 import { useOnboardingProgress } from "@/lib/onboarding/useOnboardingProgress";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { useSession } from "@/lib/session/SessionContext";
+import { useProductTour } from "@/stores/ui";
 
 export function OnboardingChecklist() {
   const { can, isLoading } = useCapabilities();
   const session = useSession();
   const progress = useOnboardingProgress(session.tenantId, session.userId);
+  const startTour = useProductTour((s) => s.start);
 
   // Wait for real capabilities — never flash steps the viewer can't open.
   if (isLoading) return null;
@@ -42,9 +44,14 @@ export function OnboardingChecklist() {
               Your first ten minutes — {doneCount} of {all.length} done. Check things off as you go.
             </CardDescription>
           </div>
-          <Button size="sm" variant="ghost" aria-label="Hide getting started" onClick={progress.dismiss}>
-            <X className="size-4" aria-hidden /> Hide
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button size="sm" variant="outline" onClick={startTour}>
+              <Compass className="size-4" aria-hidden /> Take the tour
+            </Button>
+            <Button size="sm" variant="ghost" aria-label="Hide getting started" onClick={progress.dismiss}>
+              <X className="size-4" aria-hidden /> Hide
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
