@@ -316,6 +316,14 @@ if [ "$SKIP_SEED" = 0 ]; then
   if [ "$PLATFORM_ONLY" = 0 ]; then
     say "${BLD}PHASE 3b${NC} seeding the claims-vertical demo (real APIs; cases in queue + pending proposal)"
     ( cd "$LOCAL_DIR" && "$PY" seed_claims_demo.py ) 2>&1 | tee "$LOG_DIR/seed_claims_demo.log"
+    # 3c completes the capability chain 3b starts. 3b already walks source ->
+    # ingestion -> dataset -> semantic model -> dashboard -> cases -> AI
+    # proposals -> retrain; this adds the four links that were shipped but
+    # invisible on a fresh boot (ontology, pipeline template, eval suite, grid +
+    # scheduled report) plus Jessie, the tenant-authored agent. Every stage is
+    # additive and best-effort, so a failure here leaves a working demo.
+    say "${BLD}PHASE 3c${NC} seeding the capability tour (ontology, pipeline, evals, grid+report, Jessie)"
+    ( cd "$LOCAL_DIR" && "$PY" seed_capability_tour.py ) 2>&1 | tee "$LOG_DIR/seed_capability_tour.log"
   else
     warn "skipping claims-vertical demo seed (--platform-only)"
   fi
@@ -388,10 +396,21 @@ echo "     datascientist@demo.datacern  — datasets, experiments, promoted mode
 echo "     admin@demo.datacern          — everything"
 echo
 if [ "$PLATFORM_ONLY" = 0 ]; then
-  echo "  ${BLD}What to try:${NC}"
-  echo "     Cases -> open a claim (e.g. the duplicate-invoice one from Zürich Ré)"
-  echo "     -> Copilot triages it -> approve the proposal in the Inbox"
-  echo "     -> the correction feeds the learning loop (retrain -> promoted model)"
+  echo "  ${BLD}What to try — the chain, in order:${NC}"
+  echo "     Data > Ingestions    the source file that was really ingested"
+  echo "     Data > Datasets      the typed dataset it produced"
+  echo "     Data > Ontology      Claim -> Provider / Member / ClaimLine, typed relationships"
+  echo "     Data > Semantic      the published model the charts query through"
+  echo "     Data > Pipelines     the authored training pipeline over that dataset"
+  echo "     ML                   experiment -> run -> promoted model (four-eyes)"
+  echo "     ML > Evals           the suite whose gate can REFUSE a promotion"
+  echo "     Dashboards           charts + the grid, and the weekly digest schedule"
+  echo "     Cases                work one BY HAND, then let ${BLD}Jessie${NC} propose on another"
+  echo "     Inbox                approve or reject Jessie's proposal — she cannot commit"
+  echo
+  echo "  ${BLD}The one-minute version:${NC} open the duplicate-invoice claim from Zürich Ré,"
+  echo "     let Copilot triage it, approve in the Inbox, and watch the correction"
+  echo "     feed the learning loop (retrain -> promoted model)."
 else
   echo "  ${BLD}Platform-only boot${NC} — no vertical demo data seeded (--platform-only)."
   echo "     Log in as admin@demo.datacern and use Data > Upload + the semantic-model"
