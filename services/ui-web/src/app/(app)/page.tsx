@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, ScrollText, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { InsightsCard } from "@/components/home/InsightsCard";
+import { OnboardingChecklist } from "@/components/home/OnboardingChecklist";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/primitives";
 import { CostPanel } from "@/components/usage/CostPanel";
 import { useMe, useProposalsInbox, useCaseSearch, useLearningLoop } from "@/lib/graphql/hooks";
@@ -60,6 +61,8 @@ export default function HomePage() {
         title={roleLabel ? `Welcome, ${roleLabel}` : "Welcome"}
         description={`${tenantLabel} · ${workspaceLabel}`}
       />
+
+      <OnboardingChecklist />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
