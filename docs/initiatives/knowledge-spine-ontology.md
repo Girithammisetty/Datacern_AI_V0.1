@@ -354,11 +354,21 @@ WS5 routes that signal into the governed ontology flow. Built 2026-08-03:
   so an agent reads "this PDF is about a policy", not just bytes. Untagged
   evidence is untouched everywhere; the reader never guesses a type.
 
+**Built since — richer gap→proposal shapes.** The steward queue now closes a
+gap in the shape it actually calls for, not only as a description note:
+**knowledge note** (unchanged — WS3 four-eyes proposal on a type's
+description), **new attribute** (the gap becomes a proposed attribute on a
+type; the proposal re-sends the type's existing attributes byte-for-byte,
+constraints included, so the WS3 diff shows exactly one addition; attribute
+names are slug-checked client-side before any call), and **new type** (the gap
+seeds a whole new entity type, gated on `dataset.ontology.create` and
+honestly labelled "created", never "proposed" — registry creation has never
+been four-eyes, same as the page's New-entity-type button).
+
 **Still deferred in WS5:** per-row entity linkage for mixed-type standards
-datasets (x12/fhir/hl7v2); server-side registry existence check on the evidence
-upload path (the UI feeds from the registry; case-service shape-checks only);
-richer gap→proposal shapes (e.g. proposing a new attribute or a new type
-instead of a description note); marking a gap as handled/dismissed (the queue
+datasets (x12/fhir/hl7v2) — in flight on its own branch; server-side registry
+existence check on the evidence upload path (the UI feeds from the registry;
+case-service shape-checks only); marking a gap as handled/dismissed (the queue
 is read-only over the transcript corpus today, so a proposed gap still lists).
 
 ### Increment 3 (WS2) — link the vertebrae on `entity_key` — BUILT (slices 1+2)

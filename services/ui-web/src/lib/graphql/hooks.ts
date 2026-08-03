@@ -6008,7 +6008,7 @@ export function useCreateOntologyEntity() {
       entityKey: string;
       name: string;
       description?: string;
-      attributes?: { name: string; dataType?: string }[];
+      attributes?: { name: string; dataType?: string; required?: boolean; enumValues?: string[] }[];
       relationships?: { name: string; target: string; cardinality?: string }[];
     }) => graphqlRequest<ops.CreateOntologyEntityResult>(ops.CREATE_ONTOLOGY_ENTITY, { input }),
     onSuccess: () => client.invalidateQueries({ queryKey: ["data", "ontologyEntities"] }),
@@ -6065,7 +6065,7 @@ export function useProposeOntologyUpdate() {
       entityKey: string;
       name?: string;
       description?: string;
-      attributes?: { name: string; dataType?: string }[];
+      attributes?: { name: string; dataType?: string; required?: boolean; enumValues?: string[] }[];
       relationships?: { name: string; target: string; cardinality?: string }[];
     }) => graphqlRequest<ops.ProposeOntologyUpdateResult>(ops.PROPOSE_ONTOLOGY_UPDATE, { input }),
     onSuccess: () => invalidateOntology(client),
