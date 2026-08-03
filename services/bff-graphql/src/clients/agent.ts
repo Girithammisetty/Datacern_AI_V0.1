@@ -643,6 +643,15 @@ export class AgentClient {
     });
   }
 
+  /** GET /knowledge-gaps (Knowledge Spine WS5) — the missing-knowledge signals
+   * humans recorded at decision time, projected as a steward queue. Text was
+   * PII-redacted at capture. */
+  knowledgeGaps(limit: number): Promise<Page<KnowledgeGapDTO>> {
+    return this.http.get<Page<KnowledgeGapDTO>>("/api/v1/knowledge-gaps", {
+      query: { limit },
+    });
+  }
+
   sftDatasets(params: { agentKey?: string; limit: number }): Promise<Page<SftDatasetDTO>> {
     return this.http.get<Page<SftDatasetDTO>>("/api/v1/sft-datasets", {
       query: { "filter[agent_key]": params.agentKey, limit: params.limit },
@@ -996,6 +1005,19 @@ export interface DecisionEffectivenessDTO {
 /** One captured agent-run transcript (routes/transcripts.py _view). The list
  * route serializes the SAME full row; the loop-stats caller only reads the
  * first few fields, the transcript(id) detail reads them all. */
+/** One WS5 knowledge gap: a human named knowledge the agent lacked. */
+export interface KnowledgeGapDTO {
+  transcript_id: string;
+  run_id: string;
+  agent_key: string;
+  agent_version: number;
+  missing_knowledge: string;
+  knowledge_relevance?: string | null;
+  adoption?: string | null;
+  decided_by?: string | null;
+  decided_at?: string | null;
+}
+
 export interface TranscriptDTO {
   transcript_id: string;
   agent_key?: string;

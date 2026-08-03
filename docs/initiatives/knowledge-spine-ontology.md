@@ -289,6 +289,33 @@ graph slice). Built 2026-08-03:
 **Deferred:** the OWL/JSON-LD export projection (the other WS4 leg); a UI runner
 for the contract check (BFF-exposed, not yet surfaced as a button).
 
+### Increment 5 (WS5) — the missing-knowledge steward loop — BUILT (first slice)
+
+The self-improving spine: humans already record "what knowledge was missing"
+when deciding an agent proposal (the 4th Agent-in-the-Loop correction signal,
+PII-redacted at capture, joined onto the transcript as `feedback.missing_knowledge`).
+WS5 routes that signal into the governed ontology flow. Built 2026-08-03:
+
+- **Steward queue (agent-runtime).** `GET /api/v1/knowledge-gaps` — decided
+  transcripts carrying the signal, newest decisions first, projected to gap +
+  provenance only (agent, decision, decider; never the transcript body).
+  Store methods on both tiers (memory filter / SQL `feedback->>'missing_knowledge'`),
+  tenant-scoped by RLS like the transcript corpus it subsets.
+- **BFF.** `knowledgeGaps(limit): [KnowledgeGap!]!` (agent client + mapper +
+  resolver; snapshot regenerated).
+- **UI (ontology page).** A **Knowledge gaps** panel (renders only when there is
+  real signal): each gap shows the missing-knowledge text + provenance, and a
+  steward picks the domain type it belongs to and clicks **Propose update** —
+  the gap lands as a knowledge note on the type's description as a WS3
+  `in_review` proposal that a DISTINCT admin must publish (four-eyes). The gap
+  never mutates the ontology directly.
+
+**Deferred in WS5:** entity-linking standards-decoded rows + case evidence to
+`entity_key` (the other WS5 leg); richer gap→proposal shapes (e.g. proposing a
+new attribute or a new type instead of a description note); marking a gap as
+handled/dismissed (the queue is read-only over the transcript corpus today, so
+a proposed gap still lists).
+
 ### Increment 3 (WS2) — link the vertebrae on `entity_key` — BUILT (slices 1+2)
 
 Closes gap #2 ("the three layers are not linked") on the canonical join key

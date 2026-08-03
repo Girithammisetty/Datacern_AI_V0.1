@@ -14,6 +14,7 @@ import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { cap } from "@/lib/authz/registry";
 import { useSession } from "@/lib/session/SessionContext";
 import { OntologyVersionPanel } from "@/components/ontology/OntologyVersionPanel";
+import { KnowledgeGapsPanel } from "@/components/ontology/KnowledgeGapsPanel";
 
 /**
  * Domain ontology registry (inc11). Read view of the governed entity-TYPE
@@ -112,6 +113,8 @@ export default function OntologyPage() {
           </CardContent>
         </Card>
       )}
+
+      <KnowledgeGapsPanel entities={entities} />
 
       <AsyncBoundary
         isLoading={q.isLoading}

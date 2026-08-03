@@ -5833,6 +5833,11 @@ export const typeDefs = gql`
     first (dataset-service GET /ontology/entities/{key}/versions). Needs
     dataset.ontology.read."""
     ontologyVersions(entityKey: ID!, workspaceId: ID!): [OntologyEntityVersion!]!
+    """The missing-knowledge steward queue (Knowledge Spine WS5): signals humans
+    recorded at decision time naming knowledge the agent lacked (agent-runtime
+    GET /knowledge-gaps; PII-redacted at capture). A steward turns a gap into a
+    governed four-eyes ontology proposal."""
+    knowledgeGaps(limit: Int = 50): [KnowledgeGap!]!
     """The governed model archetypes — intended-model blueprints a vertical
     declares (experiment-service GET /archetypes). Omit workspaceId to list the
     whole tenant. Needs experiment.archetype.read."""
@@ -6069,6 +6074,21 @@ export const typeDefs = gql`
     attributes: [OntologyAttributeInput!]
     relationships: [OntologyRelationshipInput!]
   }
+  """One WS5 knowledge gap: at decision time a human named knowledge the agent
+  lacked (the 4th Agent-in-the-Loop correction signal). \`adoption\` is how the
+  proposal was decided (approve | edit | reject | cancel)."""
+  type KnowledgeGap {
+    transcriptId: ID!
+    runId: ID!
+    agentKey: String!
+    agentVersion: Int!
+    missingKnowledge: String!
+    knowledgeRelevance: String
+    adoption: String
+    decidedBy: String
+    decidedAt: String
+  }
+
   """One WS4 contract violation found in a dataset's real rows. \`kind\`:
   required_unmapped | column_missing | nulls_in_required | value_not_in_enum."""
   type OntologyContractViolation {

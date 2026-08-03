@@ -42,7 +42,7 @@ import type {
   AgentSessionDTO, DecisionEvaluationDTO,
   // BRD 14 §6.5: SLM distillation cockpit (transcripts/SFT/training/adapters).
   TranscriptDTO, SftDatasetDTO, SftExampleDTO, TrainingJobDTO, SlmAdapterDTO,
- DecisionDriftDTO,} from "../clients/agent.js";
+ DecisionDriftDTO, KnowledgeGapDTO,} from "../clients/agent.js";
 import type {
   PackSummaryDTO, PackDetailDTO, PlanOpDTO, LedgerRowDTO, InstallDTO,
   InstallPlanDTO, InstallResultDTO, UninstallResultDTO, CompleteResultDTO,
@@ -3243,6 +3243,22 @@ export function mapOntologyEntity(d: OntologyEntityDTO) {
     })),
     versionNo: d.version_no ?? null,
     createdAt: d.created_at ?? null,
+  };
+}
+
+/** WS5: one missing-knowledge signal, projected for the steward queue. */
+export function mapKnowledgeGap(d: KnowledgeGapDTO) {
+  return {
+    __typename: "KnowledgeGap" as const,
+    transcriptId: d.transcript_id,
+    runId: d.run_id,
+    agentKey: d.agent_key,
+    agentVersion: d.agent_version,
+    missingKnowledge: d.missing_knowledge,
+    knowledgeRelevance: d.knowledge_relevance ?? null,
+    adoption: d.adoption ?? null,
+    decidedBy: d.decided_by ?? null,
+    decidedAt: d.decided_at ?? null,
   };
 }
 

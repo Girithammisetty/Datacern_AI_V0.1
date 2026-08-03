@@ -76,7 +76,7 @@ import {
   mapAgentRollout, mapRetrainWatch,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapOntologyEntityVersion,
-  linkOntologyGraph, mapOntologyContract, mapModelArchetype,
+  linkOntologyGraph, mapOntologyContract, mapKnowledgeGap, mapModelArchetype,
 
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
   mapPackDrift, mapPackTransition,
@@ -2547,6 +2547,12 @@ export const resolvers = {
       ctx.clients.dataset
         .ontologyVersions(a.entityKey, a.workspaceId)
         .then((rows) => rows.map(mapOntologyEntityVersion)),
+
+    // ---- WS5: the missing-knowledge steward queue ---------------------------
+    knowledgeGaps: async (_p: unknown, a: { limit?: number }, ctx: GraphQLContext) => {
+      const page = await ctx.clients.agent.knowledgeGaps(a.limit ?? 50);
+      return (page.data ?? []).map(mapKnowledgeGap);
+    },
 
     // ---- inc16: model-archetype registry (governed blueprint editor) --------
     modelArchetypes: (_p: unknown, a: { workspaceId?: string }, ctx: GraphQLContext) =>

@@ -5815,6 +5815,31 @@ export const DELETE_ONTOLOGY_ENTITY = /* GraphQL */ `
   }
 `;
 
+// ---- WS5: the missing-knowledge steward queue --------------------------------
+export interface KnowledgeGap {
+  transcriptId: string;
+  runId: string;
+  agentKey: string;
+  agentVersion: number;
+  missingKnowledge: string;
+  knowledgeRelevance: string | null;
+  adoption: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+}
+export interface KnowledgeGapsResult {
+  knowledgeGaps: KnowledgeGap[];
+}
+
+export const KNOWLEDGE_GAPS = /* GraphQL */ `
+  query KnowledgeGaps($limit: Int) {
+    knowledgeGaps(limit: $limit) {
+      transcriptId runId agentKey agentVersion missingKnowledge
+      knowledgeRelevance adoption decidedBy decidedAt
+    }
+  }
+`;
+
 // ---- WS3: ontology versioning + four-eyes update ----------------------------
 export interface OntologyEntityVersion {
   entityKey: string;

@@ -767,6 +767,17 @@ class SqlStore:
             rows = (await s.execute(text(q), params)).mappings().all()
         return [_transcript(r) for r in rows]
 
+    async def list_knowledge_gaps(self, tenant_id: str, *, limit: int = 50) -> list[Transcript]:
+        """WS5: decided transcripts carrying the missing-knowledge signal
+        (feedback->>'missing_knowledge'), newest decisions first."""
+        q = ("SELECT * FROM agent_transcripts "
+             "WHERE feedback->>'missing_knowledge' IS NOT NULL "
+             "AND feedback->>'missing_knowledge' <> '' "
+             "ORDER BY decided_at DESC NULLS LAST, created_at DESC LIMIT :lim")
+        async with self._tenant(tenant_id) as s:
+            rows = (await s.execute(text(q), {"lim": limit})).mappings().all()
+        return [_transcript(r) for r in rows]
+
     # ---- SLM SFT datasets (milestone 2) ------------------------------------
     async def next_sft_version(self, tenant_id: str, agent_key: str) -> int:
         async with self._tenant(tenant_id) as s:
