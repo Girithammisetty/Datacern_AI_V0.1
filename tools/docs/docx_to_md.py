@@ -28,7 +28,7 @@ import sys
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET  # nosemgrep: use-defused-xml  (DTD rejected below)
-from xml.parsers import expat
+from xml.parsers import expat  # nosemgrep: use-defused-xml  (the DTD-rejecting pass itself)
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
