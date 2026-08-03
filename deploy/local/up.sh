@@ -54,14 +54,54 @@ wait_http() { local url="$1" tries="${2:-40}" i code
     sleep 1
   done; return 1; }
 
-wait_ready() { local name="$1" base="$2" i code
+wait_ready() { local name="$1" base="$2" i code pidf
+  # Own line: `local` expands ALL its arguments before ANY of the assignments
+  # take effect, so a "$PID_DIR/${name}.pid" written up there reads an empty
+  # ${name} and silently points at "$PID_DIR/.pid".
+  pidf="$PID_DIR/${name}.pid"
   for ((i=0;i<75;i++)); do
     for path in /readyz /healthz /health /api/v1/health; do
       code=$(curl -s -o /dev/null -w '%{http_code}' -m3 "${base}${path}" 2>/dev/null)
       [[ "$code" =~ ^(200|204)$ ]] && { ok "$name ready (${path} ${code})"; return 0; }
-    done; sleep 1
+    done
+    # A service that has EXITED is not going to answer /readyz sixty seconds
+    # from now. Config faults (a bad seed, an unparseable env) die in the first
+    # second and the poll then burns the full 75s to report a decision already
+    # made. Grace period first, so a slow starter that has not forked yet is
+    # not mistaken for a corpse.
+    if (( i > 5 )) && [ -f "$pidf" ] && ! kill -0 "$(cat "$pidf")" 2>/dev/null; then
+      boot_failure "$name" "exited during startup"; return 1
+    fi
+    sleep 1
   done
-  warn "$name did not become ready; tail log:"; tail -20 "$LOG_DIR/${name}.log" 2>/dev/null; return 1; }
+  boot_failure "$name" "still not answering /readyz after 75s"; return 1; }
+
+# Report a boot failure using ONLY what THIS attempt wrote, and lead with the
+# fatal if the service named its own cause.
+#
+# The old version was `tail -20 <log>`. Service logs are APPENDED across runs,
+# never truncated, so on a machine that has booted the stack a few times that
+# tail is mostly archaeology: a real one-line seed fatal arrived under nineteen
+# lines of connection errors from previous days, and took seven `make up`
+# attempts to spot. The log start offset is recorded by boot() below.
+boot_failure() { local name="$1" why="$2" log off=0 this fatal
+  log="$LOG_DIR/${name}.log"   # own line — see the note in wait_ready
+  warn "$name did not become ready — ${why}"
+  [ -f "$PID_DIR/${name}.logpos" ] && off=$(cat "$PID_DIR/${name}.logpos" 2>/dev/null)
+  [[ "$off" =~ ^[0-9]+$ ]] || off=0
+  this=$(tail -c "+$((off+1))" "$log" 2>/dev/null)
+  # No offset (or a rotated log) — fall back to the old behaviour rather than
+  # printing nothing at all.
+  [ -z "$this" ] && this=$(tail -20 "$log" 2>/dev/null)
+  fatal=$(printf '%s\n' "$this" | grep '"msg":"fatal"' | tail -1)
+  if [ -n "$fatal" ]; then
+    echo "${RED}  it named its own cause:${NC}"
+    printf '%s\n' "$fatal" | sed -e 's/.*"err":"//' -e 's/"}[[:space:]]*$//' -e 's/\\"/"/g' -e 's/^/    /'
+    echo
+  fi
+  echo "  --- ${name}.log, this boot only ---"
+  printf '%s\n' "$this" | tail -25
+  echo "  --- (full history: $LOG_DIR/${name}.log) ---"; }
 
 psql_q() { PGPASSWORD=datacern_dev psql -h localhost -U datacern "$@"; }
 
@@ -74,6 +114,11 @@ build_go() { # dir binname subpath
 # down with the parent's process group. execvp preserves the pid we track.
 SPAWN="$LOCAL_DIR/spawn.py"
 boot() { local name="$1"; shift
+  # Where this attempt's output begins. The log is append-only across runs, so
+  # boot_failure needs this to tell today's failure from last week's.
+  if [ -f "$LOG_DIR/${name}.log" ]; then
+    wc -c < "$LOG_DIR/${name}.log" | tr -d ' ' > "$PID_DIR/${name}.logpos"
+  else echo 0 > "$PID_DIR/${name}.logpos"; fi
   python3 "$SPAWN" "$LOG_DIR/${name}.log" "$@" &
   local pid=$!; disown "$pid" 2>/dev/null || true
   track_pid "$pid"; echo "$pid" > "$PID_DIR/${name}.pid"; }
