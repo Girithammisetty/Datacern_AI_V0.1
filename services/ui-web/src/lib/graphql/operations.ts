@@ -5754,6 +5754,10 @@ export interface AgentRunsResult {
 export interface OntologyAttribute {
   name: string;
   dataType: string | null;
+  /** WS4 contract: must be mapped + non-blank in bound data. */
+  required: boolean;
+  /** WS4 contract: allowed values; empty = unconstrained. */
+  enumValues: string[];
 }
 export interface OntologyRelationship {
   name: string;
@@ -5793,7 +5797,7 @@ export const ONTOLOGY_ENTITIES = /* GraphQL */ `
       description
       versionNo
       createdAt
-      attributes { name dataType }
+      attributes { name dataType required enumValues }
       relationships { name target cardinality targetExists targetName }
     }
   }
@@ -5808,6 +5812,31 @@ export const CREATE_ONTOLOGY_ENTITY = /* GraphQL */ `
 export const DELETE_ONTOLOGY_ENTITY = /* GraphQL */ `
   mutation DeleteOntologyEntity($entityKey: ID!, $workspaceId: ID!) {
     deleteOntologyEntity(entityKey: $entityKey, workspaceId: $workspaceId)
+  }
+`;
+
+// ---- WS5: the missing-knowledge steward queue --------------------------------
+export interface KnowledgeGap {
+  transcriptId: string;
+  runId: string;
+  agentKey: string;
+  agentVersion: number;
+  missingKnowledge: string;
+  knowledgeRelevance: string | null;
+  adoption: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+}
+export interface KnowledgeGapsResult {
+  knowledgeGaps: KnowledgeGap[];
+}
+
+export const KNOWLEDGE_GAPS = /* GraphQL */ `
+  query KnowledgeGaps($limit: Int) {
+    knowledgeGaps(limit: $limit) {
+      transcriptId runId agentKey agentVersion missingKnowledge
+      knowledgeRelevance adoption decidedBy decidedAt
+    }
   }
 `;
 
@@ -5843,7 +5872,7 @@ export interface RejectOntologyUpdateResult {
 
 const ONTOLOGY_VERSION_FIELDS = /* GraphQL */ `
   entityKey workspaceId versionNo status name description
-  attributes { name dataType } relationships { name target cardinality }
+  attributes { name dataType required enumValues } relationships { name target cardinality }
   diff submittedBy approvedBy decisionNote createdAt decidedAt
 `;
 

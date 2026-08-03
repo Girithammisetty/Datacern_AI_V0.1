@@ -160,3 +160,44 @@ async def test_mapped_column_is_checked_even_when_the_registry_is_down(client, c
     problems = resp.json()["error"]["details"]
     assert any("'no_such_col'" in p["problem"] and "not in dataset schema" in p["problem"]
                for p in problems), problems
+
+
+# ---- WS4 binding contract: required attributes must be mapped ----------------
+
+
+@pytest.mark.asyncio
+async def test_submit_fails_when_a_required_attribute_is_unmapped(client, container):
+    container.dataset_client.register_ontology_type(
+        TENANT_A, WORKSPACE, "order",
+        attributes=["order_ref", "amount"],
+        specs=[{"name": "order_ref", "required": True, "enum": []},
+               {"name": "amount", "required": False, "enum": []}])
+    # Linked to the type but maps nothing -> the required attribute is invisible.
+    model = await create_model(client, definition=_linked_definition("order"))
+    resp = await _submit(client, model["id"])
+    assert resp.status_code == 422
+    problems = resp.json()["error"]["details"]
+    assert any("required ontology attribute 'order_ref'" in p["problem"]
+               and "not mapped" in p["problem"] for p in problems), problems
+
+
+@pytest.mark.asyncio
+async def test_submit_passes_when_required_attributes_are_mapped(client, container):
+    container.dataset_client.register_ontology_type(
+        TENANT_A, WORKSPACE, "order",
+        attributes=["order_ref", "amount"],
+        specs=[{"name": "order_ref", "required": True, "enum": []},
+               {"name": "amount", "required": False, "enum": []}])
+    # The required attribute is mapped; the optional one may stay unmapped.
+    model = await create_model(
+        client, definition=_mapped_definition("order", {"order_ref": "order_id"}))
+    resp = await _submit(client, model["id"])
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_required_check_is_skipped_when_the_registry_is_down(client, container):
+    container.dataset_client.simulate_ontology_outage()
+    model = await create_model(client, definition=_linked_definition("order"))
+    resp = await _submit(client, model["id"])
+    assert resp.status_code == 200, resp.text  # fail-soft, as ever

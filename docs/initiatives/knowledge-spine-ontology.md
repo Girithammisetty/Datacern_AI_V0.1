@@ -255,8 +255,66 @@ honestly, a duplicate proposal the real 409. Published rows show a compact diff
 summary. 3 component tests (lazy load + approve vars + propose vars). `tsc`/lint
 clean; ui-web 700 + BFF 420 unit tests green.
 
-**Deferred:** SHACL-style attribute contracts (WS4; relationship navigability
-shipped separately as the WS4 graph slice).
+### Increment 4 (WS4) — SHACL-style data contracts — BUILT
+
+Attribute constraints that *validate bound data*, enforced through the WS2
+attribute → column map (relationship navigability shipped earlier as the WS4
+graph slice). Built 2026-08-03:
+
+- **Constraint authoring (dataset-service).** Attributes may carry
+  `required: bool` and `enum: [scalars]`, shape-validated at ontology create
+  AND at a WS3 proposed update (`_validate_ontology_attributes`) — a malformed
+  constraint can never silently disable enforcement. The internal lookup route
+  additionally returns `attribute_specs` for the semantic layer.
+- **Binding contract (semantic-service).** At submit/approve, a REQUIRED
+  attribute of the linked ontology type must appear in the entity's
+  `ontology_attribute_map` — an entity cannot claim to instantiate a type while
+  leaving its required attributes invisible. Fail-soft on registry outage, as
+  with every ontology check.
+- **Data contract (dataset-service).** `check_ontology_contract` +
+  `POST /api/v1/ontology/entities/{key}/contract-check` (gated
+  `dataset.dataset.read` — it reads rows): enforces required/enum against a
+  dataset's REAL rows through the map. Violations are honest and typed:
+  `required_unmapped` (the contract cannot be satisfied invisibly),
+  `column_missing`, `nulls_in_required` (count), `value_not_in_enum` (count +
+  worst-offender examples, bounded). Blanks belong to the required check — the
+  enum check skips them so one bad cell never double-counts. Read-only; an
+  unmapped optional attribute is simply not checked.
+- **BFF + UI.** `OntologyAttribute.required/enumValues`, a
+  `checkOntologyContract` mutation mapping violations back typed; the ontology
+  page marks required attributes (\*) and shows `enum(n)` with allowed values
+  on hover; the builder's attribute-map editor flags required attributes so a
+  steward sees what must be mapped before submit says so.
+
+**Deferred:** the OWL/JSON-LD export projection (the other WS4 leg); a UI runner
+for the contract check (BFF-exposed, not yet surfaced as a button).
+
+### Increment 5 (WS5) — the missing-knowledge steward loop — BUILT (first slice)
+
+The self-improving spine: humans already record "what knowledge was missing"
+when deciding an agent proposal (the 4th Agent-in-the-Loop correction signal,
+PII-redacted at capture, joined onto the transcript as `feedback.missing_knowledge`).
+WS5 routes that signal into the governed ontology flow. Built 2026-08-03:
+
+- **Steward queue (agent-runtime).** `GET /api/v1/knowledge-gaps` — decided
+  transcripts carrying the signal, newest decisions first, projected to gap +
+  provenance only (agent, decision, decider; never the transcript body).
+  Store methods on both tiers (memory filter / SQL `feedback->>'missing_knowledge'`),
+  tenant-scoped by RLS like the transcript corpus it subsets.
+- **BFF.** `knowledgeGaps(limit): [KnowledgeGap!]!` (agent client + mapper +
+  resolver; snapshot regenerated).
+- **UI (ontology page).** A **Knowledge gaps** panel (renders only when there is
+  real signal): each gap shows the missing-knowledge text + provenance, and a
+  steward picks the domain type it belongs to and clicks **Propose update** —
+  the gap lands as a knowledge note on the type's description as a WS3
+  `in_review` proposal that a DISTINCT admin must publish (four-eyes). The gap
+  never mutates the ontology directly.
+
+**Deferred in WS5:** entity-linking standards-decoded rows + case evidence to
+`entity_key` (the other WS5 leg); richer gap→proposal shapes (e.g. proposing a
+new attribute or a new type instead of a description note); marking a gap as
+handled/dismissed (the queue is read-only over the transcript corpus today, so
+a proposed gap still lists).
 
 ### Increment 3 (WS2) — link the vertebrae on `entity_key` — BUILT (slices 1+2)
 

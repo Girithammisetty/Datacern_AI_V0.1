@@ -6,6 +6,10 @@ import { unwrap, type Page } from "./types.js";
 export interface OntologyAttributeDTO {
   name: string;
   data_type?: string;
+  /** WS4 contract: attribute must be mapped + non-blank in bound data. */
+  required?: boolean;
+  /** WS4 contract: allowed values; empty/absent = unconstrained. */
+  enum?: (string | number)[];
 }
 export interface OntologyRelationshipDTO {
   name: string;
@@ -22,6 +26,25 @@ export interface OntologyEntityDTO {
   relationships: OntologyRelationshipDTO[];
   version_no?: number;
   created_at?: string | null;
+}
+
+/** WS4 contract-check result: violations of required/enum constraints found in
+ * a dataset's real rows (kind: required_unmapped | column_missing |
+ * nulls_in_required | value_not_in_enum). */
+export interface OntologyContractViolationDTO {
+  attribute: string;
+  kind: string;
+  column?: string | null;
+  count?: number | null;
+  examples?: string[];
+}
+export interface OntologyContractResultDTO {
+  entity_key: string;
+  dataset_id: string;
+  checked_rows: number;
+  checked_attributes: string[];
+  violations: OntologyContractViolationDTO[];
+  passed: boolean;
 }
 
 /** One versioned revision of an ontology type + the four-eyes review state
@@ -540,6 +563,24 @@ export class DatasetClient {
       { query: { "filter[workspace_id]": workspaceId } },
     );
     return true;
+  }
+
+  // ---- WS4 data contracts ---------------------------------------------------
+
+  /** POST /ontology/entities/{key}/contract-check — enforce the type's
+   * required/enum constraints against a dataset's real rows through an
+   * attribute -> column map (needs dataset.dataset.read). */
+  async checkOntologyContract(entityKey: string, body: {
+    workspace_id: string;
+    dataset_id: string;
+    attribute_map?: Record<string, string>;
+    row_limit?: number;
+  }): Promise<OntologyContractResultDTO> {
+    const r = await this.http.post<{ data: OntologyContractResultDTO } | OntologyContractResultDTO>(
+      `/api/v1/ontology/entities/${encodeURIComponent(entityKey)}/contract-check`,
+      { body },
+    );
+    return unwrap<OntologyContractResultDTO>(r);
   }
 
   // ---- ontology versioning + four-eyes update (WS3) -------------------------

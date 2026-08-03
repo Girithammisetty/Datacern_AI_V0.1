@@ -347,16 +347,29 @@ def validate_definition(defn: Definition, dataset_lookup, ontology_lookup=None) 
                     "problem": (f"ontology type {entity.ontology_entity_key!r} is not "
                                 "declared in the workspace ontology"),
                 })
-            elif onto is not None and entity.ontology_attribute_map:
+            elif onto is not None:
                 # Registry reachable + type declared: mapped attribute names must
                 # be real attributes of the governed type.
                 declared = set(onto.get("attributes") or [])
-                for attr in sorted(entity.ontology_attribute_map):
+                for attr in sorted(entity.ontology_attribute_map or {}):
                     if attr not in declared:
                         problems.append({
                             "object": f"entity/{entity.name}",
                             "problem": (f"ontology attribute {attr!r} is not declared on "
                                         f"type {entity.ontology_entity_key!r}"),
+                        })
+                # WS4 binding contract: a REQUIRED attribute of the linked type
+                # must be mapped to a column — an entity cannot claim to
+                # instantiate the type while leaving its required attributes
+                # invisible. (Skipped with the rest when the registry is down.)
+                mapped = set(entity.ontology_attribute_map or {})
+                for spec in onto.get("specs") or []:
+                    if spec.get("required") and spec.get("name") not in mapped:
+                        problems.append({
+                            "object": f"entity/{entity.name}",
+                            "problem": (f"required ontology attribute {spec['name']!r} of "
+                                        f"type {entity.ontology_entity_key!r} is not "
+                                        "mapped to a column"),
                         })
         info = dataset_lookup(entity.dataset_urn) if entity.dataset_urn else None
         if not info or not info.get("exists"):

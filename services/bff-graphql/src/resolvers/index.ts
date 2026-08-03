@@ -76,7 +76,7 @@ import {
   mapAgentRollout, mapRetrainWatch,
   mapResolutionRun, mapResolutionRunDetail, mapResolveEntities, mapMergeCandidate,
   mapEntityMergeProposal, mapMaterializeResolved, mapOntologyEntity, mapOntologyEntityVersion,
-  linkOntologyGraph, mapModelArchetype,
+  linkOntologyGraph, mapOntologyContract, mapKnowledgeGap, mapModelArchetype,
 
   mapPack, mapPackInstall, mapPackInstallPlan, mapPackUninstall, mapPackComplete,
   mapPackDrift, mapPackTransition,
@@ -2548,6 +2548,12 @@ export const resolvers = {
         .ontologyVersions(a.entityKey, a.workspaceId)
         .then((rows) => rows.map(mapOntologyEntityVersion)),
 
+    // ---- WS5: the missing-knowledge steward queue ---------------------------
+    knowledgeGaps: async (_p: unknown, a: { limit?: number }, ctx: GraphQLContext) => {
+      const page = await ctx.clients.agent.knowledgeGaps(a.limit ?? 50);
+      return (page.data ?? []).map(mapKnowledgeGap);
+    },
+
     // ---- inc16: model-archetype registry (governed blueprint editor) --------
     modelArchetypes: (_p: unknown, a: { workspaceId?: string }, ctx: GraphQLContext) =>
       ctx.clients.experiment
@@ -2578,7 +2584,7 @@ export const resolvers = {
       a: {
         input: {
           workspaceId: string; entityKey: string; name: string; description?: string;
-          attributes?: { name: string; dataType?: string }[];
+          attributes?: { name: string; dataType?: string; required?: boolean; enumValues?: string[] }[];
           relationships?: { name: string; target: string; cardinality?: string }[];
         };
       },
@@ -2589,7 +2595,9 @@ export const resolvers = {
         entity_key: a.input.entityKey,
         name: a.input.name,
         description: a.input.description,
-        attributes: (a.input.attributes ?? []).map((x) => ({ name: x.name, data_type: x.dataType })),
+        attributes: (a.input.attributes ?? []).map((x) => ({
+          name: x.name, data_type: x.dataType, required: x.required, enum: x.enumValues,
+        })),
         relationships: (a.input.relationships ?? []).map((x) => ({
           name: x.name, target: x.target, cardinality: x.cardinality,
         })),
@@ -2653,6 +2661,26 @@ export const resolvers = {
       mapOntologyEntityVersion(
         await ctx.clients.dataset.rejectOntologyUpdate(a.entityKey, a.versionNo, {
           workspace_id: a.workspaceId, note: a.note,
+        }),
+      ),
+
+    // ---- WS4: data contracts ------------------------------------------------
+    checkOntologyContract: async (
+      _p: unknown,
+      a: {
+        input: {
+          workspaceId: string; entityKey: string; datasetId: string;
+          attributeMap?: Record<string, string>; rowLimit?: number;
+        };
+      },
+      ctx: GraphQLContext,
+    ) =>
+      mapOntologyContract(
+        await ctx.clients.dataset.checkOntologyContract(a.input.entityKey, {
+          workspace_id: a.input.workspaceId,
+          dataset_id: a.input.datasetId,
+          attribute_map: a.input.attributeMap,
+          row_limit: a.input.rowLimit,
         }),
       ),
 

@@ -84,6 +84,30 @@ async def delete_entity(
     return Response(status_code=204)
 
 
+# ---- WS4 data contracts -----------------------------------------------------
+
+
+@router.post("/ontology/entities/{entity_key}/contract-check")
+async def contract_check(
+    request: Request, entity_key: str, body: dict = Body(...),
+    principal: Principal = Depends(require("dataset.dataset.read")),
+):
+    """Enforce the type's attribute constraints (required/enum) against a
+    dataset's real rows through an attribute -> column map. Read-only; gated on
+    dataset.dataset.read because it reads dataset content."""
+    workspace_id = body.get("workspace_id")
+    dataset_id = body.get("dataset_id")
+    if not workspace_id or not dataset_id:
+        raise ValidationFailed("workspace_id and dataset_id are required")
+    row_limit = body.get("row_limit") or 20000
+    if not isinstance(row_limit, int) or row_limit < 1:
+        raise ValidationFailed("row_limit must be a positive integer")
+    result = await _c(request).dataset_service.check_ontology_contract(
+        principal.ctx(), workspace_id, entity_key, dataset_id,
+        attribute_map=body.get("attribute_map") or {}, row_limit=row_limit)
+    return {"data": result}
+
+
 # ---- versioned four-eyes update (WS3) --------------------------------------
 
 

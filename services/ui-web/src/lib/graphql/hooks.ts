@@ -6024,6 +6024,20 @@ export function useDeleteOntologyEntity() {
   });
 }
 
+// ---- WS5: the missing-knowledge steward queue --------------------------------
+/** Signals humans recorded at decision time naming knowledge the agent lacked
+ * (PII-redacted at capture) — the queue a steward turns into governed ontology
+ * proposals. */
+export function useKnowledgeGaps(limit = 50) {
+  return useQuery({
+    queryKey: qk.knowledgeGaps(),
+    queryFn: () =>
+      graphqlRequest<ops.KnowledgeGapsResult>(ops.KNOWLEDGE_GAPS, { limit }).then(
+        (r) => r.knowledgeGaps,
+      ),
+  });
+}
+
 // ---- WS3: ontology versioning + four-eyes update ----------------------------
 export function useOntologyVersions(entityKey: string, workspaceId: string, enabled = true) {
   return useQuery({
