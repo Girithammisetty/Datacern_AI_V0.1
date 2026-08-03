@@ -27,7 +27,8 @@ import re
 import sys
 import zipfile
 from pathlib import Path
-from xml.etree import ElementTree as ET
+from xml.etree import ElementTree as ET  # nosemgrep: use-defused-xml  (DTD rejected below)
+from xml.parsers import expat
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -112,10 +113,60 @@ def _table_md(tbl) -> list[str]:
     return out
 
 
+class _DtdRejected(Exception):
+    """A DOCTYPE was seen in the XML prolog (entity-expansion DoS vector)."""
+
+
+class _PrologDone(Exception):
+    """The root element started with no DOCTYPE — the prolog is clean."""
+
+
+def _reject_dtd(xml: bytes) -> None:
+    """Reject a document.xml that declares a DTD/DOCTYPE, defeating the internal
+    entity-expansion ("billion laughs") DoS without adding a dependency.
+
+    Same mitigation ingestion-service applies to uploaded XML
+    (app/domain/decode.py::_reject_dtd), for the same reason: internal entities —
+    the expansion vector — can only be declared inside a DOCTYPE, and a DOCTYPE is
+    only legal in the prolog. One expat pass that bails at the first DOCTYPE
+    (reject) or the first element start (clean) settles it without parsing any
+    content, and stdlib expat never resolves EXTERNAL entities.
+
+    A .docx is a zip an operator hands this tool, not a network input, so the
+    realistic risk is low — but "the caller is trusted" is exactly the assumption
+    that stops being true later, and the check costs one pass over the prolog.
+    """
+    p = expat.ParserCreate()
+
+    def _on_doctype(*_a):
+        raise _DtdRejected()
+
+    def _on_start(*_a):
+        raise _PrologDone()
+
+    p.StartDoctypeDeclHandler = _on_doctype
+    p.StartElementHandler = _on_start
+    try:
+        p.Parse(xml, True)
+    except _DtdRejected:
+        raise SystemExit("refusing to convert: document.xml declares a DTD") from None
+    except _PrologDone:
+        return  # reached the root element, prolog is clean
+    except expat.ExpatError:
+        return  # malformed — let ET produce the real, more useful error
+
+
 def convert(src: Path) -> str:
     with zipfile.ZipFile(src) as z:
         xml = z.read("word/document.xml")
-    body = ET.fromstring(xml).find(f"{W}body")
+    _reject_dtd(xml)
+    # use-defused-xml, mitigated by _reject_dtd directly above. The suppression is
+    # left UNQUALIFIED on purpose: ingestion-service names
+    # python.lang.security.use-defused-xml-parse.use-defused-xml-parse for its
+    # ET.parse call, and it is not verifiable from here whether fromstring trips
+    # that same id or a sibling — semgrep.dev is unreachable in this environment,
+    # so a named id would be a guess that costs a full CI cycle when wrong.
+    body = ET.fromstring(xml).find(f"{W}body")  # nosemgrep
     if body is None:
         return ""
 
