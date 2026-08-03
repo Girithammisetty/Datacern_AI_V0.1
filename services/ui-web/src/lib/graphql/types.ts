@@ -2869,6 +2869,10 @@ export interface SemanticDefinitionDoc {
     /** WS2: the governed domain ontology type this entity instantiates
      * (OntologyEntity.entity_key). Optional; existence-validated at submit. */
     ontology_entity_key?: string | null;
+    /** WS2: explicit ontology-attribute -> dataset-column mapping. Attribute
+     * names validated against the registry, columns against the dataset schema,
+     * both at submit. */
+    ontology_attribute_map?: Record<string, string> | null;
   }[];
   dimensions: {
     name: string;

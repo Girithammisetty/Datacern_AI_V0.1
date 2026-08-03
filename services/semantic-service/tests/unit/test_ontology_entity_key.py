@@ -95,3 +95,68 @@ async def test_registry_outage_fails_soft_and_never_blocks_authoring(client, con
     # The registry can't be checked -> the optional link is skipped, not fatal.
     resp = await _submit(client, model["id"])
     assert resp.status_code == 200, resp.text
+
+
+# ---- WS2 remainder: explicit ontology-attribute -> dataset-column map --------
+
+
+def _mapped_definition(key: str = "order", attr_map: dict | None = None) -> dict:
+    d = _linked_definition(key)
+    d["entities"][0]["ontology_attribute_map"] = (
+        attr_map if attr_map is not None else {"order_ref": "order_id"})
+    return d
+
+
+def test_attribute_map_parses_and_round_trips():
+    doc = _doc({"ontology_entity_key": "vendor",
+                "ontology_attribute_map": {"vendor_ref": "id"}})
+    defn = parse_definition(doc)
+    assert defn.entities["vendors"].ontology_attribute_map == {"vendor_ref": "id"}
+    assert defn.raw["entities"][0]["ontology_attribute_map"] == {"vendor_ref": "id"}
+
+
+def test_attribute_map_requires_the_type_and_a_sane_shape():
+    with pytest.raises(ValidationFailed):
+        # A map without a declared type is meaningless.
+        parse_definition(_doc({"ontology_attribute_map": {"a": "b"}}))
+    with pytest.raises(ValidationFailed):
+        parse_definition(_doc({"ontology_entity_key": "vendor",
+                               "ontology_attribute_map": {"a": 42}}))
+
+
+@pytest.mark.asyncio
+async def test_submit_passes_with_a_valid_attribute_map(client, container):
+    container.dataset_client.register_ontology_type(
+        TENANT_A, WORKSPACE, "order", attributes=["order_ref", "amount"])
+    model = await create_model(
+        client, definition=_mapped_definition("order", {"order_ref": "order_id",
+                                                        "amount": "order_total"}))
+    resp = await _submit(client, model["id"])
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_submit_fails_on_an_attribute_the_type_does_not_declare(client, container):
+    container.dataset_client.register_ontology_type(
+        TENANT_A, WORKSPACE, "order", attributes=["order_ref"])
+    model = await create_model(
+        client, definition=_mapped_definition("order", {"shoe_size": "order_id"}))
+    resp = await _submit(client, model["id"])
+    assert resp.status_code == 422
+    problems = resp.json()["error"]["details"]
+    assert any("'shoe_size'" in p["problem"] and "not declared on" in p["problem"]
+               for p in problems), problems
+
+
+@pytest.mark.asyncio
+async def test_mapped_column_is_checked_even_when_the_registry_is_down(client, container):
+    # Column existence comes from the bound dataset schema, NOT the registry —
+    # it stays definitive during an outage (the attribute check is skipped).
+    container.dataset_client.simulate_ontology_outage()
+    model = await create_model(
+        client, definition=_mapped_definition("order", {"order_ref": "no_such_col"}))
+    resp = await _submit(client, model["id"])
+    assert resp.status_code == 422
+    problems = resp.json()["error"]["details"]
+    assert any("'no_such_col'" in p["problem"] and "not in dataset schema" in p["problem"]
+               for p in problems), problems

@@ -300,12 +300,34 @@ Closes gap #2 ("the three layers are not linked") on the canonical join key
   definition (clearing drops the key so unlinked entities stay byte-identical).
   Editor test covers linking + the saved definition carrying the key.
 
-With this, one `entity_key` can be followed ontology type → resolution runs →
-semantic entity — the precondition for per-case typing, "measures of this
-type" queries, and an Entity-360 view.
+**Slice 3 (2026-08-03) — the explicit attribute → column mapping (closes WS2):**
 
-**Still deferred in WS2:** the explicit ontology-attribute → dataset-column
-mapping; showing the link on the published-model read view.
+- **Registry lookup grows attributes.** The internal ontology route now returns
+  `{exists, name, attributes:[names]}`, so the semantic layer can validate a
+  mapping against the governed type's real attribute list.
+- **`Entity.ontology_attribute_map`** (semantic-service) — the explicit
+  `{attribute_name: column_name}` map the initiative called for (the mapping was
+  previously only *implicit* in "drawn from the dataset contract columns").
+  Shape-checked at save (requires `ontology_entity_key`; string→string only).
+  At submit/approve: **attribute names** are validated against the registry
+  (fail-soft on outage, definitive miss fails naming the attribute), and
+  **column names** are validated against the bound dataset schema — a
+  definitive check that holds even during a registry outage. Tests cover the
+  valid map, the undeclared attribute, and the bad-column-during-outage case.
+- **Builder UI.** When an entity's ontology type carries attributes, the editor
+  renders an **Attribute mapping** block — one picker per attribute over the
+  entity's REAL dataset columns (never free text). "Not mapped" removes the
+  entry; an empty map is dropped so unmapped entities stay byte-identical.
+  Clearing the type also clears the map. Editor test covers map → autosave.
+- **Published-model read view:** verified — published versions render through
+  the same `DefinitionEditor` in read-only mode, so the ontology type (and its
+  mapping) are visible on the read view with no extra surface.
+
+With this, WS2 is **complete**: one `entity_key` joins ontology type →
+resolution runs → semantic entity, and each governed attribute can name the
+exact dataset column that carries it — the substrate for per-case typing,
+"measures of this type" queries, data-contract enforcement (WS4's SHACL-style
+checks now have a mapping to enforce), and an Entity-360 view.
 
 ### Phasing
 WS1 (increment 1) proves the anti-hallucination thesis on the existing

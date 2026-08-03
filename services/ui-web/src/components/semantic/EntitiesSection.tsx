@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useDatasets, flatten, useOntologyEntities } from "@/lib/graphql/hooks";
 import { newEntity } from "@/lib/semantic/definition";
 import type { SemanticDefinitionDoc } from "@/lib/graphql/types";
+import type { OntologyEntity } from "@/lib/graphql/operations";
 import { t } from "@/lib/i18n/messages";
 
 const SELECT_CLS = "h-9 w-full rounded-md border border-input bg-background px-2 text-sm";
@@ -20,11 +21,15 @@ function urnFor(datasetId: string, sampleUrn: string | undefined): string {
 export function EntitiesSection({
   doc,
   onChange,
+  columnsByEntity,
   errors,
   readOnly,
 }: {
   doc: SemanticDefinitionDoc;
   onChange: (doc: SemanticDefinitionDoc) => void;
+  /** Real dataset columns keyed by entity name (from DefinitionEditor) — the
+   * ontology attribute-map picker binds to these, never free text. */
+  columnsByEntity?: Record<string, { name: string }[]>;
   errors: Map<string, string[]>;
   readOnly: boolean;
 }) {
@@ -121,9 +126,13 @@ export function EntitiesSection({
                     className={SELECT_CLS}
                     value={entity.ontology_entity_key ?? ""}
                     onChange={(e) =>
-                      // Clearing drops the key entirely (JSON.stringify strips
-                      // undefined), so an unlinked entity stays exactly as before.
-                      update(i, { ontology_entity_key: e.target.value || undefined })
+                      // Clearing drops the key AND the map entirely
+                      // (JSON.stringify strips undefined), so an unlinked
+                      // entity stays exactly as before.
+                      update(i, {
+                        ontology_entity_key: e.target.value || undefined,
+                        ontology_attribute_map: undefined,
+                      })
                     }
                   >
                     <option value="">{t("semantic.entity.noOntologyType")}</option>
@@ -135,6 +144,12 @@ export function EntitiesSection({
                   </select>
                 </div>
               </div>
+              <AttributeMapEditor
+                entity={entity}
+                ontologyType={ontologyTypes.find((o) => o.entityKey === entity.ontology_entity_key)}
+                columns={columnsByEntity?.[entity.name] ?? []}
+                onMapChange={(map) => update(i, { ontology_attribute_map: map })}
+              />
               {rowErrors.length > 0 && (
                 <ul className="space-y-0.5 text-xs text-destructive" role="alert">
                   {rowErrors.map((e, ei) => (
@@ -154,5 +169,59 @@ export function EntitiesSection({
         })}
       </div>
     </fieldset>
+  );
+}
+
+/** WS2 remainder: the explicit ontology-attribute -> dataset-column map for one
+ * entity. Rendered only when the entity declares an ontology type that carries
+ * attributes; each attribute gets a picker over the entity's REAL dataset
+ * columns. "Not mapped" removes the attribute from the map, and an empty map is
+ * dropped entirely so an unmapped entity stays byte-identical. Both sides are
+ * re-validated at submit (attributes vs registry, columns vs schema). */
+function AttributeMapEditor({
+  entity,
+  ontologyType,
+  columns,
+  onMapChange,
+}: {
+  entity: SemanticDefinitionDoc["entities"][number];
+  ontologyType: OntologyEntity | undefined;
+  columns: { name: string }[];
+  onMapChange: (map: Record<string, string> | undefined) => void;
+}) {
+  const attributes = ontologyType?.attributes ?? [];
+  if (!entity.ontology_entity_key || attributes.length === 0) return null;
+
+  const map = entity.ontology_attribute_map ?? {};
+  const setAttr = (attr: string, col: string) => {
+    const next = { ...map };
+    if (col) next[attr] = col;
+    else delete next[attr];
+    onMapChange(Object.keys(next).length > 0 ? next : undefined);
+  };
+
+  return (
+    <div className="space-y-1.5 rounded-md border border-border/50 p-2">
+      <p className="text-xs font-medium">{t("semantic.entity.attributeMap")}</p>
+      <p className="text-xs text-muted-foreground">{t("semantic.entity.attributeMapHint")}</p>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        {attributes.map((a) => (
+          <div key={a.name} className="flex items-center gap-2">
+            <code className="w-28 shrink-0 truncate text-xs" title={a.name}>{a.name}</code>
+            <select
+              aria-label={`Map attribute ${a.name}`}
+              className={SELECT_CLS}
+              value={map[a.name] ?? ""}
+              onChange={(e) => setAttr(a.name, e.target.value)}
+            >
+              <option value="">{t("semantic.entity.unmapped")}</option>
+              {columns.map((c) => (
+                <option key={c.name} value={c.name}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

@@ -194,4 +194,41 @@ describe("DefinitionEditor — entity/dimension/measure authoring bound to real 
       { timeout: 3000 },
     );
   });
+
+  it("maps an ontology attribute to a real dataset column and saves the map (WS2)", async () => {
+    const base = handler;
+    handler = (doc: string, vars: any) => {
+      if (doc.includes("query OntologyEntities")) {
+        return { ontologyEntities: [
+          { id: "o-1", entityKey: "claim", workspaceId: "ws", name: "Claim", description: "",
+            createdAt: null, relationships: [],
+            attributes: [{ name: "claim_ref", dataType: "string" }] },
+        ] };
+      }
+      return base(doc, vars);
+    };
+    const user = userEvent.setup();
+    renderWithProviders(<DefinitionEditor modelId="sm-1" version={DRAFT_VERSION} onSubmitted={() => {}} />);
+
+    // Link the type; its attributes then render a per-attribute column picker
+    // bound to the entity's REAL dataset columns (from datasetSchema).
+    const ontologySelect = await screen.findByLabelText("Ontology type", { selector: "select" });
+    await waitFor(() => {
+      expect(within(ontologySelect).getByText("Claim (claim)")).toBeInTheDocument();
+    });
+    await user.selectOptions(ontologySelect, "claim");
+    const attrSelect = await screen.findByLabelText("Map attribute claim_ref");
+    await waitFor(() => {
+      expect(within(attrSelect).getByText("amount")).toBeInTheDocument();
+    });
+    await user.selectOptions(attrSelect, "amount");
+
+    await waitFor(
+      () => {
+        const call = [...requests].reverse().find((r) => r.doc.includes("mutation UpdateSemanticModelDraft"));
+        expect(call?.vars.definition.entities[0].ontology_attribute_map).toEqual({ claim_ref: "amount" });
+      },
+      { timeout: 3000 },
+    );
+  });
 });

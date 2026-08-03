@@ -170,7 +170,7 @@ export function DefinitionEditor({
         ) : null}
       </div>
 
-      <EntitiesSection doc={doc} onChange={setDoc} errors={errorsByObject} readOnly={readOnly} />
+      <EntitiesSection doc={doc} onChange={setDoc} columnsByEntity={columnsByEntity} errors={errorsByObject} readOnly={readOnly} />
       <DimensionsSection doc={doc} onChange={setDoc} columnsByEntity={columnsByEntity} errors={errorsByObject} readOnly={readOnly} />
       <MeasuresSection doc={doc} onChange={setDoc} columnsByEntity={columnsByEntity} errors={errorsByObject} readOnly={readOnly} />
       <JoinPathsSection doc={doc} onChange={setDoc} errors={errorsByObject} readOnly={readOnly} />
