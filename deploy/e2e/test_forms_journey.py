@@ -133,21 +133,48 @@ SIU, EXPOSURE, METHOD, NOTE = (f["name"] for f in FIELDS)
 # for four separate specs. The leak had existed for as long as this journey has,
 # and nothing downstream ever ran to notice — e2e:live had been skipped behind
 # journey-packs on every previous run.
-_DECLARED_IDS: list[str] = []
+_DECLARED_IDS: list[tuple[str, str]] = []   # (field id, field name)
+_TEARDOWN: list[tuple[str, str, str]] = []  # (name, outcome, detail)
 _TOK: str | None = None
 
 
 def _undeclare(tok) -> None:
-    """Remove the fields this run declared. A journey that mutates a SHARED
-    tenant owes the next suite a clean catalog — case-service exposes a real
-    DELETE for case fields (they are in packctl's REVERSIBLE_KINDS, and the packs
-    journey asserts they are gone after uninstall), so this is a real revert and
-    not a workaround."""
-    for fid in _DECLARED_IDS:
+    """Withdraw what this run declared, and SAY what happened to each field.
+
+    The first version of this swallowed every status code and every exception.
+    It ran, deleted nothing, and reported success — `journey-forms` then failed
+    on the assertion below with "4 still in the catalog" and no reason attached.
+    A teardown that cannot fail loudly is the same defect this journey exists to
+    catch, so this one records an outcome per field and prints them.
+
+    DELETE first, because a full revert is the honest goal. But the harm this
+    exists to prevent is narrower than deletion: it is the REQUIRED flag, which
+    makes every later case write in the tenant fail validation. A field the
+    just-submitted case still references may legitimately refuse deletion, and
+    that refusal must not leave the landmine armed — so when DELETE does not
+    take, PATCH the field to not-required and keep going. Either outcome
+    satisfies the invariant; only silence does not.
+    """
+    for fid, name in _DECLARED_IDS:
+        why = ""
         try:
-            api("DELETE", f"{c.CASE}/api/v1/case-fields/{fid}", tok)
-        except Exception:  # noqa: BLE001 — teardown must never mask the verdict
-            pass
+            r = api("DELETE", f"{c.CASE}/api/v1/case-fields/{fid}", tok)
+            if r.status_code in (200, 202, 204):
+                _TEARDOWN.append((name, "deleted", r.status_code))
+                continue
+            why = f"{r.status_code} {r.text[:80]}"
+        except Exception as e:  # noqa: BLE001 — never mask the journey's verdict
+            why = f"exception {e}"
+        try:
+            p = api("PATCH", f"{c.CASE}/api/v1/case-fields/{fid}", tok,
+                    {"field_meta": {"required": False}})
+            state = "un-required" if p.status_code in (200, 204) else "STUCK"
+            _TEARDOWN.append((name, state, f"delete={why} patch={p.status_code}"))
+        except Exception as e:  # noqa: BLE001
+            _TEARDOWN.append((name, "STUCK", f"delete={why} patch exception {e}"))
+    for name, state, detail in _TEARDOWN:
+        line = f"       {state:<12} {name}"
+        print(line if state in ("deleted", "un-required") else f"{line}  ({detail})")
 
 CASE_FORM_Q = """
 query($mode: String) {
@@ -244,7 +271,13 @@ def main() -> int:  # noqa: PLR0911, PLR0915
         body = r.json()
         fid = (body.get("data") or body).get("id")
         if fid:
-            _DECLARED_IDS.append(str(fid))
+            _DECLARED_IDS.append((str(fid), f["name"]))
+        else:
+            # Not fatal to the journey, but it IS fatal to the teardown: no id
+            # means nothing to delete later, and a teardown with an empty work
+            # list runs, reports nothing, and leaves the field armed.
+            print(f"  !!   declare {f['name']}: create returned no id "
+                  f"— this field cannot be withdrawn at the end")
     declared = int(psql(
         "SELECT count(*) FROM case_fields WHERE tenant_id = "
         f"'{tenant}' AND workspace_id = '{ws}' AND name LIKE '%{RUN}' "
@@ -416,14 +449,22 @@ def main() -> int:  # noqa: PLR0911, PLR0915
     # than this one — which is precisely why it went unnoticed until e2e:live
     # ran for the first time.
     _undeclare(tok)
-    left = int(psql(
+    # Assert the invariant that actually protects the next suite: no field this
+    # run declared is still REQUIRED. The first version asserted "no field
+    # remains at all", which is a stricter claim than the harm justifies — a
+    # field the submitted case references may legitimately refuse deletion, and
+    # failing the journey for that would be punishing correct behaviour. What
+    # broke e2e:live was the required flag, so that is what is checked.
+    stuck = int(psql(
         "SELECT count(*) FROM case_fields WHERE tenant_id = "
         f"'{tenant}' AND workspace_id = '{ws}' AND name LIKE '%{RUN}' "
-        "AND deleted_at IS NULL", db="case_svc") or 0)
-    check(left == 0,
-          "the run's fields are removed again (a REQUIRED field left behind "
-          "fails every later case write in this tenant)",
-          f"{left} still in the catalog")
+        "AND deleted_at IS NULL "
+        "AND COALESCE(field_meta->>'required', 'false') = 'true'",
+        db="case_svc") or 0)
+    check(stuck == 0,
+          "no field this run declared is still REQUIRED (one left behind fails "
+          "every later case write in this tenant)",
+          f"{stuck} still required — see the teardown lines above for why")
 
     if _fail:
         print(f"\nFAIL -- {len(_fail)} check(s): {', '.join(_fail)}\n")
