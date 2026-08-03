@@ -5833,6 +5833,12 @@ export const typeDefs = gql`
     first (dataset-service GET /ontology/entities/{key}/versions). Needs
     dataset.ontology.read."""
     ontologyVersions(entityKey: ID!, workspaceId: ID!): [OntologyEntityVersion!]!
+    """The workspace ontology as one OWL + SHACL document in JSON-LD (Knowledge
+    Spine WS4 interop leg; dataset-service GET /ontology/export). A read-only
+    projection for external RDF tooling — the governed registry stays the
+    source of truth and re-import is not supported. Needs
+    dataset.ontology.read."""
+    ontologyJsonLd(workspaceId: ID!): JSON!
     """The missing-knowledge steward queue (Knowledge Spine WS5): signals humans
     recorded at decision time naming knowledge the agent lacked (agent-runtime
     GET /knowledge-gaps; PII-redacted at capture). A steward turns a gap into a

@@ -595,6 +595,16 @@ export class DatasetClient {
     return r.data ?? [];
   }
 
+  /** GET /ontology/export — the workspace ontology as one OWL + SHACL document
+   * in JSON-LD (WS4 interop; needs dataset.ontology.read). The document is the
+   * whole response body (application/ld+json), not a {data} envelope. */
+  async ontologyJsonLd(workspaceId: string): Promise<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(
+      "/api/v1/ontology/export",
+      { query: { "filter[workspace_id]": workspaceId } },
+    );
+  }
+
   /** POST /ontology/entities/{key}/versions — open an in-review update (needs
    * dataset.ontology.update). The live type is unchanged until approved. */
   async proposeOntologyUpdate(entityKey: string, body: {

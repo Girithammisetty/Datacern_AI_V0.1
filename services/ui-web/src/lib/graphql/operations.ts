@@ -5904,6 +5904,18 @@ export const REJECT_ONTOLOGY_UPDATE = /* GraphQL */ `
   }
 `;
 
+// ---- WS4: OWL/JSON-LD export projection (interop leg) -----------------------
+export interface OntologyJsonLdResult {
+  /** The whole JSON-LD document, verbatim from the service. */
+  ontologyJsonLd: Record<string, unknown>;
+}
+
+export const ONTOLOGY_JSONLD = /* GraphQL */ `
+  query OntologyJsonLd($workspaceId: ID!) {
+    ontologyJsonLd(workspaceId: $workspaceId)
+  }
+`;
+
 // ---- WS4: data-contract check (attribute constraints vs a dataset's rows) ---
 export interface OntologyContractViolation {
   attribute: string;
