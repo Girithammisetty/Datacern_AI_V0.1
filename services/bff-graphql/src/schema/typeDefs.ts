@@ -5847,7 +5847,7 @@ export const typeDefs = gql`
     recorded at decision time naming knowledge the agent lacked (agent-runtime
     GET /knowledge-gaps; PII-redacted at capture). A steward turns a gap into a
     governed four-eyes ontology proposal."""
-    knowledgeGaps(limit: Int = 50): [KnowledgeGap!]!
+    knowledgeGaps(limit: Int = 50, includeDecided: Boolean = false): [KnowledgeGap!]!
     """The governed model archetypes — intended-model blueprints a vertical
     declares (experiment-service GET /archetypes). Omit workspaceId to list the
     whole tenant. Needs experiment.archetype.read."""
@@ -6096,6 +6096,19 @@ export const typeDefs = gql`
     knowledgeRelevance: String
     adoption: String
     decidedBy: String
+    decidedAt: String
+    """Steward triage (WS5): handled | dismissed; null while the gap is open.
+    Triage lives in its own table — the transcript corpus is never mutated."""
+    gapStatus: String
+    gapDecidedBy: String
+    gapDecidedAt: String
+  }
+
+  "The steward's triage of one knowledge gap (WS5)."
+  type KnowledgeGapDecision {
+    transcriptId: ID!
+    status: String!
+    decidedBy: String!
     decidedAt: String
   }
 
@@ -6409,6 +6422,11 @@ export const typeDefs = gql`
     contracts). Read-only despite being a mutation (it reads bounded rows on
     demand). Needs dataset.dataset.read."""
     checkOntologyContract(input: CheckOntologyContractInput!): OntologyContractResult!
+    """Steward triage of a WS5 knowledge gap: \`handled\` (a governed proposal
+    or type was opened from it) or \`dismissed\` (judged noise). Triage lives in
+    its own table — the transcript corpus is never mutated; re-deciding
+    upserts. 404 when the transcript carries no missing-knowledge signal."""
+    decideKnowledgeGap(transcriptId: ID!, status: String!): KnowledgeGapDecision!
     """Register a governed model archetype (idempotent by archetypeKey within the
     workspace). Needs experiment.archetype.create."""
     createModelArchetype(input: CreateModelArchetypeInput!): ModelArchetype!

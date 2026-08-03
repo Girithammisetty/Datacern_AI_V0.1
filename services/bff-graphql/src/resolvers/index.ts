@@ -2554,8 +2554,10 @@ export const resolvers = {
       ctx.clients.dataset.ontologyJsonLd(a.workspaceId),
 
     // ---- WS5: the missing-knowledge steward queue ---------------------------
-    knowledgeGaps: async (_p: unknown, a: { limit?: number }, ctx: GraphQLContext) => {
-      const page = await ctx.clients.agent.knowledgeGaps(a.limit ?? 50);
+    knowledgeGaps: async (
+      _p: unknown, a: { limit?: number; includeDecided?: boolean }, ctx: GraphQLContext,
+    ) => {
+      const page = await ctx.clients.agent.knowledgeGaps(a.limit ?? 50, a.includeDecided ?? false);
       return (page.data ?? []).map(mapKnowledgeGap);
     },
 
@@ -2688,6 +2690,21 @@ export const resolvers = {
           row_limit: a.input.rowLimit,
         }),
       ),
+
+    // WS5 steward triage: pass-through — a 404 (no such gap) or 422 (made-up
+    // status) from agent-runtime surfaces verbatim.
+    decideKnowledgeGap: async (
+      _p: unknown, a: { transcriptId: string; status: string }, ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.decideKnowledgeGap(a.transcriptId, a.status);
+      return {
+        __typename: "KnowledgeGapDecision" as const,
+        transcriptId: d.transcript_id,
+        status: d.status,
+        decidedBy: d.decided_by,
+        decidedAt: d.decided_at ?? null,
+      };
+    },
 
     // ---- inc16: model-archetype registry writes -----------------------------
     createModelArchetype: async (

@@ -16,13 +16,20 @@
  *   immediate (create has never been four-eyes — same as the page's "New
  *   entity type" button), so this path is gated on dataset.ontology.create
  *   and says "created", never "proposed".
+ *
+ * Triage state (handled/dismissed): acting on a gap marks it HANDLED — a real
+ * signal, recorded only after the mutation succeeded — and Dismiss marks it
+ * noise. Triaged gaps leave the default queue; "Show resolved" lists them with
+ * their state. The transcript corpus is never mutated by triage.
  */
 import { useState } from "react";
-import { Lightbulb, Loader2, Send } from "lucide-react";
+import { Lightbulb, Loader2, Send, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Input } from "@/components/ui/primitives";
-import { useKnowledgeGaps, useProposeOntologyUpdate, useCreateOntologyEntity } from "@/lib/graphql/hooks";
+import {
+  useKnowledgeGaps, useProposeOntologyUpdate, useCreateOntologyEntity, useDecideKnowledgeGap,
+} from "@/lib/graphql/hooks";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
 import { cap } from "@/lib/authz/registry";
 import { useToasts } from "@/stores/ui";
@@ -45,6 +52,27 @@ function GapRow({ gap, entities }: { gap: KnowledgeGap; entities: OntologyEntity
   const push = useToasts((s) => s.push);
   const propose = useProposeOntologyUpdate();
   const create = useCreateOntologyEntity();
+  const decide = useDecideKnowledgeGap();
+
+  // Acting on a gap marks it handled — recorded only AFTER the real mutation
+  // succeeded, so "handled" is a fact, not an intent. A failed mark never
+  // fails the action it follows; it is reported and the gap simply stays open.
+  const markHandled = async () => {
+    try {
+      await decide.mutateAsync({ transcriptId: gap.transcriptId, status: "handled" });
+    } catch (e) {
+      push({ title: "Gap stays in the queue", description: e instanceof Error ? e.message : String(e), variant: "error" });
+    }
+  };
+
+  const dismiss = async () => {
+    try {
+      await decide.mutateAsync({ transcriptId: gap.transcriptId, status: "dismissed" });
+      push({ title: "Gap dismissed", description: "Nothing was proposed — the signal stays recorded on the transcript.", variant: "success" });
+    } catch (e) {
+      push({ title: "Could not dismiss", description: e instanceof Error ? e.message : String(e), variant: "error" });
+    }
+  };
 
   const [shape, setShape] = useState<"note" | "attribute" | "newtype">("note");
   const [targetKey, setTargetKey] = useState("");
@@ -70,6 +98,7 @@ function GapRow({ gap, entities }: { gap: KnowledgeGap; entities: OntologyEntity
         description: target.description ? `${target.description}\n${note}` : note,
       });
       push({ title: "Ontology update proposed", description: "Awaiting a second reviewer to publish.", variant: "success" });
+      await markHandled();
     } catch (e) {
       fail("Could not propose", e);
     }
@@ -104,6 +133,7 @@ function GapRow({ gap, entities }: { gap: KnowledgeGap; entities: OntologyEntity
         description: target.description ? `${target.description}\n${note}` : note,
       });
       push({ title: `Attribute "${name}" proposed`, description: "Awaiting a second reviewer to publish.", variant: "success" });
+      await markHandled();
     } catch (e) {
       fail("Could not propose", e);
     }
@@ -121,6 +151,7 @@ function GapRow({ gap, entities }: { gap: KnowledgeGap; entities: OntologyEntity
     try {
       await create.mutateAsync({ workspaceId: ws, entityKey: key, name, description: note });
       push({ title: `Entity type "${name}" created`, description: "Creation is immediate — the registry's create path is not four-eyes.", variant: "success" });
+      await markHandled();
     } catch (e) {
       fail("Could not create", e);
     }
@@ -149,7 +180,13 @@ function GapRow({ gap, entities }: { gap: KnowledgeGap; entities: OntologyEntity
           <Badge variant="outline" className="ml-1.5 text-[10px]">grounding {gap.knowledgeRelevance}</Badge>
         )}
       </p>
-      {shapes.length > 0 && entities.length > 0 && (
+      {gap.gapStatus ? (
+        // A triaged gap is read-only history: its state and who decided it.
+        <Badge variant="outline" className="text-[10px]">
+          {gap.gapStatus}
+          {gap.gapDecidedBy && <> by {gap.gapDecidedBy}</>}
+        </Badge>
+      ) : shapes.length > 0 && entities.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <select
             aria-label={`Proposal shape for gap ${gap.transcriptId}`}
@@ -222,6 +259,14 @@ function GapRow({ gap, entities }: { gap: KnowledgeGap; entities: OntologyEntity
             {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Send className="size-3.5" aria-hidden />}
             {shape === "newtype" ? "Create type" : "Propose update"}
           </Button>
+          <Button
+            size="sm" variant="ghost" className="h-8"
+            aria-label={`Dismiss gap ${gap.transcriptId}`}
+            disabled={busy || decide.isPending}
+            onClick={dismiss}
+          >
+            <X className="size-3.5" aria-hidden /> Dismiss
+          </Button>
         </div>
       )}
     </li>
@@ -229,10 +274,13 @@ function GapRow({ gap, entities }: { gap: KnowledgeGap; entities: OntologyEntity
 }
 
 export function KnowledgeGapsPanel({ entities }: { entities: OntologyEntity[] }) {
-  const q = useKnowledgeGaps();
+  const [showResolved, setShowResolved] = useState(false);
+  const q = useKnowledgeGaps(50, showResolved);
   const gaps = q.data ?? [];
   // No gaps -> no panel: the queue only appears when there is real signal.
-  if (q.isLoading || q.isError || gaps.length === 0) return null;
+  // (While "Show resolved" is on, an empty OPEN queue still renders — the
+  // steward toggled into history on purpose.)
+  if (q.isLoading || q.isError || (gaps.length === 0 && !showResolved)) return null;
 
   return (
     <Card data-testid="knowledge-gaps-panel">
@@ -241,18 +289,29 @@ export function KnowledgeGapsPanel({ entities }: { entities: OntologyEntity[] })
           <Lightbulb className="size-4 text-muted-foreground" aria-hidden />
           Knowledge gaps
           <Badge variant="secondary" className="text-[10px] tabular-nums">{gaps.length}</Badge>
+          <Button
+            size="sm" variant="ghost" className="ml-auto h-7 text-xs font-normal"
+            aria-pressed={showResolved}
+            onClick={() => setShowResolved((v) => !v)}
+          >
+            {showResolved ? "Hide resolved" : "Show resolved"}
+          </Button>
         </CardTitle>
         <CardDescription>
           Knowledge reviewers said agents were missing, recorded at decision time. Turn a gap into a
-          governed ontology update — a second admin reviews it before it publishes.
+          governed ontology update — a second admin reviews it before it publishes — or dismiss it.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ul className="space-y-2">
-          {gaps.map((g) => (
-            <GapRow key={g.transcriptId} gap={g} entities={entities} />
-          ))}
-        </ul>
+        {gaps.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No gaps — resolved ones included.</p>
+        ) : (
+          <ul className="space-y-2">
+            {gaps.map((g) => (
+              <GapRow key={g.transcriptId} gap={g} entities={entities} />
+            ))}
+          </ul>
+        )}
       </CardContent>
     </Card>
   );

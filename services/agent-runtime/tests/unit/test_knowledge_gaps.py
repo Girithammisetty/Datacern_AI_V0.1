@@ -90,3 +90,81 @@ async def test_gaps_are_tenant_scoped_and_newest_first(client_and_container):
     r = await client.get("/api/v1/knowledge-gaps", headers=_auth())
     gaps = [g["missing_knowledge"] for g in r.json()["data"]]
     assert gaps == ["new gap", "old gap"]  # newest decision first, no foreign rows
+
+
+# ---- WS5 triage: handled / dismissed ----------------------------------------
+
+
+async def _seed_gap(c, tenant=TENANT_A):
+    t = _transcript(tenant, feedback={
+        "adoption": "reject", "preference": "rejected",
+        "missing_knowledge": "the policy exclusion for cosmetic claims",
+        "knowledge_relevance": "irrelevant"},
+        decided_at=dt.datetime(2026, 8, 1, tzinfo=dt.UTC))
+    await c.store.record_transcript(t)
+    return t
+
+
+async def test_deciding_a_gap_removes_it_from_the_default_queue(client_and_container):
+    client, c = client_and_container
+    t = await _seed_gap(c)
+
+    r = await client.post(f"/api/v1/knowledge-gaps/{t.transcript_id}/decision",
+                          json={"status": "dismissed"}, headers=_auth())
+    assert r.status_code == 200, r.text
+    body = r.json()["data"]
+    assert body["status"] == "dismissed"
+    assert body["decided_by"] == "steward-1"  # the caller, from the verified token
+
+    # Default view: the triaged gap is gone.
+    r = await client.get("/api/v1/knowledge-gaps", headers=_auth())
+    assert r.json()["data"] == []
+
+    # include_decided: still listed, with its triage state — nothing is erased.
+    r = await client.get("/api/v1/knowledge-gaps",
+                         params={"include_decided": "true"}, headers=_auth())
+    rows = r.json()["data"]
+    assert len(rows) == 1
+    assert rows[0]["gap_status"] == "dismissed"
+    assert rows[0]["gap_decided_by"] == "steward-1"
+    assert rows[0]["missing_knowledge"]  # the signal itself is untouched
+
+
+async def test_redeciding_upserts_and_open_gaps_carry_null_state(client_and_container):
+    client, c = client_and_container
+    t = await _seed_gap(c)
+
+    r = await client.get("/api/v1/knowledge-gaps", headers=_auth())
+    assert r.json()["data"][0]["gap_status"] is None  # open
+
+    await client.post(f"/api/v1/knowledge-gaps/{t.transcript_id}/decision",
+                      json={"status": "dismissed"}, headers=_auth())
+    r = await client.post(f"/api/v1/knowledge-gaps/{t.transcript_id}/decision",
+                          json={"status": "handled"}, headers=_auth())
+    assert r.status_code == 200
+    r = await client.get("/api/v1/knowledge-gaps",
+                         params={"include_decided": "true"}, headers=_auth())
+    assert r.json()["data"][0]["gap_status"] == "handled"
+
+
+async def test_decision_validates_status_and_the_gap_itself(client_and_container):
+    client, c = client_and_container
+    t = await _seed_gap(c)
+
+    # A made-up status is refused, not coerced.
+    r = await client.post(f"/api/v1/knowledge-gaps/{t.transcript_id}/decision",
+                          json={"status": "ignored"}, headers=_auth())
+    assert r.status_code == 422
+
+    # A transcript WITHOUT the signal is not a gap — deciding it is a 404.
+    plain = _transcript(TENANT_A, feedback={"adoption": "approve"},
+                        decided_at=dt.datetime(2026, 8, 1, tzinfo=dt.UTC))
+    await c.store.record_transcript(plain)
+    r = await client.post(f"/api/v1/knowledge-gaps/{plain.transcript_id}/decision",
+                          json={"status": "handled"}, headers=_auth())
+    assert r.status_code == 404
+
+    # Tenant isolation: another tenant cannot decide (or see) this gap.
+    r = await client.post(f"/api/v1/knowledge-gaps/{t.transcript_id}/decision",
+                          json={"status": "handled"}, headers=_auth(TENANT_B))
+    assert r.status_code == 404

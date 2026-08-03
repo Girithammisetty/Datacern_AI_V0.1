@@ -3259,6 +3259,9 @@ export function mapKnowledgeGap(d: KnowledgeGapDTO) {
     adoption: d.adoption ?? null,
     decidedBy: d.decided_by ?? null,
     decidedAt: d.decided_at ?? null,
+    gapStatus: d.gap_status ?? null,
+    gapDecidedBy: d.gap_decided_by ?? null,
+    gapDecidedAt: d.gap_decided_at ?? null,
   };
 }
 

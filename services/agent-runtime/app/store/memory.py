@@ -8,7 +8,7 @@ decisions, so the unit tier can exercise BR-11/BR-12/AC-14 without Postgres.
 from __future__ import annotations
 
 import copy
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.domain.entities import (
     AgentDefinition,
@@ -39,6 +39,10 @@ class InMemoryStore:
         self._runs: dict[str, Run] = {}
         self._proposals: dict[str, Proposal] = {}
         self._transcripts: dict[str, Transcript] = {}
+        # WS5 steward triage of knowledge gaps: (tenant_id, transcript_id) ->
+        # {status, decided_by, decided_at}. Separate from the transcript corpus
+        # on purpose — triage never mutates a captured training record.
+        self._gap_decisions: dict[tuple[str, str], dict] = {}
         self._sft_datasets: dict[str, SftDataset] = {}
         self._sft_examples: dict[str, list[SftExample]] = {}
         self._training_jobs: dict[str, TrainingJob] = {}
@@ -382,14 +386,49 @@ class InMemoryStore:
         out.sort(key=lambda t: t.created_at, reverse=True)
         return [copy.copy(t) for t in out[:limit]]
 
-    async def list_knowledge_gaps(self, tenant_id: str, *, limit: int = 50) -> list[Transcript]:
+    async def list_knowledge_gaps(
+        self, tenant_id: str, *, limit: int = 50, include_decided: bool = False,
+    ) -> list[Transcript]:
         """WS5 (knowledge spine): decided transcripts where the human named
         MISSING knowledge — the signal the steward loop turns into governed
-        ontology proposals. Newest decisions first."""
+        ontology proposals. Newest decisions first. Triaged (handled/dismissed)
+        gaps are excluded unless ``include_decided``."""
         out = [t for t in self._transcripts.values()
                if t.tenant_id == tenant_id and (t.feedback or {}).get("missing_knowledge")]
+        if not include_decided:
+            out = [t for t in out
+                   if (tenant_id, t.transcript_id) not in self._gap_decisions]
         out.sort(key=lambda t: (t.decided_at or t.created_at), reverse=True)
         return [copy.copy(t) for t in out[:limit]]
+
+    async def decide_knowledge_gap(
+        self, tenant_id: str, transcript_id: str, *, status: str, decided_by: str,
+    ) -> dict | None:
+        """Record the steward's triage of a gap (handled | dismissed). Returns
+        None when the transcript doesn't exist in this tenant or doesn't carry
+        the missing-knowledge signal — there is no gap to decide. Re-deciding
+        upserts (triage is working state; the audit spine covers the proposals
+        a gap produced)."""
+        t = self._transcripts.get(transcript_id)
+        if not t or t.tenant_id != tenant_id or not (t.feedback or {}).get("missing_knowledge"):
+            return None
+        rec = {"transcript_id": transcript_id, "status": status,
+               "decided_by": decided_by,
+               "decided_at": datetime.now(UTC)}
+        self._gap_decisions[(tenant_id, transcript_id)] = rec
+        return dict(rec)
+
+    async def gap_decisions(
+        self, tenant_id: str, transcript_ids: list[str],
+    ) -> dict[str, dict]:
+        """Triage state for the given gaps, keyed by transcript_id (absent =
+        still open)."""
+        out: dict[str, dict] = {}
+        for tid in transcript_ids:
+            rec = self._gap_decisions.get((tenant_id, tid))
+            if rec:
+                out[tid] = dict(rec)
+        return out
 
     # ---- SLM SFT datasets (milestone 2) ------------------------------------
     async def next_sft_version(self, tenant_id: str, agent_key: str) -> int:

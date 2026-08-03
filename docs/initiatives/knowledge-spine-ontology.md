@@ -369,11 +369,30 @@ catalog of possibilities: an 835-only file cannot earn `ontology:claim`. An
 unmapped value records `entity_key: null`; an unreadable snapshot or missing
 column skips linkage with a warning and never blocks registration.
 
+**Built since — richer gap→proposal shapes** (this block was lost in a doc
+merge; restating): the steward closes a gap in the shape it calls for —
+**knowledge note** (four-eyes description proposal), **new attribute** (the
+proposal re-sends the type's existing attributes byte-for-byte, constraints
+included, so the WS3 diff shows exactly one addition), or **new type** (gated
+on `dataset.ontology.create`, honestly labelled "created" — registry creation
+has never been four-eyes).
+
+**Built since — gap triage (handled/dismissed).** The queue is no longer
+append-only in the steward's face: acting on a gap marks it **handled** —
+recorded only AFTER the proposal/creation mutation succeeded, so handled is a
+fact, not an intent — and **Dismiss** marks it noise. Triage lives in its own
+RLS-forced table (`knowledge_gap_decisions`, agent-runtime migration 0020)
+keyed by transcript_id; the transcript corpus — a captured training record —
+is never mutated. Triaged gaps leave the default queue
+(`GET /knowledge-gaps`); `include_decided=true` lists them with
+`gap_status`/`gap_decided_by`/`gap_decided_at` (null while open), surfaced
+through `decideKnowledgeGap`/`KnowledgeGap.gapStatus` in the BFF and a
+"Show resolved" toggle + read-only state badges in the panel. Re-deciding
+upserts — triage is working state; the WORM audit spine covers the actual
+ontology proposals a gap produced.
+
 **Still deferred in WS5:** server-side registry existence check on the evidence
-upload path (the UI feeds from the registry; case-service shape-checks only);
-richer gap→proposal shapes (e.g. proposing a new attribute or a new type
-instead of a description note); marking a gap as handled/dismissed (the queue
-is read-only over the transcript corpus today, so a proposed gap still lists).
+upload path (the UI feeds from the registry; case-service shape-checks only).
 
 ### Increment 3 (WS2) — link the vertebrae on `entity_key` — BUILT (slices 1+2)
 

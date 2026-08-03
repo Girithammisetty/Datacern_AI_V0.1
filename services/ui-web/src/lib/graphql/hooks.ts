@@ -6028,13 +6028,25 @@ export function useDeleteOntologyEntity() {
 /** Signals humans recorded at decision time naming knowledge the agent lacked
  * (PII-redacted at capture) — the queue a steward turns into governed ontology
  * proposals. */
-export function useKnowledgeGaps(limit = 50) {
+export function useKnowledgeGaps(limit = 50, includeDecided = false) {
   return useQuery({
-    queryKey: qk.knowledgeGaps(),
+    queryKey: [...qk.knowledgeGaps(), includeDecided] as const,
     queryFn: () =>
-      graphqlRequest<ops.KnowledgeGapsResult>(ops.KNOWLEDGE_GAPS, { limit }).then(
+      graphqlRequest<ops.KnowledgeGapsResult>(ops.KNOWLEDGE_GAPS, { limit, includeDecided }).then(
         (r) => r.knowledgeGaps,
       ),
+  });
+}
+
+/** WS5 steward triage: mark a gap handled (a governed proposal/type was opened
+ * from it) or dismissed (judged noise). The transcript corpus is never
+ * mutated; the queue re-reads so the row drops out of the open view. */
+export function useDecideKnowledgeGap() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { transcriptId: string; status: "handled" | "dismissed" }) =>
+      graphqlRequest<ops.DecideKnowledgeGapResult>(ops.DECIDE_KNOWLEDGE_GAP, v),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.knowledgeGaps() }),
   });
 }
 

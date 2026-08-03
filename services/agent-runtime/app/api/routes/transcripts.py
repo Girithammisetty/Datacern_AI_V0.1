@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 
 from app.api.auth import principal_of
-from app.domain.errors import NotFound
+from app.domain.errors import NotFound, ValidationFailed
 
 router = APIRouter(prefix="/api/v1")
 
@@ -48,16 +48,24 @@ async def list_transcripts(
 async def list_knowledge_gaps(
     request: Request,
     limit: int = Query(default=50, ge=1, le=200),
+    include_decided: bool = Query(default=False),
 ):
     """WS5 (knowledge spine): the missing-knowledge signals humans recorded at
     decision time, projected as a steward queue — each gap names knowledge the
     agent lacked, so a steward can turn it into a governed ontology proposal.
-    Text was PII-redacted at capture."""
+    Text was PII-redacted at capture. Triaged gaps (handled/dismissed) drop out
+    of the default view; ``include_decided`` lists them with their triage
+    state (``gap_status``/``gap_decided_by``/``gap_decided_at``, null while
+    open)."""
     principal = await principal_of(request)
     c = request.app.state.container
-    rows = await c.store.list_knowledge_gaps(principal.tenant_id, limit=limit)
-    return {"data": [
-        {
+    rows = await c.store.list_knowledge_gaps(
+        principal.tenant_id, limit=limit, include_decided=include_decided)
+    decisions = await c.store.gap_decisions(
+        principal.tenant_id, [t.transcript_id for t in rows])
+    def _gap(t):
+        d = decisions.get(t.transcript_id)
+        return {
             "transcript_id": t.transcript_id, "run_id": t.run_id,
             "agent_key": t.agent_key, "agent_version": t.agent_version,
             "missing_knowledge": (t.feedback or {}).get("missing_knowledge"),
@@ -65,9 +73,36 @@ async def list_knowledge_gaps(
             "adoption": (t.feedback or {}).get("adoption"),
             "decided_by": t.decided_by,
             "decided_at": t.decided_at.isoformat() if t.decided_at else None,
+            "gap_status": d["status"] if d else None,
+            "gap_decided_by": d["decided_by"] if d else None,
+            "gap_decided_at": d["decided_at"].isoformat() if d else None,
         }
-        for t in rows
-    ], "page": {"next_cursor": None, "has_more": False}}
+    return {"data": [_gap(t) for t in rows],
+            "page": {"next_cursor": None, "has_more": False}}
+
+
+@router.post("/knowledge-gaps/{transcript_id}/decision")
+async def decide_knowledge_gap(request: Request, transcript_id: str, body: dict):
+    """WS5 steward triage: mark a gap ``handled`` (a governed proposal or type
+    was opened from it) or ``dismissed`` (judged noise). The transcript corpus
+    is never mutated — triage lives in its own table. Re-deciding upserts."""
+    principal = await principal_of(request)
+    status = (body or {}).get("status")
+    if status not in ("handled", "dismissed"):
+        raise ValidationFailed("status must be 'handled' or 'dismissed'")
+    c = request.app.state.container
+    rec = await c.store.decide_knowledge_gap(
+        principal.tenant_id, transcript_id,
+        status=status, decided_by=principal.sub)
+    if rec is None:
+        raise NotFound("no knowledge gap for that transcript")
+    return {"data": {
+        "transcript_id": rec["transcript_id"], "status": rec["status"],
+        "decided_by": rec["decided_by"],
+        "decided_at": rec["decided_at"].isoformat()
+        if rec.get("decided_at") is not None and not isinstance(rec["decided_at"], str)
+        else rec.get("decided_at"),
+    }}
 
 
 @router.get("/transcripts/{transcript_id}")
