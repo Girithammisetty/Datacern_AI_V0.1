@@ -120,6 +120,35 @@ FIELDS = [
 ]
 SIU, EXPOSURE, METHOD, NOTE = (f["name"] for f in FIELDS)
 
+# Ids of the fields this run declared, so it can take them back out again.
+#
+# siu_referral_<RUN> is REQUIRED. Left in the catalog it does not just linger —
+# it makes every LATER case creation in this tenant fail validation, because a
+# required custom field must be supplied by whoever writes next. That is exactly
+# what happened the first time the live Playwright suite ever executed (6f996fd):
+# journey-forms passed, journey-packs passed, and then e2e:live died on
+#
+#   custom field "siu_referral_62c9bf60" is required   VALIDATION_FAILED
+#
+# for four separate specs. The leak had existed for as long as this journey has,
+# and nothing downstream ever ran to notice — e2e:live had been skipped behind
+# journey-packs on every previous run.
+_DECLARED_IDS: list[str] = []
+_TOK: str | None = None
+
+
+def _undeclare(tok) -> None:
+    """Remove the fields this run declared. A journey that mutates a SHARED
+    tenant owes the next suite a clean catalog — case-service exposes a real
+    DELETE for case fields (they are in packctl's REVERSIBLE_KINDS, and the packs
+    journey asserts they are gone after uninstall), so this is a real revert and
+    not a workaround."""
+    for fid in _DECLARED_IDS:
+        try:
+            api("DELETE", f"{c.CASE}/api/v1/case-fields/{fid}", tok)
+        except Exception:  # noqa: BLE001 — teardown must never mask the verdict
+            pass
+
 CASE_FORM_Q = """
 query($mode: String) {
   caseForm(mode: $mode) {
@@ -192,6 +221,8 @@ def main() -> int:  # noqa: PLR0911, PLR0915
     api("POST", f"{c.RBAC}/api/v1/admin/projection/rebuild?tenant={tenant}", su, {})
 
     tok = c.user_token("u-forms-admin", tenant, ["*"], workspace_id=ws)
+    global _TOK
+    _TOK = tok  # so teardown can revert the catalog from any of the 14 exit paths
 
     # rbac materializes the perm:* projection asynchronously; a field write
     # before it lands is a 403 that has nothing to do with this add-on. Poll a
@@ -210,6 +241,10 @@ def main() -> int:  # noqa: PLR0911, PLR0915
         r = api("POST", f"{c.CASE}/api/v1/case-fields", tok, f)
         if r.status_code not in (200, 201):
             return bail(f"declare field {f['name']}", f"{r.status_code} {r.text[:200]}")
+        body = r.json()
+        fid = (body.get("data") or body).get("id")
+        if fid:
+            _DECLARED_IDS.append(str(fid))
     declared = int(psql(
         "SELECT count(*) FROM case_fields WHERE tenant_id = "
         f"'{tenant}' AND workspace_id = '{ws}' AND name LIKE '%{RUN}' "
@@ -374,13 +409,37 @@ def main() -> int:  # noqa: PLR0911, PLR0915
           "the draft is metered on the CALLER's tenant, attributed to the human's sub",
           f"request_log rows since the draft: {logged}")
 
+    # ---- 6. UNDECLARE: leave the shared tenant as we found it ---------------
+    # Asserted, not assumed. The __main__ finally block is a safety net for the
+    # bail paths; this proves the revert actually happens on the path that
+    # matters, because a required field left behind breaks the NEXT suite rather
+    # than this one — which is precisely why it went unnoticed until e2e:live
+    # ran for the first time.
+    _undeclare(tok)
+    left = int(psql(
+        "SELECT count(*) FROM case_fields WHERE tenant_id = "
+        f"'{tenant}' AND workspace_id = '{ws}' AND name LIKE '%{RUN}' "
+        "AND deleted_at IS NULL", db="case_svc") or 0)
+    check(left == 0,
+          "the run's fields are removed again (a REQUIRED field left behind "
+          "fails every later case write in this tenant)",
+          f"{left} still in the catalog")
+
     if _fail:
         print(f"\nFAIL -- {len(_fail)} check(s): {', '.join(_fail)}\n")
         return 1
     print("\nPASS -- the customer's own form is declared, served, enforced, "
-          "drafted from, and stored exactly as submitted.\n")
+          "drafted from, stored exactly as submitted, and withdrawn again.\n")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # finally, not a trailing call: main() has 14 exit paths, and a journey that
+    # bails early is exactly when it is most likely to leave a required field
+    # behind for the next suite to trip over.
+    try:
+        _rc = main()
+    finally:
+        if _TOK:
+            _undeclare(_TOK)
+    sys.exit(_rc)
