@@ -93,7 +93,7 @@ export default function CasesPage() {
     <div>
       <PageHeader
         title={t("cases.title")}
-        description="Every open decision, ranked and searchable."
+        description="Your team's work queue — every open case, ranked and searchable."
         actions={
           <div className="flex items-center gap-2">
             <CaseExportButton status={status || undefined} />
