@@ -45,6 +45,13 @@ export function DefinitionEditor({
   const [doc, setDoc] = useState<SemanticDefinitionDoc>(
     () => normalizeDefinition(version.definitionJson),
   );
+  // The doc object last SEEDED from the server (mount / version switch). The
+  // autosave effect compares against this by identity: only a doc produced by
+  // an edit (a new object from setDoc in a section) triggers a save. This
+  // replaces a consume-on-run "skip" flag whose effect-ordering ate the FIRST
+  // edit after mount — a single edit never autosaved until a second one landed.
+  const seededDoc = useRef<SemanticDefinitionDoc | null>(null);
+  if (seededDoc.current === null) seededDoc.current = doc;
   // Re-seed local state whenever we switch to a different version (e.g. after
   // opening a new draft, or after a submit rolls back to draft with fresh data).
   const loadedVersionKey = useRef(`${version.modelId}:${version.versionNo}`);
@@ -52,7 +59,9 @@ export function DefinitionEditor({
     const key = `${version.modelId}:${version.versionNo}`;
     if (key !== loadedVersionKey.current) {
       loadedVersionKey.current = key;
-      setDoc(normalizeDefinition(version.definitionJson));
+      const seeded = normalizeDefinition(version.definitionJson);
+      seededDoc.current = seeded;
+      setDoc(seeded);
     }
   }, [version]);
 
@@ -66,15 +75,12 @@ export function DefinitionEditor({
 
   // Debounced autosave: fires SAVE_DEBOUNCE_MS after the last edit. A save-time
   // 422 (structural/expr) is real and shown immediately; it does not clear the
-  // author's in-progress edits.
-  const skipNextSave = useRef(true);
+  // author's in-progress edits. Identity check against the seeded doc means the
+  // VERY FIRST edit saves too — a mount or version switch (doc === seeded)
+  // never does.
   useEffect(() => {
     if (readOnly) return;
-    if (skipNextSave.current) {
-      // Don't save on initial mount / version switch — only on real edits.
-      skipNextSave.current = false;
-      return;
-    }
+    if (doc === seededDoc.current) return; // seeded from the server, not an edit
     const timer = setTimeout(() => {
       setSaveError(null);
       saveMutation.mutate(
@@ -88,10 +94,6 @@ export function DefinitionEditor({
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc, readOnly]);
-  // Reset the "skip" guard whenever the loaded version changes.
-  useEffect(() => {
-    skipNextSave.current = true;
-  }, [version.modelId, version.versionNo]);
 
   // Real columns for every referenced dataset, keyed by entity name — the
   // dimension/measure column pickers bind to these instead of free text.
