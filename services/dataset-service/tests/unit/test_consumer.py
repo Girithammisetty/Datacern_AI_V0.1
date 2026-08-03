@@ -404,3 +404,98 @@ class TestStandardsProvenance:
         ds = await self._ingest(recording_container, "csv")
         assert not any(t.startswith(("standard:", "ontology:")) for t in ds.tags)
         assert not ds.custom_metadata
+
+
+class TestPerRowEntityLinkage:
+    """WS5 per-row slice: for mixed-meaning standards (x12/fhir/hl7v2) the
+    consumer reads a bounded head of the event's exact snapshot and links the
+    discriminator values ACTUALLY observed — never the format's full catalog
+    of possibilities."""
+
+    @staticmethod
+    def _ctx():
+        from app.domain.services import CallCtx
+        return CallCtx(tenant_id=TENANT_A, actor={"type": "user", "id": "steward-1"})
+
+    async def _declare(self, c, key, name):
+        from tests.conftest import WORKSPACE
+        await c.ontology_service.create(
+            self._ctx(), WORKSPACE, {"entity_key": key, "name": name})
+
+    async def _ingest_df(self, c, fmt, df, ingestion_id="ing-rows", name="RowsDs"):
+        table = f"bronze.t.{ingestion_id}"
+        await c.catalog.commit_snapshot(table, 1001, df)
+        env = ingestion_envelope(
+            TENANT_A, ingestion_id, dataset_name=name,
+            iceberg_table=table, file_format=fmt,
+        )
+        await c.bus.publish("ingestion.events.v1", env)
+        return next(iter(c.memory_state.datasets.values()))
+
+    async def test_fhir_links_only_the_resource_types_observed_and_declared(
+        self, recording_container,
+    ):
+        c = recording_container
+        await self._declare(c, "claim", "Claim")
+        df = pd.DataFrame({
+            "resource_type": ["Claim", "Claim", "Patient"],
+            "resource_id": ["r1", "r2", "r3"],
+        })
+        ds = await self._ingest_df(c, "fhir", df)
+
+        assert "standard:fhir" in ds.tags
+        assert "ontology:claim" in ds.tags          # observed AND declared
+        assert "ontology:patient" not in ds.tags    # observed, NOT declared
+        std = ds.custom_metadata["standards"]
+        assert std["discriminator"] == "resource_type"
+        assert std["rows_scanned"] == 3
+        assert std["row_entities"] == [
+            {"value": "Claim", "rows": 2, "entity_key": "claim", "ontology_linked": True},
+            {"value": "Patient", "rows": 1, "entity_key": "patient", "ontology_linked": False},
+        ]
+
+    async def test_x12_transaction_sets_map_to_their_row_meanings(self, recording_container):
+        c = recording_container
+        await self._declare(c, "claim_payment", "Claim payment")
+        df = pd.DataFrame({"transaction_set": ["835", "835", "837"],
+                           "claim_id": ["a", "b", "c"]})
+        ds = await self._ingest_df(c, "x12", df, ingestion_id="ing-x12rows")
+        assert "ontology:claim_payment" in ds.tags
+        std = ds.custom_metadata["standards"]
+        by_value = {r["value"]: r for r in std["row_entities"]}
+        assert by_value["835"] == {"value": "835", "rows": 2,
+                                   "entity_key": "claim_payment", "ontology_linked": True}
+        assert by_value["837"]["entity_key"] == "claim"
+        assert by_value["837"]["ontology_linked"] is False
+
+    async def test_hl7v2_prefixes_map_and_unknown_values_stay_unmapped(
+        self, recording_container,
+    ):
+        df = pd.DataFrame({"message_type": ["ORU^R01", "ADT^A01", "SIU^S12"]})
+        ds = await self._ingest_df(recording_container, "hl7v2", df, ingestion_id="ing-hl7")
+        by_value = {r["value"]: r
+                    for r in ds.custom_metadata["standards"]["row_entities"]}
+        assert by_value["ORU^R01"]["entity_key"] == "observation"
+        assert by_value["ADT^A01"]["entity_key"] == "patient_event"
+        # An undecodable value is recorded as observed-but-unmapped, not guessed.
+        assert by_value["SIU^S12"] == {"value": "SIU^S12", "rows": 1,
+                                       "entity_key": None, "ontology_linked": False}
+        assert not any(t.startswith("ontology:") for t in ds.tags)
+
+    async def test_unreadable_snapshot_skips_linkage_but_never_registration(
+        self, recording_container, monkeypatch,
+    ):
+        c = recording_container
+
+        async def _boom(table, snapshot_id, max_rows):
+            raise RuntimeError("object store down")
+
+        monkeypatch.setattr(c.catalog, "read_snapshot_head", _boom)
+        await seed_snapshot(c, table="bronze.t.ing-fail")
+        env = ingestion_envelope(TENANT_A, "ing-fail", dataset_name="FailDs",
+                                 iceberg_table="bronze.t.ing-fail", file_format="fhir")
+        await c.bus.publish("ingestion.events.v1", env)
+
+        ds = next(iter(c.memory_state.datasets.values()))
+        assert "standard:fhir" in ds.tags  # provenance still recorded
+        assert "row_entities" not in ds.custom_metadata["standards"]  # nothing fabricated

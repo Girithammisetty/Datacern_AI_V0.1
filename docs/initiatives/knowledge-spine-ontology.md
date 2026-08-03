@@ -354,8 +354,22 @@ WS5 routes that signal into the governed ontology flow. Built 2026-08-03:
   so an agent reads "this PDF is about a policy", not just bytes. Untagged
   evidence is untouched everywhere; the reader never guesses a type.
 
-**Still deferred in WS5:** per-row entity linkage for mixed-type standards
-datasets (x12/fhir/hl7v2); server-side registry existence check on the evidence
+**Built since — per-row entity linkage for mixed-type standards datasets:**
+each mixed-meaning decoder already writes a per-row discriminator column
+(x12 `transaction_set`, FHIR `resource_type`, HL7v2 `message_type`), so the
+ingestion consumer now reads a bounded head (20k rows, `rows_scanned`
+disclosed) of the event's EXACT snapshot and records the discriminator values
+ACTUALLY OBSERVED — value, row count, the entity kind such a row instantiates
+(837→claim, 835→claim_payment, 271→eligibility_benefit, 277→claim_status,
+834→enrollment, 999→acknowledgment; FHIR resource types to snake_case;
+ADT→patient_event, ORU→observation), and whether the workspace registry
+declares that kind — as `custom_metadata.standards.row_entities`, tagging
+`ontology:<key>` per observed-AND-declared kind. Never the format's full
+catalog of possibilities: an 835-only file cannot earn `ontology:claim`. An
+unmapped value records `entity_key: null`; an unreadable snapshot or missing
+column skips linkage with a warning and never blocks registration.
+
+**Still deferred in WS5:** server-side registry existence check on the evidence
 upload path (the UI feeds from the registry; case-service shape-checks only);
 richer gap→proposal shapes (e.g. proposing a new attribute or a new type
 instead of a description note); marking a gap as handled/dismissed (the queue

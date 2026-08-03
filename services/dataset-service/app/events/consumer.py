@@ -36,6 +36,59 @@ STANDARDS_FORMATS = ("x12", "fhir", "hl7v2", "iso20022", "acord")
 #: resourceType / message type, so a dataset-level hint would be a guess.
 STANDARDS_ROW_ENTITY = {"iso20022": "bank_statement_entry", "acord": "policy"}
 
+#: Mixed-meaning formats carry a PER-ROW discriminator column (written by the
+#: decoder onto every row) — the per-row linkage slice observes its actual
+#: values in the committed snapshot instead of guessing from the format.
+STANDARDS_ROW_DISCRIMINATOR = {
+    "x12": "transaction_set",   # ingestion-service x12.py _ENVELOPE_COLUMNS
+    "fhir": "resource_type",    # fhir.py COLUMNS
+    "hl7v2": "message_type",    # hl7v2.py COLUMNS (e.g. "ADT^A01", "ORU^R01")
+}
+
+#: What one row IS per x12 transaction set — each set's row meaning is
+#: documented on its column list in ingestion-service x12.py (837 one row per
+#: claim, 835 per claim payment, 271 per eligibility/benefit segment, 277 per
+#: claim status response, 834 per health-coverage line, 999 per acknowledged
+#: transaction set).
+X12_ROW_ENTITY = {
+    "837": "claim", "835": "claim_payment", "271": "eligibility_benefit",
+    "277": "claim_status", "834": "enrollment", "999": "acknowledgment",
+}
+
+#: FHIR resourceType -> entity kind, for exactly the types the decoder maps
+#: (unmapped resources are skipped at decode, so observed values ⊆ this set;
+#: anything else records entity_key None rather than a guess).
+FHIR_ROW_ENTITY = {
+    "Patient": "patient", "Coverage": "coverage", "Claim": "claim",
+    "ClaimResponse": "claim_response",
+    "ExplanationOfBenefit": "explanation_of_benefit", "Encounter": "encounter",
+}
+
+#: Bounded row scan for per-row linkage — same order as the profiler/contract
+#: reads; rows_scanned is recorded so a partial scan is disclosed, never hidden.
+ROW_SCAN_LIMIT = 20_000
+#: Distinct discriminator values recorded, most-frequent first (evidence, not a
+#: dump; truncation is logged).
+MAX_ROW_ENTITY_VALUES = 20
+
+
+def _row_entity_for(fmt: str, value: str) -> str | None:
+    """The entity kind one row instantiates, from its discriminator value —
+    None when the value maps to nothing we can honestly name."""
+    if fmt == "x12":
+        return X12_ROW_ENTITY.get(value)
+    if fmt == "fhir":
+        return FHIR_ROW_ENTITY.get(value)
+    if fmt == "hl7v2":
+        # hl7v2.py: ADT emits one patient/event row per message; ORU one row
+        # per OBX observation. The suffix (^A01, ^R01) refines the trigger,
+        # not what a row is.
+        if value.startswith("ADT"):
+            return "patient_event"
+        if value.startswith("ORU"):
+            return "observation"
+    return None
+
 logger = logging.getLogger(__name__)
 
 INGESTION_TOPIC = "ingestion.events.v1"
@@ -200,7 +253,63 @@ class IngestionEventHandler:
             if linked:
                 tags.append(f"ontology:{hint}")
         meta = {"standards": {"format": fmt, "entity_key": hint, "ontology_linked": linked}}
+
+        # Per-row slice: for mixed-meaning formats, observe the discriminator
+        # values ACTUALLY present in the committed snapshot and link each one.
+        if fmt in STANDARDS_ROW_DISCRIMINATOR:
+            observed = await self._observe_row_entities(ctx, payload, fmt)
+            if observed is not None:
+                rows_scanned, row_entities = observed
+                meta["standards"]["discriminator"] = STANDARDS_ROW_DISCRIMINATOR[fmt]
+                meta["standards"]["rows_scanned"] = rows_scanned
+                meta["standards"]["row_entities"] = row_entities
+                for re_ in row_entities:
+                    if re_["ontology_linked"]:
+                        tag = f"ontology:{re_['entity_key']}"
+                        if tag not in tags:
+                            tags.append(tag)
         return tags, meta
+
+    async def _observe_row_entities(
+        self, ctx: CallCtx, payload: dict, fmt: str,
+    ) -> tuple[int, list[dict]] | None:
+        """Read a bounded head of the event's exact snapshot and report the
+        distinct discriminator values present — value, row count, the entity
+        kind such a row instantiates, and whether the workspace registry
+        declares that kind. Any failure (unreadable snapshot, missing column)
+        skips per-row linkage with a warning — it NEVER blocks registration,
+        and nothing is recorded that wasn't observed."""
+        table = payload.get("iceberg_table")
+        snapshot_id = payload.get("iceberg_snapshot_id")
+        workspace_id = payload.get("workspace_id")
+        col = STANDARDS_ROW_DISCRIMINATOR[fmt]
+        if not table or snapshot_id is None or not workspace_id:
+            return None
+        try:
+            df = await self.deps.catalog.read_snapshot_head(table, snapshot_id, ROW_SCAN_LIMIT)
+        except Exception as exc:  # noqa: BLE001 — linkage is best-effort metadata
+            logger.warning("standards row scan failed for %s@%s: %s — per-row "
+                           "linkage skipped", table, snapshot_id, exc)
+            return None
+        if df is None or col not in df.columns:
+            logger.warning("standards dataset %s carries no %r column; per-row "
+                           "linkage skipped", table, col)
+            return None
+
+        counts = df[col].astype(str).value_counts()
+        if len(counts) > MAX_ROW_ENTITY_VALUES:
+            logger.warning("%s distinct %r values; recording the %s most frequent",
+                           len(counts), col, MAX_ROW_ENTITY_VALUES)
+        out: list[dict] = []
+        async with self.deps.uow_factory(ctx.tenant_id) as uow:
+            for value, n in counts.head(MAX_ROW_ENTITY_VALUES).items():
+                key = _row_entity_for(fmt, str(value))
+                linked = False
+                if key:
+                    linked = await uow.ontology.get(workspace_id, key) is not None
+                out.append({"value": str(value), "rows": int(n),
+                            "entity_key": key, "ontology_linked": linked})
+        return int(len(df)), out
 
     async def _resolve_dataset(self, ctx: CallCtx, payload: dict):
         dataset_id = self._event_dataset_id(ctx, payload)
