@@ -48,7 +48,8 @@ class CaseServiceClient:
         """Evidence attachment metadata for a case (task #77 GET
         /cases/{id}/evidence). Metadata only — no bytes; requires
         case.evidence.read. Each row: {id, filename, content_type, size_bytes,
-        uploaded_by, created_at}."""
+        uploaded_by, created_at} plus entity_key when the uploader tagged the
+        document with the governed ontology type it instantiates (WS5)."""
         url = f"{self._base}/api/v1/cases/{case_id}/evidence"
         headers = {"Authorization": f"Bearer {auth_token}"}
         async with httpx.AsyncClient(timeout=self._timeout) as client:

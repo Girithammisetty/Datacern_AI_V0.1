@@ -1753,7 +1753,7 @@ export const CASE_DETAIL = /* GraphQL */ `
       proposals {
         id urn agentKey tool riskTier rationale rationaleSource predictedEffect status affectedUrns argsDiff createdAt
       }
-      evidence { id caseId filename contentType sizeBytes uploadedBy createdAt }
+      evidence { id caseId filename contentType sizeBytes uploadedBy entityKey createdAt }
     }
   }
 `;

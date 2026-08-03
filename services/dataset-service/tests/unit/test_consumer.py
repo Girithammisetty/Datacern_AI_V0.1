@@ -351,3 +351,56 @@ class TestExactlyOnceOnError:
         # A further duplicate now no-ops (marker present).
         await c.ingestion_handler.handle(env)
         assert len(state.versions) == 1
+
+
+class TestStandardsProvenance:
+    """Knowledge Spine WS5: a dataset decoded from an interop standard carries
+    its provenance, and links to the governed ontology ONLY when the workspace
+    registry actually declares the type its rows instantiate."""
+
+    @staticmethod
+    def _ctx():
+        from app.domain.services import CallCtx
+        return CallCtx(tenant_id=TENANT_A, actor={"type": "user", "id": "steward-1"})
+
+    async def _ingest(self, c, fmt, ingestion_id="ing-std", name="StdDs"):
+        await seed_snapshot(c, table=f"bronze.t.{ingestion_id}")
+        env = ingestion_envelope(
+            TENANT_A, ingestion_id, dataset_name=name,
+            iceberg_table=f"bronze.t.{ingestion_id}", file_format=fmt,
+        )
+        await c.bus.publish("ingestion.events.v1", env)
+        return next(iter(c.memory_state.datasets.values()))
+
+    async def test_acord_links_when_the_registry_declares_policy(self, recording_container):
+        c = recording_container
+        from tests.conftest import WORKSPACE
+        await c.ontology_service.create(
+            self._ctx(), WORKSPACE, {"entity_key": "policy", "name": "Policy"})
+        ds = await self._ingest(c, "acord")
+        assert "standard:acord" in ds.tags
+        assert "ontology:policy" in ds.tags
+        assert ds.custom_metadata["standards"] == {
+            "format": "acord", "entity_key": "policy", "ontology_linked": True}
+
+    async def test_iso20022_without_declaration_is_an_honest_miss(self, recording_container):
+        ds = await self._ingest(recording_container, "iso20022")
+        assert "standard:iso20022" in ds.tags
+        assert not any(t.startswith("ontology:") for t in ds.tags)
+        # The hint states what a row IS (decoder fact); linked states what the
+        # registry declares — a miss is recorded, never upgraded into a tag.
+        assert ds.custom_metadata["standards"] == {
+            "format": "iso20022", "entity_key": "bank_statement_entry",
+            "ontology_linked": False}
+
+    async def test_x12_gets_provenance_but_no_entity_guess(self, recording_container):
+        ds = await self._ingest(recording_container, "x12")
+        assert "standard:x12" in ds.tags
+        assert not any(t.startswith("ontology:") for t in ds.tags)
+        assert ds.custom_metadata["standards"] == {
+            "format": "x12", "entity_key": None, "ontology_linked": False}
+
+    async def test_plain_formats_stay_untouched(self, recording_container):
+        ds = await self._ingest(recording_container, "csv")
+        assert not any(t.startswith(("standard:", "ontology:")) for t in ds.tags)
+        assert not ds.custom_metadata

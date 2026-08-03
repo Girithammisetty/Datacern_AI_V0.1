@@ -85,8 +85,8 @@ class _FakeCaseClient:
         self.downloads: list[str] = []
 
     async def list_evidence(self, *, tenant_id, case_id, auth_token) -> list[dict]:
-        return [{k: f[k] for k in ("id", "filename", "content_type", "size_bytes")}
-                for f in self._files]
+        keys = ("id", "filename", "content_type", "size_bytes", "entity_key")
+        return [{k: f[k] for k in keys if k in f} for f in self._files]
 
     async def download_evidence(self, *, tenant_id, case_id, evidence_id, auth_token):
         self.downloads.append(evidence_id)
@@ -110,6 +110,23 @@ async def test_reader_lists_downloads_and_extracts():
     img_doc = docs[1]
     assert not img_doc["extracted"] and "OCR" in img_doc["note"]
     assert client.downloads == ["e1", "e2"]  # both fetched
+
+
+async def test_reader_surfaces_the_uploaders_entity_tag_only(  # WS5
+):
+    """A document tagged with the governed ontology type it instantiates
+    carries that tag into grounding; an untagged one carries NO entity field —
+    the reader never guesses a domain type."""
+    client = _FakeCaseClient([
+        {"id": "e1", "filename": "loss-run.txt", "content_type": "text/plain",
+         "size_bytes": 20, "bytes": b"policy P-77 losses", "entity_key": "policy"},
+        {"id": "e2", "filename": "note.txt", "content_type": "text/plain",
+         "size_bytes": 10, "bytes": b"misc note"},
+    ])
+    docs = await EvidenceReader(client).read_case_evidence(
+        tenant_id="t", case_id="c-1", auth_token="tok")
+    assert docs[0]["entity_key"] == "policy"
+    assert "entity_key" not in docs[1]
 
 
 async def test_reader_respects_doc_and_total_budgets():

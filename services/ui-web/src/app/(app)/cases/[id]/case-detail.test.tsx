@@ -74,6 +74,9 @@ beforeEach(() => {
     // Sync-to-SoR dialog (task #69) fetches outgoing connections eagerly in
     // CaseActionsBar — an empty connection list here since no test targets it.
     if (doc.includes("query Connections")) return { connections: { nodes: [], pageInfo: { hasMore: false } } };
+    // Attachments tagging (WS5): the panel offers domain types from the
+    // governed registry; empty unless a test provides some.
+    if (doc.includes("query OntologyEntities")) return { ontologyEntities: [] };
     return {};
   };
 });
@@ -215,5 +218,32 @@ describe("Case detail actions — real mutations", () => {
       expect(call?.vars).toMatchObject({ caseId: "c-1", body: "flagging for SIU review" });
       expect(call?.vars?.idempotencyKey).toBeTruthy();
     });
+  });
+
+  it("shows an evidence file's domain-type tag and offers registry types on upload (WS5)", async () => {
+    detail = caseResult({
+      evidence: [{ id: "e-1", caseId: "c-1", filename: "loss-run.pdf",
+                   contentType: "application/pdf", sizeBytes: 1024,
+                   uploadedBy: "u", entityKey: "policy", createdAt: null }],
+    });
+    const prev = handler;
+    handler = (doc: string, vars: any) => {
+      if (doc.includes("query OntologyEntities")) {
+        return { ontologyEntities: [
+          { id: "o-1", entityKey: "policy", workspaceId: "ws", name: "Policy", description: "",
+            versionNo: 1, createdAt: null, attributes: [], relationships: [] },
+        ] };
+      }
+      return prev(doc, vars);
+    };
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: /attachments/i }));
+    // The uploader's tag renders next to the file; untagged files carry none.
+    expect(await screen.findByText("about: policy")).toBeInTheDocument();
+    // The upload form offers the governed registry's types, never free text.
+    const select = screen.getByLabelText("Document is about (domain type)");
+    expect(select.querySelector('option[value="policy"]')).not.toBeNull();
   });
 });

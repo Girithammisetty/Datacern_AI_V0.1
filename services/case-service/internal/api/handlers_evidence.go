@@ -5,12 +5,17 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/datacern-ai/case-service/internal/domain"
 )
+
+// entityKeyRe mirrors the restricted name shape the ontology registry enforces
+// on entity keys (dataset-service; same shape semantic-service validates).
+var entityKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 // maxEvidenceBytes caps a single evidence upload (25 MiB): claim photos, PDFs,
 // scanned reports. Large enough for real documents, small enough to hold in
@@ -64,6 +69,18 @@ func (s *Server) handleAddEvidence(w http.ResponseWriter, r *http.Request) {
 		contentType = "application/octet-stream"
 	}
 
+	// Optional (Knowledge Spine WS5): the governed ontology entity type this
+	// document instantiates. Shape-checked only — the registry lives in
+	// dataset-service and the UI feeds this field from it, so a malformed
+	// value here is a client bug worth a 400, while registry existence is
+	// deliberately NOT re-verified cross-service on the upload hot path.
+	entityKey := strings.TrimSpace(r.FormValue("entity_key"))
+	if entityKey != "" && !entityKeyRe.MatchString(entityKey) {
+		writeErr(w, r, domain.EValidation(
+			"entity_key must match the ontology key shape (lowercase slug)", nil))
+		return
+	}
+
 	eid := domain.NewID()
 	// Object key is tenant/case/evidence — RLS + the case_id check on download
 	// are the real isolation; the key just organizes the bucket.
@@ -76,7 +93,7 @@ func (s *Server) handleAddEvidence(w http.ResponseWriter, r *http.Request) {
 	e := &domain.CaseEvidence{
 		ID: eid, TenantID: op.Tenant, WorkspaceID: c0.WorkspaceID, CaseID: id,
 		Filename: filename, ContentType: contentType, SizeBytes: int64(len(data)),
-		StorageKey: key, UploadedBy: op.Actor.ID,
+		StorageKey: key, UploadedBy: op.Actor.ID, EntityKey: entityKey,
 	}
 	if err := s.Store.InsertEvidence(r.Context(), op, e); err != nil {
 		writeErr(w, r, domain.EInternal("evidence record failed"))

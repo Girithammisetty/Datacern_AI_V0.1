@@ -12,10 +12,11 @@ import { DiffView } from "@/components/primitives/DiffView";
 import { Can } from "@/components/authz/Can";
 import { CaseActionsBar } from "@/components/cases/CaseActionsBar";
 import { FEATURE_GATES, cap } from "@/lib/authz/registry";
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui/primitives";
+import { Badge, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { useCaseDetail, useUpdateCase, useCaseTimeline, useCaseComments,
-  useAddCaseComment, useUpdateCaseComment, useDeleteCaseComment } from "@/lib/graphql/hooks";
+  useAddCaseComment, useUpdateCaseComment, useDeleteCaseComment,
+  useOntologyEntities } from "@/lib/graphql/hooks";
 import { useHubTopics } from "@/lib/realtime/useHubTopics";
 import { useSession } from "@/lib/session/SessionContext";
 import { useToasts } from "@/stores/ui";
@@ -210,6 +211,11 @@ function AttachmentsPanel({
 }) {
   const toasts = useToasts();
   const [busy, setBusy] = useState(false);
+  // WS5: the uploader can name the governed ontology type this document
+  // instantiates ("this PDF is about a policy"). Fed by the workspace
+  // registry — never free text — and entirely optional.
+  const [entityKey, setEntityKey] = useState("");
+  const ontologyTypes = useOntologyEntities().data ?? [];
 
   async function upload(file: File) {
     if (busy) return;
@@ -217,6 +223,7 @@ function AttachmentsPanel({
     try {
       const fd = new FormData();
       fd.append("file", file);
+      if (entityKey) fd.append("entity_key", entityKey);
       const res = await fetch(`/api/case-evidence/${encodeURIComponent(caseId)}`, {
         method: "POST",
         body: fd,
@@ -252,6 +259,19 @@ function AttachmentsPanel({
               />
               {busy ? "Uploading…" : "Attach a file"}
             </label>
+            {ontologyTypes.length > 0 && (
+              <select
+                aria-label="Document is about (domain type)"
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                value={entityKey}
+                onChange={(e) => setEntityKey(e.target.value)}
+              >
+                <option value="">About… (optional)</option>
+                {ontologyTypes.map((o) => (
+                  <option key={o.entityKey} value={o.entityKey}>{o.name}</option>
+                ))}
+              </select>
+            )}
             <span className="text-xs text-muted-foreground">PDF, image, report — up to 25 MB.</span>
           </CardContent>
         </Card>
@@ -265,7 +285,14 @@ function AttachmentsPanel({
             <Card key={e.id}>
               <CardContent className="flex items-center gap-3 py-3 text-sm">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium" title={e.filename}>{e.filename}</p>
+                  <p className="flex items-center gap-2 truncate font-medium" title={e.filename}>
+                    {e.filename}
+                    {e.entityKey && (
+                      <Badge variant="outline" className="shrink-0 text-[10px]">
+                        about: {e.entityKey}
+                      </Badge>
+                    )}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {humanBytes(e.sizeBytes)} · {e.contentType}
                     {e.createdAt ? ` · ${formatLocal(e.createdAt)}` : ""}

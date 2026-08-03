@@ -1488,6 +1488,9 @@ export interface CaseEvidence {
   contentType: string;
   sizeBytes: number;
   uploadedBy?: string | null;
+  /** WS5: the governed ontology entity type this document instantiates
+   * (set by the uploader from the workspace registry; null when untagged). */
+  entityKey?: string | null;
   createdAt?: string | null;
 }
 
