@@ -7,6 +7,7 @@ entities (flat) and from entity RESOLUTION (which resolves instances)."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, Query, Request, Response
+from fastapi.responses import JSONResponse
 
 from app.api.auth import Principal, require
 from app.domain.errors import ValidationFailed
@@ -62,6 +63,19 @@ async def list_entities(
 ):
     items = await _c(request).ontology_service.list(principal.ctx(), workspace_id)
     return {"data": [_payload(e) for e in items]}
+
+
+@router.get("/ontology/export")
+async def export_jsonld(
+    request: Request,
+    principal: Principal = Depends(require("dataset.ontology.read")),
+    workspace_id: str = Query(alias="filter[workspace_id]"),
+):
+    """WS4 interop: the workspace's ontology as one OWL + SHACL document in
+    JSON-LD. A projection, not a sync — served with the JSON-LD media type so
+    external RDF tooling recognizes it; re-import is not supported."""
+    doc = await _c(request).ontology_service.export_jsonld(principal.ctx(), workspace_id)
+    return JSONResponse(content=doc, media_type="application/ld+json")
 
 
 @router.get("/ontology/entities/{entity_key}")

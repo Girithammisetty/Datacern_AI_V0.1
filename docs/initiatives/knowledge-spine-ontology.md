@@ -294,7 +294,20 @@ counted, or violations in the engine's own vocabulary with bounded
 worst-offender examples. The UI never pre-judges: an unmapped required
 attribute is the ENGINE's violation to report, not the form's to block.
 
-**Deferred:** the OWL/JSON-LD export projection (the other WS4 leg).
+**Built since (2):** the OWL/JSON-LD export projection — WS4's interop leg,
+per the explicit non-goal ("adopt the standard as an export projection only",
+no RDF re-platform). `GET /ontology/export` (dataset-service, gated
+`dataset.ontology.read`, served as `application/ld+json`) projects the
+workspace registry into one OWL + SHACL document: entity types as `owl:Class`
+carrying the LIVE published version (`owl:versionInfo`), attributes as
+`owl:DatatypeProperty` (an `rdfs:range` only when `data_type` maps cleanly to
+XSD — never fabricated), relationships as `owl:ObjectProperty`
+(has_one/belongs_to additionally `owl:FunctionalProperty`; an undeclared
+target keeps its range per RDF's open world but says so in a comment), and
+required/enum as real SHACL shapes (`sh:minCount`/`sh:in`) — the same
+contract the WS4 checker enforces against rows. BFF `ontologyJsonLd` passes
+the document through VERBATIM; the ontology page's "Export JSON-LD" button
+downloads it as-is. WS4 is complete.
 
 ### Increment 5 (WS5) — the missing-knowledge steward loop — BUILT (first slice)
 

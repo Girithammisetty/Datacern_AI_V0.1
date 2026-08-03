@@ -43,6 +43,7 @@ from app.domain.errors import (
     ValidationFailed,
 )
 from app.domain.naming import RESOLVE_NAMESPACE, safe_relation
+from app.domain.ontology_export import ontology_to_jsonld
 from app.domain.ports import (
     Catalog,
     DatasetFilters,
@@ -1736,6 +1737,15 @@ class OntologyService(_Base):
     async def list(self, ctx: CallCtx, workspace_id: str | None) -> list[OntologyEntity]:
         async with self.uow(ctx.tenant_id) as uow:
             return await uow.ontology.list(workspace_id)
+
+    async def export_jsonld(self, ctx: CallCtx, workspace_id: str) -> dict:
+        """WS4's interop leg: the workspace ontology as one OWL + SHACL
+        document in JSON-LD (see domain/ontology_export.py for the mapping).
+        Read-only projection — the governed registry stays the source of
+        truth, and an empty workspace exports an honestly empty graph."""
+        async with self.uow(ctx.tenant_id) as uow:
+            entities = await uow.ontology.list(workspace_id)
+        return ontology_to_jsonld(workspace_id, entities)
 
     async def get(self, ctx: CallCtx, workspace_id: str, entity_key: str) -> OntologyEntity:
         async with self.uow(ctx.tenant_id) as uow:
