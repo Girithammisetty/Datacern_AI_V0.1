@@ -440,9 +440,19 @@ def main() -> int:  # noqa: PLR0911, PLR0912, PLR0915
     if r.status_code != 200:
         return bail("drift readable", f"{r.status_code} {r.text[:180]}")
     d = r.json().get("data") or {}
-    check(d.get("inSync") is True,
-          "a freshly installed pack reads in_sync",
-          f"drifted={d.get('drifted')} summary={json.dumps(d.get('summary'))}")
+    # NAME the offending rows, do not just count them. This check reported
+    # `drifted=11` and later `drifted=4` for three separate causes, and each
+    # diagnosis cost a full 35-minute e2e cycle because the counts do not say
+    # WHICH objects or WHY. The same standard the edit-detection check below is
+    # already held to: "drift named the object that was actually edited".
+    offenders = [row for row in (d.get("objects") or [])
+                 if row.get("status") in ("modified", "missing")]
+    detail = f"drifted={d.get('drifted')} summary={json.dumps(d.get('summary'))}"
+    if offenders:
+        detail += "\n       " + "\n       ".join(
+            f"{row.get('status'):<8} {row.get('kind')}/{row.get('identity')}"
+            f"  {row.get('detail', '')}" for row in offenders[:15])
+    check(d.get("inSync") is True, "a freshly installed pack reads in_sync", detail)
     content_checked = (d.get("summary") or {}).get("content_checked", 0)
     if not check(content_checked > 0,
                  "drift actually COMPARED content (not presence-only, which cannot detect an edit)",
