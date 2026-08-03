@@ -160,4 +160,38 @@ describe("DefinitionEditor — entity/dimension/measure authoring bound to real 
     // Still shows the submit button — a failed submit does not lock the editor.
     expect(await screen.findByRole("button", { name: "Submit for review" })).toBeEnabled();
   });
+
+  it("links an entity to a governed ontology type and saves ontology_entity_key (WS2)", async () => {
+    const base = handler;
+    handler = (doc: string, vars: any) => {
+      if (doc.includes("query OntologyEntities")) {
+        return { ontologyEntities: [
+          { id: "o-1", entityKey: "claim", workspaceId: "ws", name: "Claim", description: "",
+            createdAt: null, attributes: [], relationships: [] },
+          { id: "o-2", entityKey: "vendor", workspaceId: "ws", name: "Vendor", description: "",
+            createdAt: null, attributes: [], relationships: [] },
+        ] };
+      }
+      return base(doc, vars);
+    };
+    const user = userEvent.setup();
+    renderWithProviders(<DefinitionEditor modelId="sm-1" version={DRAFT_VERSION} onSubmitted={() => {}} />);
+
+    const ontologySelect = await screen.findByLabelText("Ontology type", { selector: "select" });
+    await waitFor(() => {
+      expect(within(ontologySelect).getByText("Claim (claim)")).toBeInTheDocument();
+    });
+    // Two selections: the editor's debounce guard eats the very first edit
+    // after mount (pre-existing behavior), and re-linking is worth covering.
+    await user.selectOptions(ontologySelect, "vendor");
+    await user.selectOptions(ontologySelect, "claim");
+
+    await waitFor(
+      () => {
+        const call = requests.find((r) => r.doc.includes("mutation UpdateSemanticModelDraft"));
+        expect(call?.vars.definition.entities[0].ontology_entity_key).toBe("claim");
+      },
+      { timeout: 3000 },
+    );
+  });
 });

@@ -255,9 +255,57 @@ honestly, a duplicate proposal the real 409. Published rows show a compact diff
 summary. 3 component tests (lazy load + approve vars + propose vars). `tsc`/lint
 clean; ui-web 700 + BFF 420 unit tests green.
 
-**Deferred:** making `relationship.target` navigable + SHACL-style attribute
-contracts (WS4); linking the ontology `entity_key` to the semantic `Entity` and
-ER `entity_type` (WS2).
+**Deferred:** SHACL-style attribute contracts (WS4; relationship navigability
+shipped separately as the WS4 graph slice).
+
+### Increment 3 (WS2) — link the vertebrae on `entity_key` — BUILT (slices 1+2)
+
+Closes gap #2 ("the three layers are not linked") on the canonical join key
+(`OntologyEntity.entity_key`).
+
+**Slice 1 (2026-08-02) — the joins:**
+
+- **ER → ontology (dataset-service).** A resolution run resolves its
+  `entity_type` against the governed ontology registry in the dataset's
+  workspace and reports `ontology_linked` in the run summary + the
+  `dataset.entity_resolution.run` event. A miss is honest metadata, never an
+  error — free-string types and resolve-before-declare keep working; an
+  unreadable dataset never claims a link. Tests: `test_ws2_ontology_links.py`.
+- **Semantic → ontology (semantic-service).** The semantic `Entity` gains an
+  optional `ontology_entity_key`, validated to the restricted name shape at
+  authoring, round-tripping through the stored definition; absent stays valid.
+  Tests: `test_ontology_entity_key.py`.
+- **BFF + UI.** `ResolveEntitiesResult.ontologyLinked: Boolean!` (absent
+  downstream → honest false); the ER page's run summary states the link or
+  tells the steward exactly what to declare.
+
+**Slice 2 (2026-08-03) — existence validation + builder UI:**
+
+- **Registry lookup (dataset-service).** New internal route
+  `GET /internal/v1/ontology/{workspace}/{key}` (SPIFFE-gated, tenant via the
+  mesh header — same pattern as the SEM-FR-002 dataset-detail routes) returning
+  `{exists, name}` with 200 either way, so a caller can tell a definitive miss
+  from an unreachable registry. Tenant-scoped tests included.
+- **Authoring validation (semantic-service).** `DatasetClient.get_ontology_type`
+  (`True`/`False` from a definitive answer, `None` on transport error) +
+  `validate_definition(..., ontology_lookup)` — a **definitive "not declared"
+  fails submit/approve** with a problem naming the key (typo protection), while
+  a registry outage **fails soft** (the link is optional metadata; an outage
+  never blocks authoring). Wired through `_validate_full` with the model's
+  workspace at both submit and approve. Tests: declared passes / typo'd key 422
+  with the problem text / outage passes.
+- **Builder UI (ui-web).** Each entity row in the semantic-model
+  `EntitiesSection` gains an **Ontology type** select fed by the governed
+  registry (`useOntologyEntities`), writing `ontology_entity_key` into the
+  definition (clearing drops the key so unlinked entities stay byte-identical).
+  Editor test covers linking + the saved definition carrying the key.
+
+With this, one `entity_key` can be followed ontology type → resolution runs →
+semantic entity — the precondition for per-case typing, "measures of this
+type" queries, and an Entity-360 view.
+
+**Still deferred in WS2:** the explicit ontology-attribute → dataset-column
+mapping; showing the link on the published-model read view.
 
 ### Phasing
 WS1 (increment 1) proves the anti-hallucination thesis on the existing

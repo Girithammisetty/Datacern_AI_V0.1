@@ -2866,6 +2866,9 @@ export interface SemanticDefinitionDoc {
     primary_key: string[];
     dataset_version_policy: { policy: "latest" | "pinned"; version_no?: number };
     description?: string;
+    /** WS2: the governed domain ontology type this entity instantiates
+     * (OntologyEntity.entity_key). Optional; existence-validated at submit. */
+    ontology_entity_key?: string | null;
   }[];
   dimensions: {
     name: string;

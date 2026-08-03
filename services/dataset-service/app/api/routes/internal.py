@@ -146,6 +146,28 @@ async def internal_dataset_detail(
     }
 
 
+@router.get("/ontology/{workspace_id}/{entity_key}")
+async def internal_ontology_type(
+    request: Request,
+    workspace_id: str,
+    entity_key: str,
+    spiffe: str = Depends(require_internal),
+):
+    """Internal ontology-type existence check for semantic-service authoring
+    validation (Knowledge Spine WS2): does this workspace declare entity_key?
+    Projects to {exists, name} — 200 either way so the caller can distinguish a
+    definitive miss (exists:false -> authoring problem) from an unreachable
+    registry (transport error -> fail-soft skip)."""
+    c = request.app.state.container
+    tenant_id = _internal_tenant(request)
+    ctx = CallCtx(tenant_id=tenant_id, actor={"type": "service", "id": spiffe})
+    try:
+        e = await c.ontology_service.get(ctx, workspace_id, entity_key)
+    except NotFound:
+        return {"data": {"exists": False, "name": None}}
+    return {"data": {"exists": True, "name": e.name}}
+
+
 @router.get("/datasets/{dataset_id}/rows")
 async def internal_dataset_rows(
     request: Request,

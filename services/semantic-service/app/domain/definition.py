@@ -295,10 +295,15 @@ def _validate_expr_metric_ast(node: dict) -> None:
         "derived measures may only combine measures with + - * / and nullif()")
 
 
-def validate_definition(defn: Definition, dataset_lookup) -> list[dict]:
+def validate_definition(defn: Definition, dataset_lookup, ontology_lookup=None) -> list[dict]:
     """Full validation (submit guard): bindings, references, join graph.
 
     `dataset_lookup(dataset_urn) -> {"exists": bool, "schema": {col: type}} | None`.
+    `ontology_lookup(entity_key) -> bool | None` (WS2): True/False from a
+    definitive registry answer — False fails the save (a typo'd or undeclared
+    domain type is an authoring error) — while None means the registry couldn't
+    be checked, which SKIPS the check: the link is optional metadata, so a
+    registry outage must never block authoring. Omitted -> no ontology checks.
     Returns a list of problems; empty means valid.
     """
     problems: list[dict] = []
@@ -306,6 +311,14 @@ def validate_definition(defn: Definition, dataset_lookup) -> list[dict]:
     all_names: set[str] = set()
 
     for entity in defn.entities.values():
+        if entity.ontology_entity_key and ontology_lookup is not None:
+            exists = ontology_lookup(entity.ontology_entity_key)
+            if exists is False:
+                problems.append({
+                    "object": f"entity/{entity.name}",
+                    "problem": (f"ontology type {entity.ontology_entity_key!r} is not "
+                                "declared in the workspace ontology"),
+                })
         info = dataset_lookup(entity.dataset_urn) if entity.dataset_urn else None
         if not info or not info.get("exists"):
             problems.append({"object": f"entity/{entity.name}",
