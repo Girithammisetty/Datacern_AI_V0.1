@@ -163,6 +163,16 @@ var canonicalSpecs = []resourceSpec{
 	{"eval", "run", []string{VerbRead, VerbExecute}, true, "eval scoring runs"},
 	{"eval", "gate", []string{VerbRead}, true, "eval quality gates"},
 	{"eval", "scorer", []string{VerbAdmin}, true, "eval scorer registry"},
+	// suite/canary were absent entirely while eval-service enforced them:
+	// routes/suites.py and routes/canaries.py both require(...update). An
+	// undeclared action cannot be registered, so it cannot be granted, so the
+	// endpoint 403s for everyone — the same shape as dataset.ontology.update.
+	// The seed called these out as blocked on non-closed verbs (write/manage);
+	// the service has since moved to `update`, which IS closed and bindable, so
+	// the stated blocker no longer applies. Only the verbs actually enforced are
+	// declared here.
+	{"eval", "suite", []string{VerbUpdate}, true, "eval suites (scorers + gate rule)"},
+	{"eval", "canary", []string{VerbUpdate}, true, "eval canary rollouts"},
 	{"eval", "slo", []string{VerbRead}, true, "eval SLO targets"},
 	{"eval", "trends", []string{VerbRead}, true, "eval trend/quality history"},
 	// memory (memory-service: agent memories, RAG corpora, tenant policy,

@@ -214,8 +214,29 @@ def seed_pipeline_template(dataset_urn: str | None) -> str | None:
     if r.status_code not in (200, 201):
         warn(f"pipeline template: {r.status_code} {r.text[:180]}")
         return None
-    tid = str((r.json().get("data") or {}).get("id") or "")
-    ok(f"training pipeline authored over the real claims dataset ({tid[:8]}…)")
+    data = r.json().get("data") or {}
+    tid, vid = str(data.get("id") or ""), str(data.get("active_version_id") or "")
+    status = str(data.get("validation_status") or "")
+
+    # ACTIVATE the version. A created template's version is a DRAFT, and a draft
+    # is not merely incomplete — the UI refuses to run it:
+    #
+    #   Run now -> "active version is a draft; fix validation first"
+    #
+    # Leaving one in the shared workspace broke e2e:live's pipeline schedule spec
+    # on 27dfa59 (data-pipeline-journeys.spec.ts:341), because that spec picks a
+    # row and clicks Run now. It is also a poor demo object on its own terms: a
+    # pipeline you cannot run teaches nothing, which is this module's whole rule.
+    if vid and status != "valid":
+        a = d.req("POST", f"{c.PIPELINE}/api/v1/pipelines/{tid}/versions/{vid}/activate",
+                  tok, headers=d.J(), json={})
+        if a.status_code in (200, 201):
+            status = str((a.json().get("data") or {}).get("validation_status") or status)
+        else:
+            warn(f"pipeline version not activated ({a.status_code} {a.text[:120]}) — "
+                 f"the template will show as a draft and refuse to run")
+    ok(f"training pipeline authored over the real claims dataset "
+       f"({tid[:8]}…, version {status or 'unknown'})")
     return tid or None
 
 
