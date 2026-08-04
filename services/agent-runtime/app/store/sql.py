@@ -417,6 +417,29 @@ class SqlStore:
                 {"t": tenant_id, "dr": decision_ref})).mappings().first()
         return _outcome_label(r) if r else None
 
+    async def find_actioned_proposals_by_urn(
+        self, tenant_id: str, *, business_urn: str, decision_type: str | None = None,
+    ) -> list[Proposal]:
+        """Resolve a system-of-record outcome (which knows a business entity —
+        a case/claim/dispute URN — not our internal decision id) back to the
+        ACTIONED decisions that produced it: proposals whose affected_urns
+        contains that URN and whose status applied an action
+        (approved/edited_approved). This is the join the automated outcome loop
+        needs; a rejected proposal took no action, so it is not a realized
+        outcome to score. Optional decision_type narrows to one tool when a
+        case carried several decisions."""
+        params: dict = {"urns": [business_urn]}
+        clause = ""
+        if decision_type:
+            clause = " AND tool_id=:dt"
+            params["dt"] = decision_type
+        async with self._tenant(tenant_id) as s:
+            rows = (await s.execute(text(
+                "SELECT * FROM proposals WHERE affected_urns && :urns"
+                " AND status IN ('approved','edited_approved')" + clause
+                + " ORDER BY created_at DESC"), params)).mappings().all()
+        return [_proposal(r) for r in rows]
+
     # ---- rollouts ----------------------------------------------------------
     async def create_rollout(self, r: Rollout) -> None:
         async with self._plain() as s:
@@ -653,6 +676,21 @@ class SqlStore:
                 f"SELECT * FROM proposals{where} ORDER BY created_at DESC LIMIT :lim"),
                 params)).mappings().all()
         return [_proposal(r) for r in rows]
+
+    async def count_proposals_by_status(
+        self, tenant_id: str, *, since: datetime | None = None,
+    ) -> dict[str, int]:
+        """Real GROUP BY count of proposals per status (optionally since a
+        cutoff). The Expertise Ledger's headline — governed decisions
+        captured — must be an exact total, never a list-page cap, so this is a
+        genuine aggregate, not a truncated count of a paged list."""
+        clause = " WHERE created_at >= :since" if since is not None else ""
+        params = {"since": since} if since is not None else {}
+        async with self._tenant(tenant_id) as s:
+            rows = (await s.execute(text(
+                f"SELECT status, count(*) AS n FROM proposals{clause} GROUP BY status"),
+                params)).mappings().all()
+        return {r["status"]: int(r["n"]) for r in rows}
 
     async def decide_proposal(
         self, *, tenant_id: str, proposal_id: str, new_status: str, decision: dict,

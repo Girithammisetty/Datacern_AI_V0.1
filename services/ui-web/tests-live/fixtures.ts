@@ -48,6 +48,66 @@ export async function logout(page: Page): Promise<void> {
 }
 
 /**
+ * Dev-login as `email` through the REAL /api/auth/login (the same RS256 mint
+ * path loginAs drives) and return the raw `wr_session` JWT. Where loginAs only
+ * needs the session cookie set on the page, this SURFACES the token so a spec
+ * can call a non-BFF service directly with `Authorization: Bearer <jwt>` — the
+ * live-stack analogue of hero-learning-loop.spec.ts's E2E_LIVE_*_URL calls.
+ * The token is a real platform-signed JWT, verified for real by every backend
+ * against the shared JWKS (identity-service authMiddleware, RS256-only).
+ */
+export async function bearerFor(page: Page, email: string): Promise<string> {
+  const res = await page.request.post("/api/auth/login", { data: { email } });
+  if (!res.ok()) {
+    throw new Error(`dev-login failed for ${email}: HTTP ${res.status()} ${await res.text()}`);
+  }
+  const session = (await page.context().cookies()).find((c) => c.name === "wr_session");
+  if (!session?.value) {
+    throw new Error(`dev-login for ${email} set no wr_session cookie — cannot mint a bearer token`);
+  }
+  return session.value;
+}
+
+/**
+ * Scopes carried by a minted dev JWT — decoded from the base64url payload with
+ * NO signature verification (used only to branch a test on the seeded persona's
+ * real privileges, never as a security decision; the backend verifies for real).
+ */
+export function tokenScopes(jwt: string): string[] {
+  const payload = jwt.split(".")[1] ?? "";
+  try {
+    const json = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { scopes?: unknown };
+    return Array.isArray(json.scopes) ? (json.scopes as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** True iff `jwt` carries the `platform.admin` scope — a genuine super-admin
+ * (identity-service Claims.IsSuperAdmin() → HasScope("platform.admin")). */
+export function isPlatformOperator(jwt: string): boolean {
+  return tokenScopes(jwt).includes("platform.admin");
+}
+
+/**
+ * A platform-operator (super-admin) bearer for driving the requireSuperAdmin-
+ * gated platform endpoints (identity-service server.go: POST /demo-tenants,
+ * GET /platform/admins, …). Dev-logs-in as the seeded `platform-admin@` persona
+ * (PERSONAS().platformAdmin) and returns its wr_session JWT, which carries the
+ * `platform.admin` scope that Claims.IsSuperAdmin() keys off. This is the
+ * credential helper the demo-sandbox live spec was blocked on.
+ *
+ * NOTE: when no distinct `platform-admin@` persona was seeded, global-setup
+ * falls PERSONAS().platformAdmin back to the tenant admin, whose token lacks
+ * `platform.admin`. Callers that require a genuine super-admin must gate on
+ * isPlatformOperator(token) and skip honestly rather than assert against a
+ * non-super-admin credential.
+ */
+export async function platformOperatorToken(page: Page): Promise<string> {
+  return bearerFor(page, PERSONAS().platformAdmin);
+}
+
+/**
  * Assert a route rendered its real content rather than an error boundary or a
  * silent auth bounce. Used by breadth/smoke specs so a 500 from any downstream
  * service surfaces as a clear failure on that exact page.

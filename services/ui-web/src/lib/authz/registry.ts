@@ -9,7 +9,7 @@
  * enforce every action. Fail-safe: a capability the client cannot confirm HIDES
  * the feature (absent capability → not shown).
  */
-import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties, Fingerprint, Network, HelpCircle, GraduationCap } from "lucide-react";
+import { Database, FlaskConical, BarChart3, Briefcase, Shield, Bot, Inbox, Home, LineChart, Plug, Workflow, Terminal, DownloadCloud, Bell, TableProperties, Fingerprint, Network, HelpCircle, GraduationCap, BookMarked } from "lucide-react";
 import type { MessageKey } from "@/lib/i18n/messages";
 
 /** The tenant-admin role short-circuits every action check (rbac BR-7). */
@@ -208,6 +208,12 @@ export const NAV_ITEMS: NavItem[] = [
    * read capability (ai.agent.read), matching viewAgentFleet's reconciliation.
    * Write actions gate on ai.agent.admin below (FEATURE_GATES). */
   { key: "mlDistillation", href: "/ml/distillation", icon: GraduationCap, label: "nav.mlDistillation", gate: cap("ai.agent.read"), group: "ml" },
+  /** Expertise Ledger — the commercial surface of the governed-decision
+   * flywheel: captured expert judgment, model-vs-expert agreement, the training
+   * corpus those decisions produced, and the state of the tenant-owned model.
+   * Read-only aggregation over the same agent-runtime surface as distillation,
+   * so it reuses ai.agent.read (matching mlDistillation / viewAgentFleet). */
+  { key: "mlExpertise", href: "/ml/expertise", icon: BookMarked, label: "nav.expertise", gate: cap("ai.agent.read"), group: "ml" },
 
   // ── Ungrouped anchors ──
   { key: "copilot", href: "/copilot", icon: Bot, label: "nav.copilot", gate: publicGate },
@@ -271,6 +277,9 @@ const ROUTE_RULES: RouteRule[] = [
   // SLM distillation cockpit also sits under /ml but is an agent-runtime
   // surface — gated like the agent catalog (ai.agent.read), not experiments.
   { prefix: "/ml/distillation", gate: cap("ai.agent.read") },
+  // Expertise Ledger also sits under /ml but is the read-only flywheel surface —
+  // gated like the agent catalog (ai.agent.read), not experiments.
+  { prefix: "/ml/expertise", gate: cap("ai.agent.read") },
   { prefix: "/ml", gate: cap("experiment.experiment.read") },
   { prefix: "/dashboards/reports", gate: cap("notification.report.read") },
   { prefix: "/dashboards", gate: cap("chart.dashboard.read") },
@@ -690,6 +699,8 @@ export const FEATURE_GATES = {
   // ==========================================================================
   /** Browse transcripts / SFT datasets / training jobs / adapters. */
   viewDistillation: cap("ai.agent.read"),
+  /** View the Expertise Ledger (governed-decision flywheel, read-only). */
+  viewExpertiseLedger: cap("ai.agent.read"),
   /** Curate a new versioned SFT dataset (agent-runtime POST /sft-datasets). */
   curateSftDataset: cap("ai.agent.admin"),
   /** Submit a LoRA distillation run (agent-runtime POST /training-jobs). */

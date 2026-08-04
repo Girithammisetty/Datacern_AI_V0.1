@@ -945,6 +945,19 @@ export class AgentClient {
     );
     return unwrap<DecisionDriftDTO>(r);
   }
+
+  /** GET /expertise-ledger — the tenant's "Expertise Ledger" rollup: decision
+   * capture (+ correction signal), decided-vs-realized agreement, the curated
+   * training corpus, and any owned/promoted SLM. AuthN-only downstream
+   * (verified bearer JWT, tenant RLS); the BFF forwards the JWT and adds no
+   * authz of its own. Returns the `{data}` envelope's payload. */
+  async expertiseLedger(windowDays?: number): Promise<ExpertiseLedgerDTO> {
+    const r = await this.http.get<{ data: ExpertiseLedgerDTO } | ExpertiseLedgerDTO>(
+      "/api/v1/expertise-ledger",
+      { query: windowDays ? { window_days: windowDays } : {} },
+    );
+    return unwrap<ExpertiseLedgerDTO>(r);
+  }
 }
 
 /** One agent chat session (agent-runtime session_view). */
@@ -1118,4 +1131,104 @@ export interface SlmAdapterDTO {
   eval_result_ref?: string | null;
   target_rung_alias?: string | null;
   created_at?: string | null;
+}
+
+// ---- Expertise Ledger (agent-runtime GET /expertise-ledger) ----------------
+// The tenant-facing rollup that proves the system is learning from THIS
+// tenant's decisions. agent-runtime returns the whole thing under a `{data}`
+// envelope; field names are snake_case (mapped to camelCase in the resolver).
+// `null`s are meaningful and preserved as `| null` — notably
+// agreement_rate=null means "nothing comparable scored yet", NEVER 0.
+
+/** decisions.by_status — decision counts bucketed by lifecycle status. */
+export interface ExpertiseByStatusDTO {
+  pending: number;
+  approved: number;
+  rejected: number;
+  edited_approved: number;
+  expired: number;
+  superseded: number;
+  cancelled: number;
+}
+
+/** decisions — decision-capture volume + correction signal in the window. */
+export interface ExpertiseDecisionsDTO {
+  window_days: number;
+  captured_in_window: number;
+  captured_all_time: number;
+  corrections_in_window: number;
+  by_status: ExpertiseByStatusDTO;
+}
+
+/** agreement.by_decision_type[] — per decision-type effectiveness group. */
+export interface ExpertiseAgreementGroupDTO {
+  key: string;
+  total: number;
+  correct: number;
+  incorrect: number;
+  unknown: number;
+  effectiveness_rate: number | null;
+}
+
+/** agreement — decided-vs-realized agreement. `agreement_rate` is null when
+ * nothing comparable has been scored yet (never coerce to 0). */
+export interface ExpertiseAgreementDTO {
+  labeled_decisions: number;
+  agreement_rate: number | null;
+  scored: number;
+  by_decision_type: ExpertiseAgreementGroupDTO[];
+}
+
+/** corpus.latest — the newest curated SFT dataset version, or null. */
+export interface ExpertiseCorpusLatestDTO {
+  dataset_id: string;
+  agent_key: string;
+  version: number;
+  row_count: number;
+  checksum: string;
+  created_at: string;
+}
+
+/** corpus — curated training-corpus rollup. */
+export interface ExpertiseCorpusDTO {
+  dataset_versions: number;
+  example_rows: number;
+  consent_verified_versions: number;
+  latest: ExpertiseCorpusLatestDTO | null;
+}
+
+/** owned_model.promoted — the tenant's promoted owned adapter, or null. */
+export interface ExpertiseOwnedModelPromotedDTO {
+  adapter_id: string;
+  archetype: string;
+  base_model: string;
+  checksum: string;
+  model_alias: string;
+}
+
+/** owned_model.latest_training — the most recent training job, or null. The
+ * `error` object passes through VERBATIM (honest failure reason, e.g.
+ * reason="gpu_trainer_not_configured"). */
+export interface ExpertiseTrainingDTO {
+  job_id: string;
+  archetype: string;
+  base_model: string;
+  status: string;
+  error: { reason?: string; detail?: string } | null;
+}
+
+/** owned_model — whether this tenant has its own distilled SLM yet. */
+export interface ExpertiseOwnedModelDTO {
+  has_owned_model: boolean;
+  adapter_count: number;
+  promoted: ExpertiseOwnedModelPromotedDTO | null;
+  latest_training: ExpertiseTrainingDTO | null;
+}
+
+/** GET /expertise-ledger payload (inside the `{data}` envelope). */
+export interface ExpertiseLedgerDTO {
+  decisions: ExpertiseDecisionsDTO;
+  agreement: ExpertiseAgreementDTO;
+  corpus: ExpertiseCorpusDTO;
+  owned_model: ExpertiseOwnedModelDTO;
 }

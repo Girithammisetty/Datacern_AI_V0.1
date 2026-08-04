@@ -2709,6 +2709,109 @@ export const typeDefs = gql`
     capped: Boolean!
   }
 
+  # ============================ Expertise Ledger (agent-runtime GET /expertise-ledger) ==
+  # The tenant-facing rollup that proves the platform is learning from THIS
+  # tenant's own decisions: decision capture + correction signal, decided-vs-
+  # realized agreement, the curated training corpus, and any owned/promoted SLM.
+  # AuthN-only downstream (verified bearer JWT, tenant RLS) — the BFF forwards
+  # the JWT and adds no authz of its own.
+
+  """Decision counts bucketed by lifecycle status (\`decisions.byStatus\`)."""
+  type ExpertiseByStatus {
+    pending: Int!
+    approved: Int!
+    rejected: Int!
+    editedApproved: Int!
+    expired: Int!
+    superseded: Int!
+    cancelled: Int!
+  }
+
+  """Decision-capture volume + the correction (edit) signal in the window."""
+  type ExpertiseDecisions {
+    windowDays: Int!
+    capturedInWindow: Int!
+    capturedAllTime: Int!
+    correctionsInWindow: Int!
+    byStatus: ExpertiseByStatus!
+  }
+
+  """Per decision-type effectiveness group (\`agreement.byDecisionType\`)."""
+  type ExpertiseAgreementGroup {
+    key: String!
+    total: Int!
+    correct: Int!
+    incorrect: Int!
+    unknown: Int!
+    """Null when nothing comparable was scored for this group (never 0)."""
+    effectivenessRate: Float
+  }
+
+  """Decided-vs-realized agreement. \`agreementRate\` is null when nothing
+  comparable has been scored yet — the UI must render "not enough data",
+  NEVER coerce it to 0."""
+  type ExpertiseAgreement {
+    labeledDecisions: Int!
+    agreementRate: Float
+    scored: Int!
+    byDecisionType: [ExpertiseAgreementGroup!]!
+  }
+
+  """The newest curated SFT dataset version (\`corpus.latest\`), or null."""
+  type ExpertiseCorpusLatest {
+    datasetId: String!
+    agentKey: String!
+    version: Int!
+    rowCount: Int!
+    checksum: String!
+    createdAt: DateTime!
+  }
+
+  """Curated training-corpus rollup: versioned SFT datasets + example rows."""
+  type ExpertiseCorpus {
+    datasetVersions: Int!
+    exampleRows: Int!
+    consentVerifiedVersions: Int!
+    latest: ExpertiseCorpusLatest
+  }
+
+  """The tenant's promoted owned adapter (\`ownedModel.promoted\`), or null."""
+  type ExpertiseOwnedModelPromoted {
+    adapterId: String!
+    archetype: String!
+    baseModel: String!
+    checksum: String!
+    modelAlias: String!
+  }
+
+  """The most recent training job (\`ownedModel.latestTraining\`), or null.
+  \`error\` is the HONEST failure object {reason, detail} verbatim — notably
+  reason "gpu_trainer_not_configured" when no GPU executor is wired. Render it
+  verbatim, never soften it."""
+  type ExpertiseTraining {
+    jobId: String!
+    archetype: String!
+    baseModel: String!
+    status: String!
+    error: JSON
+  }
+
+  """Whether this tenant has its own distilled SLM yet (BRD 14 §6.5 M4)."""
+  type ExpertiseOwnedModel {
+    hasOwnedModel: Boolean!
+    adapterCount: Int!
+    promoted: ExpertiseOwnedModelPromoted
+    latestTraining: ExpertiseTraining
+  }
+
+  """The Expertise Ledger rollup (agent-runtime GET /expertise-ledger)."""
+  type ExpertiseLedger {
+    decisions: ExpertiseDecisions!
+    agreement: ExpertiseAgreement!
+    corpus: ExpertiseCorpus!
+    ownedModel: ExpertiseOwnedModel!
+  }
+
   # ============================ SLM distillation (agent-runtime, BRD 14 §6.5) ==
   # The learning-loop cockpit surfaces: M1 transcript corpus -> M2 curated SFT
   # datasets -> M3 LoRA training jobs -> M4 eval-gated adapter promotion. All of
@@ -5413,6 +5516,16 @@ export const typeDefs = gql`
     curated SFT datasets, BRD 12 M1/M2). Counts are honest page counts capped
     at 200 — capped is true when the underlying page was full."""
     learningLoop: LearningLoopStats!
+
+    """
+    Expertise Ledger rollup: what the tenant's own decisions have captured
+    (decision volume + correction signal), how well decisions agree with
+    realized outcomes, the curated training corpus, and any owned/promoted
+    SLM. agent-runtime GET /expertise-ledger — authN-only downstream (bearer +
+    tenant RLS); the BFF adds no authz. \`agreementRate\` is null (never 0)
+    when nothing comparable has been scored yet.
+    """
+    expertiseLedger(windowDays: Int = 90): ExpertiseLedger!
 
     # ---- SLM distillation cockpit (agent-runtime, BRD 14 §6.5 M1-M4). All of
     # ---- these routes authorize by verified bearer JWT only (principal_of; no

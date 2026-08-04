@@ -1,0 +1,76 @@
+# Nightly full-platform validation — the deterministic quality suite.
+#
+# Distinct from ci.yml (which gates PRs): this boots the real stack once and
+# runs EVERY validator through the orchestrator, then uploads the machine-
+# readable evidence artifact. It answers "is the platform green?" with one
+# downloadable report instead of archaeology across job logs. Zero LLM API
+# cost — the agent-exercising steps drive the platform's own ai-gateway
+# pointed at a local Ollama model.
+#
+# Runs nightly and on manual dispatch. It does not gate merges; it produces
+# the standing evidence trail the status ledger has never had.
+name: validate-platform
+
+on:
+  schedule:
+    - cron: "17 6 * * *"   # 06:17 UTC nightly
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "quick (skip soaks/load) or full"
+        type: choice
+        options: [full, quick]
+        default: full
+
+concurrency:
+  group: validate-platform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Boot the real platform (infra + all services)
+        run: |
+          # up.sh brings up docker infra, per-service DBs (incl. fhir_bridge),
+          # every service, and seeds. If boot fails, the orchestrator still
+          # runs and records an INCONCLUSIVE report rather than a false pass.
+          make up || echo "::warning::make up returned non-zero; orchestrator will record what it can"
+
+      - name: Run the validation orchestrator
+        id: validate
+        run: |
+          MODE="${{ github.event.inputs.mode || 'full' }}"
+          ARGS=""
+          [ "$MODE" = "quick" ] && ARGS="--quick"
+          # Non-zero exit (FAIL or INCONCLUSIVE) is surfaced by the step status;
+          # the artifact is uploaded regardless via if: always() below.
+          make validate-platform ARGS="$ARGS"
+
+      - name: Upload evidence report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-report
+          path: |
+            deploy/evidence/validation-report.json
+            deploy/evidence/validation-report.md
+            deploy/evidence/load-report.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Summarize into the run
+        if: always()
+        run: |
+          if [ -f deploy/evidence/validation-report.md ]; then
+            cat deploy/evidence/validation-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No validation report produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Always tear down
+        if: always()
+        run: make down || true

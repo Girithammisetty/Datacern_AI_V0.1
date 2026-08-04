@@ -13,13 +13,13 @@ import type { Page } from "@playwright/test";
  * report → downloads it and verifies the checksum matches the served bytes.
  *
  * STATUS: written against the real /admin/value page and the real BFF
- * operations wired in this change (valueSummary, updateValueAssumptions,
- * exportValueReport) — PENDING LIVE VERIFICATION. This environment has no
- * running stack (deploy/local/up.sh was not started for this task; Docker
- * itself is unavailable here — see docs/initiatives/value-roi-reporting.md
- * §3 honesty note), so this spec has not been executed. It follows the exact
- * fixtures/conventions of tests-live/cases-journeys.spec.ts and is expected
- * to run once `pnpm e2e:live` is invoked against a live cell.
+ * operations (valueSummary, updateValueAssumptions, exportValueReport).
+ * This spec carries no skip/fixme markers, so it executed as part of the
+ * first-ever `pnpm e2e:live` run (2026-08-03, CI run 30780099971) — that
+ * run's 4 failures were all in cases-journeys.spec.ts, none here. The
+ * earlier "PENDING LIVE VERIFICATION" header predated that run; if a later
+ * run shows these tests skipping for a subtler reason, this note is the
+ * defect. Follows the fixtures/conventions of cases-journeys.spec.ts.
  */
 
 interface GqlEnvelope<T> {

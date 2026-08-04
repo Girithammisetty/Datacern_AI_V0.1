@@ -206,7 +206,7 @@ fi
 say "ensuring per-service databases + pgvector extensions"
 for db in identity rbac tool_plane case_svc realtimehub dataset ingestion ai_gateway \
           agent_runtime memory pipeline experiment inference query semantic eval \
-          chart usage notification pack; do
+          chart usage notification pack fhir_bridge; do
   psql_q -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 \
     || psql_q -d postgres -c "CREATE DATABASE $db" >/dev/null
 done
@@ -274,6 +274,13 @@ boot_platform_extra      # query, semantic, chart, audit, notification, eval
 # tool-plane's mcp_backends at dataset-service's facade, so an approved steward
 # entity-merge proposal federates to a real confirm-merge (four-eyes, ER-FR-030).
 ( cd "$E2E" && "$PY" lib/seed.py entity_merge_tool "$TENANT_ID" ) 2>&1 | tee "$LOG_DIR/seed_entity_merge_tool.log"
+
+# Register the four fhir-bridge tools (read/search direct, create/update
+# write-proposal) + point tool-plane's mcp_backends at the bridge's facade, so
+# agents get governed clinical-system access and FHIR writes only execute
+# after a human-approved proposal grant. fhir-bridge is up by this point
+# (boot_platform_extra's start_fhir_bridge just ran).
+( cd "$E2E" && "$PY" lib/seed.py fhir_tools "$TENANT_ID" ) 2>&1 | tee "$LOG_DIR/seed_fhir_tools.log"
 
 # ---- bff-graphql (Node) ----
 start_bff() {

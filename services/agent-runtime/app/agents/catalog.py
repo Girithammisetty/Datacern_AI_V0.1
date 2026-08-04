@@ -125,7 +125,12 @@ def _tool(tool_id: str) -> dict:
 #: surface declared" rather than "deny", so any agent that CAN emit a
 #: WriteIntent belongs here.
 AGENT_TOOLSETS: dict[str, list[dict]] = {
-    "case-triage": [_tool("case.apply_disposition")],
+    # case-triage additionally holds the fhir READ tools (fhir-bridge): case
+    # enrichment with live clinical context is read-tier — it is in the agent's
+    # gateway toolset but never widens the write surface, which stays exactly
+    # case.apply_disposition (the guardrail checks WriteIntents only).
+    "case-triage": [_tool("case.apply_disposition"),
+                    _tool("fhir.read_resource"), _tool("fhir.search_resources")],
     "governance": [_tool("mlops.open_retrain")],
     "onboarding": [_tool("ingestion.create")],
     "dashboard-designer": [_tool("chart.dashboard.create")],
@@ -145,7 +150,11 @@ AGENT_TOOLSETS: dict[str, list[dict]] = {
     "meta-router": [_tool("ingestion.create"), _tool("chart.dashboard.create"),
                     _tool("pipeline.template.create_from_algorithm"),
                     _tool("pipeline.template.create"), _tool("inference.submit"),
-                    _tool("mlops.open_retrain")],
+                    _tool("mlops.open_retrain"),
+                    # fhir read tools: keeps the router a superset of every
+                    # delegate that may consult clinical context (read-tier —
+                    # no write surface added).
+                    _tool("fhir.read_resource"), _tool("fhir.search_resources")],
 }
 
 

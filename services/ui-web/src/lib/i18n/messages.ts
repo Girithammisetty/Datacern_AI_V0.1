@@ -33,6 +33,7 @@ export const en = {
   "nav.queries": "Queries",
   "nav.mlEval": "Eval",
   "nav.mlDistillation": "Distillation",
+  "nav.expertise": "Expertise Ledger",
   // Sidebar section headers (nav grouping). A section renders only when the
   // viewer can see at least one item inside it.
   "nav.group.casework": "Casework",
@@ -914,6 +915,50 @@ export const en = {
   "pipelines.versionActivated": "Version activated.",
   "pipelines.versionActive": "Active",
   "pipelines.showArchived": "Show archived",
+
+  // Expertise Ledger (governed-decision flywheel). Every rate is honest: null
+  // renders as "Not enough data yet", never 0%. The model states are honest too:
+  // no fabricated "ready" when there is no owned model or a training job failed.
+  "expertise.title": "Expertise Ledger",
+  "expertise.subtitle": "Your experts' governed decisions, the model they're training, and the model you own.",
+  "expertise.empty": "No governed decisions captured yet — the ledger fills as your experts decide.",
+  "expertise.tile.decisions": "Governed decisions captured",
+  "expertise.tile.decisionsWindow": "{n} in last {days} days",
+  "expertise.tile.corrections": "Expert corrections",
+  "expertise.tile.correctionsHint": "edits + rejects that trained the model",
+  "expertise.tile.agreement": "Model agreement",
+  "expertise.tile.agreementHint": "vs your experts, {n} scored",
+  "expertise.tile.corpus": "Training corpus",
+  "expertise.tile.corpusHint": "rows across {n} versions",
+  "expertise.notEnoughData": "Not enough data yet",
+  "expertise.model.title": "The model you own",
+  "expertise.model.owned": "Owned",
+  "expertise.model.none": "No trained model yet",
+  "expertise.model.noneHint": "Governed decisions become training data; a distilled model you own appears here once one is trained and promoted.",
+  "expertise.model.archetype": "Archetype",
+  "expertise.model.baseModel": "Base model",
+  "expertise.model.checksum": "Checksum",
+  "expertise.model.alias": "Serving alias",
+  "expertise.model.trainingFailed": "Last training run failed",
+  "expertise.model.exportData": "Export training data",
+  "expertise.model.exportUnavailable": "Available once a dataset is built",
+  "expertise.corpus.title": "Latest training set",
+  "expertise.corpus.version": "Version",
+  "expertise.corpus.rows": "Rows",
+  "expertise.corpus.archetype": "Archetype",
+  "expertise.corpus.consent": "Consent verified",
+  "expertise.corpus.built": "Built",
+  "expertise.breakdown.title": "Decision breakdown",
+  "expertise.breakdown.approved": "Approved",
+  "expertise.breakdown.edited": "Edited (correction)",
+  "expertise.breakdown.rejected": "Rejected",
+  "expertise.breakdown.pending": "Pending",
+  "expertise.agreement.title": "Agreement by decision type",
+  "expertise.agreement.type": "Decision type",
+  "expertise.agreement.total": "Labeled",
+  "expertise.agreement.correct": "Agreed",
+  "expertise.agreement.rate": "Agreement",
+  "expertise.agreement.empty": "No labeled outcomes to compare yet.",
 } as const;
 
 export type MessageKey = keyof typeof en;

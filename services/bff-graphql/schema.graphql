@@ -3264,6 +3264,106 @@ type LearningLoopStats {
   capped: Boolean!
 }
 
+"""Decision counts bucketed by lifecycle status (`decisions.byStatus`)."""
+type ExpertiseByStatus {
+  pending: Int!
+  approved: Int!
+  rejected: Int!
+  editedApproved: Int!
+  expired: Int!
+  superseded: Int!
+  cancelled: Int!
+}
+
+"""Decision-capture volume + the correction (edit) signal in the window."""
+type ExpertiseDecisions {
+  windowDays: Int!
+  capturedInWindow: Int!
+  capturedAllTime: Int!
+  correctionsInWindow: Int!
+  byStatus: ExpertiseByStatus!
+}
+
+"""Per decision-type effectiveness group (`agreement.byDecisionType`)."""
+type ExpertiseAgreementGroup {
+  key: String!
+  total: Int!
+  correct: Int!
+  incorrect: Int!
+  unknown: Int!
+  """Null when nothing comparable was scored for this group (never 0)."""
+  effectivenessRate: Float
+}
+
+"""
+Decided-vs-realized agreement. `agreementRate` is null when nothing
+comparable has been scored yet — the UI must render "not enough data",
+NEVER coerce it to 0.
+"""
+type ExpertiseAgreement {
+  labeledDecisions: Int!
+  agreementRate: Float
+  scored: Int!
+  byDecisionType: [ExpertiseAgreementGroup!]!
+}
+
+"""The newest curated SFT dataset version (`corpus.latest`), or null."""
+type ExpertiseCorpusLatest {
+  datasetId: String!
+  agentKey: String!
+  version: Int!
+  rowCount: Int!
+  checksum: String!
+  createdAt: DateTime!
+}
+
+"""Curated training-corpus rollup: versioned SFT datasets + example rows."""
+type ExpertiseCorpus {
+  datasetVersions: Int!
+  exampleRows: Int!
+  consentVerifiedVersions: Int!
+  latest: ExpertiseCorpusLatest
+}
+
+"""The tenant's promoted owned adapter (`ownedModel.promoted`), or null."""
+type ExpertiseOwnedModelPromoted {
+  adapterId: String!
+  archetype: String!
+  baseModel: String!
+  checksum: String!
+  modelAlias: String!
+}
+
+"""
+The most recent training job (`ownedModel.latestTraining`), or null.
+`error` is the HONEST failure object {reason, detail} verbatim — notably
+reason "gpu_trainer_not_configured" when no GPU executor is wired. Render it
+verbatim, never soften it.
+"""
+type ExpertiseTraining {
+  jobId: String!
+  archetype: String!
+  baseModel: String!
+  status: String!
+  error: JSON
+}
+
+"""Whether this tenant has its own distilled SLM yet (BRD 14 §6.5 M4)."""
+type ExpertiseOwnedModel {
+  hasOwnedModel: Boolean!
+  adapterCount: Int!
+  promoted: ExpertiseOwnedModelPromoted
+  latestTraining: ExpertiseTraining
+}
+
+"""The Expertise Ledger rollup (agent-runtime GET /expertise-ledger)."""
+type ExpertiseLedger {
+  decisions: ExpertiseDecisions!
+  agreement: ExpertiseAgreement!
+  corpus: ExpertiseCorpus!
+  ownedModel: ExpertiseOwnedModel!
+}
+
 """
 One captured agent-run transcript in the governed distillation corpus
 (agent-runtime GET /transcripts/{id}, M1). Sensitive fields are PII-redacted
@@ -6460,6 +6560,15 @@ type Query {
   at 200 — capped is true when the underlying page was full.
   """
   learningLoop: LearningLoopStats!
+  """
+  Expertise Ledger rollup: what the tenant's own decisions have captured
+  (decision volume + correction signal), how well decisions agree with
+  realized outcomes, the curated training corpus, and any owned/promoted
+  SLM. agent-runtime GET /expertise-ledger — authN-only downstream (bearer +
+  tenant RLS); the BFF adds no authz. `agreementRate` is null (never 0)
+  when nothing comparable has been scored yet.
+  """
+  expertiseLedger(windowDays: Int = 90): ExpertiseLedger!
   """
   One captured transcript from the governed corpus (agent-runtime GET
   /transcripts/{id}, M1). AuthN-only downstream; tenant-scoped by RLS.

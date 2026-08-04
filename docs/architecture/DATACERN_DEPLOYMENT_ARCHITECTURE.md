@@ -18,7 +18,7 @@ cloud), it says so.
 ## 1. Deployment model in one paragraph
 
 Every service is a container; every stateful dependency is open-source. One
-Helm umbrella chart deploys all 24 services plus the in-cluster platform tier;
+Helm umbrella chart deploys all 25 services plus the in-cluster platform tier;
 one Terraform stack per cloud provisions the managed substrate (Kubernetes,
 Postgres, Kafka, Redis, object store, secrets, registry, networking). Moving
 clouds means a different `terraform` directory and a different

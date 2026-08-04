@@ -92,6 +92,70 @@ async def mark_outcome(request: Request, decision_ref: str, body: dict = Body(..
     return {"data": _label_view(lab)}
 
 
+@router.post("/outcomes/ingest", status_code=200)
+async def ingest_outcomes(request: Request, body: dict = Body(...)):
+    """Close the outcome loop: ingest REALIZED outcomes from the system of
+    record automatically (DM-FR-011 / OM inbound). The SoR knows a business
+    entity — a case/claim/dispute URN — not our internal decision id, so each
+    item is keyed by ``business_urn`` (+ optional ``decision_type``) and
+    resolved back to the ACTIONED decision(s) that produced it. Every resolved
+    decision gets a ``label_source=sor`` (or ``event``) outcome label with
+    agreement computed against what the platform decided; unresolved keys are
+    reported honestly, never fabricated. Idempotent per decision (annotate,
+    never mutate — the label upsert is keyed by decision_ref).
+
+    This is the seam a connector, webhook, or event relay pushes the SoR's
+    realized results into; once recorded, the labels flow into decision
+    effectiveness (the agreement number) AND into SFT curation weighting (a
+    correct decision is imitated, an incorrect one down-weighted) with no
+    further call — the model learns from reality, not just from execution.
+
+    Service-authenticated (reuses ``case.case.update``, matching the human
+    path; a dedicated ``decision.outcome.*`` action is a later increment)."""
+    principal = await principal_of(request)
+    await _require(request, principal, "case.case.update")
+    c = request.app.state.container
+
+    source = str(body.get("label_source") or "sor")
+    if source not in LABEL_SOURCES:
+        raise ValidationFailed(f"label_source must be one of {LABEL_SOURCES}")
+    items = body.get("outcomes")
+    if not isinstance(items, list) or not items:
+        raise ValidationFailed("outcomes must be a non-empty list")
+
+    resolved: list[dict] = []
+    unmatched: list[dict] = []
+    for i, item in enumerate(items):
+        business_urn = str((item or {}).get("business_urn") or "").strip()
+        realized = str((item or {}).get("realized_outcome") or "").strip()
+        dtype = (item or {}).get("decision_type")
+        if not business_urn or not realized:
+            raise ValidationFailed(
+                f"outcomes[{i}]: business_urn and realized_outcome are required")
+        props = await c.store.find_actioned_proposals_by_urn(
+            principal.tenant_id, business_urn=business_urn, decision_type=dtype)
+        if not props:
+            # Honest: the SoR sent an outcome for an entity no actioned decision
+            # touched. Report it — never invent a decision to attach it to.
+            unmatched.append({"business_urn": business_urn, "reason": "no_actioned_decision"})
+            continue
+        for prop in props:
+            decided = _decided_outcome_of(prop)
+            lab = OutcomeLabel(
+                label_id=new_uuid(), tenant_id=principal.tenant_id,
+                decision_ref=prop.proposal_id, decision_type=prop.tool_id,
+                producer=prop.agent_key, decided_outcome=decided,
+                realized_outcome=realized,
+                correct=compute_correct(decided, realized),
+                label_source=source, note=(item or {}).get("note"),
+                labeled_by=principal.sub)
+            await c.store.upsert_outcome_label(lab)
+            resolved.append(_label_view(lab))
+
+    return {"data": {"resolved": len(resolved), "unmatched": unmatched,
+                     "labels": resolved}}
+
+
 @router.get("/decisions/{decision_ref}/outcome")
 async def get_outcome(request: Request, decision_ref: str):
     principal = await principal_of(request)

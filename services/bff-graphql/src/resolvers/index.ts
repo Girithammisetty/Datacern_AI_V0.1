@@ -82,6 +82,7 @@ import {
   mapPackDrift, mapPackTransition,
   // BRD 14 §6.5: SLM distillation cockpit (transcripts/SFT/training/adapters).
   mapTranscript, mapSftDataset, mapSftExample, mapTrainingJob, mapSlmAdapter,
+  mapExpertiseLedger,
 } from "../schema/map.js";
 
 /** GraphQL ChartSourceInput (camel) -> chart-service source body (snake). */
@@ -1808,6 +1809,18 @@ export const resolvers = {
         latestDatasetAt: latest?.created_at ?? null,
         capped: (all.data ?? []).length >= CAP,
       };
+    },
+
+    // Expertise Ledger rollup (agent-runtime GET /expertise-ledger). Like
+    // learningLoop above, the downstream route is authN-only (verified bearer
+    // JWT, tenant RLS) — the BFF forwards the JWT and adds NO authz of its own.
+    expertiseLedger: async (
+      _p: unknown,
+      args: { windowDays?: number },
+      ctx: GraphQLContext,
+    ) => {
+      const d = await ctx.clients.agent.expertiseLedger(args.windowDays);
+      return mapExpertiseLedger(d);
     },
 
     // ---- SLM distillation cockpit (agent-runtime, BRD 14 §6.5 M1-M4). The

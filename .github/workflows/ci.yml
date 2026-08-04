@@ -796,6 +796,20 @@ jobs:
       - name: Schema-driven forms journey (make journey-forms)
         run: make journey-forms
 
+      # Governed FHIR bridge journey (fhir-bridge slice): the tenant's clinical
+      # system of record changes ONLY through the governed loop. An in-process
+      # FHIR R4 sandbox is connected as the tenant backend via the bridge, then:
+      # a governed READ returns the real patient -> an UNGRANTED write and a
+      # FORGED-grant write are both refused (proposal_required) with the store
+      # byte-for-byte unchanged -> the legitimately-signed grant lands EXACTLY
+      # ONE new resource -> read + refusals + execution all appear in
+      # tool-plane's invocation_log. Same placement rationale as the journeys
+      # above: state-asserted (the sandbox's own bytes + audit rows), cheap
+      # relative to the Playwright suite, and a broken chain here makes the UI
+      # assertions meaningless. Needs seed.py fhir_tools, which up.sh seeds.
+      - name: Governed FHIR journey (make journey-fhir)
+        run: make journey-fhir
+
       # Pack conformance: the "28 production packs" claim, checked by INSTALLING
       # one. test-packs lints manifests and checks cross-file coherence — both
       # read FILES, so a pack whose installer silently no-ops passes them. This

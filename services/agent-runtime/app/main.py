@@ -29,6 +29,7 @@ from app.api.routes import (
     chat,
     decisions,
     entity_merges,
+    expertise,
     external,
     health,
     jwks,
@@ -232,6 +233,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(training.router)
     app.include_router(decisions.router)
     app.include_router(outcomes.router)
+    app.include_router(expertise.router)
     app.include_router(entity_merges.router)
     return app
 
