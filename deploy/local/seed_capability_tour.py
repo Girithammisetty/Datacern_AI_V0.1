@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "e2e" / "lib"))
 
 import common as c  # noqa: E402
 import driver as d  # noqa: E402
+import seed_platform as sp  # noqa: E402
 
 B, G, Y, N = "\033[1m", "\033[32m", "\033[33m", "\033[0m"
 
@@ -69,24 +70,28 @@ def _tok():
     return c.user_token(d.MANAGER, TENANT, ["*"], workspace_id=d.WORKSPACE)
 
 
-def _resolve_dataset_urn(tok, dataset_name: str | None) -> str | None:
-    """Re-resolve the dataset urn by NAME inside this workspace.
+def _resolve_dataset(tok) -> tuple[str | None, str | None]:
+    """Find the claims dataset the seed really ingested. Returns (urn, name).
 
-    EVID carries `ingest_dataset_name` but not the urn, and the urn is the one
-    thing every downstream stage needs. Resolving by name in-workspace also
-    survives a reused dev environment, where prior boots leave same-named
-    datasets belonging to other tenants visible (the dev DB role does not FORCE
-    row-level security) — the same reason seed_claims_demo re-resolves rather
-    than trusting a urn threaded through from earlier."""
-    if not dataset_name:
-        return None
+    NOT via driver.EVID. EVID is in-PROCESS state, and this tour runs as its own
+    process from up.sh, so EVID is empty here — the first version read
+    `EVID["ingest_dataset_name"]`, got None, and skipped every dataset-bound
+    stage while reporting a clean run. Asking dataset-service is the only source
+    of truth that survives a process boundary.
+
+    driver names the ingested dataset `auto-claims-<epoch>` (driver.py:235), so
+    prefer that prefix and take the newest; fall back to the newest dataset in
+    the workspace so a differently-named vertical still gets a tour.
+    """
     r = d.req("GET", f"{c.DATASET}/api/v1/datasets?workspace_id={d.WORKSPACE}", tok)
     if r.status_code != 200:
-        return None
-    for x in (r.json().get("data") or []):
-        if x.get("name") == dataset_name:
-            return f"wr:{TENANT}:dataset:dataset/{x['id']}"
-    return None
+        return None, None
+    rows = [x for x in (r.json().get("data") or []) if x.get("id") and x.get("name")]
+    if not rows:
+        return None, None
+    claims = [x for x in rows if str(x["name"]).startswith("auto-claims-")]
+    pick = sorted(claims or rows, key=lambda x: str(x.get("created_at") or x["name"]))[-1]
+    return f"wr:{TENANT}:dataset:dataset/{pick['id']}", str(pick["name"])
 
 
 # ---------------------------------------------------------------- 1. ONTOLOGY
@@ -320,7 +325,12 @@ def seed_jessie() -> str | None:
     """
     say("Jessie — a tenant-authored AI caseworker (proposals only, never commits)")
     tok = _tok()
-    g = d.req("GET", f"{c.AGENT_RUNTIME}/api/v1/tenants/self/agents", tok)
+    # /api/v1/REGISTRY/tenants/self/agents — registry.py declares
+    # APIRouter(prefix="/api/v1/registry"). The first version omitted the
+    # registry segment and got a bare 404 {"detail":"Not Found"}, which reads
+    # like "the feature does not exist" rather than "you typed the path wrong".
+    base = f"{c.AGENT_RUNTIME}/api/v1/registry/tenants/self/agents"
+    g = d.req("GET", base, tok)
     if g.status_code == 200:
         for a in (g.json().get("data") or []):
             if str(a.get("display_name") or "").lower() == "jessie":
@@ -337,8 +347,7 @@ def seed_jessie() -> str | None:
         "propose_tool": "case.propose_disposition",
         "max_tier": "write-proposal",
     }
-    r = d.req("POST", f"{c.AGENT_RUNTIME}/api/v1/tenants/self/agents", tok,
-              headers=d.J(), json=body)
+    r = d.req("POST", base, tok, headers=d.J(), json=body)
     if r.status_code not in (200, 201):
         warn(f"Jessie: {r.status_code} {r.text[:200]}")
         return None
@@ -350,11 +359,23 @@ def seed_jessie() -> str | None:
 
 def main() -> int:
     print(f"{B}Datacern capability tour — the links a fresh boot was not showing{N}")
-    dataset_name = d.EVID.get("ingest_dataset_name") or os.environ.get("DEMO_DATASET_NAME")
-    dataset_urn = _resolve_dataset_urn(_tok(), dataset_name)
+
+    # MUST run first. ensure_platform_seeded() re-points d.WORKSPACE at rbac's
+    # REAL default workspace (seed_platform.py:291); until it does, driver holds
+    # a FABRICATED workspace id. seed_claims_demo calls it, this did not, and the
+    # whole first run therefore addressed a workspace nothing else uses:
+    # dashboards and datasets came back empty, the eval suite 403'd on
+    # workspace-scoped authz, and — worst — the ontology stage reported `ok` for
+    # 4 entity types it had written somewhere no one would ever look. A green
+    # line for work landing in the wrong place is worse than a failure.
+    sp.ensure_platform_seeded()
+    say(f"workspace {d.WORKSPACE} (rbac's real default)")
+
+    dataset_urn, dataset_name = _resolve_dataset(_tok())
     if not dataset_urn:
-        warn(f"could not resolve a dataset urn for {dataset_name!r} — "
-             f"dataset-bound stages will skip and say so")
+        warn("no dataset in this workspace — dataset-bound stages will skip and say so")
+    else:
+        ok(f"resolved the ingested dataset: {dataset_name}")
 
     stages = [
         ("ontology", lambda: seed_ontology()),
