@@ -42,7 +42,9 @@ import type {
   AgentSessionDTO, DecisionEvaluationDTO,
   // BRD 14 §6.5: SLM distillation cockpit (transcripts/SFT/training/adapters).
   TranscriptDTO, SftDatasetDTO, SftExampleDTO, TrainingJobDTO, SlmAdapterDTO,
- DecisionDriftDTO, KnowledgeGapDTO,} from "../clients/agent.js";
+ DecisionDriftDTO, KnowledgeGapDTO,
+  ExpertiseLedgerDTO,
+} from "../clients/agent.js";
 import type {
   PackSummaryDTO, PackDetailDTO, PlanOpDTO, LedgerRowDTO, InstallDTO,
   InstallPlanDTO, InstallResultDTO, UninstallResultDTO, CompleteResultDTO,
@@ -1408,6 +1410,98 @@ export function mapSlmAdapter(d: SlmAdapterDTO) {
     evalResultRef: d.eval_result_ref ?? null,
     targetRungAlias: d.target_rung_alias ?? null,
     createdAt: d.created_at ?? null,
+  };
+}
+
+/** agent-runtime GET /expertise-ledger -> ExpertiseLedger. snake->camel only;
+ * nulls are preserved VERBATIM — agreementRate/effectivenessRate null stay
+ * null (NEVER coerced to 0), and corpus.latest / ownedModel.promoted /
+ * ownedModel.latestTraining null stay null. The training `error` passes
+ * through as JSON verbatim (the honest failure reason). No BFF authz — the
+ * downstream route is authN-only (bearer + tenant RLS), like learningLoop. */
+export function mapExpertiseLedger(d: ExpertiseLedgerDTO) {
+  const dec = d.decisions;
+  const agr = d.agreement;
+  const corp = d.corpus;
+  const om = d.owned_model;
+  return {
+    __typename: "ExpertiseLedger" as const,
+    decisions: {
+      __typename: "ExpertiseDecisions" as const,
+      windowDays: dec.window_days,
+      capturedInWindow: dec.captured_in_window,
+      capturedAllTime: dec.captured_all_time,
+      correctionsInWindow: dec.corrections_in_window,
+      byStatus: {
+        __typename: "ExpertiseByStatus" as const,
+        pending: dec.by_status.pending,
+        approved: dec.by_status.approved,
+        rejected: dec.by_status.rejected,
+        editedApproved: dec.by_status.edited_approved,
+        expired: dec.by_status.expired,
+        superseded: dec.by_status.superseded,
+        cancelled: dec.by_status.cancelled,
+      },
+    },
+    agreement: {
+      __typename: "ExpertiseAgreement" as const,
+      labeledDecisions: agr.labeled_decisions,
+      // null means "nothing comparable scored yet" — preserved, never 0.
+      agreementRate: agr.agreement_rate ?? null,
+      scored: agr.scored,
+      byDecisionType: (agr.by_decision_type ?? []).map((g) => ({
+        __typename: "ExpertiseAgreementGroup" as const,
+        key: g.key,
+        total: g.total,
+        correct: g.correct,
+        incorrect: g.incorrect,
+        unknown: g.unknown,
+        effectivenessRate: g.effectiveness_rate ?? null,
+      })),
+    },
+    corpus: {
+      __typename: "ExpertiseCorpus" as const,
+      datasetVersions: corp.dataset_versions,
+      exampleRows: corp.example_rows,
+      consentVerifiedVersions: corp.consent_verified_versions,
+      latest: corp.latest
+        ? {
+            __typename: "ExpertiseCorpusLatest" as const,
+            datasetId: corp.latest.dataset_id,
+            agentKey: corp.latest.agent_key,
+            version: corp.latest.version,
+            rowCount: corp.latest.row_count,
+            checksum: corp.latest.checksum,
+            createdAt: corp.latest.created_at,
+          }
+        : null,
+    },
+    ownedModel: {
+      __typename: "ExpertiseOwnedModel" as const,
+      hasOwnedModel: om.has_owned_model,
+      adapterCount: om.adapter_count,
+      promoted: om.promoted
+        ? {
+            __typename: "ExpertiseOwnedModelPromoted" as const,
+            adapterId: om.promoted.adapter_id,
+            archetype: om.promoted.archetype,
+            baseModel: om.promoted.base_model,
+            checksum: om.promoted.checksum,
+            modelAlias: om.promoted.model_alias,
+          }
+        : null,
+      latestTraining: om.latest_training
+        ? {
+            __typename: "ExpertiseTraining" as const,
+            jobId: om.latest_training.job_id,
+            archetype: om.latest_training.archetype,
+            baseModel: om.latest_training.base_model,
+            status: om.latest_training.status,
+            // Honest failure reason passes through VERBATIM as JSON.
+            error: om.latest_training.error ?? null,
+          }
+        : null,
+    },
   };
 }
 
