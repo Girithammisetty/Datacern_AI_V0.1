@@ -27,7 +27,7 @@ That is the shape of this checkpoint: the platform got measurably more proven, a
 | Built-in agents | **9** |
 | BRDs | **72** |
 | Test functions | **~2,560** strict count — 985 Go, 996 TypeScript, 578 Python |
-| E2E journeys | **6**, all **6 PROVEN green** on the last complete run |
+| E2E journeys | **7** — 6 **PROVEN green** on the last complete run; `journey-fhir` (added 2026-08-04) sandbox-selftest PASS only, not yet wired into CI |
 | Live UI tests (`pnpm e2e:live`) | **43 passed · 4 failed · 18 skipped** — first execution ever |
 | Packs with a seeded demo scenario | **4 of 28** |
 | Production cloud deployments | **0** |
@@ -48,7 +48,7 @@ That is the shape of this checkpoint: the platform got measurably more proven, a
 | **Schema-driven forms** — typed intake, refusals write nothing, AI drafting, human submit stored exactly | ✅ |
 | **Pack conformance** — 30 checks: install, materialization, layout, drift, uninstall, tombstoning | ✅ |
 | **Live Playwright suite** (`pnpm e2e:live`, 65 tests) | ❌ 4 failed · 43 passed · 18 skipped |
-| Restart soak · volume soak | ⏭ skipped behind the Playwright failure — **still never executed** |
+| Restart soak · volume soak | ⏭ skipped behind the Playwright failure — **never executed in CI** (each has one recorded local run: restart-soak PASS 2026-07-23, 1M-row volume numbers in BRD 58 WS5) |
 
 **What that run actually establishes.** Self-approval is rejected server-side. A forged authorisation grant is rejected. A pack refuses to install against a tenant with no data, naming every missing field; installing it materializes 8 case fields, 7 dispositions and 5 roles as real rows, and uninstalling reverses 47 objects while tombstoning 21 it cannot reverse. A model is trained, promoted through a distinct approver, and scores new work. The AI drafts and writes nothing until a named human signs.
 
@@ -124,7 +124,7 @@ The five beats all have live evidence: the pack refusal, copilot triage, approva
 | # | Item | State |
 |---|---|---|
 | 1 | **`e2e:live` — 4 failing specs**, all `cases-journeys.spec.ts` (`:216 :269 :375 :507`), all one cause: `journey-forms` declared `siu_referral_<RUN>` as a **required** custom field and never removed it, so every later case write failed `VALIDATION_FAILED`. Fixed in #74 (the journey now deletes its own fields, asserted on the happy path plus a `finally` over all 14 exit paths) | Fix merged, **not yet verified live** |
-| 2 | **Restart soak + volume soak** — skipped behind `e2e:live` on every run to date. **Neither has ever executed, once.** | Never run |
+| 2 | **Restart soak + volume soak** — skipped behind `e2e:live` on every CI run to date. **Neither has ever executed in CI**; each has exactly one recorded local run (restart-soak PASS in the ClickHouse-HA doc; 1M-row volume numbers in BRD 58 WS5) | Never run in CI |
 | 3 | **Databricks connector** — real, SDK-backed, dependency-declared, **never pointed at a live workspace**. The single most load-bearing unverified claim in any customer conversation | Unproven |
 | 4 | **`land_pack_data.py`** — the recommended unblock for `make demo-load`. Compiled and linted, **never executed** | Unrun |
 | 5 | **Partner-briefing §2 capability claims** — counts were re-verified 2026-08-01, the ~15 capability assertions were not | Unre-verified |
@@ -154,7 +154,7 @@ Each fix was correct and none of them was sufficient. The assertion now **names*
 | SOC 2 / HITRUST / ISO 27001 | **Not started.** Self-identified as the #1 blocker to a first regulated customer; 6–12 months |
 | Third-party penetration test | **None.** Internal cross-tenant probes exist and pass, covering a minority of services |
 | SAML | **None.** Zero implementation across all services |
-| Load / scale testing | **None run.** A written bottleneck audit exists; scale is proven at demo volume only |
+| Load / scale testing | **Never in CI; no concurrency numbers at all.** One local restart-soak PASS and one local 1M-row volume run are recorded; `load_test.py` has never touched a running stack, so no p95/throughput figure exists for any surface |
 | Incident-response plan | Not documented |
 | Bus factor | **One engineer.** Mitigated by 72 BRDs and ~2,560 tests; not eliminated |
 
