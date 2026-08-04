@@ -1,7 +1,7 @@
 SERVICES := $(wildcard services/*)
 
 .PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up up-platform down reset doctor soak soak-volume \
-        journey journey-forms journey-packs journey-fhir demo-list demo-load demo-clean demo-clean-all security-probe
+        journey journey-forms journey-packs journey-fhir validate-platform demo-list demo-load demo-clean demo-clean-all security-probe
 
 # Capstone: provision the WHOLE platform locally and open it in a browser for
 # hands-on end-user testing. Preflight -> infra -> migrate+boot all 22 services
@@ -117,6 +117,18 @@ journey-packs:
 # audit rows), same rule as `make journey`. Needs `make up`.
 journey-fhir:
 	deploy/e2e/.venv/bin/python deploy/e2e/test_fhir_journey.py
+
+# Full-platform validation orchestrator: runs every existing validator
+# (doctor -> 7 journeys -> security-probe -> agent-roster sweep -> pnpm
+# e2e:live -> soaks) in dependency order against a live stack and writes ONE
+# machine-readable evidence artifact to deploy/evidence/validation-report.
+# {json,md}. Zero LLM API cost (agent steps use the local Ollama model). Needs
+# `make up`. `--quick` skips the soaks/load profile for a fast signal; the
+# orchestrator self-test (`--self-test`) needs no stack.
+#   make validate-platform            # full run, writes the evidence report
+#   make validate-platform ARGS=--quick
+validate-platform:
+	deploy/e2e/.venv/bin/python deploy/e2e/validate_platform.py $(ARGS)
 
 # ---- Demo pack control -----------------------------------------------------
 # Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway
