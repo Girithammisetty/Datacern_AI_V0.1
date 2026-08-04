@@ -6,7 +6,7 @@
 
 Every claim in this document is traceable to code in this repository, and the
 layer-by-layer counts and behaviours were verified by execution on 2026-07-30
-(3,029+ tests green across all 25 services; two live workflow proofs). The
+(3,029 tests green across all 24 services; two live workflow proofs). The
 execution record, including what could *not* be verified locally, is
 [`../DATACERN_LOCAL_EVALUATION_EVIDENCE_2026-07-30.md`](../DATACERN_LOCAL_EVALUATION_EVIDENCE_2026-07-30.md).
 

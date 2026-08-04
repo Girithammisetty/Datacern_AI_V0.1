@@ -136,14 +136,6 @@ class Catalog(Protocol):
         """Physical parquet data files for a pinned snapshot (QRY-FR-005)."""
         ...
 
-    async def ingestion_delta_file_uris(
-        self, table: str, ingestion_id: str
-    ) -> list[str]:
-        """Physical parquet data files appended by one ingestion (keyed on the
-        snapshot summary's ingestion_id — one ingestion may span several
-        chunked snapshots)."""
-        ...
-
     async def table_columns(self, table: str) -> list[dict[str, str]]:
         """Columns from the physical table schema (name/type)."""
         ...

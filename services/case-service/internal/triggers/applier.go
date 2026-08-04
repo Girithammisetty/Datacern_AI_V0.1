@@ -37,20 +37,12 @@ type RowsPage struct {
 type RowsClient interface {
 	BrowseRows(ctx context.Context, tenant uuid.UUID, datasetID string,
 		conditions []domain.TriggerCondition, limit int) (*RowsPage, error)
-	// BrowseDeltaRows fetches ONLY the rows appended by one ingestion
-	// (dataset-service resolves the delta from catalog snapshot summaries,
-	// independent of version registration). Conditions push down exactly as
-	// in BrowseRows. This is the incremental read the delta trigger path
-	// evaluates conditions over — no registration catch-up wait required.
-	BrowseDeltaRows(ctx context.Context, tenant uuid.UUID, datasetID string,
-		ingestionID string, conditions []domain.TriggerCondition, limit int) (*RowsPage, error)
 	// CurrentSnapshotID returns the Iceberg snapshot id of the dataset's
 	// REGISTERED current version ("" if none yet). browse_rows serves that
 	// pinned snapshot, and dataset-service bumps it asynchronously from the
 	// same ingestion.completed event this applier consumes — so on appends the
 	// applier must wait for registration to catch up to the event's snapshot
-	// or it browses pre-append rows and silently misses the increment. Only
-	// the legacy full-snapshot path needs this.
+	// or it browses pre-append rows and silently misses the increment.
 	CurrentSnapshotID(ctx context.Context, tenant uuid.UUID, datasetID string) (string, error)
 }
 
@@ -185,50 +177,6 @@ func (d *DatasetHTTP) BrowseRows(ctx context.Context, tenant uuid.UUID, datasetI
 	return &RowsPage{Columns: body.Data.Columns, Rows: body.Data.Rows}, nil
 }
 
-// BrowseDeltaRows fetches up to limit rows appended by one ingestion, with the
-// trigger's conditions pushed down — GET /rows?delta_ingestion_id=...
-func (d *DatasetHTTP) BrowseDeltaRows(ctx context.Context, tenant uuid.UUID, datasetID string,
-	ingestionID string, conditions []domain.TriggerCondition, limit int) (*RowsPage, error) {
-	if d.BaseURL == "" {
-		return nil, fmt.Errorf("dataset-service not configured (DATASET_URL)")
-	}
-	tok, err := d.mint(tenant)
-	if err != nil {
-		return nil, err
-	}
-	q := url.Values{}
-	q.Set("limit", fmt.Sprintf("%d", limit))
-	q.Set("delta_ingestion_id", ingestionID)
-	for _, c := range conditions {
-		q.Add("filter", fmt.Sprintf("%s:%s:%s", c.Col, c.Op, c.Value))
-	}
-	u := fmt.Sprintf("%s/api/v1/datasets/%s/rows?%s", d.BaseURL, url.PathEscape(datasetID), q.Encode())
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+tok)
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("dataset browse_rows: status %d: %s", resp.StatusCode, string(raw))
-	}
-	var body struct {
-		Data struct {
-			Columns []string `json:"columns"`
-			Rows    [][]any  `json:"rows"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, fmt.Errorf("dataset browse_rows: decode: %w", err)
-	}
-	return &RowsPage{Columns: body.Data.Columns, Rows: body.Data.Rows}, nil
-}
-
 // CurrentSnapshotID reads GET /datasets/{id} and returns
 // current_version.iceberg_snapshot_id as a canonical string ("" if the
 // dataset or its version is not registered yet).
@@ -285,13 +233,6 @@ type Applier struct {
 	// SnapshotPollInterval paces the wait for dataset-service to register the
 	// event's snapshot before browsing (default 3s; tests shrink it).
 	SnapshotPollInterval time.Duration
-	// DeltaBrowse switches condition evaluation to the snapshot-delta read
-	// (only the rows the event's ingestion appended) — no registration
-	// catch-up wait, no full-snapshot rescan, and MaxCasesPerEvent becomes a
-	// plain rate limit instead of a correctness crutch. TRIGGER_DELTA_BROWSE
-	// env. On delta failure the applier falls back to the legacy full browse,
-	// so enabling it is never stricter than the pre-flag behavior.
-	DeltaBrowse bool
 }
 
 // EvidenceBlob is the minimal surface the applier needs from the evidence
@@ -346,13 +287,12 @@ func (a *Applier) ApplyIngestionCompleted(ctx context.Context, tenant uuid.UUID,
 		return err
 	}
 	eventSnapshot := snapshotKey(payload["iceberg_snapshot_id"])
-	ingestionID, _ := payload["ingestion_id"].(string)
 	var firstErr error
 	for _, t := range trigs {
 		if !t.MatchesSource(datasetURN, datasetName) {
 			continue
 		}
-		if err := a.applyOne(ctx, tenant, t, datasetURN, datasetID, eventSnapshot, ingestionID); err != nil {
+		if err := a.applyOne(ctx, tenant, t, datasetURN, datasetID, eventSnapshot); err != nil {
 			slog.Error("case trigger apply failed", "trigger", t.ID, "name", t.Name,
 				"dataset_urn", datasetURN, "err", err)
 			if firstErr == nil {
@@ -363,34 +303,8 @@ func (a *Applier) ApplyIngestionCompleted(ctx context.Context, tenant uuid.UUID,
 	return firstErr
 }
 
-// browseDelta evaluates the trigger's conditions over ONLY the rows the
-// event's ingestion appended. The delta is resolved by dataset-service
-// straight from the Iceberg catalog, so no registration catch-up wait is
-// needed; the one remaining race is the DATASET ROW itself (created
-// asynchronously by dataset-service's consumer on first fire), covered by the
-// bounded 404 retry.
-func (a *Applier) browseDelta(ctx context.Context, tenant uuid.UUID, t *domain.CaseTrigger,
-	datasetID, ingestionID string) (*RowsPage, error) {
-	var page *RowsPage
-	var err error
-	for attempt := 0; attempt < 6; attempt++ {
-		page, err = a.Rows.BrowseDeltaRows(ctx, tenant, datasetID, ingestionID, t.Conditions, t.MaxCasesPerEvent)
-		if err == nil || !strings.Contains(err.Error(), "status 404") {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(3 * time.Second):
-		}
-	}
-	return page, err
-}
-
-// browseFull is the legacy path: wait for version registration to catch up to
-// the event's snapshot, then browse the ENTIRE current snapshot.
-func (a *Applier) browseFull(ctx context.Context, tenant uuid.UUID, t *domain.CaseTrigger,
-	datasetURN, datasetID, eventSnapshot string) (*RowsPage, error) {
+func (a *Applier) applyOne(ctx context.Context, tenant uuid.UUID, t *domain.CaseTrigger,
+	datasetURN, datasetID, eventSnapshot string) error {
 	// dataset-service registers the dataset AND its new version ASYNCHRONOUSLY
 	// from the same ingestion.completed event this consumer received. Two races
 	// follow. (1) First fire: the dataset does not exist yet → browse 404s —
@@ -416,7 +330,7 @@ func (a *Applier) browseFull(ctx context.Context, tenant uuid.UUID, t *domain.Ca
 			}
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return ctx.Err()
 			case <-time.After(interval):
 			}
 		}
@@ -434,28 +348,9 @@ func (a *Applier) browseFull(ctx context.Context, tenant uuid.UUID, t *domain.Ca
 		}
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		case <-time.After(3 * time.Second):
 		}
-	}
-	return page, err
-}
-
-func (a *Applier) applyOne(ctx context.Context, tenant uuid.UUID, t *domain.CaseTrigger,
-	datasetURN, datasetID, eventSnapshot, ingestionID string) error {
-	var page *RowsPage
-	var err error
-	if a.DeltaBrowse && ingestionID != "" {
-		page, err = a.browseDelta(ctx, tenant, t, datasetID, ingestionID)
-		if err != nil {
-			// Fall back to the legacy full browse so a delta regression can
-			// only ever cost latency, never a lost fire.
-			slog.Warn("delta browse failed; falling back to full-snapshot browse",
-				"trigger", t.ID, "dataset_urn", datasetURN, "ingestion_id", ingestionID, "err", err)
-			page, err = a.browseFull(ctx, tenant, t, datasetURN, datasetID, eventSnapshot)
-		}
-	} else {
-		page, err = a.browseFull(ctx, tenant, t, datasetURN, datasetID, eventSnapshot)
 	}
 	if err != nil {
 		return err

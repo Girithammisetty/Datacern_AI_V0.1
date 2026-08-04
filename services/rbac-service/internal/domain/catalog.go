@@ -210,13 +210,6 @@ var canonicalSpecs = []resourceSpec{
 	// pack (pack-service, BRD 23: capability-pack catalog + governed install lifecycle)
 	{"pack", "pack", []string{VerbRead}, true, "capability pack catalog"},
 	{"pack", "install", []string{VerbRead, VerbExecute}, true, "pack installs into a workspace"},
-	// fhir (fhir-bridge: governed proxy to external FHIR R4 backends).
-	// Tenant-scoped: the bridge's OPA input carries the tenant only — the
-	// tool-plane facade call has no workspace context. fhir.backend.* is the
-	// tenant-admin connection registry; fhir.resource.* is the proxied data
-	// plane re-checked per tool invocation for the effective human.
-	{"fhir", "backend", []string{VerbCreate, VerbRead, VerbList, VerbUpdate, VerbDelete}, false, "tenant FHIR backend connections"},
-	{"fhir", "resource", []string{VerbRead, VerbList, VerbCreate, VerbUpdate}, false, "proxied FHIR resource access"},
 }
 
 // CanonicalCatalog returns the canonical platform action list (RBC-FR-022),

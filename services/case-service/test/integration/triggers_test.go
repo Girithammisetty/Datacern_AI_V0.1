@@ -2,7 +2,6 @@ package integration
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -26,16 +25,9 @@ func (f *fakeRows) BrowseRows(_ context.Context, _ uuid.UUID, _ string,
 	return f.page, nil
 }
 
-func (f *fakeRows) BrowseDeltaRows(_ context.Context, _ uuid.UUID, _ string, _ string,
-	_ []domain.TriggerCondition, _ int) (*triggers.RowsPage, error) {
-	return nil, errNoDelta // these tests exercise the legacy path only
-}
-
 func (f *fakeRows) CurrentSnapshotID(_ context.Context, _ uuid.UUID, _ string) (string, error) {
 	return "", nil
 }
-
-var errNoDelta = errors.New("delta browse not wired in this double")
 
 // TestCaseTriggers_CRUD_ApplyAndDedup exercises the full INC-1 core slice
 // against real Postgres: trigger CRUD under RLS, the applier materializing
@@ -143,11 +135,6 @@ func (s *snapRows) BrowseRows(_ context.Context, _ uuid.UUID, _ string,
 	return s.stale, nil
 }
 
-func (s *snapRows) BrowseDeltaRows(_ context.Context, _ uuid.UUID, _ string, _ string,
-	_ []domain.TriggerCondition, _ int) (*triggers.RowsPage, error) {
-	return nil, errNoDelta
-}
-
 // TestCaseTriggers_AppendFireWaitsForSnapshotRegistration: an append
 // ingestion.completed must not browse until dataset-service has registered
 // the event's snapshot — otherwise the increment is invisible and dedup
@@ -186,116 +173,4 @@ func TestCaseTriggers_AppendFireWaitsForSnapshotRegistration(t *testing.T) {
 
 	created, _ := h.pg.OutboxEventsByType(ctx, tenant, "case.created")
 	require.Len(t, created, 2, "the browse must see the POST-append page (both rows), not the stale one")
-}
-
-// deltaRows counts which read path the applier takes: the snapshot-delta read
-// (BrowseDeltaRows), the legacy full browse, and registration polls.
-type deltaRows struct {
-	deltaCalls int
-	fullCalls  int
-	snapChecks int
-	failDelta  bool
-	page       *triggers.RowsPage
-}
-
-func (d *deltaRows) BrowseDeltaRows(_ context.Context, _ uuid.UUID, _ string, _ string,
-	_ []domain.TriggerCondition, _ int) (*triggers.RowsPage, error) {
-	d.deltaCalls++
-	if d.failDelta {
-		return nil, errors.New("dataset browse_rows: status 500: boom")
-	}
-	return d.page, nil
-}
-
-func (d *deltaRows) BrowseRows(_ context.Context, _ uuid.UUID, _ string,
-	_ []domain.TriggerCondition, _ int) (*triggers.RowsPage, error) {
-	d.fullCalls++
-	return d.page, nil
-}
-
-func (d *deltaRows) CurrentSnapshotID(_ context.Context, _ uuid.UUID, _ string) (string, error) {
-	d.snapChecks++
-	return "", nil
-}
-
-// TestCaseTriggers_DeltaBrowseSkipsRegistrationWait: with TRIGGER_DELTA_BROWSE
-// on and an ingestion_id in the event, the applier evaluates conditions over
-// the ingestion's delta directly — zero CurrentSnapshotID polls, zero
-// full-snapshot browses — and cases still flow through the real CreateCases
-// path with dedup intact.
-func TestCaseTriggers_DeltaBrowseSkipsRegistrationWait(t *testing.T) {
-	requireHarness(t)
-	ctx := context.Background()
-	tenant, ws := uuid.New(), uuid.New()
-
-	tr := &domain.CaseTrigger{
-		ID: domain.NewID(), TenantID: tenant, WorkspaceID: ws,
-		Name: "delta-stream", Enabled: true, DatasetName: "orders",
-		RowPKField: "id",
-	}
-	tr.Normalize()
-	require.NoError(t, h.pg.CreateTrigger(ctx, tr))
-
-	datasetURN := "wr:" + tenant.String() + ":dataset:dataset/" + uuid.NewString()
-	rows := &deltaRows{page: &triggers.RowsPage{
-		Columns: []string{"id", "amount"},
-		Rows:    [][]any{{"D1", "5000"}, {"D2", "9000"}},
-	}}
-	applier := &triggers.Applier{Store: h.pg, Rows: rows, DeltaBrowse: true,
-		SnapshotPollInterval: 10 * time.Millisecond}
-
-	payload := map[string]any{
-		"dataset_urn": datasetURN, "dataset_id": uuid.NewString(),
-		"dataset_name": "orders", "workspace_id": ws.String(),
-		"iceberg_snapshot_id": float64(721389546218946213),
-		"ingestion_id":        uuid.NewString(),
-	}
-	require.NoError(t, applier.ApplyIngestionCompleted(ctx, tenant, payload))
-	require.Equal(t, 1, rows.deltaCalls, "delta path must browse the ingestion delta")
-	require.Equal(t, 0, rows.fullCalls, "delta path must not rescan the full snapshot")
-	require.Equal(t, 0, rows.snapChecks, "delta path must not wait on version registration")
-
-	created, _ := h.pg.OutboxEventsByType(ctx, tenant, "case.created")
-	require.Len(t, created, 2)
-
-	// Redelivery stays idempotent on the delta path too.
-	require.NoError(t, applier.ApplyIngestionCompleted(ctx, tenant, payload))
-	created, _ = h.pg.OutboxEventsByType(ctx, tenant, "case.created")
-	require.Len(t, created, 2, "replayed event must not duplicate cases")
-}
-
-// TestCaseTriggers_DeltaBrowseFallsBackToFullBrowse: a delta failure must
-// degrade to the legacy full-snapshot browse (with its registration wait) —
-// enabling the flag can cost latency, never a lost fire.
-func TestCaseTriggers_DeltaBrowseFallsBackToFullBrowse(t *testing.T) {
-	requireHarness(t)
-	ctx := context.Background()
-	tenant, ws := uuid.New(), uuid.New()
-
-	tr := &domain.CaseTrigger{
-		ID: domain.NewID(), TenantID: tenant, WorkspaceID: ws,
-		Name: "delta-fallback", Enabled: true, DatasetName: "orders",
-		RowPKField: "id",
-	}
-	tr.Normalize()
-	require.NoError(t, h.pg.CreateTrigger(ctx, tr))
-
-	datasetURN := "wr:" + tenant.String() + ":dataset:dataset/" + uuid.NewString()
-	rows := &deltaRows{failDelta: true, page: &triggers.RowsPage{
-		Columns: []string{"id", "amount"},
-		Rows:    [][]any{{"F1", "5000"}},
-	}}
-	applier := &triggers.Applier{Store: h.pg, Rows: rows, DeltaBrowse: true,
-		SnapshotPollInterval: 10 * time.Millisecond}
-
-	require.NoError(t, applier.ApplyIngestionCompleted(ctx, tenant, map[string]any{
-		"dataset_urn": datasetURN, "dataset_id": uuid.NewString(),
-		"dataset_name": "orders", "workspace_id": ws.String(),
-		"ingestion_id": uuid.NewString(),
-	}))
-	require.Equal(t, 1, rows.deltaCalls, "delta must be attempted first")
-	require.Equal(t, 1, rows.fullCalls, "failure must fall back to the full browse")
-
-	created, _ := h.pg.OutboxEventsByType(ctx, tenant, "case.created")
-	require.Len(t, created, 1, "the fallback fire must still open the case")
 }

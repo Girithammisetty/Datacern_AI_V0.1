@@ -69,58 +69,6 @@ async def test_iceberg_rest_catalog_reads_snapshot():
         await catalog.drop_table(table)
 
 
-async def test_iceberg_rest_catalog_ingestion_delta_files():
-    """The snapshot-delta read the case-trigger applier depends on: two real
-    ingestions into one bronze table, and ingestion_delta_file_uris resolves
-    exactly the second ingestion's files (plan_files diff against each
-    snapshot's parent), including the multi-snapshot chunked-append case."""
-    _require(8181, "Iceberg REST")
-    _require(9000, "MinIO")
-    from datacern_common.iceberg import IcebergTableWriter, RowBatch
-
-    from app.adapters.catalog import IcebergRestCatalog
-
-    table = f"bronze.dstit{uuid.uuid4().hex[:8]}.ds_delta"
-    catalog = IcebergRestCatalog()
-    # Tiny chunk size so the second ingestion commits MULTIPLE snapshots — the
-    # production shape the delta must handle (one snapshot per 50k-row chunk).
-    writer = IcebergTableWriter(commit_chunk_rows=2)
-
-    async def batch(rows):
-        yield RowBatch(columns=["claim_id", "amount"], rows=rows)
-
-    try:
-        staged = await writer.stage(
-            table, batch([["C1", "100"], ["C2", "200"]]),
-            {"ingestion_id": "ing-a", "source": "upload"},
-        )
-        await writer.commit(staged)
-        staged = await writer.stage(
-            table, batch([["C3", "300"], ["C4", "400"], ["C5", "500"]]),
-            {"ingestion_id": "ing-b", "source": "upload"},
-        )
-        await writer.commit(staged)
-
-        all_files = await catalog.data_file_uris(table)
-        delta_a = await catalog.ingestion_delta_file_uris(table, "ing-a")
-        delta_b = await catalog.ingestion_delta_file_uris(table, "ing-b")
-        assert delta_a and delta_b
-        assert set(delta_a).isdisjoint(delta_b)
-        assert set(delta_a) | set(delta_b) == set(all_files)
-        assert await catalog.ingestion_delta_file_uris(table, "ing-nope") == []
-
-        # And the delta browse reads exactly the second ingestion's rows.
-        columns, rows, total, filtered = await catalog.browse_ingestion_delta(
-            table, "ing-b", filters=None, sort_col=None, sort_dir="asc",
-            offset=0, limit=50,
-        )
-        assert total == 3 and filtered == 3
-        idx = columns.index("claim_id")
-        assert {r[idx] for r in rows} == {"C3", "C4", "C5"}
-    finally:
-        await catalog.drop_table(table)
-
-
 async def test_kafka_consumer_dedup_via_redis():
     _require(9092, "Redpanda")
     _require(6379, "Redis")

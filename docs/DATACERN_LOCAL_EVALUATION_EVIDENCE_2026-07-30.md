@@ -12,7 +12,7 @@ which tiers could run (see §5); it does not soften any claim in §1–§4.
 
 ---
 
-## 1. Full test sweep — the 24-service fleet as of this dated snapshot
+## 1. Full test sweep — all 24 services
 
 **3,029 tests passed; zero product-code failures.**
 

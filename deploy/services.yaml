@@ -39,7 +39,6 @@ services:
   - { name: audit-service,         language: go,     path: services/audit-service,        port: 8322, db: ~,             migrate: false, ingress: internal, needs: [postgres, kafka, clickhouse] }
   - { name: notification-service,  language: go,     path: services/notification-service, port: 8323, db: notification,  migrate: true,  ingress: internal, needs: [postgres, kafka, redis, opa, smtp] }
   - { name: eval-service,          language: python, path: services/eval-service,         port: 8324, db: eval,          migrate: true,  ingress: internal, needs: [postgres, kafka, redis, opa] }
-  - { name: fhir-bridge,           language: go,     path: services/fhir-bridge,          port: 8325, db: fhir_bridge,   migrate: true,  ingress: internal, needs: [postgres, opa, secretstore] }
   - { name: bff-graphql,           language: node,   path: services/bff-graphql,          port: 4000, db: ~,             migrate: false, ingress: public,   needs: [jwks] }
   - { name: ui-web,                language: node,   path: services/ui-web,               port: 3000, db: ~,             migrate: false, ingress: public,   needs: [bff] }
 

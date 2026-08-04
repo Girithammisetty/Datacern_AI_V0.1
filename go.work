@@ -5,7 +5,6 @@ use (
 	./services/audit-service
 	./services/case-service
 	./services/chart-service
-	./services/fhir-bridge
 	./services/identity-service
 	./services/notification-service
 	./services/query-service

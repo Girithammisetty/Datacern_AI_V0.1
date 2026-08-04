@@ -212,18 +212,12 @@ async def browse_dataset_rows(
     limit: int = Query(default=50, ge=1, le=500),
     sort: str | None = Query(default=None),
     dir: str = Query(default="asc"),
-    delta_ingestion_id: str | None = Query(default=None, max_length=128),
     principal: Principal = Depends(require("dataset.dataset.read")),
 ):
     """Paginated, filterable, sortable browse of a dataset's current-version
     rows (DST-FR-050). Per-column filters arrive as repeated query params
     ``filter=<col>:<op>:<value>`` where op ∈ eq|neq|contains|gt|gte|lt|lte.
-    Returns {columns, rows, total, filtered, offset, limit}.
-
-    ``delta_ingestion_id`` restricts the read to the rows appended by that one
-    ingestion, resolved from catalog snapshot summaries without requiring the
-    version to be registered — the read the case-trigger applier uses so its
-    condition evaluation is incremental and race-free."""
+    Returns {columns, rows, total, filtered, offset, limit}."""
     filters: list[dict] = []
     for raw in request.query_params.getlist("filter"):
         # col may itself contain ':' only in pathological cases; split into 3.
@@ -237,7 +231,6 @@ async def browse_dataset_rows(
         principal.ctx(request.state.trace_id), dataset_id,
         offset=offset, limit=limit, sort_col=sort,
         sort_dir=("desc" if dir == "desc" else "asc"), filters=filters,
-        delta_ingestion_id=delta_ingestion_id,
     )
     return {"data": result}
 

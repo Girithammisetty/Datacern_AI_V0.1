@@ -424,144 +424,6 @@ def register_case_apply_tool(tenant_id: str) -> str:
     return tid
 
 
-def register_fhir_tools(tenant_id: str) -> list[str]:
-    """Idempotently register the four fhir-bridge tools and point them at the
-    bridge's MCP backend facade. Reads (``fhir.read_resource``,
-    ``fhir.search_resources``) are permission_tier=read — an agent enriching a
-    case with clinical context invokes them directly. Writes
-    (``fhir.create_resource``, ``fhir.update_resource``) are write-proposal —
-    the gateway refuses them without a human-approved proposal grant, so the
-    clinical system of record only ever changes after the same four-eyes loop
-    that governs case dispositions. Mirrors register_case_apply_tool():
-    register tool -> register+publish version -> per-tenant enable ->
-    mcp_backends upsert; safe on every boot."""
-    import psycopg
-
-    su = c.superadmin_token()
-    fhir_url = os.environ.get("FHIR_BRIDGE_URL", "http://localhost:8325")
-    ver = "1.0.0"
-
-    def _post(url, token, body):
-        return requests.post(url, json=body,
-                             headers={"Authorization": f"Bearer {token}",
-                                      "Content-Type": "application/json"}, timeout=15)
-
-    backend_prop = {"type": "string"}
-    rtype_prop = {"type": "string"}
-    rid_prop = {"type": "string"}
-
-    tools = [
-        {"tool_id": "fhir.read_resource", "display_name": "Read FHIR resource",
-         "side_effects": "none", "tier": "read", "cost_weight": 1,
-         "semantic_description":
-             "Read one FHIR R4 resource (Patient, Coverage, Claim, Observation, "
-             "...) by type and id from the tenant's clinical backend. Use when "
-             "a case needs live clinical context for a known resource id.",
-         "input_schema": {"type": "object", "additionalProperties": False,
-                          "properties": {"backend_id": backend_prop,
-                                         "resource_type": rtype_prop,
-                                         "resource_id": rid_prop},
-                          "required": ["backend_id", "resource_type", "resource_id"]}},
-        {"tool_id": "fhir.search_resources", "display_name": "Search FHIR resources",
-         "side_effects": "none", "tier": "read", "cost_weight": 2,
-         "semantic_description":
-             "Search FHIR R4 resources of one type with standard FHIR search "
-             "parameters against the tenant's clinical backend. Use when "
-             "enriching a case and the exact resource id is not known.",
-         "input_schema": {"type": "object", "additionalProperties": False,
-                          "properties": {"backend_id": backend_prop,
-                                         "resource_type": rtype_prop,
-                                         "params": {"type": "object",
-                                                    "additionalProperties": {"type": "string"}}},
-                          "required": ["backend_id", "resource_type"]}},
-        {"tool_id": "fhir.create_resource", "display_name": "Create FHIR resource",
-         "side_effects": "reversible", "tier": "write-proposal", "cost_weight": 3,
-         "semantic_description":
-             "Create a FHIR R4 resource on the tenant's clinical backend. Use "
-             "when a human has approved a proposal to write clinical data back "
-             "to the system of record.",
-         "input_schema": {"type": "object", "additionalProperties": False,
-                          "properties": {"backend_id": backend_prop,
-                                         "resource_type": rtype_prop,
-                                         "resource": {"type": "object",
-                                                      "additionalProperties": True}},
-                          "required": ["backend_id", "resource_type", "resource"]}},
-        {"tool_id": "fhir.update_resource", "display_name": "Update FHIR resource",
-         "side_effects": "reversible", "tier": "write-proposal", "cost_weight": 3,
-         "semantic_description":
-             "Update one FHIR R4 resource by type and id on the tenant's "
-             "clinical backend. Use when a human has approved a proposal to "
-             "amend clinical data in the system of record.",
-         "input_schema": {"type": "object", "additionalProperties": False,
-                          "properties": {"backend_id": backend_prop,
-                                         "resource_type": rtype_prop,
-                                         "resource_id": rid_prop,
-                                         "resource": {"type": "object",
-                                                      "additionalProperties": True}},
-                          "required": ["backend_id", "resource_type", "resource_id",
-                                       "resource"]}},
-    ]
-
-    tenant_tok = c.service_token("svc:seed", tenant_id, ["*"])
-    for t in tools:
-        tid = t["tool_id"]
-        r = _post(f"{c.TOOL_REGISTRY}/api/v1/tools", su,
-                  {"tool_id": tid, "display_name": t["display_name"],
-                   "owner_service": "fhir-bridge", "owner_team": "interop",
-                   "enabled_by_default": True, "side_effects": t["side_effects"],
-                   "tags": ["fhir", "clinical"]})
-        print(f"register {tid} tool: {r.status_code} {r.text[:150]}", file=sys.stderr)
-
-        r = _post(f"{c.TOOL_REGISTRY}/api/v1/tools/{tid}/versions", su,
-                  {"version": ver,
-                   "semantic_description": t["semantic_description"],
-                   "input_schema": t["input_schema"],
-                   "output_schema": {"type": "object", "additionalProperties": True},
-                   "permission_tier": t["tier"], "cost_weight": t["cost_weight"],
-                   "declared_sla": {"p95_ms": 5000}, "side_effects": t["side_effects"],
-                   "examples": []})
-        print(f"register {tid} version: {r.status_code} {r.text[:150]}", file=sys.stderr)
-
-        try:
-            with psycopg.connect(
-                    "postgresql://datacern:datacern_dev@localhost:5432/tool_plane") as cn:
-                pubs = [row[0] for row in cn.execute(
-                    "SELECT version FROM tool_versions WHERE tool_id=%s AND "
-                    "status='published' AND version<>%s", (tid, ver)).fetchall()]
-            for vv in pubs:
-                requests.post(
-                    f"{c.TOOL_REGISTRY}/api/v1/tools/{tid}/versions/{vv}/deprecate",
-                    headers={"Authorization": f"Bearer {su}"}, timeout=15)
-        except Exception as e:
-            print(f"deprecate prior published {tid} versions: {e}", file=sys.stderr)
-
-        pubr = requests.post(
-            f"{c.TOOL_REGISTRY}/api/v1/tools/{tid}/versions/{ver}/publish",
-            headers={"Authorization": f"Bearer {su}"}, timeout=20)
-        if pubr.status_code not in (200, 201) and "only draft" not in pubr.text:
-            print(f"publish {tid} {ver}: {pubr.status_code} {pubr.text[:150]}",
-                  file=sys.stderr)
-
-        requests.put(f"{c.TOOL_REGISTRY}/api/v1/tenants/self/tools/{tid}",
-                     headers={"Authorization": f"Bearer {tenant_tok}",
-                              "Content-Type": "application/json"},
-                     json={"enabled": True}, timeout=15)
-
-    facade_url = f"{fhir_url}/internal/v1/mcp/invoke"
-    with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane",
-                         autocommit=True) as cn:
-        cn.execute("SELECT set_config('app.role','platform', false)")
-        cn.execute(
-            """INSERT INTO mcp_backends (name, tenant_id, internal_url, spiffe_id, kind, status)
-               VALUES ('fhir-bridge','00000000-0000-0000-0000-000000000000',%s,
-                       'spiffe://datacern/ns/tools/sa/mcp-gateway','internal','active')
-               ON CONFLICT (name) DO UPDATE SET internal_url=EXCLUDED.internal_url,
-                   spiffe_id=EXCLUDED.spiffe_id, status='active'""",
-            (facade_url,))
-    print(f"fhir tools registered + enabled; mcp_backends -> {facade_url}", file=sys.stderr)
-    return [t["tool_id"] for t in tools]
-
-
 def register_ingestion_tool(tenant_id: str) -> str:
     """Idempotently register the ``ingestion.create`` write-proposal tool in
     tool-plane and point it at ingestion-service's real MCP backend facade
@@ -1135,13 +997,11 @@ if __name__ == "__main__":
         register_entity_merge_tool(sys.argv[2])
     elif cmd == "ml_lifecycle_tools":
         register_ml_lifecycle_tools(sys.argv[2])
-    elif cmd == "fhir_tools":
-        register_fhir_tools(sys.argv[2])
     else:
         print("usage: seed.py {tenant|aigw <tenant_id>|evalkey <tenant_id>|bffkey <tenant_id>|"
              "inference_tool <tenant_id>|case_apply_tool <tenant_id>|"
              "ingestion_tool <tenant_id>|"
              "chart_dashboard_tool <tenant_id>|entity_merge_tool <tenant_id>|"
-             "ml_lifecycle_tools <tenant_id>|fhir_tools <tenant_id>}",
+             "ml_lifecycle_tools <tenant_id>}",
              file=sys.stderr)
         sys.exit(2)
