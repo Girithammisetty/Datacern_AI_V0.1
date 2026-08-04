@@ -1,7 +1,7 @@
 SERVICES := $(wildcard services/*)
 
 .PHONY: dev-up dev-down test test-unit lint e2e e2e-keep up up-platform down reset doctor soak soak-volume \
-        journey journey-forms journey-packs demo-list demo-load demo-clean demo-clean-all security-probe
+        journey journey-forms journey-packs journey-fhir demo-list demo-load demo-clean demo-clean-all security-probe
 
 # Capstone: provision the WHOLE platform locally and open it in a browser for
 # hands-on end-user testing. Preflight -> infra -> migrate+boot all 22 services
@@ -103,6 +103,20 @@ journey-forms:
 # Core can delete and honestly retains what it cannot. Needs `make up`.
 journey-packs:
 	deploy/e2e/.venv/bin/python deploy/e2e/test_packs_journey.py
+
+# Governed FHIR journey (fhir-bridge next slice): the tenant's clinical system
+# of record changes ONLY through the governed loop. Runs its own in-process
+# FHIR R4 sandbox as the system of record, connects it as the tenant backend
+# via the bridge's REST API (secret to Vault; /test ok:true proves the bridge
+# attached the bearer, since the sandbox 401s everything else), then: governed
+# READ returns the actual patient -> an UNGRANTED write and a FORGED-grant
+# write are both refused (proposal_required) with the store byte-for-byte
+# unchanged -> the legitimately-signed grant lands EXACTLY ONE new resource
+# with the approved fields -> read + refusals + execution all present in
+# tool-plane's invocation_log. Asserts on STATE (the sandbox's own bytes,
+# audit rows), same rule as `make journey`. Needs `make up`.
+journey-fhir:
+	deploy/e2e/.venv/bin/python deploy/e2e/test_fhir_journey.py
 
 # ---- Demo pack control -----------------------------------------------------
 # Load ONE vertical pack (+ its demo data + per-role logins) into a throwaway

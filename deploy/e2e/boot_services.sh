@@ -129,7 +129,10 @@ start_fhir_bridge() {
     REGISTER_SIGNING_KID="e2e-harness-key-1" REGISTER_TENANT_ID="$TENANT_ID" \
     FHIR_FACADE_ALLOWED_SPIFFE="spiffe://datacern/ns/tools/sa/mcp-gateway" \
     "$BIN_DIR/fhir-bridge-e2e"
-  wait_ready fhir-bridge "$FHIR_BRIDGE_URL" || die "fhir-bridge not ready"
+  # warn, not die: fhir-bridge is an add-on backend (its tools simply stay
+  # unregistered without it) — a Vault/DB hiccup here must never block the
+  # rest of the platform boot the way a core-service failure does.
+  wait_ready fhir-bridge "$FHIR_BRIDGE_URL" || warn "fhir-bridge not ready; FHIR tools will be unavailable"
 }
 
 start_realtime() {
