@@ -326,6 +326,18 @@ class InMemoryStore:
         out.sort(key=lambda p: p.created_at, reverse=True)
         return out[:limit]
 
+    async def count_proposals_by_status(
+        self, tenant_id: str, *, since: datetime | None = None,
+    ) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for p in self._proposals.values():
+            if p.tenant_id != tenant_id:
+                continue
+            if since is not None and p.created_at < since:
+                continue
+            out[p.status] = out.get(p.status, 0) + 1
+        return out
+
     async def decide_proposal(
         self, *, tenant_id: str, proposal_id: str, new_status: str, decision: dict,
         decided_at: datetime,

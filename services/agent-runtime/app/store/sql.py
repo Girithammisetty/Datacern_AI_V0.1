@@ -654,6 +654,21 @@ class SqlStore:
                 params)).mappings().all()
         return [_proposal(r) for r in rows]
 
+    async def count_proposals_by_status(
+        self, tenant_id: str, *, since: datetime | None = None,
+    ) -> dict[str, int]:
+        """Real GROUP BY count of proposals per status (optionally since a
+        cutoff). The Expertise Ledger's headline — governed decisions
+        captured — must be an exact total, never a list-page cap, so this is a
+        genuine aggregate, not a truncated count of a paged list."""
+        clause = " WHERE created_at >= :since" if since is not None else ""
+        params = {"since": since} if since is not None else {}
+        async with self._tenant(tenant_id) as s:
+            rows = (await s.execute(text(
+                f"SELECT status, count(*) AS n FROM proposals{clause} GROUP BY status"),
+                params)).mappings().all()
+        return {r["status"]: int(r["n"]) for r in rows}
+
     async def decide_proposal(
         self, *, tenant_id: str, proposal_id: str, new_status: str, decision: dict,
         decided_at: datetime,
