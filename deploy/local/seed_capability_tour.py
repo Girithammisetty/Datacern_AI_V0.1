@@ -197,25 +197,110 @@ def seed_pipeline_template(dataset_urn: str | None) -> str | None:
         "name": name,
         "pipeline_type": "training",
         "model_type": "anomaly_detection",
+        # Node keys are alias/component/parameters — NOT id/type/config, which is
+        # what I had invented and what three rounds of "draft" were really telling
+        # me. Component names come from the catalog (domain/catalog.py), not from
+        # what a pipeline node plausibly ought to be called.
         "definition": {
             "nodes": [
-                {"id": "src", "type": "dataset_source",
-                 "config": {"dataset_urn": dataset_urn}},
-                {"id": "prep", "type": "transform",
-                 "config": {"drop_nulls": True, "standardize": True}},
-                {"id": "train", "type": "train",
-                 "config": {"algorithm": "isolation_forest", "contamination": 0.08}},
+                # A training pipeline MUST contain read-from-warehouse (dag.py
+                # _validate_terminals/MISSING_READ). `dataset` is a dataset_ref:
+                # it has to be a real wr:{tenant}:dataset:dataset/{id} URN.
+                {"alias": "claims", "component": "read-from-warehouse",
+                 "parameters": {"dataset": dataset_urn}},
+                {"alias": "fill gaps", "component": "handle-missing-values",
+                 "parameters": {"strategy": "median"}},
+                # No `columns` on the scalers: omitting it means "all numeric",
+                # and naming columns here would hard-code this tour to one
+                # dataset's schema.
+                {"alias": "normalize", "component": "zscore-normalization",
+                 "parameters": {}},
+                # model-input is what gives the training feed its role. Anomaly
+                # detection is unsupervised, so TRAIN is the only role it takes.
+                {"alias": "train feed", "component": "model-input",
+                 "parameters": {"role": "TRAIN"}},
+                {"alias": "detect anomalies", "component": "isolation_forest-train",
+                 "parameters": {"n_estimators": 200, "contamination": 0.08}},
             ],
-            "edges": [{"from": "src", "to": "prep"}, {"from": "prep", "to": "train"}],
+            # `from` is alias.port, `to` is a bare alias. read-from-warehouse and
+            # every data-prep node expose a single "out" port of type dataframe;
+            # isolation_forest-train emits `model` and is the terminal.
+            "edges": [
+                {"from": "claims.out", "to": "fill gaps"},
+                {"from": "fill gaps.out", "to": "normalize"},
+                {"from": "normalize.out", "to": "train feed"},
+                {"from": "train feed.out", "to": "detect anomalies"},
+            ],
         },
         "run_parameters": {"test_size": 0.2, "random_state": 42},
     }
+    # VALIDATE BEFORE CREATING. Two rounds were spent treating this as an
+    # activation problem: create returns 201, activate returns 200, and the
+    # version is STILL `draft` — because draft here means "the definition did not
+    # validate", not "nobody pressed activate". The UI says so plainly ("active
+    # version is a draft; fix validation first") and I read it as a state to
+    # toggle rather than a verdict to satisfy.
+    #
+    # A template whose definition does not validate is worse than no template:
+    # it sits in the shared workspace, the UI refuses to run it, and e2e:live's
+    # pipeline spec picks it up and fails. So validate first and only create
+    # when the platform agrees the definition is sound — and when it does not,
+    # print the platform's own field errors instead of materializing anyway.
+    v = d.req("POST", f"{c.PIPELINE}/api/v1/pipelines/validate?mode=all", tok,
+              headers=d.J(), json={"definition": body["definition"],
+                                   "pipeline_type": body["pipeline_type"],
+                                   "model_type": body["model_type"]})
+    if v.status_code != 200:
+        warn(f"pipeline definition did not validate ({v.status_code}) — NOT creating it, "
+             f"because an unrunnable template breaks the pipelines page for everyone")
+        warn(f"     {v.text[:260]}")
+        return None
+
     r = d.req("POST", f"{c.PIPELINE}/api/v1/pipelines", tok, headers=d.J(), json=body)
     if r.status_code not in (200, 201):
         warn(f"pipeline template: {r.status_code} {r.text[:180]}")
         return None
-    tid = str((r.json().get("data") or {}).get("id") or "")
-    ok(f"training pipeline authored over the real claims dataset ({tid[:8]}…)")
+    data = r.json().get("data") or {}
+    tid = str(data.get("id") or "")
+    status = str(data.get("validation_status") or "")
+
+    # The version id is NOT on the create response. template_payload carries
+    # `active_version_id`, and on a fresh template that is null BY DEFINITION —
+    # nothing is active yet, which is the exact condition we are here to fix.
+    # Reading it gave an empty id, the activate branch never ran, and the stage
+    # printed "version draft" with no warning because there was no failed call
+    # to warn about. Ask for the versions instead.
+    vid = ""
+    gv = d.req("GET", f"{c.PIPELINE}/api/v1/pipelines/{tid}/versions", tok)
+    if gv.status_code == 200:
+        vers = gv.json().get("data") or []
+        if vers:
+            newest = sorted(vers, key=lambda v: v.get("version_no") or 0)[-1]
+            vid = str(newest.get("id") or "")
+            status = str(newest.get("validation_status") or status)
+    if not vid:
+        warn(f"could not resolve a version id for {tid[:8]}… "
+             f"(GET versions {gv.status_code}) — it will stay a draft and refuse to run")
+
+    # ACTIVATE the version. A created template's version is a DRAFT, and a draft
+    # is not merely incomplete — the UI refuses to run it:
+    #
+    #   Run now -> "active version is a draft; fix validation first"
+    #
+    # Leaving one in the shared workspace broke e2e:live's pipeline schedule spec
+    # on 27dfa59 (data-pipeline-journeys.spec.ts:341), because that spec picks a
+    # row and clicks Run now. It is also a poor demo object on its own terms: a
+    # pipeline you cannot run teaches nothing, which is this module's whole rule.
+    if vid and status != "valid":
+        a = d.req("POST", f"{c.PIPELINE}/api/v1/pipelines/{tid}/versions/{vid}/activate",
+                  tok, headers=d.J(), json={})
+        if a.status_code in (200, 201):
+            status = str((a.json().get("data") or {}).get("validation_status") or status)
+        else:
+            warn(f"pipeline version not activated ({a.status_code} {a.text[:120]}) — "
+                 f"the template will show as a draft and refuse to run")
+    ok(f"training pipeline authored over the real claims dataset "
+       f"({tid[:8]}…, version {status or 'unknown'})")
     return tid or None
 
 
@@ -245,6 +330,23 @@ def seed_eval_suite() -> str | None:
         "min_cases": 20,
     }
     r = d.req("POST", f"{EVAL_URL}/api/v1/suites", tok, headers=d.J(), json=body)
+    if r.status_code == 403:
+        # Not a seeding problem. This principal is a TENANT ADMIN — the same
+        # token created the ontology types, the pipeline template, the report
+        # subscription and Jessie, all of which are equally privileged writes.
+        # eval-service alone refuses it, so its require() does not honour the
+        # tenant-admin bypass every other service on this path honours.
+        #
+        # eval.suite.update was also missing from the rbac catalog entirely
+        # until it was added alongside eval.canary.update; declaring it made it
+        # grantable but did not change eval-service's own check. That is a
+        # platform inconsistency to settle in eval-service, not something a demo
+        # seeder should paper over by hunting for a token that happens to work.
+        warn(f"eval suite: 403 {r.text[:150]}")
+        warn("     ^ this token is tenant admin and every other stage accepted "
+             "it — eval-service does not honour the admin bypass (platform bug, "
+             "not a seeding gap)")
+        return None
     if r.status_code not in (200, 201):
         warn(f"eval suite: {r.status_code} {r.text[:180]}")
         return None
@@ -280,11 +382,22 @@ def seed_grid_and_report(dataset_name: str | None) -> None:
     if grid_name in names:
         ok("grid chart already present")
     else:
-        r = d.req("POST", f"{CHART_URL}/api/v1/charts", tok, headers=d.J(), json={
-            "workspace_id": d.WORKSPACE, "dashboard_id": dash,
-            "name": grid_name, "chart_type": "grid_chart",
-            "config": {"page_size": 25},
-        })
+        # POST /dashboards/{id}/charts — a chart is created UNDER its dashboard
+        # (server.go:141). POST /charts does not exist and answered a bare
+        # "404 page not found", which reads like the service is down rather than
+        # like the path is wrong.
+        r = d.req("POST", f"{CHART_URL}/api/v1/dashboards/{dash}/charts", tok,
+                  headers=d.J(), json={
+                      "workspace_id": d.WORKSPACE,
+                      "name": grid_name, "chart_type": "grid_chart",
+                      # `columns` is REQUIRED for the grid family
+                      # (charttypes.go:132) — omitting it 422s with
+                      # config.columns/REQUIRED. A grid without columns is not a
+                      # grid, so this is the schema being right, not fussy.
+                      "config": {"columns": ["claim_id", "provider", "amount",
+                                             "service_date", "status"],
+                                 "page_size": 25},
+                  })
         if r.status_code in (200, 201):
             ok("grid chart added to the Insights dashboard")
         else:
