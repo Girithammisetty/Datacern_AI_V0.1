@@ -125,8 +125,23 @@ jobs:
             echo "vuln-DB download attempt $i failed — retrying in 20s"
             sleep 20
           done
-          trivy fs --skip-db-update --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
-            --format sarif --output trivy.sarif .
+          # Scan ONCE to JSON, then render both surfaces from that one report.
+          #
+          # This used to be `--format sarif --output trivy.sarif --exit-code 1`,
+          # whose only output was a file. So when the gate went red (main, 2026-08-04,
+          # on a routine vuln-DB refresh) the job log contained no CVE id, no package
+          # name and no version — nothing to act on. The finding existed only inside
+          # trivy.sarif, and reading it meant downloading a run artifact. A gate that
+          # blocks merges has to say what it found in its own log.
+          trivy fs --skip-db-update --scanners vuln --severity HIGH,CRITICAL \
+            --format json --output trivy.json .
+          trivy convert --format sarif --output trivy.sarif trivy.json
+          # The verdict now comes from convert, not from the scan. That ordering is
+          # deliberate: the scan must run to completion so trivy.sarif is always
+          # written for upload-sarif, and the table below both names the CVEs and
+          # sets the exit code, so the two can never disagree.
+          trivy convert --format table --scanners vuln --severity HIGH,CRITICAL \
+            --exit-code 1 trivy.json
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with: { sarif_file: trivy.sarif, category: trivy }
