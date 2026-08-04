@@ -1970,6 +1970,103 @@ export interface LearningLoopResult {
   };
 }
 
+/**
+ * Expertise Ledger (the governed-decision flywheel, made visible): how much
+ * expert judgment has been captured as governed decisions, how well the owned
+ * model agrees with the experts, the size/provenance of the training corpus
+ * those decisions produced, and the state of the model the tenant owns. Every
+ * rate is Float-or-null: null means "not enough comparable outcomes yet" and is
+ * rendered as an explicit honest state, never coerced to 0. The nullable model
+ * blocks (corpus.latest / ownedModel.promoted / ownedModel.latestTraining) drive
+ * the "no trained model yet" and verbatim-failure states.
+ */
+export const EXPERTISE_LEDGER = /* GraphQL */ `
+  query ExpertiseLedger($windowDays: Int) {
+    expertiseLedger(windowDays: $windowDays) {
+      decisions {
+        windowDays capturedInWindow capturedAllTime correctionsInWindow
+        byStatus { pending approved rejected editedApproved expired superseded cancelled }
+      }
+      agreement {
+        labeledDecisions agreementRate scored
+        byDecisionType { key total correct incorrect unknown effectivenessRate }
+      }
+      corpus {
+        datasetVersions exampleRows consentVerifiedVersions
+        latest { datasetId agentKey version rowCount checksum createdAt }
+      }
+      ownedModel {
+        hasOwnedModel adapterCount
+        promoted { adapterId archetype baseModel checksum modelAlias }
+        latestTraining { jobId archetype baseModel status error }
+      }
+    }
+  }
+`;
+export interface ExpertiseLedgerResult {
+  expertiseLedger: {
+    decisions: {
+      windowDays: number;
+      capturedInWindow: number;
+      capturedAllTime: number;
+      correctionsInWindow: number;
+      byStatus: {
+        pending: number;
+        approved: number;
+        rejected: number;
+        editedApproved: number;
+        expired: number;
+        superseded: number;
+        cancelled: number;
+      };
+    };
+    agreement: {
+      labeledDecisions: number;
+      agreementRate: number | null;
+      scored: number;
+      byDecisionType: {
+        key: string;
+        total: number;
+        correct: number;
+        incorrect: number;
+        unknown: number;
+        effectivenessRate: number | null;
+      }[];
+    };
+    corpus: {
+      datasetVersions: number;
+      exampleRows: number;
+      consentVerifiedVersions: number;
+      latest: {
+        datasetId: string;
+        agentKey: string | null;
+        version: number | null;
+        rowCount: number | null;
+        checksum: string | null;
+        createdAt: string | null;
+      } | null;
+    };
+    ownedModel: {
+      hasOwnedModel: boolean;
+      adapterCount: number;
+      promoted: {
+        adapterId: string;
+        archetype: string | null;
+        baseModel: string | null;
+        checksum: string | null;
+        modelAlias: string | null;
+      } | null;
+      latestTraining: {
+        jobId: string;
+        archetype: string | null;
+        baseModel: string | null;
+        status: string | null;
+        error: unknown;
+      } | null;
+    };
+  };
+}
+
 export const CREATE_DISPOSITION = /* GraphQL */ `
   mutation CreateDisposition($input: CreateDispositionInput!, $idempotencyKey: String) {
     createDisposition(input: $input, idempotencyKey: $idempotencyKey) { ${DISPOSITION_FIELDS} }

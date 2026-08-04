@@ -96,6 +96,7 @@ export const qk = {
   proposal: (id: string) => ["agentic", "proposal", id] as const,
   agentRun: (id: string) => ["agentic", "run", id] as const,
   learningLoop: () => ["agentic", "learningLoop"] as const,
+  expertiseLedger: () => ["agentic", "expertiseLedger"] as const,
 
   // SLM distillation cockpit (agent-runtime M1-M4, BRD 14 §6.5)
   sftDatasets: (filters: unknown) => ["distillation", "sftDatasets", filters] as const,

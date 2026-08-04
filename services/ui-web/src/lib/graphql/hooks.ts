@@ -2042,6 +2042,20 @@ export function useLearningLoop(options: { enabled?: boolean } = {}) {
   });
 }
 
+/** Expertise Ledger (governed-decision flywheel): captured decisions + expert
+ * corrections, model-vs-expert agreement, training-corpus provenance, and the
+ * state of the tenant-owned model. Rates are Float-or-null (honest "not enough
+ * data yet"); the model blocks are nullable for the "no trained model" state. */
+export function useExpertiseLedger(windowDays = 90) {
+  return useQuery({
+    queryKey: qk.expertiseLedger(),
+    queryFn: () =>
+      graphqlRequest<ops.ExpertiseLedgerResult>(ops.EXPERTISE_LEDGER, { windowDays }).then(
+        (r) => r.expertiseLedger,
+      ),
+  });
+}
+
 export function useCreateDisposition() {
   const client = useQueryClient();
   return useMutation({
