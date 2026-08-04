@@ -50,7 +50,7 @@ class FakeGpuTrainer:
         )
 
 
-def build_trainer(backend: str | None) -> GpuTrainer:
+def build_trainer(backend: str | None, *, artifact_store=None) -> GpuTrainer:
     """Select the trainer by backend name.
 
     "modal" runs the REAL QLoRA distillation on a serverless GPU (see
@@ -64,6 +64,13 @@ def build_trainer(backend: str | None) -> GpuTrainer:
     """
     if backend == "fake":
         return FakeGpuTrainer()
+    if backend == "local":
+        # A real distilled student on CPU — no GPU. Mirrors the production
+        # contract; distils the SFT corpus into a servable decision model.
+        from app.adapters.artifact_store import InMemoryAdapterStore
+        from app.adapters.local_trainer import LocalCpuTrainer
+
+        return LocalCpuTrainer(artifact_store or InMemoryAdapterStore())
     if backend == "modal":
         from app.adapters.modal_trainer import ModalGpuTrainer
 

@@ -1013,6 +1013,19 @@ class SqlStore:
             rows = (await s.execute(text(q), params)).mappings().all()
         return [_slm_adapter(r) for r in rows]
 
+    async def get_promoted_adapter(
+        self, tenant_id: str, archetype: str,
+    ) -> SlmAdapter | None:
+        """The tenant's currently-served distilled model for an archetype: the
+        newest adapter in ``promoted`` status. The serving path resolves through
+        this — nothing else changes traffic."""
+        async with self._tenant(tenant_id) as s:
+            r = (await s.execute(text(
+                "SELECT * FROM slm_adapters WHERE archetype=:ak"
+                " AND promotion_status='promoted' ORDER BY updated_at DESC LIMIT 1"),
+                {"ak": archetype})).mappings().first()
+        return _slm_adapter(r) if r else None
+
     # ---- outbox ------------------------------------------------------------
     async def enqueue_outbox(self, *, tenant_id: str, topic: str, envelope: dict) -> None:
         async with self._tenant(tenant_id) as s:

@@ -136,15 +136,30 @@ engine. The one remaining piece is a thin producer — a connector/webhook/event
 relay that pushes the SoR's realized results into that seam; the hard part (the
 business-key→decision join + automated labeling + corpus weighting) is built.
 
-**5.3 · Make "own your model" demoable — `BUILD` (the hard gap, scope it small).**
-The honest gap: the SLM trainer has never executed, has no serving path, and no
-tenant-partitioned storage (`docs/DATACERN_POSITIONING_OPTIONS_SLM_AND_AGENTS.md`
-lists it as "do not put on a slide"). The commercial MINIMUM is **not** a
-multi-tenant GPU trainer — it is: **one archetype, one tenant, one real distilled
-adapter that actually serves through ai-gateway and beats the base model on that
-tenant's task, stored tenant-partitioned.** That single live proof converts
-"own your model" from vapor to a demo. Everything beyond it stays honest
-roadmap.
+**5.3 · Make "own your model" demoable — CPU existence proof `DONE`; production LoRA `GPU`.**
+The audit's four gaps (never executed, no serving path, `promote()` flips a dead
+column, no tenant partition) are closed on CPU. A `LocalCpuTrainer`
+(`agent-runtime/app/adapters/local_trainer.py`) distils the tenant's governed
+SFT corpus into a **real, servable decision student** (`app/domain/distill.py`,
+a trained NB classifier — stdlib+numpy, no GPU); it is stored **tenant-
+partitioned** (`{tenant_id}/{archetype}/{run_id}`); an **eval-gate**
+(`TrainingJobService.gate`) marks it promotable **only if it beats the baseline
+on the tenant's held-out decisions** (the "wins" bar — the majority-class
+predictor, or the incumbent student it would replace); and `POST /api/v1/
+distilled/serve` **serves the promoted student** so the owned model actually
+decides — with an honest 404 when nothing is promoted, never a base guess
+dressed up as the owned model. 19 tests prove the full train → gate(wins) →
+promote → serve loop end to end, including a loser being refused and tenant
+isolation; the local backend is wired into the demo boot
+(`AR_SLM_TRAINER_BACKEND=local`).
+
+What stays honest roadmap: a **generative** distilled LLM at production scale —
+that is the genuinely GPU-gated leg, and `ModalGpuTrainer` +
+`slm_modal_app.py` (real QLoRA on an A10G) already exist for it, unchanged, and
+require the customer's GPU account. The CPU student is the right tool for the
+narrow *decision* task (small models win on narrow tasks) and proves the whole
+own-your-model mechanism the buyer needs to see; the LLM variant is a compute
+upgrade of the same, now-proven, pipeline.
 
 ## 6 · Competitive teardown — why only Datacern
 
