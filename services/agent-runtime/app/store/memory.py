@@ -104,6 +104,19 @@ class InMemoryStore:
     async def get_outcome_label(self, tenant_id: str, decision_ref: str):
         return self._outcome_labels.get((tenant_id, decision_ref))
 
+    async def find_actioned_proposals_by_urn(
+        self, tenant_id: str, *, business_urn: str, decision_type: str | None = None,
+    ) -> list:
+        out = [
+            p for p in self._proposals.values()
+            if p.tenant_id == tenant_id
+            and p.status in ("approved", "edited_approved")
+            and business_urn in (p.affected_urns or [])
+            and (decision_type is None or p.tool_id == decision_type)
+        ]
+        out.sort(key=lambda p: p.created_at, reverse=True)
+        return out
+
     async def connect(self) -> None:  # parity with SqlStore
         return None
 

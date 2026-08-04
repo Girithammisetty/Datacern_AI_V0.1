@@ -118,15 +118,23 @@ into the artifact a buyer signs for — *"the expertise walking out the door,
 turned into an asset you own."* This is the single most leverage-per-effort
 item: mostly a read-model + UI over existing data.
 
-**5.2 · Close the outcome loop — `BUILD` (weeks).**
-Wire the automated inbound signal — *was the decision actually right?*
-(chargeback won, SAR substantiated, readmission avoided) — from the system of
-record back into the model as a training weight. The domain code exists
-(`agent-runtime/app/domain/outcomes.py`, `sft_enrichment`, BRD 55); the gaps are
-the SoR-inbound path (`label_source=sor|event`, today human-only) and an e2e
-proof. This is what lets you say "decision intelligence that learns from
-**reality**," not a rules engine — and it's defensible because it's *your*
-outcomes on *your* decisions.
+**5.2 · Close the outcome loop — platform mechanism `DONE`; producer connector `BUILD`.**
+The automated inbound signal — *was the decision actually right?* (chargeback
+won, SAR substantiated, readmission avoided) — now flows from the system of
+record back into the model. `POST /api/v1/outcomes/ingest`
+(`agent-runtime/app/api/routes/outcomes.py`) takes realized outcomes keyed by
+the **business entity** the SoR knows (a case/claim/dispute URN, not our
+internal id), resolves each to the actioned decision that produced it
+(`store.find_actioned_proposals_by_urn`), records a `label_source=sor` label
+with agreement computed against what was decided, and — with no further call —
+those labels flow into decision effectiveness (the Expertise Ledger's agreement
+number) AND into SFT curation weighting (correct → imitate, incorrect →
+down-weight). Unmatched keys are reported honestly, re-ingest is idempotent,
+tenants isolated; 7 unit tests prove the chain end to end. This is what lets
+you say "decision intelligence that learns from **reality**," not a rules
+engine. The one remaining piece is a thin producer — a connector/webhook/event
+relay that pushes the SoR's realized results into that seam; the hard part (the
+business-key→decision join + automated labeling + corpus weighting) is built.
 
 **5.3 · Make "own your model" demoable — `BUILD` (the hard gap, scope it small).**
 The honest gap: the SLM trainer has never executed, has no serving path, and no

@@ -417,6 +417,29 @@ class SqlStore:
                 {"t": tenant_id, "dr": decision_ref})).mappings().first()
         return _outcome_label(r) if r else None
 
+    async def find_actioned_proposals_by_urn(
+        self, tenant_id: str, *, business_urn: str, decision_type: str | None = None,
+    ) -> list[Proposal]:
+        """Resolve a system-of-record outcome (which knows a business entity —
+        a case/claim/dispute URN — not our internal decision id) back to the
+        ACTIONED decisions that produced it: proposals whose affected_urns
+        contains that URN and whose status applied an action
+        (approved/edited_approved). This is the join the automated outcome loop
+        needs; a rejected proposal took no action, so it is not a realized
+        outcome to score. Optional decision_type narrows to one tool when a
+        case carried several decisions."""
+        params: dict = {"urns": [business_urn]}
+        clause = ""
+        if decision_type:
+            clause = " AND tool_id=:dt"
+            params["dt"] = decision_type
+        async with self._tenant(tenant_id) as s:
+            rows = (await s.execute(text(
+                "SELECT * FROM proposals WHERE affected_urns && :urns"
+                " AND status IN ('approved','edited_approved')" + clause
+                + " ORDER BY created_at DESC"), params)).mappings().all()
+        return [_proposal(r) for r in rows]
+
     # ---- rollouts ----------------------------------------------------------
     async def create_rollout(self, r: Rollout) -> None:
         async with self._plain() as s:
