@@ -26,7 +26,7 @@ Every row below is checkable in the repository at the cited location. Hand this 
 
 | Area | Verified state | Evidence anchor |
 |---|---|---|
-| **Core services** | 24 services: 10 Go (identity, RBAC, case, tool-plane, audit, notification, usage, chart, query, realtime), 11 Python (agents, AI gateway, data/ML plane), GraphQL BFF, Next.js UI | `services/` |
+| **Core services** | 25 services: 11 Go (identity, RBAC, case, tool-plane, audit, notification, usage, chart, query, realtime, fhir-bridge), 11 Python (agents, AI gateway, data/ML plane), GraphQL BFF, Next.js UI | `services/` |
 | **Agents** | 9 built-in agents, all 9 passing a live real-LLM roster test; plus tenant-defined custom agents — configuration only, locked to one vetted graph, capped at propose-only tier, mandatory tool allow-list | `services/agent-runtime/app/agents/catalog.py`, `tests/integration/test_agent_roster_real_llm.py` |
 | **Governance gate** | Self-approval rejected server-side; high-risk always requires a distinct approver with no tenant opt-out; agent tool calls require signed on-behalf-of grants through a governed tool plane; a forged grant is rejected in the E2E test | `agent-runtime/app/proposals/service.py`, `tool-plane/internal/enforce/pipeline.go`, `deploy/e2e/driver.py` step E |
 | **Learning loop** | Human corrections → labeled dataset → real model training logged to MLflow (sklearn/xgboost/lightgbm) → promotion behind a hard four-eyes gate → batch inference on new work. Proven by a 12-step E2E run on the real stack (Kafka, MinIO/Iceberg, OpenSearch, Ollama, MLflow, Temporal) | `deploy/e2e/driver.py` steps H–L |
@@ -161,7 +161,7 @@ Two demo modes exist. Both are real; know which one you're in.
 4. **Learning loop.** Corrections → labeled examples → the retrained model in MLflow → promoted through the same four-eyes gate → new claims scored by it. No mocks anywhere in the path.
 5. **Audit trail.** Every step above as tamper-evident events with proposer, approver, and effect. Close: *"Every AI action you just saw is governed, attributed, and replayable — that's the product."*
 
-**Metrics to have memorized:** 24 services · 9 agents (9/9 live-tested) · 28 packs · 72 BRDs · ~2,560 test functions · 12-step E2E on the real stack · IaC for 3 clouds written, 0 applied.
+**Metrics to have memorized:** 25 services · 9 agents (9/9 live-tested) · 28 packs · 72 BRDs · ~2,560 test functions · 12-step E2E on the real stack · IaC for 3 clouds written, 0 applied.
 
 **[INTERNAL] Do-not-say list** (each is checkable and currently false): "all tests green" · "four-eyes on every write, no exceptions" · "cost per decision" as a live metric · "SOC 2 in progress" · "Bedrock and Vertex supported" · "packs come with demo data" · "fully autonomous agents" · any customer/pilot reference.
 

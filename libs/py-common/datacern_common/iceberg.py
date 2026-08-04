@@ -330,6 +330,55 @@ class IcebergRestCatalog(_CatalogHolder):
             scan = tbl.scan(snapshot_id=snapshot_id)
             return [task.file.file_path for task in scan.plan_files()]
 
+    async def ingestion_delta_file_uris(self, table: str, ingestion_id: str) -> list[str]:
+        """Return the parquet data files appended by ONE ingestion.
+
+        An ingestion is not one snapshot: the writer chunks large appends
+        (``commit_chunk_rows``) and every chunk commits its own snapshot, all
+        stamped with the same ``ingestion_id`` summary property. The delta is
+        therefore keyed on that property, not on a single snapshot id: for each
+        matching snapshot the added files are ``plan_files(snapshot) minus
+        plan_files(parent)`` — exact under the append-only bronze discipline
+        (BR-9), no manifest-entry spelunking required. Raises if a parent
+        snapshot has been expired out from under the diff; callers treat that
+        as "delta unavailable" and fall back to a full-snapshot read."""
+        return await asyncio.to_thread(
+            self._ingestion_delta_file_uris_sync, table, ingestion_id
+        )
+
+    def _ingestion_delta_file_uris_sync(self, table: str, ingestion_id: str) -> list[str]:
+        with _CATALOG_LOCK:
+            catalog = self._cat()
+            namespace, name = _split_identifier(table)
+            tbl = catalog.load_table((namespace, name))
+            matching = [
+                s
+                for s in tbl.snapshots()
+                if s.summary and s.summary.get("ingestion_id") == ingestion_id
+            ]
+            uris: list[str] = []
+            seen: set[str] = set()
+            for snap in matching:
+                current = {
+                    task.file.file_path
+                    for task in tbl.scan(snapshot_id=snap.snapshot_id).plan_files()
+                }
+                if snap.parent_snapshot_id is None:
+                    added = current
+                else:
+                    parent = {
+                        task.file.file_path
+                        for task in tbl.scan(
+                            snapshot_id=snap.parent_snapshot_id
+                        ).plan_files()
+                    }
+                    added = current - parent
+                for uri in sorted(added):
+                    if uri not in seen:
+                        seen.add(uri)
+                        uris.append(uri)
+            return uris
+
     async def table_columns(self, table: str) -> list[dict[str, str]]:
         """Return the table's columns as ``[{"name", "type"}, ...]`` from the
         Iceberg schema — the source of truth when a DatasetVersion carries an
