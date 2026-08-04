@@ -108,6 +108,15 @@ roles:
       - ai.key.read
       - ai.guardrail.read
       - ai.platform.admin
+      # fhir-bridge backend registry (tenant admin config plane): register /
+      # inspect / rotate / disable the tenant's external FHIR servers. Same
+      # explain-chain rationale as every other Admin binding — Admin itself
+      # bypasses via the projection admin flag.
+      - fhir.backend.create
+      - fhir.backend.read
+      - fhir.backend.list
+      - fhir.backend.update
+      - fhir.backend.delete
 
   - name: Use case Admin
     actions:
@@ -629,6 +638,12 @@ roles:
       # Copilot tool access (OBO): the copilot invokes read tools as the analyst.
       - tool.tool.read
       - tool.tool.execute
+      # fhir-bridge proxied reads (OBO): the copilot's fhir.read_resource /
+      # fhir.search_resources tools re-check the ANALYST's projection at the
+      # bridge facade, so the read/list capability must sit on this role (same
+      # contract as tool.tool.execute above). Writes stay OFF for the analyst.
+      - fhir.resource.read
+      - fhir.resource.list
 
   - name: Case Manager
     actions:
@@ -710,6 +725,14 @@ roles:
       # Copilot tool access (OBO).
       - tool.tool.read
       - tool.tool.execute
+      # fhir-bridge proxied access (OBO): read/list as the analyst has, plus
+      # the governed write plane (fhir.create_resource / fhir.update_resource
+      # tools) — the manager persona approves and applies clinical-system
+      # writes, mirroring how case.disposition.approve sits here.
+      - fhir.resource.read
+      - fhir.resource.list
+      - fhir.resource.create
+      - fhir.resource.update
       # manager oversees + can approve model promotions (four-eyes)
       - experiment.promotion.approve
       - experiment.model.read

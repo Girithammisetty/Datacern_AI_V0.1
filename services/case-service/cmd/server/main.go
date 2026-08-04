@@ -281,6 +281,10 @@ func main() {
 			// Same object store as human evidence uploads: intake snapshots are
 			// governed evidence, not a side channel.
 			Blob: evidence,
+			// Delta trigger evaluation: browse only the rows the event's
+			// ingestion appended instead of rescanning the full current
+			// snapshot (falls back to the full browse on any delta failure).
+			DeltaBrowse: os.Getenv("TRIGGER_DELTA_BROWSE") == "true",
 		}
 		inboundHandler := func(ctx context.Context, e gcevent.Envelope) error {
 			if err := events.InferenceHandler(creator)(ctx, e); err != nil {
