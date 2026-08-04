@@ -215,8 +215,26 @@ def seed_pipeline_template(dataset_urn: str | None) -> str | None:
         warn(f"pipeline template: {r.status_code} {r.text[:180]}")
         return None
     data = r.json().get("data") or {}
-    tid, vid = str(data.get("id") or ""), str(data.get("active_version_id") or "")
+    tid = str(data.get("id") or "")
     status = str(data.get("validation_status") or "")
+
+    # The version id is NOT on the create response. template_payload carries
+    # `active_version_id`, and on a fresh template that is null BY DEFINITION —
+    # nothing is active yet, which is the exact condition we are here to fix.
+    # Reading it gave an empty id, the activate branch never ran, and the stage
+    # printed "version draft" with no warning because there was no failed call
+    # to warn about. Ask for the versions instead.
+    vid = ""
+    gv = d.req("GET", f"{c.PIPELINE}/api/v1/pipelines/{tid}/versions", tok)
+    if gv.status_code == 200:
+        vers = gv.json().get("data") or []
+        if vers:
+            newest = sorted(vers, key=lambda v: v.get("version_no") or 0)[-1]
+            vid = str(newest.get("id") or "")
+            status = str(newest.get("validation_status") or status)
+    if not vid:
+        warn(f"could not resolve a version id for {tid[:8]}… "
+             f"(GET versions {gv.status_code}) — it will stay a draft and refuse to run")
 
     # ACTIVATE the version. A created template's version is a DRAFT, and a draft
     # is not merely incomplete — the UI refuses to run it:
@@ -266,6 +284,23 @@ def seed_eval_suite() -> str | None:
         "min_cases": 20,
     }
     r = d.req("POST", f"{EVAL_URL}/api/v1/suites", tok, headers=d.J(), json=body)
+    if r.status_code == 403:
+        # Not a seeding problem. This principal is a TENANT ADMIN — the same
+        # token created the ontology types, the pipeline template, the report
+        # subscription and Jessie, all of which are equally privileged writes.
+        # eval-service alone refuses it, so its require() does not honour the
+        # tenant-admin bypass every other service on this path honours.
+        #
+        # eval.suite.update was also missing from the rbac catalog entirely
+        # until it was added alongside eval.canary.update; declaring it made it
+        # grantable but did not change eval-service's own check. That is a
+        # platform inconsistency to settle in eval-service, not something a demo
+        # seeder should paper over by hunting for a token that happens to work.
+        warn(f"eval suite: 403 {r.text[:150]}")
+        warn("     ^ this token is tenant admin and every other stage accepted "
+             "it — eval-service does not honour the admin bypass (platform bug, "
+             "not a seeding gap)")
+        return None
     if r.status_code not in (200, 201):
         warn(f"eval suite: {r.status_code} {r.text[:180]}")
         return None
@@ -301,11 +336,16 @@ def seed_grid_and_report(dataset_name: str | None) -> None:
     if grid_name in names:
         ok("grid chart already present")
     else:
-        r = d.req("POST", f"{CHART_URL}/api/v1/charts", tok, headers=d.J(), json={
-            "workspace_id": d.WORKSPACE, "dashboard_id": dash,
-            "name": grid_name, "chart_type": "grid_chart",
-            "config": {"page_size": 25},
-        })
+        # POST /dashboards/{id}/charts — a chart is created UNDER its dashboard
+        # (server.go:141). POST /charts does not exist and answered a bare
+        # "404 page not found", which reads like the service is down rather than
+        # like the path is wrong.
+        r = d.req("POST", f"{CHART_URL}/api/v1/dashboards/{dash}/charts", tok,
+                  headers=d.J(), json={
+                      "workspace_id": d.WORKSPACE,
+                      "name": grid_name, "chart_type": "grid_chart",
+                      "config": {"page_size": 25},
+                  })
         if r.status_code in (200, 201):
             ok("grid chart added to the Insights dashboard")
         else:
