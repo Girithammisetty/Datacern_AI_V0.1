@@ -735,6 +735,7 @@ class DatasetService(_Base):
         self, ctx: CallCtx, dataset_id: str, *, offset: int = 0, limit: int = 50,
         sort_col: str | None = None, sort_dir: str = "asc",
         filters: list[dict] | None = None,
+        delta_ingestion_id: str | None = None,
     ) -> dict:
         """User-facing paginated row browse (DST-FR-050): a dataset's current-
         version rows with per-column filtering, single-column sort, and offset
@@ -743,27 +744,42 @@ class DatasetService(_Base):
         larger than the returned page is materialized (regardless of table
         size). Numeric columns compare numerically; only the returned page is
         stringified for display. Returns {columns, rows, total (unfiltered),
-        filtered, offset, limit, truncated}."""
+        filtered, offset, limit, truncated}.
+
+        ``delta_ingestion_id`` switches the read to ONLY the rows appended by
+        that ingestion, resolved straight from the catalog's snapshot summaries
+        — deliberately independent of DatasetVersion registration, because the
+        version row is registered asynchronously off the same Kafka event the
+        caller (the case-trigger applier) is reacting to. Requiring the
+        registration here is precisely the race this mode exists to remove."""
         import math
 
         async with self.uow(ctx.tenant_id) as uow:
             dataset = await uow.datasets.get(dataset_id)
             if not dataset or dataset.tenant_id != ctx.tenant_id:
                 raise NotFound("dataset not found")
-            if dataset.current_version_id:
-                dsv = await uow.versions.get_by_id(dataset.current_version_id)
-            else:
-                dsv = await uow.versions.latest(dataset.id)
-        if not dsv:
-            raise NotFound("dataset has no readable version")
+            if delta_ingestion_id is None:
+                if dataset.current_version_id:
+                    dsv = await uow.versions.get_by_id(dataset.current_version_id)
+                else:
+                    dsv = await uow.versions.latest(dataset.id)
 
         offset = max(0, offset)
         limit = max(1, min(limit, 500))
-        columns, page, total, filtered = await self.deps.catalog.browse_snapshot(
-            dataset.iceberg_table, dsv.iceberg_snapshot_id,
-            filters=filters, sort_col=sort_col, sort_dir=sort_dir,
-            offset=offset, limit=limit,
-        )
+        if delta_ingestion_id is not None:
+            columns, page, total, filtered = await self.deps.catalog.browse_ingestion_delta(
+                dataset.iceberg_table, delta_ingestion_id,
+                filters=filters, sort_col=sort_col, sort_dir=sort_dir,
+                offset=offset, limit=limit,
+            )
+        else:
+            if not dsv:
+                raise NotFound("dataset has no readable version")
+            columns, page, total, filtered = await self.deps.catalog.browse_snapshot(
+                dataset.iceberg_table, dsv.iceberg_snapshot_id,
+                filters=filters, sort_col=sort_col, sort_dir=sort_dir,
+                offset=offset, limit=limit,
+            )
 
         def _cell(v):
             if v is None or (isinstance(v, float) and math.isnan(v)):

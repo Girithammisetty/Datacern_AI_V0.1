@@ -40,12 +40,22 @@ class LocalCatalog:
         path.write_text(json.dumps(meta, indent=2))
 
     # -- helper used by tests/producers to commit data (ingestion side in prod)
-    async def commit_snapshot(self, table: str, snapshot_id: int, df: pd.DataFrame) -> None:
+    async def commit_snapshot(
+        self,
+        table: str,
+        snapshot_id: int,
+        df: pd.DataFrame,
+        summary: dict | None = None,
+    ) -> None:
         meta = self._read_meta(table)
         data_file = self._table_dir(table) / f"snap-{snapshot_id}.parquet"
         data_file.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(data_file)
-        meta["snapshots"][str(snapshot_id)] = {"file": data_file.name, "expired": False}
+        meta["snapshots"][str(snapshot_id)] = {
+            "file": data_file.name,
+            "expired": False,
+            "summary": summary or {},
+        }
         self._write_meta(table, meta)
 
     async def snapshot_exists(self, table: str, snapshot_id: int) -> bool:
@@ -135,6 +145,38 @@ class LocalCatalog:
             sort_col=sort_col, sort_dir=sort_dir, offset=offset, limit=limit,
         )
 
+    async def ingestion_delta_file_uris(self, table: str, ingestion_id: str) -> list[str]:
+        """Files appended by one ingestion. In the local catalog every snapshot
+        file already contains ONLY that snapshot's rows (it is a delta by
+        construction — unlike Iceberg, where a snapshot's file set is
+        cumulative), so this is simply the live snapshots stamped with the
+        ingestion_id summary property."""
+        meta = self._read_meta(table)
+        return [
+            str(self._table_dir(table) / s["file"])
+            for s in meta["snapshots"].values()
+            if not s["expired"]
+            and s.get("summary", {}).get("ingestion_id") == ingestion_id
+        ]
+
+    async def browse_ingestion_delta(
+        self, table: str, ingestion_id: str, *, filters, sort_col, sort_dir, offset, limit
+    ):
+        """Engine-pushed browse over only the rows appended by one ingestion.
+        Returns (columns, page_rows, total, filtered); an ingestion that
+        appended nothing yields the empty page rather than an error."""
+        import asyncio
+
+        from app.adapters.duckdb_browse import browse_parquet
+
+        uris = await self.ingestion_delta_file_uris(table, ingestion_id)
+        if not uris:
+            return [], [], 0, 0
+        return await asyncio.to_thread(
+            browse_parquet, source_uris=uris, filters=filters,
+            sort_col=sort_col, sort_dir=sort_dir, offset=offset, limit=limit,
+        )
+
     async def table_columns(self, table: str) -> list[dict[str, str]]:
         meta = self._read_meta(table)
         live = [s for s in meta["snapshots"].values() if not s["expired"]]
@@ -215,6 +257,37 @@ class IcebergRestCatalog:
         uris = await self.data_file_uris(table, snapshot_id)
         if not uris:
             raise NotFound(f"snapshot {snapshot_id} not found in {table}")
+        return await asyncio.to_thread(
+            browse_parquet, source_uris=uris, filters=filters,
+            sort_col=sort_col, sort_dir=sort_dir, offset=offset, limit=limit, s3=self._s3,
+        )
+
+    async def ingestion_delta_file_uris(self, table: str, ingestion_id: str) -> list[str]:
+        from pyiceberg.exceptions import NoSuchTableError
+
+        from app.domain.errors import NotFound
+
+        try:
+            return await self._catalog.ingestion_delta_file_uris(table, ingestion_id)
+        except NoSuchTableError as exc:
+            raise NotFound(f"table {table} not found") from exc
+
+    async def browse_ingestion_delta(
+        self, table: str, ingestion_id: str, *, filters, sort_col, sort_dir, offset, limit
+    ):
+        """Engine-pushed browse over only the parquet files appended by one
+        ingestion (delta keyed on the snapshot summary's ingestion_id — see
+        datacern_common.iceberg.ingestion_delta_file_uris for why it is not a
+        single snapshot id). Requires no DatasetVersion registration: the
+        catalog is the source of truth, which is exactly what dissolves the
+        trigger applier's snapshot-catch-up race."""
+        import asyncio
+
+        from app.adapters.duckdb_browse import browse_parquet
+
+        uris = await self.ingestion_delta_file_uris(table, ingestion_id)
+        if not uris:
+            return [], [], 0, 0
         return await asyncio.to_thread(
             browse_parquet, source_uris=uris, filters=filters,
             sort_col=sort_col, sort_dir=sort_dir, offset=offset, limit=limit, s3=self._s3,
