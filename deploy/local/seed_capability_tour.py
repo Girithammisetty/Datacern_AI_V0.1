@@ -197,16 +197,40 @@ def seed_pipeline_template(dataset_urn: str | None) -> str | None:
         "name": name,
         "pipeline_type": "training",
         "model_type": "anomaly_detection",
+        # Node keys are alias/component/parameters — NOT id/type/config, which is
+        # what I had invented and what three rounds of "draft" were really telling
+        # me. Component names come from the catalog (domain/catalog.py), not from
+        # what a pipeline node plausibly ought to be called.
         "definition": {
             "nodes": [
-                {"id": "src", "type": "dataset_source",
-                 "config": {"dataset_urn": dataset_urn}},
-                {"id": "prep", "type": "transform",
-                 "config": {"drop_nulls": True, "standardize": True}},
-                {"id": "train", "type": "train",
-                 "config": {"algorithm": "isolation_forest", "contamination": 0.08}},
+                # A training pipeline MUST contain read-from-warehouse (dag.py
+                # _validate_terminals/MISSING_READ). `dataset` is a dataset_ref:
+                # it has to be a real wr:{tenant}:dataset:dataset/{id} URN.
+                {"alias": "claims", "component": "read-from-warehouse",
+                 "parameters": {"dataset": dataset_urn}},
+                {"alias": "fill gaps", "component": "handle-missing-values",
+                 "parameters": {"strategy": "median"}},
+                # No `columns` on the scalers: omitting it means "all numeric",
+                # and naming columns here would hard-code this tour to one
+                # dataset's schema.
+                {"alias": "normalize", "component": "zscore-normalization",
+                 "parameters": {}},
+                # model-input is what gives the training feed its role. Anomaly
+                # detection is unsupervised, so TRAIN is the only role it takes.
+                {"alias": "train feed", "component": "model-input",
+                 "parameters": {"role": "TRAIN"}},
+                {"alias": "detect anomalies", "component": "isolation_forest-train",
+                 "parameters": {"n_estimators": 200, "contamination": 0.08}},
             ],
-            "edges": [{"from": "src", "to": "prep"}, {"from": "prep", "to": "train"}],
+            # `from` is alias.port, `to` is a bare alias. read-from-warehouse and
+            # every data-prep node expose a single "out" port of type dataframe;
+            # isolation_forest-train emits `model` and is the terminal.
+            "edges": [
+                {"from": "claims.out", "to": "fill gaps"},
+                {"from": "fill gaps.out", "to": "normalize"},
+                {"from": "normalize.out", "to": "train feed"},
+                {"from": "train feed.out", "to": "detect anomalies"},
+            ],
         },
         "run_parameters": {"test_size": 0.2, "random_state": 42},
     }
