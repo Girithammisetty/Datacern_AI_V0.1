@@ -284,6 +284,10 @@ start_agent_runtime() { # arg: virtual key
   export AR_OPA_URL="$OPA_URL" AR_OPA_PACKAGE="datacern/authz_input"
   export AR_AI_GATEWAY_URL="$AI_GATEWAY_URL" AR_AI_GATEWAY_CHAT_PATH="/v1/chat/completions"
   export AR_AI_GATEWAY_MODEL="datacern-auto" AR_AI_GATEWAY_VIRTUAL_KEY="$vkey" AR_AI_GATEWAY_REQUEST_CLASS="chat"
+  # Distilled "own your model" on CPU: the local trainer distils the tenant's
+  # governed SFT corpus into a servable decision student (no GPU). Production-
+  # scale generative LoRA uses AR_SLM_TRAINER_BACKEND=modal + a GPU pool.
+  export AR_SLM_TRAINER_BACKEND="local"
   export AR_TOOL_PLANE_URL="$MCP_GATEWAY_URL" AR_TOOL_PLANE_MCP_PATH="/mcp"
   export AR_MEMORY_SERVICE_URL="$MEMORY_URL" AR_CASE_SERVICE_URL="$CASE_URL" AR_REALTIME_HUB_URL="$REALTIME_URL"
   export AR_JWKS_URL="$WR_JWKS_URL" AR_JWT_ISSUER="$WR_ISS" AR_JWT_AUDIENCE="$WR_AUD"

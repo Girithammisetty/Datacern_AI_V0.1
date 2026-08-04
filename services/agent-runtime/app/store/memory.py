@@ -527,6 +527,17 @@ class InMemoryStore:
         out.sort(key=lambda a: a.created_at, reverse=True)
         return [copy.copy(a) for a in out[:limit]]
 
+    async def get_promoted_adapter(
+        self, tenant_id: str, archetype: str,
+    ) -> SlmAdapter | None:
+        out = [
+            a for a in self._slm_adapters.values()
+            if a.tenant_id == tenant_id and a.archetype == archetype
+            and a.promotion_status == "promoted"
+        ]
+        out.sort(key=lambda a: a.updated_at, reverse=True)
+        return copy.copy(out[0]) if out else None
+
     async def supersede_pending(
         self, *, tenant_id: str, run_id: str, tool_id: str, urns: list[str],
         except_id: str,

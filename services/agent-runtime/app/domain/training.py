@@ -28,9 +28,13 @@ logger = logging.getLogger(__name__)
 
 
 class TrainingJobService:
-    def __init__(self, store, trainer: GpuTrainer) -> None:
+    def __init__(self, store, trainer: GpuTrainer, *, artifact_store=None) -> None:
         self._store = store
         self._trainer = trainer
+        # Only the local CPU trainer needs the artifact store (to load a
+        # distilled student for the eval-gate + serving); the GPU path serves
+        # its adapters through ai-gateway rungs and leaves this None.
+        self._artifacts = artifact_store
 
     async def submit(
         self, *, tenant_id: str, agent_key: str, sft_dataset_id: str,
@@ -131,6 +135,78 @@ class TrainingJobService:
         a.promotion_status = "demoted"
         await self._store.update_slm_adapter(a)
         return a
+
+    # ---- eval-gate + serving (local distilled student) ---------------------
+
+    async def _load_local(self, adapter_uri: str):
+        """Load (student, holdout) for a ``local://{key}`` adapter from the
+        tenant-partitioned artifact store."""
+        from app.adapters.local_trainer import EVALSET_SUFFIX, MODEL_SUFFIX
+        from app.domain.distill import DistilledStudent
+
+        if self._artifacts is None or not adapter_uri.startswith("local://"):
+            return None, None
+        key = adapter_uri[len("local://"):]
+        model = json.loads(await self._artifacts.get(f"{key}/{MODEL_SUFFIX}"))
+        evalset = json.loads(await self._artifacts.get(f"{key}/{EVALSET_SUFFIX}"))
+        return DistilledStudent.from_dict(model), evalset
+
+    async def gate(self, *, tenant_id: str, adapter_id: str, min_margin: float = 0.0
+                   ) -> dict:
+        """The 'wins' gate: a distilled student may only be promoted if it BEATS
+        the baseline on the tenant's held-out decisions. Baseline = the
+        currently-promoted student for this archetype if one exists (must beat
+        the incumbent to replace it), else the majority-class predictor ('no
+        tenant-specialized model'). Deterministic and reproducible. On a win the
+        adapter is marked ``gated`` and carries the eval result; on a loss it is
+        left un-gated with an honest report — never promoted on a claim."""
+        from app.domain.distill import accuracy, majority_baseline
+
+        a = await self._store.get_slm_adapter(tenant_id, adapter_id)
+        if a is None:
+            raise NotFound("adapter not found")
+        student, ev = await self._load_local(a.adapter_uri)
+        if student is None:
+            raise Conflict("adapter has no local artifact to evaluate")
+        holdout = [tuple(x) for x in ev.get("holdout", [])]
+        train = [tuple(x) for x in ev.get("train", [])]
+        if not holdout:
+            raise Conflict("no held-out decisions to evaluate the student against")
+
+        student_acc = accuracy(lambda t: student.predict(t)[0], holdout)
+        incumbent = await self._store.get_promoted_adapter(tenant_id, a.archetype)
+        if incumbent is not None and incumbent.adapter_id != adapter_id:
+            inc_student, _ = await self._load_local(incumbent.adapter_uri)
+            base_kind, base_pred = "incumbent", (lambda t: inc_student.predict(t)[0])
+        else:
+            base_kind, base_pred = "majority_class", majority_baseline(train)
+        base_acc = accuracy(base_pred, holdout)
+
+        wins = student_acc >= base_acc + min_margin
+        report = {"student_accuracy": student_acc, "baseline_accuracy": base_acc,
+                  "baseline_kind": base_kind, "n_holdout": len(holdout),
+                  "min_margin": min_margin, "wins": wins}
+        if wins:
+            a.promotion_status = "gated"
+            a.eval_result_ref = f"local-gate:{json.dumps(report, sort_keys=True)}"
+            await self._store.update_slm_adapter(a)
+        return {"adapter_id": adapter_id, "gated": wins, "report": report}
+
+    async def serve(self, *, tenant_id: str, archetype: str, input_text: str) -> dict:
+        """Serve the tenant's PROMOTED distilled student for one decision: load
+        the promoted adapter for (tenant, archetype) and predict. Honest 404
+        when nothing is promoted — never a base-model guess dressed up as the
+        owned model."""
+        a = await self._store.get_promoted_adapter(tenant_id, archetype)
+        if a is None:
+            raise NotFound(f"no promoted distilled model for archetype {archetype!r}")
+        student, _ = await self._load_local(a.adapter_uri)
+        if student is None:
+            raise Conflict("promoted adapter has no servable local artifact")
+        decision, confidence = student.predict(input_text)
+        return {"decision": decision, "confidence": confidence,
+                "adapter_id": a.adapter_id, "model_alias": a.model_alias,
+                "archetype": archetype, "served_by": "distilled-student"}
 
 
 _ = ADAPTER_PROMOTION_STATUSES  # documents the state space (used by tests)

@@ -38,7 +38,8 @@ def _adapter_view(a) -> dict:
 
 def _svc(request: Request) -> TrainingJobService:
     c = request.app.state.container
-    return TrainingJobService(c.store, c.trainer)
+    return TrainingJobService(c.store, c.trainer,
+                              artifact_store=getattr(c, "adapter_store", None))
 
 
 @router.post("/training-jobs", status_code=201)
@@ -113,3 +114,30 @@ async def demote_adapter(request: Request, adapter_id: str):
     principal = await principal_of(request)
     a = await _svc(request).demote(tenant_id=principal.tenant_id, adapter_id=adapter_id)
     return {"data": _adapter_view(a)}
+
+
+@router.post("/slm-adapters/{adapter_id}/gate")
+async def gate_adapter(request: Request, adapter_id: str, body: dict = Body(default={})):
+    """The 'wins' gate: mark a distilled adapter promotable ONLY if its student
+    beats the baseline on the tenant's held-out decisions. Returns the eval
+    report either way — a loss is a valid, honest outcome, not an error."""
+    principal = await principal_of(request)
+    res = await _svc(request).gate(
+        tenant_id=principal.tenant_id, adapter_id=adapter_id,
+        min_margin=float(body.get("min_margin", 0.0)))
+    return {"data": res}
+
+
+@router.post("/distilled/serve")
+async def serve_distilled(request: Request, body: dict = Body(...)):
+    """Serve the tenant's PROMOTED distilled student for one decision — the
+    owned model actually changing an answer. 404 when nothing is promoted."""
+    principal = await principal_of(request)
+    archetype = str(body.get("archetype") or "").strip()
+    input_text = str(body.get("input") or "")
+    if not archetype or not input_text:
+        from app.domain.errors import ValidationFailed
+        raise ValidationFailed("archetype and input are required")
+    res = await _svc(request).serve(
+        tenant_id=principal.tenant_id, archetype=archetype, input_text=input_text)
+    return {"data": res}

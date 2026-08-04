@@ -51,6 +51,7 @@ class Container:
     session_proj: Any = None
     trainer: Any = None
     eval_gate: Any = None
+    adapter_store: Any = None
     extras: dict = field(default_factory=dict)
 
 
@@ -363,7 +364,13 @@ def build_container(
         kill_registry=kill_registry,
         kill_poll_interval_s=settings.kill_poll_interval_s)
 
+    from app.adapters.artifact_store import InMemoryAdapterStore
     from app.adapters.trainer import build_trainer
+
+    # One artifact store shared by the local trainer (writes) and the serving
+    # path (reads); tenant-partitioned by key. In-memory by default; a file/
+    # object-store backend implements the same protocol for a real deployment.
+    adapter_store = InMemoryAdapterStore()
 
     return Container(
         settings=settings, signing_key=signing_key, grant_issuer=grant_issuer,
@@ -377,8 +384,9 @@ def build_container(
         kill_registry=kill_registry, token_verifier=token_verifier,
         proposal_service=proposal_service, run_engine=run_engine,
         transcripts=transcripts, session_proj=session_proj,
-        trainer=build_trainer(settings.slm_trainer_backend),
+        trainer=build_trainer(settings.slm_trainer_backend, artifact_store=adapter_store),
         eval_gate=eval_gate,
+        adapter_store=adapter_store,
         extras={"mode": mode, "engines": engines,
                 # exposed for the outbox relay (app.main lifespan)
                 "session_factory": session_factory})
