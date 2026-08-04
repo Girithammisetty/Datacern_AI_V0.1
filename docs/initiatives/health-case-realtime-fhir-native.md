@@ -1,6 +1,6 @@
 # Health Case Solution: Native Realtime Triggers + FHIR Connectivity
 
-Status: IN PROGRESS
+Status: BUILT (both parts; live journey evidence pending — see Verification)
 Owner seams: dataset-service, case-service, tool-plane, agent-runtime (consumer), deploy
 Predecessors: `docs/initiatives/realtime-decisioning.md` (INC-2..INC-5),
 `docs/initiatives/realtime-case-streams-addon.md`,
@@ -134,16 +134,25 @@ either part — that is the point of building native.
 
 ## Verification
 
-Each part lands with evidence in the established styles:
+Landed with the build:
 
-- dataset-service: unit tests for added-files resolution + delta browse.
-- case-service: applier unit tests for the flag-gated path (no catch-up
-  poll, dedup preserved, cap honored).
-- fhir-bridge: unit tests for each op + auth method against a fake FHIR
-  server; the roster/journey suites grow a governed FHIR write loop
-  (`journey-fhir`) asserting a proposal-gated write actually lands on the
-  (sandbox) FHIR backend only after approval — asserting on state, never on
-  acknowledgements.
+- dataset-service: 4 hermetic delta-browse tests (unregistered-version delta,
+  filters-within-delta, unknown-ingestion empty page, chunked multi-snapshot
+  union) + a real-Iceberg integration test driving chunked appends
+  (`tests/integration/test_real_adapters.py`).
+- case-service: applier integration tests proving the delta path performs
+  zero registration polls and zero full browses, dedup holds on redelivery,
+  and a delta failure falls back to the legacy full browse without losing
+  the fire (`test/integration/triggers_test.go`).
+- fhir-bridge: 32 unit tests — all four ops, every auth method (incl. the
+  SMART RS384 client assertion verified field-by-field), SPIFFE fail-closed
+  facade, OPA re-check denial shapes, secret-never-in-Postgres, response
+  caps, traversal and cross-host-redirect rejection.
+
+Still owed (next slice): a `journey-fhir` script in `deploy/e2e/` asserting a
+proposal-gated FHIR write lands on a sandbox FHIR backend only after human
+approval — asserting on state, never on acknowledgements — and delta-path
+assertions folded into `make journey-streams`.
 
 ## Out of scope (for now)
 

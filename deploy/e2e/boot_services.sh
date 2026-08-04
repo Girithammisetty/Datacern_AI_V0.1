@@ -109,8 +109,27 @@ start_case() {
     RBAC_URL="$RBAC_URL" REGISTER_SIGNING_KEY_PEM="$reg_key" \
     REGISTER_SIGNING_KID="e2e-harness-key-1" REGISTER_TENANT_ID="$TENANT_ID" \
     CASE_FACADE_ALLOWED_SPIFFE="spiffe://datacern/ns/tools/sa/mcp-gateway" \
+    TRIGGER_DELTA_BROWSE="true" \
     "$BIN_DIR/case-e2e"
   wait_ready case "$CASE_URL" || die "case-service not ready"
+}
+
+start_fhir_bridge() {
+  build_go fhir-bridge fhir-bridge-e2e cmd/server
+  say "boot fhir-bridge"
+  local reg_key; reg_key="$(cat "$E2E_DIR/keys/idp_private.pem")"
+  boot fhir-bridge env \
+    MIGRATE_DATABASE_URL="${PG_BASE}/fhir_bridge?sslmode=disable" \
+    DATABASE_URL="postgres://fhirbridge_app:fhirbridge_app@localhost:5432/fhir_bridge?sslmode=disable" \
+    LISTEN_ADDR=":${PORT_FHIR_BRIDGE}" \
+    OPA_URL="$OPA_URL" \
+    JWKS_URL="$WR_JWKS_URL" JWT_ISSUER="$WR_ISS" JWT_AUDIENCE="$WR_AUD" \
+    VAULT_ADDR="$VAULT_ADDR_" VAULT_TOKEN="$VAULT_TOKEN_" \
+    RBAC_URL="$RBAC_URL" REGISTER_SIGNING_KEY_PEM="$reg_key" \
+    REGISTER_SIGNING_KID="e2e-harness-key-1" REGISTER_TENANT_ID="$TENANT_ID" \
+    FHIR_FACADE_ALLOWED_SPIFFE="spiffe://datacern/ns/tools/sa/mcp-gateway" \
+    "$BIN_DIR/fhir-bridge-e2e"
+  wait_ready fhir-bridge "$FHIR_BRIDGE_URL" || die "fhir-bridge not ready"
 }
 
 start_realtime() {
@@ -594,7 +613,10 @@ boot_platform_extra() {
   start_audit
   start_notification
   start_eval
-  echo; ok "full platform backend up (22 services incl. bff+ui booted separately)"
+  # fhir-bridge: governed clinical-system access for agents (tool-plane
+  # backend); its tools are seeded by up.sh (`seed.py fhir_tools`).
+  start_fhir_bridge
+  echo; ok "full platform backend up (23 services incl. bff+ui booted separately)"
 }
 
 boot_all() {
