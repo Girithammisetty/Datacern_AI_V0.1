@@ -210,6 +210,28 @@ def seed_pipeline_template(dataset_urn: str | None) -> str | None:
         },
         "run_parameters": {"test_size": 0.2, "random_state": 42},
     }
+    # VALIDATE BEFORE CREATING. Two rounds were spent treating this as an
+    # activation problem: create returns 201, activate returns 200, and the
+    # version is STILL `draft` — because draft here means "the definition did not
+    # validate", not "nobody pressed activate". The UI says so plainly ("active
+    # version is a draft; fix validation first") and I read it as a state to
+    # toggle rather than a verdict to satisfy.
+    #
+    # A template whose definition does not validate is worse than no template:
+    # it sits in the shared workspace, the UI refuses to run it, and e2e:live's
+    # pipeline spec picks it up and fails. So validate first and only create
+    # when the platform agrees the definition is sound — and when it does not,
+    # print the platform's own field errors instead of materializing anyway.
+    v = d.req("POST", f"{c.PIPELINE}/api/v1/pipelines/validate?mode=all", tok,
+              headers=d.J(), json={"definition": body["definition"],
+                                   "pipeline_type": body["pipeline_type"],
+                                   "model_type": body["model_type"]})
+    if v.status_code != 200:
+        warn(f"pipeline definition did not validate ({v.status_code}) — NOT creating it, "
+             f"because an unrunnable template breaks the pipelines page for everyone")
+        warn(f"     {v.text[:260]}")
+        return None
+
     r = d.req("POST", f"{c.PIPELINE}/api/v1/pipelines", tok, headers=d.J(), json=body)
     if r.status_code not in (200, 201):
         warn(f"pipeline template: {r.status_code} {r.text[:180]}")
@@ -344,7 +366,13 @@ def seed_grid_and_report(dataset_name: str | None) -> None:
                   headers=d.J(), json={
                       "workspace_id": d.WORKSPACE,
                       "name": grid_name, "chart_type": "grid_chart",
-                      "config": {"page_size": 25},
+                      # `columns` is REQUIRED for the grid family
+                      # (charttypes.go:132) — omitting it 422s with
+                      # config.columns/REQUIRED. A grid without columns is not a
+                      # grid, so this is the schema being right, not fussy.
+                      "config": {"columns": ["claim_id", "provider", "amount",
+                                             "service_date", "status"],
+                                 "page_size": 25},
                   })
         if r.status_code in (200, 201):
             ok("grid chart added to the Insights dashboard")
