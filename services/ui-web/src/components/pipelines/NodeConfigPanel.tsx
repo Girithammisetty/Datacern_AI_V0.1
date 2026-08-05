@@ -41,7 +41,8 @@ export function NodeConfigPanel() {
     () => propagateSchema(nodes, edges, sourceColumns),
     [nodes, edges, sourceColumns],
   );
-  const availableColumns = (selectedId ? propagated.get(selectedId) : undefined) ?? [];
+  const availableColumns = (selectedId ? propagated.seen.get(selectedId) : undefined) ?? [];
+  const propagationError = selectedId ? propagated.errors.get(selectedId) : undefined;
 
   const { data: policy } = usePipelineResourcePolicy();
 
@@ -66,6 +67,11 @@ export function NodeConfigPanel() {
       </div>
 
       <div className="flex-1 space-y-4 overflow-auto p-3">
+        {propagationError ? (
+          <p role="alert" className="rounded-md border border-destructive/50 bg-destructive/5 p-2 text-xs text-destructive">
+            {t("pipelines.propagationFailed")}
+          </p>
+        ) : null}
         {issues?.length ? (
           <ul className="space-y-1 rounded-md border border-destructive/50 bg-destructive/5 p-2 text-xs text-destructive">
             {issues.map((m, i) => (

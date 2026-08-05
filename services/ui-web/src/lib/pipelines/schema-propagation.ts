@@ -241,11 +241,18 @@ function topoOrder(ids: string[], edges: Array<[string, string]>): string[] {
  * widget layer falls back to free text — the same degradation it already has when no
  * dataset is chosen.
  */
+export interface PropagationResult {
+  /** Node id -> the columns that node's own form should offer. */
+  seen: Map<string, string[]>;
+  /** Node id -> why propagation failed there. Empty when everything worked. */
+  errors: Map<string, string>;
+}
+
 export function propagateSchema(
   nodes: CanvasNode[],
   edges: CanvasEdge[],
   sourceColumns: string[],
-): Map<string, string[]> {
+): PropagationResult {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const incoming = new Map<string, CanvasEdge[]>();
   const topoEdges: Array<[string, string]> = [];
@@ -259,6 +266,7 @@ export function propagateSchema(
   const outputs = new Map<string, string[]>();
   /** Input columns per node id — what that node's OWN form should offer. */
   const seen = new Map<string, string[]>();
+  const errors = new Map<string, string>();
 
   for (const id of topoOrder([...byId.keys()], topoEdges)) {
     const node = byId.get(id)!;
@@ -282,9 +290,20 @@ export function propagateSchema(
     const { parameters } = collect(node.params, node.values);
     try {
       outputs.set(id, fn(ins, parameters));
-    } catch {
-      outputs.set(id, ins[0] ?? []); // a half-typed param must never break the picker
+    } catch (err) {
+      // `parameters` has already been through collect(), so a throw here is a BUG
+      // in the header function, not bad user input. Swallowing it degraded the
+      // step to "columns unchanged" — which looks exactly like a correct
+      // pass-through operator, so a broken header function could ship unnoticed
+      // and quietly feed every downstream picker the wrong column list.
+      //
+      // Tests fail loudly. The app keeps the picker usable (an unusable form
+      // helps nobody) but records the failure so the UI can show it.
+      if (process.env.NODE_ENV === "test") throw err;
+      console.error(`[propagateSchema] ${node.component} header function threw`, err);
+      errors.set(id, err instanceof Error ? err.message : String(err));
+      outputs.set(id, ins[0] ?? []);
     }
   }
-  return seen;
+  return { seen, errors };
 }

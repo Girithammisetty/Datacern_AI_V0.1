@@ -10,6 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, Vi
 import { CanvasRenderer } from "echarts/renderers";
 import { LegacyGridContainLabel } from "echarts/features";
 import { toChartModel, toHeatmapModel } from "@/lib/charts/geometry";
+import { t } from "@/lib/i18n/messages";
 import { buildEChartsOption, buildHeatmapOption, type ChartTheme, type EChartsOption } from "@/lib/charts/echarts";
 import {
   buildChordOption, buildNetworkOption, buildSankeyOption, buildSunburstOption,
@@ -122,6 +123,8 @@ export function EChartsChart({
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const [ready, setReady] = useState(false);
+  /** Set only when ECharts failed in an environment that CLAIMED to support it. */
+  const [initError, setInitError] = useState<string | null>(null);
   const [themeTick, setThemeTick] = useState(0);
   const reduceMotion = useRef(false);
   // The click handler is bound once, but `onSelect` becomes defined only after
@@ -157,13 +160,24 @@ export function EChartsChart({
     // Feature-gate on the APIs ECharts needs. jsdom (tests) and SSR lack a real
     // 2D canvas context and/or ResizeObserver — bail so the SVG fallback stays.
     const probe = document.createElement("canvas");
-    if (typeof ResizeObserver === "undefined" || !probe.getContext || !probe.getContext("2d")) return;
+    if (typeof ResizeObserver === "undefined" || !probe.getContext || !probe.getContext("2d")) {
+      // EXPECTED, not a failure: SSR and jsdom genuinely have no 2D canvas, and
+      // the fallback renders the same real data. Nothing to report.
+      return;
+    }
     reduceMotion.current = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let chart: echarts.ECharts | null = null;
     try {
       chart = echarts.init(el, undefined, { renderer: "canvas" });
-    } catch {
-      return; // canvas-less env → keep the SVG fallback
+    } catch (err) {
+      // A REAL failure: the environment said it has canvas and ECharts still could
+      // not start. Silently keeping the fallback here made a broken chart engine
+      // look like a working chart — the whole dashboard would render "fine" while
+      // no chart was interactive. Say so.
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[EChartsChart] init failed; rendering the static fallback", err);
+      setInitError(msg);
+      return;
     }
     chartRef.current = chart;
     setReady(true);
@@ -197,8 +211,16 @@ export function EChartsChart({
 
   // Push option updates.
   useEffect(() => {
-    if (chartRef.current && option) {
+    if (!chartRef.current || !option) return;
+    try {
       chartRef.current.setOption(option, { notMerge: true });
+    } catch (err) {
+      // A malformed option is a BUG in an option builder, and it used to escape
+      // this effect as an unhandled error. Report it and keep the static chart
+      // rather than blanking the card with no explanation.
+      console.error("[EChartsChart] setOption failed; keeping the static chart", err);
+      setInitError(err instanceof Error ? err.message : String(err));
+      setReady(false);
     }
   }, [option]);
 
@@ -206,6 +228,16 @@ export function EChartsChart({
     <div className="relative w-full" style={{ height }} data-testid="echarts-host">
       <div ref={hostRef} className="h-full w-full" role="img" aria-label={desc ? `${title ?? "Chart"} — ${desc}` : (title ?? "Chart")} />
       {!ready && <div className="absolute inset-0 overflow-hidden">{fallback}</div>}
+      {initError && (
+        <p
+          role="alert"
+          data-testid="echarts-init-error"
+          className="absolute inset-x-0 bottom-0 truncate bg-destructive/10 px-2 py-1 text-[11px] text-destructive"
+          title={initError}
+        >
+          {t("charts.engineFailed")}
+        </p>
+      )}
     </div>
   );
 }

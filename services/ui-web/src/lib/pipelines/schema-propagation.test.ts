@@ -50,7 +50,7 @@ function edge(from: CanvasNode, to: CanvasNode, port = "in0"): CanvasEdge {
 
 /** What THIS node's own form should offer. */
 function seenBy(nodes: CanvasNode[], edges: CanvasEdge[], target: CanvasNode): string[] {
-  return propagateSchema(nodes, edges, SRC).get(target.id) ?? [];
+  return propagateSchema(nodes, edges, SRC).seen.get(target.id) ?? [];
 }
 
 describe("propagateSchema — the core defect", () => {
@@ -106,12 +106,39 @@ describe("propagateSchema — the core defect", () => {
 
   it("a half-typed param never breaks the picker", () => {
     const read = node("read-from-warehouse");
-    // `columns` holds unparseable JSON — collect() drops it, propagation falls back.
+    // `columns` holds unparseable JSON — collect() drops it before the header
+    // function sees it, so this is handled input, not a swallowed exception.
     const sel = node("select-columns", { columns: "[not json" }, [param("columns", "array", "columns")]);
     const next = node("sort-data");
     const edges = [edge(read, sel), edge(sel, next)];
     expect(() => seenBy([read, sel, next], edges, next)).not.toThrow();
     expect(seenBy([read, sel, next], edges, next)).toEqual(SRC);
+  });
+
+  it("a THROWING header function surfaces instead of degrading silently", () => {
+    // params come from collect(), so a throw is a BUG in the header function.
+    // Degrading to "columns unchanged" looks exactly like a correct pass-through
+    // operator, so a broken one could ship unnoticed. Tests must fail loudly.
+    const original = HEADER_FNS["sort-data"];
+    HEADER_FNS["sort-data"] = () => {
+      throw new Error("boom");
+    };
+    try {
+      const read = node("read-from-warehouse");
+      const bad = node("sort-data");
+      expect(() => propagateSchema([read, bad], [edge(read, bad)], SRC)).toThrow(/boom/);
+    } finally {
+      HEADER_FNS["sort-data"] = original;
+    }
+  });
+
+  it("reports no errors when everything propagates", () => {
+    const read = node("read-from-warehouse");
+    const sel = node("select-columns", { columns: JSON.stringify(["id"]) }, [
+      param("columns", "array", "columns"),
+    ]);
+    const r = propagateSchema([read, sel], [edge(read, sel)], SRC);
+    expect(r.errors.size).toBe(0);
   });
 });
 
