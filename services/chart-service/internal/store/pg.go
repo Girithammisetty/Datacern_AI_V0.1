@@ -365,6 +365,113 @@ func (s *PG) ListCharts(ctx context.Context, tenant, dashboardID uuid.UUID) ([]d
 	return out, err
 }
 
+// SearchCharts answers the cross-dashboard chart search (BRD 74 D2) with
+// keyset pagination (MASTER-FR-022). It joins dashboards because `module` and
+// `tags` are dashboard columns — charts carry neither — and it searches the
+// chart's own name/description plus any live chart-scoped documentation body.
+// RLS scopes the whole statement to the tenant, so a cross-tenant workspace_id
+// simply matches nothing.
+func (s *PG) SearchCharts(ctx context.Context, tenant uuid.UUID, f domain.ChartSearchFilter) ([]domain.ChartSearchHit, error) {
+	var out []domain.ChartSearchHit
+	err := s.withTenant(ctx, tenant, func(tx pgx.Tx) error {
+		q := strings.Builder{}
+		q.WriteString(`SELECT c.id,c.tenant_id,c.dashboard_id,c.name,c.chart_type,c.description,c.config,
+			c.display_meta,c.chart_version,c.custom,c.config_status,c.link_type,c.linked_parent_id,
+			c.created_at,c.updated_at,d.name,d.module,d.tags
+			FROM charts c
+			JOIN dashboards d ON d.id = c.dashboard_id AND d.deleted_at IS NULL
+			WHERE c.deleted_at IS NULL AND d.workspace_id=$1`)
+		args := []any{f.WorkspaceID}
+		if !f.IncludeArchived {
+			q.WriteString(` AND NOT d.archived`)
+		}
+		if f.Module != "" {
+			args = append(args, f.Module)
+			fmt.Fprintf(&q, ` AND d.module=$%d`, len(args))
+		}
+		if f.Tag != "" {
+			args = append(args, f.Tag)
+			fmt.Fprintf(&q, ` AND $%d = ANY(d.tags)`, len(args))
+		}
+		if f.DashboardID != nil {
+			args = append(args, *f.DashboardID)
+			fmt.Fprintf(&q, ` AND c.dashboard_id=$%d`, len(args))
+		}
+		if f.Q != "" {
+			args = append(args, LikePattern(f.Q))
+			n := len(args)
+			fmt.Fprintf(&q, ` AND (c.name ILIKE $%d ESCAPE '\' OR c.description ILIKE $%d ESCAPE '\'`+
+				` OR EXISTS (SELECT 1 FROM documentations doc WHERE doc.documentable_type='chart'`+
+				` AND doc.documentable_id=c.id AND NOT doc.archived AND doc.content ILIKE $%d ESCAPE '\'))`,
+				n, n, n)
+		}
+		if f.After != nil {
+			args = append(args, *f.After)
+			fmt.Fprintf(&q, ` AND c.id > $%d`, len(args))
+		}
+		args = append(args, f.Limit)
+		fmt.Fprintf(&q, ` ORDER BY c.id ASC LIMIT $%d`, len(args))
+
+		rows, err := tx.Query(ctx, q.String(), args...)
+		if err != nil {
+			return err
+		}
+		ids := []uuid.UUID{}
+		for rows.Next() {
+			var h domain.ChartSearchHit
+			if err := rows.Scan(&h.ID, &h.TenantID, &h.DashboardID, &h.Name, &h.ChartType, &h.Description,
+				&h.Config, &h.DisplayMeta, &h.ChartVersion, &h.Custom, &h.ConfigStatus, &h.LinkType,
+				&h.LinkedParentID, &h.CreatedAt, &h.UpdatedAt,
+				&h.DashboardName, &h.DashboardModule, &h.DashboardTags); err != nil {
+				rows.Close()
+				return err
+			}
+			out = append(out, h)
+			ids = append(ids, h.ID)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		// One batched sources lookup instead of ListCharts' per-chart N+1.
+		srcRows, err := tx.Query(ctx,
+			`SELECT chart_id,position,source_type,source_urn FROM chart_sources
+			 WHERE chart_id = ANY($1) ORDER BY chart_id, position`, ids)
+		if err != nil {
+			return err
+		}
+		defer srcRows.Close()
+		byChart := map[uuid.UUID][]domain.ChartSource{}
+		for srcRows.Next() {
+			var cid uuid.UUID
+			var src domain.ChartSource
+			if err := srcRows.Scan(&cid, &src.Position, &src.SourceType, &src.SourceURN); err != nil {
+				return err
+			}
+			byChart[cid] = append(byChart[cid], src)
+		}
+		if err := srcRows.Err(); err != nil {
+			return err
+		}
+		for i := range out {
+			out[i].Sources = byChart[out[i].ID]
+		}
+		return nil
+	})
+	return out, err
+}
+
+// LikePattern turns a user search term into a contains-style ILIKE pattern,
+// escaping the LIKE metacharacters so a term containing % or _ matches
+// literally. Paired with `ESCAPE '\'` at every call site.
+func LikePattern(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return "%" + r.Replace(s) + "%"
+}
+
 // UpdateChart updates a chart (optimistic lock via expectVersion when > 0) and
 // replaces its sources; bumps chart_version when versionBump is true.
 func (s *PG) UpdateChart(ctx context.Context, c *domain.Chart, versionBump bool, expectVersion int, envs []event.Envelope) error {

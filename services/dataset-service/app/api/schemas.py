@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.domain.entities import Dataset, DatasetVersion
+from app.domain.entities import Dataset, DatasetExport, DatasetVersion
 from app.domain.naming import RESOLVE_NAMESPACE
 from app.domain.naming import safe_relation as _safe_relation
 from app.domain.urn import dataset_urn, version_urn
@@ -58,6 +58,18 @@ class ProfileResult(BaseModel):
     profiler_version: str | None = None
 
 
+class DatasetExportCreate(BaseModel):
+    """BRD 74 D1. ``version`` omitted exports the dataset's CURRENT version, and
+    whichever version was chosen is recorded on the artifact (AC-1).
+
+    ``format`` is validated in the service, not here, so `parquet` gets an
+    explanatory 422 instead of a bare enum rejection.
+    """
+
+    format: str = "csv"
+    version: int | None = Field(default=None, ge=1)
+
+
 class EdgeCreate(BaseModel):
     from_urn: str
     to_urn: str
@@ -92,6 +104,34 @@ def version_payload(v: DatasetVersion) -> dict:
         "profile_status": str(v.profile_status),
         "expired": v.expired,
         "created_at": v.created_at.isoformat(),
+    }
+
+
+def export_payload(e: DatasetExport) -> dict:
+    """Export operation status (BRD 74 D1).
+
+    ``download_url`` is query-service's signed link, absolute and HMAC-validated
+    there — dataset-service never proxies the bytes and never mints a second
+    signature. ``expires_at`` is query-service's retention window, not a local
+    one, which is why there is no GC in this service (AC-3).
+    """
+    return {
+        "id": e.id,
+        "operation_id": e.id,
+        "dataset_id": e.dataset_id,
+        "version_no": e.version_no,
+        "version_urn": e.version_urn,
+        "format": e.format,
+        "status": str(e.status),
+        "query_execution_id": e.query_execution_id,
+        "download_url": e.download_url,
+        "expires_at": e.expires_at.isoformat() if e.expires_at else None,
+        "row_count": e.row_count,
+        "error": e.error,
+        "created_by": e.created_by,
+        "created_at": e.created_at.isoformat(),
+        "started_at": e.started_at.isoformat() if e.started_at else None,
+        "finished_at": e.finished_at.isoformat() if e.finished_at else None,
     }
 
 

@@ -8,9 +8,11 @@ from app.api.auth import Principal, require
 from app.api.idempotency import idempotent
 from app.api.schemas import (
     DatasetCreate,
+    DatasetExportCreate,
     DatasetPatch,
     SimilarRequest,
     dataset_payload,
+    export_payload,
     page_envelope,
     resolve_payload,
     version_payload,
@@ -240,6 +242,57 @@ async def browse_dataset_rows(
         delta_ingestion_id=delta_ingestion_id,
     )
     return {"data": result}
+
+
+@router.post("/datasets/{dataset_id}/exports", status_code=202)
+async def create_dataset_export(
+    request: Request,
+    response: Response,
+    dataset_id: str,
+    body: DatasetExportCreate,
+    principal: Principal = Depends(require("dataset.dataset.export")),
+):
+    """Export a dataset VERSION as a downloadable artifact (BRD 74 D1).
+
+    Delegated to query-service: this runs ``SELECT * FROM {{dataset(name,
+    version=n)}}`` there and hands back the signed download link query-service
+    minted, so there is exactly one export machine, one signing secret and one
+    retention GC on the platform (AC-3).
+
+    Omitting ``version`` exports the dataset's current version; the chosen
+    version is recorded on the operation and echoed back as ``version_no`` /
+    ``version_urn`` (AC-1).
+
+    The caller's bearer token is forwarded to query-service, which re-authorizes
+    the run and the export under the SAME user (``query.execution.execute`` /
+    ``query.execution.export``) — a dataset export can never reach data the user
+    could not already query.
+    """
+    c = _svc(request)
+    ctx = principal.ctx(request.state.trace_id)
+    token = request.headers.get("authorization", "")[7:]
+
+    async def work():
+        export = await c.export_service.create(
+            ctx, dataset_id, fmt=body.format, version_no=body.version,
+            bearer_token=token,
+        )
+        return 202, {"data": export_payload(export)}
+
+    return await idempotent(request, response, c.deps.uow_factory, ctx.tenant_id, work)
+
+
+@router.get("/exports/{export_id}")
+async def get_dataset_export(
+    request: Request,
+    export_id: str,
+    principal: Principal = Depends(require("dataset.dataset.read")),
+):
+    """Export status + the signed download URL once it completes (BRD 74 D1).
+    RLS-scoped: another tenant's export id is a 404 (AC-2)."""
+    c = _svc(request)
+    export = await c.export_service.get(principal.ctx(request.state.trace_id), export_id)
+    return {"data": export_payload(export)}
 
 
 @router.get("/datasets/{dataset_id}/consumers")

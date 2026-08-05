@@ -14,6 +14,7 @@ from datetime import datetime
 
 from app.domain.entities import (
     Dataset,
+    DatasetExport,
     DatasetVersion,
     EntityMergeCandidate,
     EntityResolutionConfig,
@@ -36,6 +37,7 @@ class MemoryState:
         self.datasets: dict[str, Dataset] = {}
         self.versions: dict[str, DatasetVersion] = {}
         self.profiles: dict[str, Profile] = {}
+        self.exports: dict[str, DatasetExport] = {}
         self.edges: dict[str, LineageEdge] = {}
         self.outbox: list[tuple[str, dict]] = []
         self.idempotency: dict[tuple[str, str], dict] = {}
@@ -290,6 +292,33 @@ class MemoryProfileRepo:
         return out
 
 
+class MemoryExportRepo:
+    """BRD 74 D1. Tenant-scoped like every other memory repo, so a cross-tenant
+    export id returns None → 404 (the in-memory mirror of RLS)."""
+
+    def __init__(self, state: MemoryState, tenant_id: str):
+        self.state, self.tenant_id = state, tenant_id
+
+    async def add(self, export: DatasetExport) -> None:
+        self.state.exports[export.id] = _copy(export)
+
+    async def get(self, export_id: str) -> DatasetExport | None:
+        e = self.state.exports.get(export_id)
+        return _copy(e) if e and e.tenant_id == self.tenant_id else None
+
+    async def update(self, export: DatasetExport) -> None:
+        current = self.state.exports.get(export.id)
+        if current and current.tenant_id == self.tenant_id:
+            self.state.exports[export.id] = _copy(export)
+
+    async def count_active(self, dataset_id: str) -> int:
+        return sum(
+            1 for e in self.state.exports.values()
+            if e.tenant_id == self.tenant_id and e.dataset_id == dataset_id
+            and e.status in ("pending", "running")
+        )
+
+
 class MemoryLineageRepo:
     def __init__(self, state: MemoryState, tenant_id: str):
         self.state, self.tenant_id = state, tenant_id
@@ -436,6 +465,7 @@ class MemoryUnitOfWork:
         self.datasets = MemoryDatasetRepo(state, tenant_id)
         self.versions = MemoryVersionRepo(state, tenant_id)
         self.profiles = MemoryProfileRepo(state, tenant_id)
+        self.exports = MemoryExportRepo(state, tenant_id)
         self.lineage = MemoryLineageRepo(state, tenant_id)
         self.outbox = MemoryOutboxRepo(state, self._staged_outbox)
         self.idempotency = MemoryIdempotencyRepo(state, tenant_id)

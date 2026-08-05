@@ -77,6 +77,15 @@ class Settings(BaseSettings):
     profile_retrigger_per_hour: int = 3
     profile_sample_max_rows: int = 10_000_000
 
+    # Dataset export (BRD 74 D1). Delegated to query-service, which owns result
+    # materialization, the HMAC signing secret and the 24h retention GC — this
+    # service adds no artifact storage and no second expiry sweeper. The URL is
+    # the same one every other service reaches query-service on.
+    query_service_url: str = "http://localhost:8085"
+    export_poll_interval_seconds: float = 1.0
+    export_timeout_seconds: float = 900.0
+    export_max_concurrent_per_dataset: int = 3
+
     # Retention (DST-FR-080/081) & restore (DST-FR-006)
     retention_keep_all_days: int = 90
     retention_keep_last: int = 10

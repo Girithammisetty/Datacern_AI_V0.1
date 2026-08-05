@@ -23,6 +23,8 @@ MANIFEST: list[str] = [
     "dataset.dataset.read",
     "dataset.dataset.update",
     "dataset.dataset.delete",
+    # BRD 74 D1: export a dataset version through query-service's export path.
+    "dataset.dataset.export",
     "dataset.profile.execute",
     "dataset.profile.read",
     "dataset.lineage.update",

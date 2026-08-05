@@ -58,6 +58,7 @@ from the real path.
 | `Catalog` | `LocalCatalog` — JSON metadata + parquet snapshots on disk | `IcebergRestCatalog` → `datacern_common.iceberg` (**Iceberg REST catalog + MinIO** via pyiceberg; verify/read-snapshot/expire/drop against the catalog) |
 | `ObjectStore` | `LocalFSObjectStore` — file blobs + HMAC pseudo-signed URLs | `S3ObjectStore` → `datacern_common.objectstore` (**MinIO/S3** blob put/get + **real presigned** GET URLs, 24h) |
 | `ProfilerRunner` | `InProcessProfilerRunner` — **real pandas profiler** producing §4.4 documents (profiles stored to the real object store, pointer in PG) | `K8sProfilerRunner` (datacern/profiler Job) — **infra-gated** (needs a K8s cluster) |
+| `ExportRunner` (BRD 74 D1) | same adapter, driven against a query-service contract fake in tests | `QueryServiceExportRunner` — **real HTTP to query-service** (`POST /sql/run` → poll `GET /executions/{id}` → `POST /executions/{id}/export`). No local export machine exists: the bytes, the HMAC signing secret and the 24h retention GC all stay in query-service |
 | `SearchIndex` | `PostgresFTSSearchIndex` (tsvector + GIN) / `InMemorySearchIndex` (unit) | `OpenSearchIndex` (CDC projection) — **infra-gated** (OpenSearch not in the local stack; PG FTS is the real local search) |
 | Event bus | `InMemoryEventBus` (records + dispatches) | `KafkaEventBus` → `datacern_common.kafka` (**Redpanda/Kafka** idempotent producer, tenant-keyed; drives the outbox dispatcher) |
 | Consumer dedup | `SqlDedupStore` / `InMemoryDedupStore` | `RedisDedupStore` → `datacern_common.redisx` (**Redis** SET NX, 24h TTL) |
@@ -115,6 +116,7 @@ Other deliberate deviations (documented, non-blocking):
 | DST-FR-061 similarity search | Done | `domain/similarity.py` | `test_datasets_api.py::TestSimilarity` (AC-11) |
 | DST-FR-062 catalog change events | Done | outbox emits created/updated/deleted/restored | `test_mcp_and_events.py`, integration outbox tests |
 | DST-FR-063 (S) consumers summary + force delete | Done | `DatasetService.consumers_summary/delete` | `test_datasets_api.py::test_ac12…` |
+| BRD 74 D1 dataset export (`POST /datasets/{id}/exports`, `GET /exports/{id}`) | Done (csv; parquet blocked upstream) | `ExportService`, `adapters/query_export.py`, migration `0007` | `test_dataset_exports.py` (30), `test_isolation_authz.py` |
 | DST-FR-080 retention policy | Done | `domain/retention.py`, `RetentionService` | `test_retention.py` (AC-6) |
 | DST-FR-081 current + trained-pin never expired | Done | `select_expirable` guards | `test_retention.py::test_current_and_pinned_never_expire` |
 | DST-FR-082 (S) tenant overrides | Partial | policy object injectable per run; audit TODO | policy override exercised in AC-6 test |

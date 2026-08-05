@@ -84,6 +84,7 @@ Config families: `axis` (10), `y_only` (4), `heatmap` (5), `network` (4),
 | CHART-FR-001..007 dashboards | `internal/api/handlers_dashboards.go`, `store/pg.go` | `TestAC09_DashboardNameConflict`, `TestIdempotentReplay` |
 | CHART-FR-010..016 charts, sources, links, guards | `handlers_charts.go`, `handlers_link.go`, `store/pg.go` | `TestAC05_*`, `TestAC08_*`, `TestAC10_CircularLinkAndCleanup` |
 | CHART-FR-011/012 catalog | `domain/charttypes.go` | `TestAC07_CatalogHas30Types`, `TestAC07_ChartTypesEndpoint` |
+| BRD 74 D2 cross-dashboard chart search (`GET /charts`) | `handlers_charts.go` `handleSearchCharts`, `store/pg.go` `SearchCharts` | `internal/api/chartsearch_test.go` (11), `test/integration/chartsearch_test.go` (real SQL + RLS) |
 | CHART-FR-020..025 resolution | `resolve/*`, `handlers_data.go`, `domain/shape.go` | `TestAC01_EndToEndResolveThroughSemanticAndQuery`, `TestAC13_DeterministicSampling` |
 | CHART-FR-030..033 cache/ETag | `cache/cache.go`, `handlers_data.go` | `TestAC02_RedisCacheHit`, `TestAC03_ETag304`, `TestKeyDeterminism` |
 | CHART-FR-031 invalidation | `events/consumers.go`, `cache/cache.go` | `TestAC04_EventDrivenInvalidation` |

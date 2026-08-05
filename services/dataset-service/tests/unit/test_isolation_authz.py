@@ -23,6 +23,8 @@ ENDPOINTS_ON_RESOURCE = [
     ("GET", "/api/v1/datasets/{id}/versions/1", None),
     ("POST", "/api/v1/datasets/{id}/versions/1/profile", None),
     ("GET", "/api/v1/datasets/{id}/profile", None),
+    # BRD 74 D1 / AC-2: a cross-tenant dataset id cannot be exported.
+    ("POST", "/api/v1/datasets/{id}/exports", {"format": "csv"}),
 ]
 
 

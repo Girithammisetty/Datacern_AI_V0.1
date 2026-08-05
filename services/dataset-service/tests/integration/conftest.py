@@ -20,7 +20,7 @@ APP_USER = "dataset_rt"
 APP_PASSWORD = "rt-secret"
 
 TABLES = [
-    "profiles", "lineage_edges", "outbox", "idempotency_keys",
+    "profiles", "dataset_exports", "lineage_edges", "outbox", "idempotency_keys",
     "processed_events", "dataset_versions", "datasets",
 ]
 

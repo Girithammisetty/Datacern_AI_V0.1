@@ -9,18 +9,20 @@ from __future__ import annotations
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from app.config import Settings
 from app.domain import lineage as lineage_ops
 from app.domain.entities import (
     Activity,
     Dataset,
+    DatasetExport,
     DatasetStatus,
     DatasetVersion,
     EntityMergeCandidate,
     EntityResolutionConfig,
     EntityResolutionRun,
+    ExportStatus,
     Lifecycle,
     LineageEdge,
     MergeCandidateStatus,
@@ -46,7 +48,9 @@ from app.domain.naming import RESOLVE_NAMESPACE, safe_relation
 from app.domain.ontology_export import ontology_to_jsonld
 from app.domain.ports import (
     Catalog,
+    DatasetExportJobSpec,
     DatasetFilters,
+    ExportRunner,
     ObjectStore,
     Page,
     ProfileJobSpec,
@@ -88,6 +92,8 @@ class ServiceDeps:
     object_store: ObjectStore
     search_index: SearchIndex
     runner_provider: Callable[[], ProfilerRunner] = field(default=lambda: None)  # set by wiring
+    # BRD 74 D1: drives a dataset export through query-service. Set by wiring.
+    export_runner_provider: Callable[[], ExportRunner] = field(default=lambda: None)
     # BRD 56 inc3: real Iceberg table writer used to materialize the governed
     # resolved-entity view as a derived warehouse dataset. None in the unit tier.
     iceberg_writer: object | None = None
@@ -1524,6 +1530,169 @@ class ProfileService(_Base):
 
 
 # ---------------------------------------------------------------------------
+
+
+class ExportService(_Base):
+    """Dataset export (BRD 74 D1) — a routing and affordance layer over
+    query-service's export machine, not a second one.
+
+    What this service owns: which dataset VERSION an export pins, the operation
+    row users poll, the authorization gate and the audit events. What it
+    deliberately does NOT own: producing the bytes, signing the download link, or
+    expiring the artifact — all of that stays in query-service so there is one
+    retention GC, one signing secret and one audit trail (AC-3).
+    """
+
+    # query-service answers `format: "parquet"` with 501 NOT_IMPLEMENTED
+    # (handlers_executions.go), and writing a parquet path here would be exactly
+    # the second export machine AC-3 forbids. csv is therefore the only value
+    # accepted, with an explicit error rather than a silent fallback.
+    ALLOWED_FORMATS = ("csv",)
+
+    async def create(
+        self,
+        ctx: CallCtx,
+        dataset_id: str,
+        *,
+        fmt: str,
+        version_no: int | None,
+        bearer_token: str,
+    ) -> DatasetExport:
+        from app.adapters.query_export import UnsafeDatasetName, build_export_sql
+
+        if fmt not in self.ALLOWED_FORMATS:
+            detail = (
+                "; parquet export is not implemented by query-service, which owns "
+                "the export path (BRD 74 AC-3)" if fmt == "parquet" else ""
+            )
+            raise ValidationFailed(
+                f"format must be one of {', '.join(self.ALLOWED_FORMATS)}{detail}"
+            )
+        if not bearer_token:
+            raise ValidationFailed("a bearer token is required to export a dataset")
+
+        spec: DatasetExportJobSpec | None = None
+        async with self.uow(ctx.tenant_id) as uow:
+            dataset = await uow.datasets.get(dataset_id)
+            if not dataset:
+                raise NotFound("dataset not found")
+            if version_no is not None:
+                version = await uow.versions.get(dataset_id, version_no)
+                if not version:
+                    raise NotFound("version not found")
+            elif dataset.current_version_id:
+                version = await uow.versions.get_by_id(dataset.current_version_id)
+            else:
+                version = None
+            if version is None:
+                raise ValidationFailed(
+                    "dataset has no registered version to export"
+                )
+            if version.expired:
+                raise Gone("that dataset version has been expired by retention")
+            # Fail before creating an operation row if the name cannot be
+            # expressed in query-service's {{dataset(...)}} macro.
+            try:
+                build_export_sql(dataset.name, version.version_no)
+            except UnsafeDatasetName as exc:
+                raise ValidationFailed(str(exc)) from exc
+            if (await uow.exports.count_active(dataset_id)
+                    >= self.settings.export_max_concurrent_per_dataset):
+                raise RateLimited(
+                    "too many exports already running for this dataset "
+                    f"(max {self.settings.export_max_concurrent_per_dataset})"
+                )
+
+            export = DatasetExport(
+                id=str(uuid7()),
+                tenant_id=ctx.tenant_id,
+                dataset_id=dataset_id,
+                version_id=version.id,
+                version_no=version.version_no,
+                version_urn=version_urn(ctx.tenant_id, dataset_id, version.version_no),
+                format=fmt,
+                created_by=ctx.actor.get("id", "unknown"),
+                created_at=self.clock.now(),
+                status=ExportStatus.PENDING,
+            )
+            await uow.exports.add(export)
+            await self._emit(
+                uow, ctx, "dataset.export.requested", export.version_urn,
+                {"export_id": export.id, "dataset_id": dataset_id,
+                 "version_no": version.version_no, "format": fmt},
+            )
+            spec = DatasetExportJobSpec(
+                tenant_id=ctx.tenant_id,
+                export_id=export.id,
+                dataset_id=dataset_id,
+                dataset_name=dataset.name,
+                version_no=version.version_no,
+                format=fmt,
+                bearer_token=bearer_token,
+                actor=ctx.actor,
+                trace_id=ctx.trace_id,
+            )
+            await uow.commit()
+        # Launch strictly after commit, so the runner can never report against a
+        # row that does not exist yet.
+        await self.deps.export_runner_provider().launch(spec)
+        return export
+
+    async def get(self, ctx: CallCtx, export_id: str) -> DatasetExport:
+        async with self.uow(ctx.tenant_id) as uow:
+            export = await uow.exports.get(export_id)
+            if not export:
+                raise NotFound("export not found")
+            return export
+
+    async def complete(self, ctx: CallCtx, export_id: str, body: dict) -> DatasetExport:
+        """Runner callback. Idempotent: a second report for a terminal export is
+        a no-op, so a retried/duplicated run can never rewrite a finished row."""
+        async with self.uow(ctx.tenant_id) as uow:
+            export = await uow.exports.get(export_id)
+            if not export:
+                raise NotFound("export not found")
+            if export.status in (ExportStatus.COMPLETED, ExportStatus.FAILED):
+                return export
+            now = self.clock.now()
+            export.started_at = export.started_at or now
+            export.finished_at = now
+            export.query_execution_id = (
+                body.get("query_execution_id") or export.query_execution_id
+            )
+            if body.get("status") == "completed":
+                export.status = ExportStatus.COMPLETED
+                export.download_url = body.get("download_url")
+                export.row_count = body.get("row_count")
+                export.expires_at = _parse_dt(body.get("expires_at"))
+                event = "dataset.export.completed"
+            else:
+                export.status = ExportStatus.FAILED
+                export.error = str(body.get("error") or "export failed")
+                event = "dataset.export.failed"
+            await uow.exports.update(export)
+            await self._emit(
+                uow, ctx, event, export.version_urn,
+                {"export_id": export.id, "dataset_id": export.dataset_id,
+                 "version_no": export.version_no, "format": export.format,
+                 "query_execution_id": export.query_execution_id,
+                 "error": export.error},
+            )
+            await uow.commit()
+            return export
+
+
+def _parse_dt(value):
+    """Parse query-service's RFC3339 expires_at (it ends in `Z`, which
+    fromisoformat rejects before 3.11's relaxation — normalize it)."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 class LineageService(_Base):

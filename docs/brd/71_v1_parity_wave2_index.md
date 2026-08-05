@@ -1,6 +1,7 @@
 # BRD 71–75 — V1 → Datacern Parity Wave 2 (initiative index)
 
-**Status:** IN PROGRESS — 2026-08-05 · 5/11 gaps closed (BRD 71, 72 inc1–inc2 and 75 landed; 73–74 open)
+**Status:** IN PROGRESS — 2026-08-05 · 9/11 gaps closed (BRD 71, 72 inc1–inc2 and 75 landed;
+74 partial — D1+D2 landed, D3 deferred; 73 pending merge)
 **Owner:** platform · **Driver:** a second cross-verification of the legacy V1 platform
 (Rails/Flask services + Argo + pandas component containers) against Datacern's rebuilt
 services. The [wave-1 index](62_pipeline_ml_parity_index.md) audited **pipeline + ML
@@ -142,5 +143,5 @@ over-engineer.
 | **71** pipeline builder completeness | U1, U2, P6 | **inc1–inc4 DONE** — backend (`drop-columns`, exclude mode, `GET /resource-policy`, `effective_resources`), BFF (`pipelineResourcePolicy`, `effectiveResources`), UI (resource round trip + "Resource Parameters" group + DAG schema propagation), agent (clamped envelope proposal). 74 new tests; orchestrator 220 / bff 450 / ui-web 876 / agent-runtime 409 all green. Live-verify pending. |
 | **72** chart renderer completeness | V1c, V2c | **inc1–inc2 DONE** — every catalogued type now has a true renderer (boxplot / waterfall / combination / histogram / sankey / treemap / sunburst / chord / force-graph / tree / bubble size channel), the network family's `graph` data path is threaded through ui-web, and `geo_map_chart` is a declared gap. 45 tests; ui-web 921 green. **inc3 (run charts) is backend-first**: `experiment-service` has no `GET /artifacts?urn=` and the executor logs no ROC points or tree structure, so those renderers have no real data yet. |
 | **73** batch job orchestration | B1, B2 | OPEN |
-| **74** discovery & export completeness | D1, D2, D3 | OPEN |
+| **74** discovery & export completeness | D1, D2, D3 | **PARTIAL — D2 + D1 DONE, D3 DEFERRED.** chart-service `GET /charts?q=` (cross-dashboard, RLS, cursor-paged); dataset-service `POST /datasets/{id}/exports` + `GET /exports/{id}`, version-pinned and delegated to query-service's export path (migration 0007, new action `dataset.dataset.export`). 58 new tests; chart-service unit+integration and dataset-service 301 unit / 22 integration all green. **D3 not built**: bff-graphql has no DB/consumer/cache *by CI-enforced policy*, so the specced projection would invert its architecture — the BRD records a fan-out redesign instead. Parquet export deferred (query-service returns 501). |
 | **75** profiling depth parity | F1 | **inc1–inc3 DONE** — schema_version 2: per-column entropy / skewness / kurtosis / mad / variance / monotonicity / top_values (numeric-only fields absent, never zeroed), correlations as a list of pearson + spearman + bias-corrected Cramér's V (cardinality cap 50, skipped not faked), depth rendered into the existing HTML artifact, and a new read-tier MCP tool `get_dataset_column_stats`. 34 new tests; dataset-service unit 304 + integration 19 green. Live-verified against real Iceberg REST + MinIO. Interactions / missing-value matrix / duplicate-row samples and Kendall's τ deferred (see the BRD). |
