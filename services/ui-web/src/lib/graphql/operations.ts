@@ -285,7 +285,7 @@ import type { ReportDefinition } from "@/lib/reports/catalog";
 export const ME = /* GraphQL */ `
   query Me {
     me {
-      userId tenantId tenantName workspaceId workspaceName type scopes isPlatformAdmin roles capabilities capsDegraded
+      userId tenantId tenantName workspaceId workspaceName type scopes isPlatformAdmin roles capabilities capsDegraded tenantDegraded
       displayLabels { key value }
       branding { configured hasLogo primaryColor accentColor updatedAt }
     }

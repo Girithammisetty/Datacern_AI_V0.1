@@ -375,6 +375,7 @@ export const en = {
   "charts.run.actualVsPredicted": "Actual \\ Predicted",
   "charts.run.confusionCaption": "Confusion matrix over {total} test rows.",
   "charts.run.noConfusionMatrix": "This run has no confusion matrix — it is only computed for classification runs with 10 or fewer classes.",
+  "shell.tenantUnavailable": "Tenant name unavailable — the identity lookup failed, so this is the tenant ID.",
   "charts.engineFailed": "Interactive chart engine failed to start — showing a static chart. See the console for details.",
   "charts.run.labelsUnavailable": "Class names are unavailable for this run — the row/column headers are positional indices, not labels.",
   "charts.run.aucLabel": "ROC AUC",

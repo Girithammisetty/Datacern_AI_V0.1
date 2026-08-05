@@ -308,7 +308,7 @@ interface ViewerParent {
   scopes: string[];
   workspaceId: string;
   _caps?: Promise<ViewerCaps>;
-  _tenant?: Promise<{ name: string | null; displayName: string | null }>;
+  _tenant?: Promise<{ name: string | null; displayName: string | null; degraded: boolean }>;
   _labels?: Promise<Array<{ key: string; value: string }>>;
   _branding?: Promise<{
     __typename: "TenantBranding";
@@ -343,10 +343,15 @@ function viewerTenant(parent: ViewerParent, ctx: GraphQLContext) {
   if (!parent._tenant) {
     parent._tenant = ctx.clients.identity
       .tenantSelf()
-      .then((t) => ({ name: t.name ?? null, displayName: t.display_name ?? null }))
+      .then((t) => ({ name: t.name ?? null, displayName: t.display_name ?? null,
+                      degraded: false }))
       .catch((e) => {
+        // Distinguishable degradation signal, mirroring viewerCaps. Returning
+        // bare nulls made an identity OUTAGE render identically to a tenant that
+        // genuinely has no display name — the UI showed a blank tenant chip and
+        // nothing, anywhere, said the lookup had failed.
         console.error("viewerTenant: identity tenantSelf failed", e);
-        return { name: null, displayName: null };
+        return { name: null, displayName: null, degraded: true };
       });
   }
   return parent._tenant;
@@ -6781,6 +6786,11 @@ export const resolvers = {
       viewerTenant(parent, ctx).then((t) => t.displayName || t.name),
     tenantDisplayName: (parent: ViewerParent, _a: unknown, ctx: GraphQLContext) =>
       viewerTenant(parent, ctx).then((t) => t.displayName),
+    // True when the identity lookup FAILED and the null name is the fallback,
+    // not the tenant's real (absent) label. Without it the two are identical on
+    // the wire.
+    tenantDegraded: (parent: ViewerParent, _a: unknown, ctx: GraphQLContext) =>
+      viewerTenant(parent, ctx).then((t) => t.degraded),
     workspaceId: (parent: ViewerParent) => parent.workspaceId || null,
     workspaceName: (parent: ViewerParent, _a: unknown, ctx: GraphQLContext) =>
       viewerCaps(parent, ctx).then((c) => c.workspaceName || null),

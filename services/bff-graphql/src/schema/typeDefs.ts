@@ -81,6 +81,13 @@ export const typeDefs = gql`
     member-visible, null if the lookup fails)."""
     tenantName: String
     tenantDisplayName: String
+    """
+    True when the identity /tenants/self lookup FAILED, so a null tenantName is
+    the fallback rather than a tenant that genuinely has no display name. The two
+    are otherwise indistinguishable on the wire, which let an identity outage
+    render as an ordinary blank tenant chip.
+    """
+    tenantDegraded: Boolean
     """The workspace the token is scoped to + its display name (rbac
     /me/capabilities workspace_name; null when unresolvable)."""
     workspaceId: ID
