@@ -112,24 +112,36 @@ Plus `outbox`, `idempotency_keys`.
 
 `VALIDATION_FAILED` (422: bad URN, bad activity, depth >10, self-edge) · `NOT_FOUND` (404, incl. cross-tenant) · `CONFLICT` (409: name, duplicate snapshot registration, profile already running, delete-with-consumers, stale If-Match) · `GONE` (410: restore window passed, profile objects GC'd) · `PERMISSION_DENIED` (403) · `RATE_LIMITED` (429: profile re-trigger max 3/hour/dataset).
 
-### 4.4 Profile content specification (`profile.json`, schema_version 1)
+### 4.4 Profile content specification (`profile.json`, schema_version 2)
 ```
 { schema_version, dataset_urn, version_no, generated_at, profiler_version,
   sample: {strategy: full|reservoir, fraction, seed},
   table: {row_count, column_count, bytes, duplicate_row_pct},
   columns: [{ name, logical_type, inferred_semantic, nullable,
       null_count, null_pct, distinct_count, distinct_pct, is_unique,
+      entropy,                                                 # every column, bits (log2)
+      top_values: [{value, count, pct}] (K=10, cap 20, values truncated 128 chars),
       min, max, mean, stddev, median, p5, p25, p75, p95,      # numeric/temporal
+      skewness, kurtosis (excess), mad (mean abs. dev.), variance,     # numeric
+      monotonic: none|increasing|decreasing|strictly_*,        # numeric/temporal
       histogram: {bins:[{lo,hi,count}], max_bins: 50},         # numeric/temporal
-      top_values: [{value, count}] (≤20, values truncated 128 chars),  # categorical/string
       min_length, max_length, avg_length,                      # string
       true_count, false_count,                                 # boolean
       tags: [pii:<kind>|pii_suspect|id|…],
       quality_flags: [HIGH_NULLS(>20%)|CONSTANT|MOSTLY_UNIQUE|MIXED_TYPES|
                       OUTLIERS_IQR|SKEWED|FUTURE_DATES|NEGATIVE_IN_AMOUNT] }],
-  correlations: {method: spearman, pairs: [[a,b,r]] (|r|≥0.5, ≤200 pairs)},
+  correlations: [ {method: pearson|spearman, pairs: [[a,b,r]]},
+                  {method: cramers_v, pairs: [[a,b,v]], max_cardinality: 50,
+                   columns: [...], skipped_high_cardinality: [...]} ]
+                (|r|≥0.5, ≤200 pairs per matrix),
   alerts: [{column?, flag, severity: info|warn, detail}] }
 ```
+A field that does not apply to a column is **absent**, never zero, so a consumer can tell
+"not applicable" from "actually zero"; the same holds for a statistic that is undefined on
+the rows at hand (sample variance of one row). schema_version 1 documents (single
+`correlations` dict, no entropy/shape/top-value pcts) still deserialize — every addition is
+optional (BRD 75).
+
 HTML report renders the same document (no pandas-profiling runtime dependency in consumers).
 
 Quality-flag definitions (deterministic thresholds, profiler_version-pinned):
@@ -191,7 +203,7 @@ GET /api/v1/lineage?urn=wr:t-42:dataset:dataset/018f..&direction=upstream&depth=
             "activity":"ingested","occurred_at":"2026-07-01T02:00:14Z"}],"truncated":false}}
 ```
 
-**MCP facade (read-only tier):** `search_datasets(q, filters)`, `get_dataset(urn)`, `get_dataset_schema(urn, version?)`, `get_dataset_profile(urn, version?)` (summary only, no signed URLs), `get_lineage(urn, direction, depth≤5)`, `find_similar_datasets(columns[])`.
+**MCP facade (read-only tier):** `search_datasets(q, filters)`, `get_dataset(urn)`, `get_dataset_schema(urn, version?)`, `get_dataset_profile(urn, version?)` (summary only, no signed URLs), `get_dataset_column_stats(urn, version?, columns?)` (the schema_version-2 depth statistics + correlation matrices read from `profile.json`, still no signed URLs — BRD 75), `get_lineage(urn, direction, depth≤5)`, `find_similar_datasets(columns[])`.
 
 ## 6. Events
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.domain.profiling.engine import TOP_VALUES_K
 from tests.conftest import SPIFFE_INGESTION, TENANT_A, TENANT_B, create_dataset
 
 SPIFFE_SEMANTIC = "spiffe://datacern/ns/data/sa/semantic-service"
@@ -111,8 +112,10 @@ class TestInternalDetail:
         # categorical string columns carry their real most-frequent values
         assert top["claim_type"] == ["auto"]
         assert top["vendor"] == ["acme"]
-        # every unique claim_id appears (14 rows < MAX_TOP_VALUES=20)
-        assert set(top["claim_id"]) == {f"C{i}" for i in range(14)}
+        # the most frequent K values only (BRD 75: K = TOP_VALUES_K = 10, the
+        # same slice semantic-service applies to sample_values anyway)
+        assert len(top["claim_id"]) == TOP_VALUES_K
+        assert set(top["claim_id"]) <= {f"C{i}" for i in range(14)}
         # values are raw strings (semantic-service slices sample_values[:10])
         assert all(isinstance(v, str) for vals in top.values() for v in vals)
 
