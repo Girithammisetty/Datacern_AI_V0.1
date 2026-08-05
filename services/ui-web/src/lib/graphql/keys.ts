@@ -77,6 +77,10 @@ export const qk = {
   pipelineRunManifest: (id: string) => ["pipelines", "runManifest", id] as const,
   pipelineTemplateVersions: (templateId: string) => ["pipelines", "templateVersions", templateId] as const,
   pipelineSchedules: () => ["pipelines", "schedules"] as const,
+  // BRD 73 — batch jobs (chained ingest → run).
+  batchJobs: () => ["pipelines", "batchJobs"] as const,
+  batchJobRuns: (batchJobId: string) => ["pipelines", "batchJobRuns", batchJobId] as const,
+  batchJobRun: (id: string) => ["pipelines", "batchJobRun", id] as const,
 
   cases: (filters: unknown) => ["cases", "list", filters] as const,
   case: (id: string) => ["cases", "case", id] as const,

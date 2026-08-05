@@ -4123,6 +4123,155 @@ export const typeDefs = gql`
     runParameters: JSON
   }
 
+  # ---------------------------------------------------------------------------
+  # BRD 73 — batch jobs: chained ingest -> run.
+  # ---------------------------------------------------------------------------
+  """
+  A recurring job that chains *pull the sources, then run the pipeline over
+  exactly that batch* (pipeline-orchestrator /batch-jobs, BRD 73). Binds a
+  pipeline template (optionally pinned to one version) to a set of source
+  connections and a cron cadence, so "every night pull the claims feed and score
+  it" is one governed object rather than two independent crons with a hopeful gap
+  between them.
+  """
+  type BatchJob implements Node {
+    id: ID!
+    urn: String!
+    name: String!
+    workspaceId: ID
+    pipelineTemplateId: ID!
+    """Pinned pipeline version; null means each run pins whatever version was
+    active when it fired."""
+    pipelineVersionId: ID
+    """V1's \`connections\` JSON, typed: [{binding_key, connection_id,
+    dataset_urn, workspace_id, ingestion_params}]. One ingestion is fired per
+    entry in the run's trigger phase."""
+    connectionBindings: JSON!
+    """Cron cadence; null for a run-now-only job."""
+    cron: String
+    timezone: String
+    runParameters: JSON
+    paused: Boolean!
+    """Per-phase deadline override in seconds; null uses the service default."""
+    phaseTimeoutSeconds: Int
+    startAt: DateTime
+    endAt: DateTime
+    nextFireAt: DateTime
+    lastFireAt: DateTime
+    lastRunId: ID
+    createdBy: String
+    createdAt: DateTime
+    updatedAt: DateTime
+  }
+
+  type BatchJobList { nodes: [BatchJob!]! pageInfo: PageInfo! }
+
+  """
+  One binding's ingestion inside a batch job run — the per-binding row the phase
+  timeline renders. \`datasetVersionUrn\` + \`icebergSnapshotId\` are the pin
+  that makes the pipeline phase run over exactly the data this run landed
+  (BRD 73 AC-3); they are only known once dataset-service has minted the version,
+  which is why a \`completed\` ingestion can still be missing them.
+  """
+  type BatchJobRunIngestion {
+    """Stable per-binding key; half of the ingestion Idempotency-Key."""
+    bindingKey: String!
+    ingestionId: ID
+    """triggered | completed | failed | cancelled."""
+    status: String!
+    datasetUrn: String
+    icebergSnapshotId: String
+    datasetVersionUrn: String
+    error: JSON
+    createdAt: DateTime
+    updatedAt: DateTime
+  }
+
+  """
+  One \`trigger → ingestion → pipeline\` execution of a BatchJob
+  (pipeline-orchestrator GET /batch-job-runs/{id}). \`phase\` is where the run
+  is (or, once terminal, where it stopped) and \`status\` is how it is doing
+  there.
+  """
+  type BatchJobRun implements Node {
+    id: ID!
+    urn: String!
+    batchJobId: ID!
+    """Stamped on every ingestion this run fires, so a re-drive replays rather
+    than double-ingests (AC-4). Equal to the run's own id."""
+    batchKey: String!
+    pipelineTemplateId: ID!
+    pipelineVersionId: ID
+    """trigger | ingestion | pipeline (BatchPhase)."""
+    phase: String!
+    """pending | running | succeeded | failed | cancelled (BatchRunStatus)."""
+    status: String!
+    """What started this run: schedule | manual | retry."""
+    trigger: String!
+    """The pipeline run the pipeline phase submitted; null until it does."""
+    pipelineRunId: ID
+    """The exact dataset VERSION urns the ingestion phase landed and the
+    pipeline phase was pinned to."""
+    inputDatasetUrns: [String!]!
+    outputDatasetUrns: [String!]!
+    """Phase-scoped failure detail, e.g. {code: BATCH_INGESTION_FAILED, phase}."""
+    error: JSON
+    phaseDeadlineAt: DateTime
+    """Set on runs created by retryBatchJobRun: the failed run this one resumes."""
+    retriedFromRunId: ID
+    submittedBy: String
+    createdAt: DateTime
+    startedAt: DateTime
+    finishedAt: DateTime
+    """The per-binding phase timeline. NULL — not [] — on the runs LIST, which
+    does not serialize it; only \`batchJobRun(id:)\` carries it. Null means "not
+    loaded"; [] would mean "this run fired nothing"."""
+    ingestions: [BatchJobRunIngestion!]
+  }
+
+  type BatchJobRunList { nodes: [BatchJobRun!]! pageInfo: PageInfo! }
+
+  """One source connection to pull before the pipeline runs. \`bindingKey\`
+  defaults server-side to the list position and is stable across retries."""
+  input BatchJobBindingInput {
+    connectionId: ID!
+    bindingKey: String
+    datasetUrn: String
+    workspaceId: ID
+    ingestionParams: JSON
+  }
+
+  """Create a batch job (pipeline-orchestrator POST /batch-jobs). The owning
+  workspace comes from the caller's JWT claim, as it does for createPipeline.
+  At least one binding is required."""
+  input CreateBatchJobInput {
+    name: String!
+    pipelineTemplateId: ID!
+    pipelineVersionId: ID
+    connectionBindings: [BatchJobBindingInput!]!
+    cron: String
+    timezone: String
+    runParameters: JSON
+    startAt: DateTime
+    endAt: DateTime
+    paused: Boolean
+    phaseTimeoutSeconds: Int
+  }
+
+  """Partial update (pipeline-orchestrator PATCH /batch-jobs/{id}); omitted
+  fields are left untouched. \`startAt\` is not updatable — the backend's
+  BatchJobUpdate has no such field."""
+  input UpdateBatchJobInput {
+    name: String
+    pipelineVersionId: ID
+    connectionBindings: [BatchJobBindingInput!]
+    cron: String
+    timezone: String
+    runParameters: JSON
+    endAt: DateTime
+    phaseTimeoutSeconds: Int
+  }
+
   # ===========================================================================
   # Tier 2a: eval (eval-service) — eval flywheel: suites/runs/gates/canaries.
   # ===========================================================================
@@ -5880,6 +6029,21 @@ export const typeDefs = gql`
     /pipeline-schedules). Needs pipeline.schedule.read."""
     pipelineSchedules: [PipelineSchedule!]!
 
+    """Batch jobs (chained ingest → run), cursor-paginated
+    (pipeline-orchestrator GET /batch-jobs, BRD 73). Needs pipeline.batch_job.read."""
+    batchJobs(first: Int = 50, after: String): BatchJobList!
+    """A single batch job (pipeline-orchestrator GET /batch-jobs/{id}). Null when
+    it does not exist or belongs to another tenant. Needs pipeline.batch_job.read."""
+    batchJob(id: ID!): BatchJob
+    """A batch job's run history, cursor-paginated (pipeline-orchestrator GET
+    /batch-jobs/{id}/runs). These runs carry NO \`ingestions\` — fetch
+    \`batchJobRun(id:)\` for the per-binding phase timeline. Needs
+    pipeline.batch_job.read."""
+    batchJobRuns(batchJobId: ID!, first: Int = 50, after: String): BatchJobRunList!
+    """A single batch job run WITH its per-binding phase timeline
+    (pipeline-orchestrator GET /batch-job-runs/{id}). Needs pipeline.batch_job.read."""
+    batchJobRun(id: ID!): BatchJobRun
+
     """Active agent kill switches (agent-runtime GET /registry/kill-switches).
     Operators see every tenant's; a tenant admin sees their own tenant's +
     platform-global kills. Emergency-stop admin surface, not a general read."""
@@ -7428,6 +7592,34 @@ export const typeDefs = gql`
     """Delete a schedule (pipeline-orchestrator DELETE /pipeline-schedules/{id},
     204). Needs pipeline.schedule.delete."""
     deletePipelineSchedule(id: ID!): Boolean!
+
+    """Create a batch job (pipeline-orchestrator POST /batch-jobs, 201). BRD 73.
+    Needs pipeline.batch_job.create."""
+    createBatchJob(input: CreateBatchJobInput!): BatchJob!
+    """Update a batch job (pipeline-orchestrator PATCH /batch-jobs/{id}). Needs
+    pipeline.batch_job.update."""
+    updateBatchJob(id: ID!, input: UpdateBatchJobInput!): BatchJob!
+    """Pause a batch job — it stops firing (pipeline-orchestrator POST
+    /batch-jobs/{id}/pause). Needs pipeline.batch_job.update."""
+    pauseBatchJob(id: ID!): BatchJob!
+    """Resume a paused batch job (pipeline-orchestrator POST
+    /batch-jobs/{id}/resume). Needs pipeline.batch_job.update."""
+    resumeBatchJob(id: ID!): BatchJob!
+    """Force one fire now (pipeline-orchestrator POST /batch-jobs/{id}/run-now,
+    202). Returns the newly created RUN, which starts in the trigger phase and is
+    driven after the response. Needs pipeline.batch_job.execute."""
+    runBatchJobNow(id: ID!): BatchJobRun!
+    """Delete a batch job (pipeline-orchestrator DELETE /batch-jobs/{id}, 204).
+    Needs pipeline.batch_job.delete."""
+    deleteBatchJob(id: ID!): Boolean!
+    """Retry a FAILED batch job run, resuming from the phase it failed in rather
+    than from trigger — re-running a succeeded ingestion phase would
+    double-ingest (pipeline-orchestrator POST /batch-job-runs/{id}/retry, 202).
+    Needs pipeline.batch_job.execute."""
+    retryBatchJobRun(id: ID!): BatchJobRun!
+    """Cancel an active batch job run (pipeline-orchestrator PUT
+    /batch-job-runs/{id}/terminate). Needs pipeline.batch_job.execute."""
+    terminateBatchJobRun(id: ID!): BatchJobRun!
 
     """
     Create an ML experiment (experiment-service POST /experiments, 201). The owning

@@ -152,6 +152,9 @@ import type {
   PipelineTemplate,
   PipelineSchedule,
   CreatePipelineScheduleInput,
+  BatchJob,
+  BatchJobRun,
+  CreateBatchJobInput,
   Proposal,
   ReportSubscription,
   Run,
@@ -1779,6 +1782,125 @@ export const DELETE_PIPELINE_SCHEDULE = /* GraphQL */ `
 `;
 export interface DeletePipelineScheduleResult {
   deletePipelineSchedule: boolean;
+}
+
+/* ---------- BRD 73: batch jobs (chained ingest → run) ---------- */
+const BATCH_JOB_FIELDS = /* GraphQL */ `
+  id urn name workspaceId pipelineTemplateId pipelineVersionId connectionBindings
+  cron timezone runParameters paused phaseTimeoutSeconds startAt endAt
+  nextFireAt lastFireAt lastRunId createdBy createdAt updatedAt
+`;
+
+/** Everything on a run EXCEPT `ingestions` — the runs list does not carry it. */
+const BATCH_JOB_RUN_FIELDS = /* GraphQL */ `
+  id urn batchJobId batchKey pipelineTemplateId pipelineVersionId
+  phase status trigger pipelineRunId inputDatasetUrns outputDatasetUrns
+  error phaseDeadlineAt retriedFromRunId submittedBy createdAt startedAt finishedAt
+`;
+
+export const BATCH_JOBS = /* GraphQL */ `
+  query BatchJobs($first: Int, $after: String) {
+    batchJobs(first: $first, after: $after) {
+      nodes { ${BATCH_JOB_FIELDS} }
+      pageInfo { nextCursor hasMore }
+    }
+  }
+`;
+export interface BatchJobsResult {
+  batchJobs: Connection<BatchJob>;
+}
+
+export const BATCH_JOB_RUNS = /* GraphQL */ `
+  query BatchJobRuns($batchJobId: ID!, $first: Int, $after: String) {
+    batchJobRuns(batchJobId: $batchJobId, first: $first, after: $after) {
+      nodes { ${BATCH_JOB_RUN_FIELDS} }
+      pageInfo { nextCursor hasMore }
+    }
+  }
+`;
+export interface BatchJobRunsResult {
+  batchJobRuns: Connection<BatchJobRun>;
+}
+
+/** The single-run read — the ONLY operation that carries the per-binding phase
+ * timeline (`ingestions`). */
+export const BATCH_JOB_RUN = /* GraphQL */ `
+  query BatchJobRun($id: ID!) {
+    batchJobRun(id: $id) {
+      ${BATCH_JOB_RUN_FIELDS}
+      ingestions {
+        bindingKey ingestionId status datasetUrn icebergSnapshotId
+        datasetVersionUrn error createdAt updatedAt
+      }
+    }
+  }
+`;
+export interface BatchJobRunResult {
+  batchJobRun: BatchJobRun | null;
+}
+
+export const CREATE_BATCH_JOB = /* GraphQL */ `
+  mutation CreateBatchJob($input: CreateBatchJobInput!) {
+    createBatchJob(input: $input) { ${BATCH_JOB_FIELDS} }
+  }
+`;
+export interface CreateBatchJobResult {
+  createBatchJob: BatchJob;
+}
+export type { CreateBatchJobInput };
+
+export const PAUSE_BATCH_JOB = /* GraphQL */ `
+  mutation PauseBatchJob($id: ID!) {
+    pauseBatchJob(id: $id) { ${BATCH_JOB_FIELDS} }
+  }
+`;
+export interface PauseBatchJobResult {
+  pauseBatchJob: BatchJob;
+}
+
+export const RESUME_BATCH_JOB = /* GraphQL */ `
+  mutation ResumeBatchJob($id: ID!) {
+    resumeBatchJob(id: $id) { ${BATCH_JOB_FIELDS} }
+  }
+`;
+export interface ResumeBatchJobResult {
+  resumeBatchJob: BatchJob;
+}
+
+export const RUN_BATCH_JOB_NOW = /* GraphQL */ `
+  mutation RunBatchJobNow($id: ID!) {
+    runBatchJobNow(id: $id) { ${BATCH_JOB_RUN_FIELDS} }
+  }
+`;
+export interface RunBatchJobNowResult {
+  runBatchJobNow: BatchJobRun;
+}
+
+export const DELETE_BATCH_JOB = /* GraphQL */ `
+  mutation DeleteBatchJob($id: ID!) {
+    deleteBatchJob(id: $id)
+  }
+`;
+export interface DeleteBatchJobResult {
+  deleteBatchJob: boolean;
+}
+
+export const RETRY_BATCH_JOB_RUN = /* GraphQL */ `
+  mutation RetryBatchJobRun($id: ID!) {
+    retryBatchJobRun(id: $id) { ${BATCH_JOB_RUN_FIELDS} }
+  }
+`;
+export interface RetryBatchJobRunResult {
+  retryBatchJobRun: BatchJobRun;
+}
+
+export const TERMINATE_BATCH_JOB_RUN = /* GraphQL */ `
+  mutation TerminateBatchJobRun($id: ID!) {
+    terminateBatchJobRun(id: $id) { ${BATCH_JOB_RUN_FIELDS} }
+  }
+`;
+export interface TerminateBatchJobRunResult {
+  terminateBatchJobRun: BatchJobRun;
 }
 
 export const CASE_SEARCH = /* GraphQL */ `

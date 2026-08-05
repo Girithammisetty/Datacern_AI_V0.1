@@ -39,6 +39,8 @@ import type {
   CreatePipelineInput,
   UpdatePipelineInput,
   CreatePipelineScheduleInput,
+  CreateBatchJobInput,
+  BatchJobRun,
   CreateWorkspaceInput,
   PipelineRun,
   CreateTeamInput,
@@ -1796,6 +1798,138 @@ export function useDeletePipelineSchedule() {
     mutationFn: (id: string) =>
       graphqlRequest<ops.DeletePipelineScheduleResult>(ops.DELETE_PIPELINE_SCHEDULE, { id }),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.pipelineSchedules() }),
+  });
+}
+
+/* ------- BRD 73: batch jobs (chained ingest → run) ------- */
+
+/** BatchRunStatus values that are terminal (enums.py BATCH_TERMINAL_STATUSES).
+ * Anything else is being driven or is parked waiting on ingestion events. */
+const BATCH_RUN_TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
+
+export function useBatchJobs() {
+  return useInfiniteQuery({
+    queryKey: qk.batchJobs(),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      graphqlRequest<ops.BatchJobsResult>(ops.BATCH_JOBS, { first: PAGE, after: pageParam }).then(
+        (r) => r.batchJobs,
+      ),
+    getNextPageParam: (last) => (last.pageInfo.hasMore ? last.pageInfo.nextCursor : undefined),
+  });
+}
+
+export function useBatchJobRuns(batchJobId: string) {
+  return useInfiniteQuery({
+    queryKey: qk.batchJobRuns(batchJobId),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      graphqlRequest<ops.BatchJobRunsResult>(ops.BATCH_JOB_RUNS, {
+        batchJobId,
+        first: PAGE,
+        after: pageParam,
+      }).then((r) => r.batchJobRuns),
+    getNextPageParam: (last) => (last.pageInfo.hasMore ? last.pageInfo.nextCursor : undefined),
+    enabled: !!batchJobId,
+    // The ingestion phase advances off ingestion-service events on the server,
+    // so nothing pushes to this client — poll while any loaded run is still
+    // non-terminal, and stop once they all are.
+    refetchInterval: (query) => {
+      const pages = query.state.data?.pages ?? [];
+      const anyActive = pages.some((pg: { nodes: BatchJobRun[] }) =>
+        pg.nodes.some((n) => !BATCH_RUN_TERMINAL.has(String(n.status ?? "").toLowerCase())),
+      );
+      return anyActive ? 5_000 : false;
+    },
+  });
+}
+
+/** The single-run read — the only one that carries the per-binding phase
+ * timeline (`ingestions`). */
+export function useBatchJobRun(id: string | null) {
+  return useQuery({
+    queryKey: qk.batchJobRun(id ?? ""),
+    queryFn: () =>
+      graphqlRequest<ops.BatchJobRunResult>(ops.BATCH_JOB_RUN, { id }).then((r) => r.batchJobRun),
+    enabled: !!id,
+    refetchInterval: (query) =>
+      BATCH_RUN_TERMINAL.has(String(query.state.data?.status ?? "").toLowerCase()) ? false : 5_000,
+  });
+}
+
+export function useCreateBatchJob() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateBatchJobInput) =>
+      graphqlRequest<ops.CreateBatchJobResult>(ops.CREATE_BATCH_JOB, { input }).then(
+        (r) => r.createBatchJob,
+      ),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.batchJobs() }),
+  });
+}
+
+export function usePauseBatchJob() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.PauseBatchJobResult>(ops.PAUSE_BATCH_JOB, { id }).then((r) => r.pauseBatchJob),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.batchJobs() }),
+  });
+}
+
+export function useResumeBatchJob() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.ResumeBatchJobResult>(ops.RESUME_BATCH_JOB, { id }).then((r) => r.resumeBatchJob),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.batchJobs() }),
+  });
+}
+
+export function useRunBatchJobNow() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.RunBatchJobNowResult>(ops.RUN_BATCH_JOB_NOW, { id }).then(
+        (r) => r.runBatchJobNow,
+      ),
+    onSuccess: (run) => {
+      client.invalidateQueries({ queryKey: qk.batchJobs() });
+      client.invalidateQueries({ queryKey: qk.batchJobRuns(run.batchJobId) });
+    },
+  });
+}
+
+export function useDeleteBatchJob() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => graphqlRequest<ops.DeleteBatchJobResult>(ops.DELETE_BATCH_JOB, { id }),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.batchJobs() }),
+  });
+}
+
+export function useRetryBatchJobRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.RetryBatchJobRunResult>(ops.RETRY_BATCH_JOB_RUN, { id }).then(
+        (r) => r.retryBatchJobRun,
+      ),
+    onSuccess: (run) => client.invalidateQueries({ queryKey: qk.batchJobRuns(run.batchJobId) }),
+  });
+}
+
+export function useTerminateBatchJobRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      graphqlRequest<ops.TerminateBatchJobRunResult>(ops.TERMINATE_BATCH_JOB_RUN, { id }).then(
+        (r) => r.terminateBatchJobRun,
+      ),
+    onSuccess: (run) => {
+      client.invalidateQueries({ queryKey: qk.batchJobRuns(run.batchJobId) });
+      client.invalidateQueries({ queryKey: qk.batchJobRun(run.id) });
+    },
   });
 }
 

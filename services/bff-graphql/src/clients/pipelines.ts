@@ -211,6 +211,116 @@ export interface CreatePipelineScheduleBody {
   run_parameters?: Record<string, unknown>;
 }
 
+// ---- batch jobs (BRD 73) ----------------------------------------------------
+
+/** One batch datasource a job pulls before its pipeline runs (schemas.py
+ * ConnectionBinding, stored on `BatchJob.connection_bindings`). `binding_key`
+ * defaults server-side to the list position and is half of the ingestion
+ * Idempotency-Key, so it is stable across retries. */
+export interface BatchJobBindingDTO {
+  connection_id: string;
+  binding_key?: string | null;
+  dataset_urn?: string | null;
+  workspace_id?: string | null;
+  ingestion_params?: Record<string, unknown>;
+}
+
+/** A recurring `trigger → ingestion → pipeline` job (batch_job_payload). */
+export interface BatchJobDTO {
+  id: string;
+  workspace_id?: string;
+  name: string;
+  pipeline_template_id: string;
+  pipeline_version_id?: string | null;
+  connection_bindings?: BatchJobBindingDTO[];
+  cron?: string | null;
+  timezone?: string;
+  run_parameters?: Record<string, unknown>;
+  paused?: boolean;
+  phase_timeout_seconds?: number | null;
+  start_at?: string | null;
+  end_at?: string | null;
+  next_fire_at?: string | null;
+  last_fire_at?: string | null;
+  last_run_id?: string | null;
+  created_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** One binding's ingestion within a run (batch_ingestion_payload) — the row the
+ * UI's phase timeline renders per binding. `status` is
+ * triggered | completed | failed | cancelled. */
+export interface BatchJobRunIngestionDTO {
+  binding_key: string;
+  ingestion_id?: string | null;
+  status: string;
+  dataset_urn?: string | null;
+  iceberg_snapshot_id?: string | null;
+  dataset_version_urn?: string | null;
+  error?: unknown;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** One execution of a batch job (batch_run_payload). `phase` is a BatchPhase
+ * NAME (trigger | ingestion | pipeline) and `status` a BatchRunStatus NAME
+ * (pending | running | succeeded | failed | cancelled). `ingestions` is present
+ * ONLY on GET /batch-job-runs/{id} — the list endpoint omits the key entirely,
+ * which is why it stays optional here rather than defaulting to []. */
+export interface BatchJobRunDTO {
+  id: string;
+  batch_job_id: string;
+  batch_key: string;
+  pipeline_template_id: string;
+  pipeline_version_id?: string | null;
+  phase: string;
+  status: string;
+  trigger: string;
+  pipeline_run_id?: string | null;
+  input_dataset_urns?: string[];
+  output_dataset_urns?: string[];
+  error?: unknown;
+  phase_deadline_at?: string | null;
+  retried_from_run_id?: string | null;
+  submitted_by?: string | null;
+  via_agent?: unknown;
+  created_at?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  ingestions?: BatchJobRunIngestionDTO[];
+}
+
+/** POST /batch-jobs body (schemas.BatchJobCreate). `workspace_id` and at least
+ * one binding are required by the server. */
+export interface CreateBatchJobBody {
+  workspace_id: string;
+  name: string;
+  pipeline_template_id: string;
+  pipeline_version_id?: string | null;
+  connection_bindings: BatchJobBindingDTO[];
+  cron?: string | null;
+  timezone?: string;
+  run_parameters?: Record<string, unknown>;
+  start_at?: string | null;
+  end_at?: string | null;
+  paused?: boolean;
+  phase_timeout_seconds?: number | null;
+}
+
+/** PATCH /batch-jobs/{id} body (schemas.BatchJobUpdate — model_dump(exclude_unset),
+ * so an omitted key is left untouched). `start_at` is NOT updatable server-side. */
+export interface UpdateBatchJobBody {
+  name?: string;
+  pipeline_version_id?: string | null;
+  connection_bindings?: BatchJobBindingDTO[];
+  cron?: string | null;
+  timezone?: string;
+  run_parameters?: Record<string, unknown>;
+  end_at?: string | null;
+  phase_timeout_seconds?: number | null;
+}
+
 function isEnvelopeBody(b: unknown): b is { data?: unknown; status?: unknown; items?: unknown } {
   return typeof b === "object" && b !== null;
 }
@@ -476,5 +586,116 @@ export class PipelinesClient {
   /** DELETE /pipeline-schedules/{id} — 204. Needs pipeline.schedule.delete. */
   async deletePipelineSchedule(id: string): Promise<void> {
     await this.http.delete<void>(`/api/v1/pipeline-schedules/${encodeURIComponent(id)}`);
+  }
+
+  // ---- batch jobs (BRD 73) -----------------------------------------------------
+  //
+  // NOTE: none of these take an `idempotencyKey`. The batch-job routes read no
+  // Idempotency-Key header (app/api/routes/batch_jobs.py) and the orchestrator
+  // has no idempotency middleware, so accepting one here would advertise a
+  // guarantee the backend does not make. What IS idempotent is the phase the
+  // job drives: the trigger phase keys each ingestion by
+  // `{batch_key}:{binding_key}` against ingestion-service, so a re-drive replays
+  // rather than double-ingests (BRD 73 AC-4). That is a server-side property and
+  // needs nothing from the caller.
+
+  /** GET /batch-jobs — cursor-paginated. Needs pipeline.batch_job.read. */
+  batchJobs(limit: number, cursor?: string): Promise<Page<BatchJobDTO>> {
+    return this.http.get<Page<BatchJobDTO>>("/api/v1/batch-jobs", { query: { limit, cursor } });
+  }
+
+  /** GET /batch-jobs/{id}. Needs pipeline.batch_job.read. */
+  async batchJob(id: string): Promise<BatchJobDTO> {
+    const r = await this.http.get<{ data: BatchJobDTO } | BatchJobDTO>(
+      `/api/v1/batch-jobs/${encodeURIComponent(id)}`,
+    );
+    return unwrap<BatchJobDTO>(r);
+  }
+
+  /** GET /batch-jobs/{id}/runs — cursor-paginated. The runs here carry NO
+   * `ingestions` key (only the single-run read does), so the per-binding
+   * timeline is fetched with `batchJobRun`. Needs pipeline.batch_job.read. */
+  batchJobRuns(jobId: string, limit: number, cursor?: string): Promise<Page<BatchJobRunDTO>> {
+    return this.http.get<Page<BatchJobRunDTO>>(
+      `/api/v1/batch-jobs/${encodeURIComponent(jobId)}/runs`,
+      { query: { limit, cursor } },
+    );
+  }
+
+  /** GET /batch-job-runs/{id} — the run WITH its per-binding phase timeline
+   * (`ingestions`). Needs pipeline.batch_job.read. */
+  async batchJobRun(id: string): Promise<BatchJobRunDTO> {
+    const r = await this.http.get<{ data: BatchJobRunDTO } | BatchJobRunDTO>(
+      `/api/v1/batch-job-runs/${encodeURIComponent(id)}`,
+    );
+    return unwrap<BatchJobRunDTO>(r);
+  }
+
+  /** POST /batch-jobs — create (201). Needs pipeline.batch_job.create. */
+  async createBatchJob(body: CreateBatchJobBody): Promise<BatchJobDTO> {
+    const r = await this.http.post<{ data: BatchJobDTO } | BatchJobDTO>("/api/v1/batch-jobs", {
+      body,
+    });
+    return unwrap<BatchJobDTO>(r);
+  }
+
+  /** PATCH /batch-jobs/{id} — partial update. Needs pipeline.batch_job.update. */
+  async updateBatchJob(id: string, body: UpdateBatchJobBody): Promise<BatchJobDTO> {
+    const r = await this.http.patch<{ data: BatchJobDTO } | BatchJobDTO>(
+      `/api/v1/batch-jobs/${encodeURIComponent(id)}`,
+      { body },
+    );
+    return unwrap<BatchJobDTO>(r);
+  }
+
+  /** POST /batch-jobs/{id}/pause. Needs pipeline.batch_job.update. */
+  async pauseBatchJob(id: string): Promise<BatchJobDTO> {
+    const r = await this.http.post<{ data: BatchJobDTO } | BatchJobDTO>(
+      `/api/v1/batch-jobs/${encodeURIComponent(id)}/pause`,
+    );
+    return unwrap<BatchJobDTO>(r);
+  }
+
+  /** POST /batch-jobs/{id}/resume. Needs pipeline.batch_job.update. */
+  async resumeBatchJob(id: string): Promise<BatchJobDTO> {
+    const r = await this.http.post<{ data: BatchJobDTO } | BatchJobDTO>(
+      `/api/v1/batch-jobs/${encodeURIComponent(id)}/resume`,
+    );
+    return unwrap<BatchJobDTO>(r);
+  }
+
+  /** POST /batch-jobs/{id}/run-now — force one fire (202). Returns the newly
+   * created RUN (not the job); the trigger phase is driven fire-and-forget after
+   * the 202. Needs pipeline.batch_job.execute. */
+  async runBatchJobNow(id: string): Promise<BatchJobRunDTO> {
+    const r = await this.http.post<{ data: BatchJobRunDTO } | BatchJobRunDTO>(
+      `/api/v1/batch-jobs/${encodeURIComponent(id)}/run-now`,
+    );
+    return unwrap<BatchJobRunDTO>(r);
+  }
+
+  /** DELETE /batch-jobs/{id} — 204. Needs pipeline.batch_job.delete. */
+  async deleteBatchJob(id: string): Promise<void> {
+    await this.http.delete<void>(`/api/v1/batch-jobs/${encodeURIComponent(id)}`);
+  }
+
+  /** POST /batch-job-runs/{id}/retry — resume a FAILED run from the phase it
+   * failed in (202). Retry is on the RUN, not the job: a job can have many
+   * failed runs and each resumes from its own phase. Needs
+   * pipeline.batch_job.execute. */
+  async retryBatchJobRun(id: string): Promise<BatchJobRunDTO> {
+    const r = await this.http.post<{ data: BatchJobRunDTO } | BatchJobRunDTO>(
+      `/api/v1/batch-job-runs/${encodeURIComponent(id)}/retry`,
+    );
+    return unwrap<BatchJobRunDTO>(r);
+  }
+
+  /** PUT /batch-job-runs/{id}/terminate — cancel an active run. Needs
+   * pipeline.batch_job.execute. */
+  async terminateBatchJobRun(id: string): Promise<BatchJobRunDTO> {
+    const r = await this.http.put<{ data: BatchJobRunDTO } | BatchJobRunDTO>(
+      `/api/v1/batch-job-runs/${encodeURIComponent(id)}/terminate`,
+    );
+    return unwrap<BatchJobRunDTO>(r);
   }
 }
