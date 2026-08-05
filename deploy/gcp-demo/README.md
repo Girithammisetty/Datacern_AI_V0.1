@@ -115,16 +115,29 @@ A fresh project often ships with a low per-region CPU quota. The `e2-standard-8`
 8 vCPUs, which typically fits — but if you later resize to `e2-standard-16` you may hit the
 ceiling. Check before you need it:
 
+The number that matters is **`E2_CPUS`**, not the overall `CPUS` — machine families have
+their own quotas, and it is the family one that stops an `e2-standard-8` from booting.
+
 ```bash
-gcloud compute regions describe us-central1 --flatten="quotas[]" --filter="quotas.metric=CPUS" --format="value(quotas.limit)"
+gcloud compute regions describe us-east1 --format="yaml(quotas)" | grep -B1 "metric: E2_CPUS"
 ```
 
-`--flatten` expands the quota list into one record each, then `--filter` picks the CPUS row.
-A `.filter()` call inside the `--format` projection is *not* valid there and fails with
-`Transform function expected`.
+`-B1` because `limit` prints on the line *above* `metric` in that output.
 
-If the limit is too low, request an increase under *IAM & Admin → Quotas* in the console.
-Approval is usually quick but is not instant, so do it before demo day, not during.
+Two dead ends worth naming, since both look plausible and neither works:
+`gcloud compute regions describe` does not accept `--filter` (that is a `list`-only flag, and
+it errors with `unrecognized arguments`), and a `.filter()` call inside a `--format`
+projection fails with `Transform function expected`. Dumping the quota block and grepping it
+is the reliable form.
+
+Anything **8 or above** is enough for this runbook. Quotas are per-region, so re-check if you
+change region. If it is too low, request an increase under *IAM & Admin → Quotas* in the
+console — usually quick, but not instant, so do it before demo day rather than during.
+
+While you have the list open, two other entries are worth noting. `PREEMPTIBLE_CPUS` is
+commonly **0** on a new project, which settles the Spot question for you. And `SSD_TOTAL_GB`
+(often 500) constrains `pd-balanced` and `pd-ssd` only — this runbook uses `pd-standard`,
+which counts against `DISKS_TOTAL_GB` instead.
 
 ## Step 1 — Reserve a static IP
 
