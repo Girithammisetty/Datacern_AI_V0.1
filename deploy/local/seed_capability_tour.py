@@ -48,6 +48,7 @@ B, G, Y, N = "\033[1m", "\033[32m", "\033[33m", "\033[0m"
 
 SEMANTIC_URL = os.environ.get("SEMANTIC_URL", "http://localhost:8086")
 CHART_URL = os.environ.get("CHART_URL", "http://localhost:8320")
+QUERY_URL = os.environ.get("QUERY_URL", "http://localhost:8085")
 NOTIFICATION_URL = os.environ.get("NOTIFICATION_URL", "http://localhost:8323")
 EVAL_URL = os.environ.get("EVAL_URL", "http://localhost:8324")
 
@@ -363,6 +364,35 @@ def _dashboard_id(tok) -> str | None:
     return str(rows[0].get("id")) if rows else None
 
 
+def _ensure_detail_query(tok, dataset_name: str | None) -> str | None:
+    """Idempotently create the saved query the DETAIL grid reads.
+
+    Mirrors seed_claims_demo.py's network-query helper, which already records the
+    rule this seeder missed: a chart with no measures for the compiler resolves
+    only through source_type=saved_query.
+    """
+    if not dataset_name:
+        return None
+    name = "Claims: detail rows"
+    r = d.req("GET", f"{QUERY_URL}/api/v1/queries?workspace_id={d.WORKSPACE}", tok)
+    if r.status_code == 200:
+        for q in r.json().get("data", []):
+            if q.get("name") == name:
+                return str(q.get("id"))
+    sql = ("SELECT claim_id, provider, amount, service_date, status "
+           f"FROM {{{{dataset('{dataset_name}')}}}} ORDER BY service_date DESC")
+    r = d.req("POST", f"{QUERY_URL}/api/v1/queries", tok, headers=d.J(), json={
+        "name": name, "description": "Row-level claim detail — source for the detail grid",
+        "module_names": ["insights"], "workspace_id": d.WORKSPACE,
+        "sql_text": sql, "tags": ["claims", "demo"]})
+    if r.status_code != 201:
+        warn(f"detail saved query create failed: {r.status_code} {r.text[:160]}")
+        return None
+    qid = str(r.json()["data"]["id"])
+    ok(f"{name!r} saved query created (id={qid})")
+    return qid
+
+
 def seed_grid_and_report(dataset_name: str | None) -> None:
     """A GRID chart (the analyst's table, not a time-series) and the scheduled
     report that mails the dashboard. Both are shipped capabilities that a fresh
@@ -386,6 +416,22 @@ def seed_grid_and_report(dataset_name: str | None) -> None:
         # (server.go:141). POST /charts does not exist and answered a bare
         # "404 page not found", which reads like the service is down rather than
         # like the path is wrong.
+        # A DETAIL grid is row-level, so it resolves through a saved query, not
+        # through the semantic compiler. Without one this chart rendered "chart
+        # has no measures to resolve" on every load, forever: chart-service
+        # routes a chart with no saved_query source to compileAndRun, and a
+        # columns-only config yields zero metrics for it to compile.
+        #
+        # (An AGGREGATE grid is different — it carries x + y like an axis chart
+        # and compiles normally, which is what every pack dashboard and
+        # seed_claims_demo.py's "Claims grid" do. This one is deliberately
+        # row-level, so the saved query is the right source, not measures.)
+        query_id = _ensure_detail_query(tok, dataset_name)
+        if not query_id:
+            warn("no saved query for the detail grid — skipping "
+                 "(a columns-only grid with no saved_query source cannot render)")
+            return
+
         r = d.req("POST", f"{CHART_URL}/api/v1/dashboards/{dash}/charts", tok,
                   headers=d.J(), json={
                       "workspace_id": d.WORKSPACE,
@@ -397,6 +443,8 @@ def seed_grid_and_report(dataset_name: str | None) -> None:
                       "config": {"columns": ["claim_id", "provider", "amount",
                                              "service_date", "status"],
                                  "page_size": 25},
+                      "sources": [{"position": 0, "source_type": "saved_query",
+                                   "source_urn": f"wr:{TENANT}:query:saved_query/{query_id}"}],
                   })
         if r.status_code in (200, 201):
             ok("grid chart added to the Insights dashboard")
