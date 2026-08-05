@@ -57,6 +57,17 @@ def n_demo_bundles() -> int:
 # group is the number a document asserts. Patterns are deliberately specific —
 # a rule that fires on unrelated prose is worse than no rule, because the next
 # person silences the whole check instead of one false positive.
+def table_row(label: str) -> re.Pattern[str]:
+    """A markdown table row whose FIRST cell is `label` and whose next cell is the
+    count: `| Deployable services | 25 | derived from … |`.
+
+    Anchored at the start of the line so it cannot match a number that merely
+    appears mid-row, and the label must fill its cell (no trailing text before the
+    pipe) so "Services requiring migration" does not match "services".
+    """
+    return re.compile(rf"^\s*\|\s*(?:{label})\s*\|\s*(\d{{1,3}})\s*\|", re.I)
+
+
 def rules() -> list[tuple[str, int, re.Pattern[str], bool]]:
     """(name, truth, pattern, authoritative_only).
 
@@ -69,6 +80,15 @@ def rules() -> list[tuple[str, int, re.Pattern[str], bool]]:
     "70 numbered BRDs") and are safe to run over every file. LOOSE patterns
     match a bare count and run only over the documents that speak for the
     platform as a whole, listed in AUTHORITATIVE.
+
+    TABLE patterns are a third shape, added 2026-08-05 after docs/README's fact
+    table sat at "| Deployable services | 24 |" against an actual 25 and this
+    script could not see it: every prose pattern reads `<number> <label>`, and a
+    table row is `<label> | <number>`. The table under the sentence "counts are
+    verified rather than asserted" was the one place a reader would trust most,
+    and the only place the checker was blind. They are authoritative-only for the
+    same reason LOOSE patterns are — a table in a BRD is usually counting the
+    subset that change touched.
     """
     return [
         ("services", n_services(),
@@ -83,6 +103,12 @@ def rules() -> list[tuple[str, int, re.Pattern[str], bool]]:
          re.compile(r"\b(\d{1,3})\s+services\b"), True),
         ("capability packs", n_packs(),
          re.compile(r"\b(\d{1,3})\s+installable\s+packs\b"), True),
+        # TABLE rows: `| <label> | <count> |`.
+        ("services", n_services(), table_row(r"(?:deployable\s+)?services"), True),
+        ("capability packs", n_packs(), table_row(r"capability\s+packs"), True),
+        ("BRDs", n_brds(), table_row(r"BRDs?|\[?`?brd/`?\]?\([^)]*\)"), True),
+        ("packs with a seeded demo scenario", n_demo_bundles(),
+         table_row(r"packs\s+with\s+a\s+seeded\s+demo\s+scenario"), True),
     ]
 
 
