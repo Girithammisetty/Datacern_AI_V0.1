@@ -71,10 +71,12 @@ This is the less visible half, and arguably the more valuable.
 
 ## 4 · CI and security state — as of this writing
 
-**Honest and incomplete: I cannot yet report a green verdict.** All four
-recent runs (`8ad0bb6`, `38c6554`, `980b75e`, `0113c7f`) are **queued or
-in-progress**. The last *completed* runs were failures, from before the fixes
-below landed.
+**Update — measured on `77bd090` / `9f31dca` / `6bddee7`.** `ci.yml`
+completed with **no failing jobs**, including `e2e-contract` (which the Case
+Workbench change had broken, since a row click now opens the case in the
+right-hand pane via `?c=<id>` instead of navigating). `security-scan` is
+**4 of 5 green** — `gitleaks`, `bandit`, `semgrep`, and `gosec` all pass;
+`trivy` was the only red job, and section 4a below records how it was closed.
 
 Two CI failures were diagnosed and fixed this session:
 
@@ -87,14 +89,44 @@ Two CI failures were diagnosed and fixed this session:
    50.0.0 across 12 `uv.lock` files; mlflow 3.14.0 → 3.15.1 where needed.
    → merged (#92).
 
-**Residual, stated plainly: 2 alerts will remain and the trivy gate will
-still fail.** `mlflow` caps `cryptography<50` at *every* published version, so
-`inference-service` and `pipeline-orchestrator` cannot reach 50.0.0 (they are
-now on 49.0.0). I did **not** add a `.trivyignore` to force the gate green —
-this sandbox cannot reach trivy's vulnerability DB to confirm the real CVE ID,
-and inventing one to silence a security gate is precisely the kind of unearned
-claim the repo's conventions exist to prevent. A documented exception needs
-only the CVE ID from the alert page.
+### 4a · The trivy residual, resolved
+
+The previous draft of this section said the gate would keep failing and that a
+`.trivyignore` could not be justified without the real CVE ID. That precondition
+has since been met, so the exception was written. The chain, in order:
+
+1. **The job's log named nothing.** trivy ran with `--format sarif --output`
+   only, so a failure produced `Process completed with exit code 1` and no
+   findings — the package had to be reverse-engineered from the Security tab.
+   Fixed first: a non-gating `--format table` pass now prints the findings where
+   the failure is read.
+2. **The next run named them.** Exactly **3 findings, one CVE**:
+   `CVE-2026-69247`, `cryptography` 49.0.0 → fixed in 50.0.0, in
+   `deploy/e2e/uv.lock`, `services/inference-service/uv.lock`, and
+   `services/pipeline-orchestrator/uv.lock`. Every other lockfile: 0.
+3. **The fix is provably unreachable.** Not asserted — demonstrated. Adding
+   `cryptography>=50` and re-resolving makes the uv solver state it outright:
+   `mlflow>=3.11.0 depends on cryptography>=43.0.0,<50`, therefore
+   unsatisfiable. No published mlflow lifts the cap, and mlflow is genuinely
+   used by all three, so dropping it is not available either.
+4. **The vulnerable path is not reachable here.** The CVE is a Bleichenbacher
+   oracle in PKCS#7 `EnvelopedData` decryption (`pkcs7_decrypt_der/pem/smime`).
+   A repository-wide search for pkcs7 / EnvelopedData / S/MIME across
+   `services`, `libs`, `deploy` and `packs` returns **zero** first-party
+   matches; `cryptography` is reached only as pyjwt's RS*/ES* backend and for
+   keypair generation in test fixtures. Exploitation needs an S/MIME gateway
+   auto-decrypting untrusted payloads adaptively at high volume. The advisory
+   scores it **CVSS 3.1 (low)**; trivy reports HIGH from a different vendor's
+   rating, and its own log warns it is "using severities from other vendors".
+
+`.trivyignore.yaml` therefore carries one entry — scoped to those three
+lockfiles, with the reachability and unfixability arguments written out, and
+**`expired_at: 2026-11-05`** so it re-opens the gate on its own rather than
+being silently inherited. The informational pass runs `--show-suppressed`, so
+the accepted risk stays visible in every run instead of disappearing.
+
+This is a documented exception, not a fix: **the dependency is still on 49.0.0.**
+It comes off the moment an mlflow release lifts the cap.
 
 **A process note worth recording:** an automation auto-creates and merges PRs
 from the development branch within ~1 minute of a push. Every PR opened this
@@ -150,8 +182,9 @@ that distinction.
    large block of TESTED to PROVEN in one execution — and, on this repo's
    track record, will find real defects. Everything built this session is
    PENDING until it does.
-2. **Get the trivy gate to a truthful green** — either mlflow relaxes its pin,
-   or a documented `.trivyignore` exception with the CVE ID.
+2. ~~**Get the trivy gate to a truthful green**~~ — done; see §4a. The follow-up
+   is to *retire* the exception when mlflow lifts its `cryptography<50` cap,
+   which `expired_at: 2026-11-05` forces.
 3. **Load test + both soaks in CI** — the largest block of entirely unmeasured
    behaviour left.
 4. **`helm install` once**, fixing the env-name mismatch — turns "IaC written,

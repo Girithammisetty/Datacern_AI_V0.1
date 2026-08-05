@@ -1,0 +1,51 @@
+# Datacern — trivy vulnerability exceptions.
+#
+# RULES FOR THIS FILE (read before adding an entry):
+#   1. An entry needs a CVE id READ FROM A REAL SCAN, never inferred.
+#   2. An entry needs a written `statement` covering three things: what the
+#      vulnerability actually is, why the vulnerable code path cannot be
+#      reached here, and why the fixed version cannot simply be installed.
+#   3. An entry is scoped with `paths` to the exact lockfiles it applies to,
+#      so the same CVE appearing anywhere new still fails the gate.
+#   4. An entry carries `expired_at`. Exceptions rot; this one re-opens the
+#      gate on its own so it must be re-argued rather than inherited.
+#
+# An entry that cannot satisfy all four is not an exception, it is a mute.
+# Leave the gate red instead.
+
+vulnerabilities:
+  - id: CVE-2026-69247
+    paths:
+      - "deploy/e2e/uv.lock"
+      - "services/inference-service/uv.lock"
+      - "services/pipeline-orchestrator/uv.lock"
+    expired_at: 2026-11-05
+    statement: >-
+      pyca/cryptography PKCS#7 EnvelopedData decryption exposes a Bleichenbacher
+      oracle through distinguishable errors and timing. Affects >=44.0.0,<50.0.0;
+      fixed in 50.0.0. All three lockfiles resolve cryptography 49.0.0.
+
+      NOT REACHABLE HERE. The oracle lives in pkcs7_decrypt_der /
+      pkcs7_decrypt_pem / pkcs7_decrypt_smime. Datacern calls none of them:
+      a repository-wide search for pkcs7, EnvelopedData, and S/MIME across
+      services, libs, deploy and packs returns zero first-party matches.
+      cryptography is reached here only as (a) pyjwt's backend for RS*/ES*
+      JWT signature verification and (b) RSA/EC keypair generation in test
+      fixtures. Exploitation additionally requires a service that auto-decrypts
+      untrusted EnvelopedData matching the victim certificate and answers
+      adaptively at high volume — an S/MIME gateway or mail filter. The
+      platform operates no such surface. The advisory scores this CVSS 3.1
+      (low); trivy reports HIGH from a different vendor's rating, and the scan
+      log warns it is "using severities from other vendors".
+
+      NOT FIXABLE WHILE MLFLOW IS A DEPENDENCY. Every published mlflow in the
+      supported range caps cryptography below 50.0.0 — the uv resolver
+      concludes verbatim: "mlflow>=3.11.0 depends on cryptography>=43.0.0,<50",
+      so requiring cryptography>=50 makes the project unsatisfiable. mlflow is
+      genuinely used by all three (model registry reads in inference-service,
+      run/artifact logging in pipeline-orchestrator, and registry assertions in
+      the e2e harness), so dropping it is not available either.
+
+      REMOVE THIS ENTRY when an mlflow release lifts the cryptography<50 cap;
+      re-run `uv lock --upgrade-package cryptography` in each of the three
+      projects and confirm 50.0.0 resolves.

@@ -129,11 +129,20 @@ jobs:
           # only artifact of a failure is the SARIF file, so the log says nothing
           # but "exit code 1" and the offending package has to be guessed from the
           # Security tab. Print the findings where the failure is read.
-          echo "::group::trivy findings (informational)"
+          #
+          # --show-suppressed is the important half: accepted risks from
+          # .trivyignore.yaml are listed here rather than vanishing. An exception
+          # that nobody can see is indistinguishable from a clean scan, and that
+          # is exactly how a stale exception outlives its justification.
+          echo "::group::trivy findings (informational, includes suppressed)"
           trivy fs --skip-db-update --scanners vuln --severity HIGH,CRITICAL --exit-code 0 \
-            --format table .
+            --show-suppressed --format table .
           echo "::endgroup::"
+          # The gate. Honours .trivyignore.yaml — every entry there carries a CVE
+          # id read from a real scan, a reachability argument, path scoping, and
+          # an expiry date. See that file's header for the rules.
           trivy fs --skip-db-update --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
+            --ignorefile .trivyignore.yaml \
             --format sarif --output trivy.sarif .
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
