@@ -24,9 +24,15 @@ logger = logging.getLogger(__name__)
 # reader(dataset_urn, params) -> frame ; writer(frame, alias, params) -> output ref
 DatasetReader = Callable[[str, dict], pd.DataFrame]
 DatasetWriter = Callable[[pd.DataFrame, str, dict], str]
+# BRD 73 (B2): trigger(alias, params) -> the created ingestion's projection.
+# An injected port for the same reason read/write are: the executor stays a pure,
+# synchronous, trivially testable function, and the async ingestion-service call
+# lives in the service wiring.
+IngestionTrigger = Callable[[str, dict], dict]
 
 _READ_COMPONENTS = {"read-from-warehouse", "batch-read-from-warehouse"}
 _WRITE_COMPONENTS = {"write-to-warehouse", "batch-write-to-warehouse"}
+_TRIGGER_COMPONENTS = {"batch-trigger"}
 # Executed but produce no data output at runtime (profiling done by dataset-service).
 _PASSTHROUGH = {"comment"}
 
@@ -56,6 +62,8 @@ class PipelineResult:
     outputs: dict[str, pd.DataFrame] = field(default_factory=dict)
     written_refs: dict[str, str] = field(default_factory=dict)
     statuses: list[NodeStatus] = field(default_factory=list)
+    #: alias -> the ingestion a `batch-trigger` node started (BRD 73 B2).
+    triggered_ingestions: dict[str, dict] = field(default_factory=dict)
 
 
 def _endpoint(ref: str) -> tuple[str, str]:
@@ -76,9 +84,11 @@ class LocalPipelineExecutor:
     """Executes a validated pipeline definition locally over the operator library."""
 
     def __init__(self, reader: DatasetReader | None = None,
-                 writer: DatasetWriter | None = None) -> None:
+                 writer: DatasetWriter | None = None,
+                 trigger: IngestionTrigger | None = None) -> None:
         self._reader = reader
         self._writer = writer
+        self._trigger = trigger
 
     def run(self, definition: dict, run_parameters: dict | None = None) -> PipelineResult:
         """Execute the DAG. ``run_parameters`` carries run-scoped context (currently
@@ -116,6 +126,12 @@ class LocalPipelineExecutor:
                 params = {**params, "label_column": label_column}
             try:
                 if comp in _PASSTHROUGH:
+                    continue
+                if comp in _TRIGGER_COMPONENTS:
+                    ingestion = self._fire_trigger(alias, params)
+                    result.triggered_ingestions[alias] = ingestion
+                    result.statuses.append(NodeStatus(alias, comp, "Succeeded",
+                                                      rows_out=0))
                     continue
                 if comp in _READ_COMPONENTS:
                     frame = self._read(node, params)
@@ -157,6 +173,21 @@ class LocalPipelineExecutor:
         if not dataset:
             raise OperatorError("read-from-warehouse: 'dataset' param required")
         return self._reader(dataset, params)
+
+    def _fire_trigger(self, alias: str, params: dict) -> dict:
+        """BRD 73 (B2): start an ingestion from inside the DAG.
+
+        Fails CLOSED when no trigger port is wired — a `batch-trigger` node that
+        silently did nothing would be exactly the "the pipeline ran, so the data
+        must be fresh" lie this BRD exists to remove.
+        """
+        if self._trigger is None:
+            raise PipelineExecutionError(
+                alias, "batch-trigger",
+                RuntimeError("no ingestion trigger configured for batch-trigger"))
+        if not params.get("connection_id"):
+            raise OperatorError("batch-trigger: 'connection_id' param required")
+        return self._trigger(alias, params)
 
     def _write(self, frame: pd.DataFrame, alias: str, params: dict) -> str:
         if self._writer is None:

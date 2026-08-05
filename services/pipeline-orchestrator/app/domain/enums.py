@@ -34,6 +34,37 @@ class RunStatus(IntEnum):
     cancelled = 6
 
 
+class BatchPhase(IntEnum):
+    """BRD 73 — the three phases a batch job run advances through, in order.
+
+    Mirrors V1's ``JOB_PHASE``. The ordering is load-bearing: ``pipeline`` may
+    only be entered once every ingestion fired in ``trigger`` has reached a
+    terminal state, which is what stops a run from scoring the PREVIOUS batch.
+    """
+
+    trigger = 0
+    ingestion = 1
+    pipeline = 2
+
+
+class BatchRunStatus(IntEnum):
+    pending = 0
+    running = 1
+    succeeded = 2
+    failed = 3
+    cancelled = 4
+
+
+#: A batch job run in one of these is being driven (or is waiting on ingestion
+#: events); anything else is terminal.
+BATCH_ACTIVE_STATUSES = {BatchRunStatus.pending, BatchRunStatus.running}
+BATCH_TERMINAL_STATUSES = {BatchRunStatus.succeeded, BatchRunStatus.failed,
+                           BatchRunStatus.cancelled}
+
+#: Terminal states an ingestion can land in, as reported on ``ingestion.events.v1``.
+INGESTION_TERMINAL = {"completed", "failed", "cancelled"}
+
+
 TERMINAL_STATUSES = {RunStatus.succeeded, RunStatus.failed, RunStatus.cancelled}
 TERMINATABLE_STATUSES = {
     RunStatus.pending,

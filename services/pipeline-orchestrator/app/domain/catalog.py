@@ -329,6 +329,25 @@ def seed_components() -> list[Component]:
         outputs=[],
         parameters={"output_dataset_name": {"type": "restricted_string", "required": True}}))
 
+    # BRD 73 (B2) — batch-trigger: the in-pipeline half of a batch job. Fires an
+    # ingestion on a saved connection mid-DAG, for a pipeline that wants to pull
+    # its own data rather than be chained behind a BatchJob's trigger phase.
+    # 0 in / 0 out on purpose: it starts an ingestion, it does not produce a frame
+    # (the landed data is read by a read-from-warehouse node, in this run or the
+    # next). Idempotent under re-run by the same Idempotency-Key discipline the
+    # batch job's trigger phase uses — pipeline run id + node alias.
+    comps.append(_component(
+        "batch-trigger", IO, min_inputs=0, max_inputs=0, max_outputs=0, outputs=[],
+        parameters={
+            "connection_id": {"type": "string", "required": True},
+            "ingestion_mode": {"type": "string", "format": "enum",
+                               "enum": ["query", "file_poll", "scheduled_run",
+                                        "webhook_batch"],
+                               "required": False, "default": "query"},
+            "dataset": {"type": "dataset_ref", "required": False},
+            "statement": {"type": "text", "required": False},
+        }))
+
     # model-input: role-typed feed into training/tuning (PIPE-FR-015).
     comps.append(_component(
         "model-input", DATA_PREP, min_inputs=1, max_inputs=1, max_outputs=1,

@@ -26,7 +26,8 @@ S3_ENDPOINT = os.environ.get("PPL_S3", "http://localhost:9000")
 OPA_URL = os.environ.get("PPL_OPA", "http://localhost:8281")
 ARTIFACTS_BUCKET = "datacern-pipelines"
 
-TABLES = ["pipeline_runs", "pipeline_template_versions", "pipeline_templates",
+TABLES = ["batch_job_run_ingestions", "batch_job_runs", "batch_jobs",
+          "pipeline_runs", "pipeline_template_versions", "pipeline_templates",
           "tenant_quotas", "run_queue", "labeled_examples", "outbox",
           "idempotency_keys", "processed_events"]
 

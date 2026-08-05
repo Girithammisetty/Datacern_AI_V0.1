@@ -19,6 +19,7 @@ from app.api.errors import TraceMiddleware, install_error_handlers
 from app.api.middleware import AuthMiddleware
 from app.api.routes import (
     algorithms,
+    batch_jobs,
     components,
     health,
     internal,
@@ -203,6 +204,56 @@ async def _start_workers(container, settings):
         logger.info("pipeline scheduler ticker started (poll=%.0fs)",
                     settings.scheduler_poll_seconds)
 
+    if settings.batch_jobs_enabled:
+        # BRD 73 — three loops, because a batch job run has three distinct ways of
+        # getting stuck and each needs a different answer:
+        #
+        #  * the cron ticker CREATES runs (and only one per job can be active, so a
+        #    job whose previous run is still going is skipped, never doubled);
+        #  * the reaper RE-DRIVES runs whose pod died mid-phase — safe because the
+        #    trigger step is idempotent by batch_key and the pipeline step
+        #    re-attaches to the pipeline run it already recorded;
+        #  * the deadline sweep FAILS runs whose phase overran. The ingestion phase
+        #    is a wait on `ingestion.events.v1`, and events can simply never arrive.
+        #    Without this the run sits in `ingestion` looking alive forever and the
+        #    job never fires again, because its previous run is still active.
+        async def batch_ticker_loop():
+            while True:
+                await asyncio.sleep(settings.batch_scheduler_poll_seconds)
+                try:
+                    fired = await container.batch_job_service.fire_due()
+                except Exception:  # noqa: BLE001
+                    logger.exception("batch job ticker error")
+                    continue
+                for run in fired:
+                    container.drive_batch_run(run.tenant_id, run.id)
+                try:
+                    recovered = await container.batch_job_service.recover_orphans()
+                except Exception:  # noqa: BLE001
+                    logger.exception("batch job orphan sweep error")
+                    continue
+                if recovered:
+                    logger.warning("re-driving %d orphaned batch run(s): %s",
+                                   len(recovered), ", ".join(recovered))
+
+        async def batch_deadline_loop():
+            while True:
+                await asyncio.sleep(settings.batch_deadline_poll_seconds)
+                try:
+                    timed_out = await container.batch_job_service.sweep_deadlines()
+                except Exception:  # noqa: BLE001
+                    logger.exception("batch job deadline sweep error")
+                    continue
+                if timed_out:
+                    logger.warning("failed %d batch run(s) past their phase deadline: "
+                                   "%s", len(timed_out), ", ".join(timed_out))
+
+        tasks.append(asyncio.create_task(batch_ticker_loop()))
+        tasks.append(asyncio.create_task(batch_deadline_loop()))
+        logger.info("batch job orchestrator started (tick=%.0fs, deadline=%.0fs)",
+                    settings.batch_scheduler_poll_seconds,
+                    settings.batch_deadline_poll_seconds)
+
     for topic in CONSUMED_TOPICS:
         try:
             con = KafkaPipelineConsumer(
@@ -257,6 +308,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(pipelines.router)
     app.include_router(runs.router)
     app.include_router(schedules.router)
+    app.include_router(batch_jobs.router)
     app.include_router(components.router)
     app.include_router(algorithms.router)
     app.include_router(internal.router)

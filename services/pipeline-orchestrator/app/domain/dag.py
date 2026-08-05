@@ -230,6 +230,11 @@ _WRITE = {"write-to-warehouse"}
 _BATCH_WRITE = {"batch-write-to-warehouse"}
 _READ = {"read-from-warehouse"}
 _BATCH_READ = {"batch-read-from-warehouse"}
+# BRD 73 (B2): batch-trigger has no output port — it starts an ingestion rather
+# than producing a frame — so it is always a graph terminal and must be allowed
+# as one wherever terminals are constrained, or every pipeline that pulls its own
+# data mid-DAG would be rejected as invalid.
+_SIDE_EFFECT_TERMINALS = {"batch-trigger"}
 
 
 def _validate_terminals(report, by_alias, out_counts, pipeline_type) -> None:
@@ -242,7 +247,7 @@ def _validate_terminals(report, by_alias, out_counts, pipeline_type) -> None:
         # still constrains its terminals, but neither must contain a read component.
         if pipeline_type == PipelineType.feature_engineering:
             for a in terminals:
-                if comps[a] not in _WRITE | {"model-input", "comment"}:
+                if comps[a] not in _WRITE | _SIDE_EFFECT_TERMINALS | {"model-input", "comment"}:
                     report.add("INVALID_TERMINAL",
                                f"feature_engineering terminal {comps[a]!r} not allowed",
                                alias=a)
@@ -254,7 +259,7 @@ def _validate_terminals(report, by_alias, out_counts, pipeline_type) -> None:
             report.add("MISSING_READ",
                        "scheduled pipeline must contain batch-read-from-warehouse")
         for a in terminals:
-            if comps[a] not in _BATCH_WRITE | {"comment"}:
+            if comps[a] not in _BATCH_WRITE | _SIDE_EFFECT_TERMINALS | {"comment"}:
                 report.add("INVALID_TERMINAL",
                            f"scheduled terminal {comps[a]!r} must be "
                            "batch-write-to-warehouse", alias=a)
@@ -268,7 +273,7 @@ def _validate_terminals(report, by_alias, out_counts, pipeline_type) -> None:
 
     if pipeline_type in (PipelineType.data_prep, PipelineType.inference):
         for a in terminals:
-            if comps[a] not in _WRITE | {"comment"}:
+            if comps[a] not in _WRITE | _SIDE_EFFECT_TERMINALS | {"comment"}:
                 report.add("INVALID_TERMINAL",
                            f"{pipeline_type.name} terminal {comps[a]!r} must be "
                            "write-to-warehouse", alias=a)

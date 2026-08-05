@@ -107,6 +107,26 @@ class Settings(BaseSettings):
     #: Defaults to the pod name under Kubernetes (downward API), else the host.
     instance_id: str = ""
 
+    # BRD 73 — batch job orchestration (chained ingest → pipeline).
+    #
+    # The trigger phase creates ingestions through ingestion-service's INTERNAL
+    # MCP facade (`POST /internal/v1/mcp/invoke`, tool_id=ingestion.create), which
+    # is SPIFFE-gated: a cron-fired batch job has no user token and must not mint
+    # one. The SPIFFE below has to be in ingestion-service's internal allowlist.
+    ingestion_service_url: str = "http://localhost:8303"
+    ingestion_client_spiffe: str = "spiffe://datacern/ns/ml/sa/pipeline-orchestrator"
+    batch_jobs_enabled: bool = True
+    batch_scheduler_poll_seconds: float = 30.0
+    #: How long a single phase may take before the run is FAILED with the phase
+    #: recorded. The ingestion phase is a wait on `ingestion.events.v1`, and events
+    #: can simply never arrive (a source that hangs, a message the bus dropped) —
+    #: without a deadline the run would sit there looking alive forever and the job
+    #: would never fire again, because its previous run is still active. One hour
+    #: is generous for a nightly batch and still bounded. Per-job override:
+    #: `batch_jobs.phase_timeout_seconds`.
+    batch_phase_deadline_seconds: float = 3600.0
+    batch_deadline_poll_seconds: float = 60.0
+
     events_topic: str = "pipeline.events.v1"
     case_topic: str = "case.events.v1"
     identity_topic: str = "identity.events.v1"

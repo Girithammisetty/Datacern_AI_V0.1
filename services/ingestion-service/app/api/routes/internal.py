@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from app.api.auth import Principal, require_internal
 from app.api.deps import tenant_urn
 from app.domain.errors import AppError
+from app.domain.services.idempotency import request_hash, run_idempotent
 from app.mcp.facade import McpFacade
 
 router = APIRouter()
@@ -22,6 +23,13 @@ class McpInvokeRequest(BaseModel):
     tenant: str
     obo_sub: str | None = None
     agent_id: str | None = None
+    #: BRD 73. The REST create path takes an `Idempotency-Key` header; this
+    #: internal path had no equivalent, so a caller that crashed between the
+    #: request and recording the response had no way to retry without creating a
+    #: SECOND ingestion. For pipeline-orchestrator's batch jobs that is not a
+    #: wasted request, it is the same batch ingested twice — so the key is carried
+    #: here and applied by the same `run_idempotent` the REST route uses.
+    idempotency_key: str | None = None
 
 
 # tool_id -> the action a caller must hold (mirrors the REST endpoint that
@@ -61,11 +69,20 @@ async def mcp_invoke(request: Request, body: McpInvokeRequest,
         return _mcp_output(403, {"error": f"not allowed: {action}"})
 
     mcp = McpFacade(container)
-    try:
+
+    async def _invoke() -> tuple[int, dict]:
         if body.tool_id == "ingestion.create":
-            out = await mcp.create_ingestion(principal, **body.args)
-        else:
-            return _mcp_output(404, {"error": f"unknown tool_id {body.tool_id!r}"})
+            return 200, await mcp.create_ingestion(principal, **body.args)
+        raise AppError(f"unknown tool_id {body.tool_id!r}", status=404,
+                       code="NOT_FOUND")
+
+    try:
+        # Replays the ORIGINAL response for a repeated key instead of creating a
+        # second ingestion (MASTER-FR-025); a no-key call runs straight through,
+        # so the existing tool-plane path is unchanged.
+        _status, out, _replayed = await run_idempotent(
+            container.db, body.tenant, body.idempotency_key,
+            request_hash({"tool_id": body.tool_id, "args": body.args}), _invoke)
     except AppError as exc:
         return _mcp_output(exc.status, {"error": exc.message, "code": exc.code})
     except KeyError as exc:
