@@ -16,7 +16,7 @@ import pytest
 
 from app.container import build_container
 from app.domain.entities import Proposal, new_uuid, now
-from app.domain.outcomes import effectiveness, sft_enrichment
+from app.domain.outcomes import sft_enrichment
 from app.main import create_app
 from tests.conftest import TENANT_A, TENANT_B, make_settings, make_token
 
