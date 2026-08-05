@@ -436,7 +436,8 @@ def service_routes(svc: str) -> set[str]:
                 if ".Mount(" in ln:  # mounted subrouter: register the prefix
                     routes.add(normalize("".join(p for _, p in stack)))
                 continue
-            if (m := re.search(r"\.(?:Get|Post|Patch|Put|Delete|Handle(?:Func)?)\(\s*\"([^\"]+)\"", ln)):
+            verb_re = r"\.(?:Get|Post|Patch|Put|Delete|Handle(?:Func)?)\(\s*\"([^\"]+)\""
+            if (m := re.search(verb_re, ln)):
                 stack = [(i, p) for i, p in stack if i < indent]
                 full = "".join(p for _, p in stack) + m.group(1)
                 routes.add(normalize(full if full.startswith("/api") else "/api/v1" + full))
@@ -452,7 +453,7 @@ def segments_compatible(client: str, route: str) -> bool:
     rs = [x for x in route.split("/") if x]
     if len(cs) != len(rs):
         return False
-    return all(a == b or a == "{}" or b == "{}" for a, b in zip(cs, rs))
+    return all(a == b or a == "{}" or b == "{}" for a, b in zip(cs, rs, strict=True))
 
 
 def match_downstream(cpaths: dict[str, set[str]]):
@@ -485,7 +486,9 @@ def main() -> int:
 
     hooks_src = read(UI / "lib/graphql/hooks.ts")
     hook_names = set(re.findall(r"export function (use[A-Za-z0-9_]+)", hooks_src))
-    op_consts = set(re.findall(r"export const ([A-Z0-9_]+)\s*=", read(UI / "lib/graphql/operations.ts")))
+    op_consts = set(
+        re.findall(r"export const ([A-Z0-9_]+)\s*=", read(UI / "lib/graphql/operations.ts"))
+    )
 
     graph, contents = build_import_graph()
     pages = page_wiring(graph, contents, hook_names, op_consts)
@@ -510,7 +513,10 @@ def main() -> int:
     used_fields = {fld for o in ops.values() for fld in o["fields"]}
     C = sorted(declared - used_fields)
     D = sorted(implemented - declared)
-    E = sorted(r for r, w in pages.items() if not (w["hooks"] or w["op_consts"] or w["rest_fetches"]))
+    E = sorted(
+        r for r, w in pages.items()
+        if not (w["hooks"] or w["op_consts"] or w["rest_fetches"])
+    )
     F = match_downstream(client_paths())
     used_hooks = {h for w in pages.values() for h in w["hooks"]}
     G = sorted(hook_names - used_hooks)
@@ -534,7 +540,10 @@ def main() -> int:
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(json.dumps(report, indent=2))
-    print(f"pages={len(pages)} ops={len(ops)} schema_fields={len(declared)} resolvers={len(implemented)}")
+    print(
+        f"pages={len(pages)} ops={len(ops)} "
+        f"schema_fields={len(declared)} resolvers={len(implemented)}"
+    )
     for k in ("A_ui_field_missing_in_schema", "B_schema_field_without_resolver",
               "C_schema_field_unused_by_ui", "D_resolver_without_schema_field",
               "E_pages_without_data_wiring", "F_client_path_without_downstream",

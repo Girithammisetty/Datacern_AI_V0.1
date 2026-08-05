@@ -71,7 +71,15 @@ class TestPersistence:
         total = next(c for c in doc["columns"] if c["name"] == "order_total")
         assert {"entropy", "skewness", "kurtosis", "mad", "variance", "monotonic",
                 "top_values"} <= set(total)
-        assert [m["method"] for m in doc["correlations"]] == [
+        # 4ca2cbe made schema_version 2 additive: `correlations` KEEPS its v1
+        # `{method, pairs}` spearman dict shape, and the multi-method list lives
+        # under the NEW `correlation_matrices` key. This assertion previously
+        # pinned the brief interim list shape — the exact non-additive break
+        # that commit reverted — and, being docker-gated, it skipped locally and
+        # only detonated in CI. Assert the guarantee, both halves of it.
+        assert doc["correlations"]["method"] == "spearman"
+        assert "pairs" in doc["correlations"]
+        assert [m["method"] for m in doc["correlation_matrices"]] == [
             "pearson", "spearman", "cramers_v",
         ]
         html = (await container.object_store.get(row["object_key_html"])).decode()
