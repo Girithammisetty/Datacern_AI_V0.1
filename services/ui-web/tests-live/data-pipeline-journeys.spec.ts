@@ -445,7 +445,7 @@ test.describe("Data -> Pipeline -> Run -> Schedule lifecycle", () => {
     // Actions textarea is left untouched (same action set) on purpose.
     const [nameEditResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("UpdateRole") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation UpdateRole(") ?? false),
       ),
       dialog1.getByRole("button", { name: "Save changes", exact: true }).click(),
     ]);
@@ -465,7 +465,7 @@ test.describe("Data -> Pipeline -> Run -> Schedule lifecycle", () => {
     await actionsField.fill(`${currentActions}\ncase.case.read`);
     const [actionsEditResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("UpdateRole") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation UpdateRole(") ?? false),
       ),
       dialog2.getByRole("button", { name: "Save changes", exact: true }).click(),
     ]);

@@ -225,7 +225,7 @@ test.describe("HERO: human-correction → learning loop", () => {
         page.waitForResponse(
           (r) =>
             r.url().includes("/api/graphql") &&
-            (r.request().postData()?.includes("DecideProposal") ?? false),
+            (r.request().postData()?.includes("mutation DecideProposal(") ?? false),
           { timeout: 30_000 },
         ),
         detail.getByRole("button", { name: /approve with edits/i }).click(),

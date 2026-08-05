@@ -151,12 +151,24 @@ test.describe("decision tables: author → four-eyes approve → dry-run evaluat
     // exact:true — the form also has a "default disposition" select; a loose
     // match would be a Playwright strict-mode violation (2 matches).
     await form.getByLabel("disposition", { exact: true }).selectOption(outcomeCode);
-    await Promise.all([
+    const [createResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("CreateDecisionModel") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation CreateDecisionModel(") ?? false),
       ),
       form.getByRole("button", { name: "Create draft" }).click(),
     ]);
+    // ASSERT THE MUTATION, not just that a response arrived. This spec used to
+    // discard the body, so a rejected create surfaced 20s later as "the card
+    // never appeared" — a symptom that reads like a rendering bug and says
+    // nothing about the cause. The list is invalidated on success
+    // (useCreateDecisionModel), so if the mutation succeeded the card must
+    // follow; failing here first keeps the two apart.
+    const createBody = await createResp.json();
+    expect(
+      createBody.errors,
+      `createDecisionModel should not error: ${JSON.stringify(createBody.errors)}`,
+    ).toBeFalsy();
+    expect(createBody.data?.createDecisionModel?.id, "createDecisionModel must return an id").toBeTruthy();
 
     const card = page.getByTestId("decision-model-card").filter({ hasText: tableName });
     await expect(card).toBeVisible({ timeout: 20_000 });
@@ -179,7 +191,7 @@ test.describe("decision tables: author → four-eyes approve → dry-run evaluat
     await expect(approveBtn).toBeEnabled();
     const [approveResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("ApproveDecisionModel") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation ApproveDecisionModel(") ?? false),
       ),
       approveBtn.click(),
     ]);
@@ -205,7 +217,7 @@ test.describe("decision tables: author → four-eyes approve → dry-run evaluat
         await tester.getByLabel("Case id").fill(fixtureCaseId);
         const [evalResp] = await Promise.all([
           page.waitForResponse(
-            (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("EvaluateDecisionModel") ?? false),
+            (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation EvaluateDecisionModel(") ?? false),
           ),
           tester.getByRole("button", { name: "Dry-run" }).click(),
         ]);
@@ -235,7 +247,7 @@ test.describe("decision tables: author → four-eyes approve → dry-run evaluat
     await test.step("batch PROPOSE mints one governed four-eyes proposal per matched case (the recorded advisory decision)", async () => {
       const [batchResp] = await Promise.all([
         page.waitForResponse(
-          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("BatchEvaluate") ?? false),
+          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation BatchEvaluate(") ?? false),
         ),
         publishedCard.getByRole("button", { name: "Propose for matches" }).click(),
       ]);

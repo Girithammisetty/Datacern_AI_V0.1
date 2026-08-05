@@ -240,7 +240,7 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
 
     const [createResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("CreateCases") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation CreateCases(") ?? false),
       ),
       dialog.getByRole("button", { name: /^Create 2 cases$/ }).click(),
     ]);
@@ -289,7 +289,7 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
 
     const [updateResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("UpdateCase") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation UpdateCase(") ?? false),
       ),
       panel.getByRole("button", { name: /save changes/i }).click(),
     ]);
@@ -325,7 +325,7 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
     await page.getByLabel("Purpose").selectOption("both");
     const [createResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("CreateCaseField") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation CreateCaseField(") ?? false),
       ),
       page.getByRole("button", { name: /create field/i }).click(),
     ]);
@@ -348,7 +348,7 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
 
     const [updateResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("UpdateCaseField") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation UpdateCaseField(") ?? false),
       ),
       page.getByRole("button", { name: "Save" }).click(),
     ]);
@@ -407,7 +407,7 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
       await dialog.getByLabel("Assign to").selectOption(userA.id);
       const [assignResp] = await Promise.all([
         page.waitForResponse(
-          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("AssignCase") ?? false),
+          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation AssignCase(") ?? false),
         ),
         dialog.getByRole("button", { name: "Assign" }).click(),
       ]);
@@ -424,7 +424,7 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
       await dialog.getByLabel("Assign to").selectOption(userB.id);
       const [reassignResp] = await Promise.all([
         page.waitForResponse(
-          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("AssignCase") ?? false),
+          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation AssignCase(") ?? false),
         ),
         dialog.getByRole("button", { name: "Assign" }).click(),
       ]);
@@ -440,7 +440,7 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
       await page.getByLabel("Add a comment").fill(commentBody);
       const [addResp] = await Promise.all([
         page.waitForResponse(
-          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("AddCaseComment") ?? false),
+          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation AddCaseComment(") ?? false),
         ),
         page.getByRole("button", { name: /^comment$/i }).click(),
       ]);
@@ -492,7 +492,7 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
       await dialog.getByLabel("Assign to").selectOption(userA.id);
       const [bulkResp] = await Promise.all([
         page.waitForResponse(
-          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("BulkAssignCases") ?? false),
+          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation BulkAssignCases(") ?? false),
         ),
         dialog.getByRole("button", { name: "Apply" }).click(),
       ]);
@@ -545,7 +545,7 @@ test.describe("cases: worklist creation, detail CRUD, settings edit, bulk ops, R
       await panel.getByPlaceholder("Describe the case…").fill(newDescription);
       const [resp] = await Promise.all([
         page.waitForResponse(
-          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("UpdateCase") ?? false),
+          (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation UpdateCase(") ?? false),
         ),
         panel.getByRole("button", { name: /save changes/i }).click(),
       ]);

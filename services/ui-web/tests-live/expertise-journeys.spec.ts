@@ -68,8 +68,11 @@ test.describe("Expertise Ledger (governed-decision flywheel)", () => {
       await expect(percentSomewhere.or(notEnough).first()).toBeVisible();
 
       // The model-you-own card is always present with an honest state (either
-      // "Owned" with promoted detail, or "No trained model yet").
-      await expect(page.getByText("The model you own")).toBeVisible();
+      // "Owned" with promoted detail, or "No trained model yet"). Match the
+      // card's HEADING, not bare text: the page's intro paragraph contains the
+      // same phrase, so getByText resolves to two nodes and fails strict mode
+      // against a perfectly healthy page.
+      await expect(page.getByRole("heading", { name: "The model you own" })).toBeVisible();
     }
 
     // Whatever state resolved, the rendered page must never leak a broken

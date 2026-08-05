@@ -91,7 +91,7 @@ test("login → case → copilot → inbox approve, with AI label + provenance",
 
   const [decideResp] = await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/graphql") && r.request().postData()?.includes("DecideProposal") === true,
+      (r) => r.url().includes("/api/graphql") && r.request().postData()?.includes("mutation DecideProposal(") === true,
     ),
     detail.getByTestId("approve").click(),
   ]);

@@ -94,6 +94,21 @@ class TestCrud:
         )
         assert same.status_code == 200
 
+    async def test_non_uuid_dataset_id_is_404_not_500(self, client):
+        """A path id that is not a UUID is a MISS, not a server fault.
+
+        Regression: `GET /api/v1/datasets/forms-journey` handed the raw string to
+        a UUID-typed column, so asyncpg raised DataError and the caller got a 500
+        with a SQLAlchemy traceback in the response — both a wrong status and an
+        information disclosure. Observed live in a real e2e run.
+        """
+        for bad in ("forms-journey", "not-a-uuid", "123"):
+            resp = await client.get(f"/api/v1/datasets/{bad}", headers=auth())
+            assert resp.status_code == 404, f"{bad!r} -> {resp.status_code}"
+            assert resp.json()["error"]["code"] == "NOT_FOUND"
+            # The failure must not leak the persistence layer to the caller.
+            assert "asyncpg" not in resp.text and "sqlalchemy" not in resp.text.lower()
+
     async def test_rename_cross_tenant_is_404(self, client):
         ds = await create_dataset(client, tenant=TENANT_A, name="Owned")
         resp = await client.patch(
