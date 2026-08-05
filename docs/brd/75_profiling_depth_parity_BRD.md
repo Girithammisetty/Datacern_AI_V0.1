@@ -56,7 +56,10 @@ absent — not zero — for non-numeric columns, so consumers can tell "not appl
 ### 2. Correlations
 
 `_correlations` returns a list of matrices rather than one:
-`{method: "pearson"|"spearman"|"cramers_v", pairs: [...]}`. Pearson and spearman from
+`{method: "pearson"|"spearman"|"cramers_v", pairs: [...]}`, published on the
+document under the **new** `correlation_matrices` key. `correlations` keeps its
+schema_version 1 `{method, pairs}` spearman shape, so the addition is additive
+(see the shape note in inc2). Pearson and spearman from
 pandas as today; **Cramér's V** for categorical×categorical over a bias-corrected
 contingency table, computed only for columns under a cardinality cap (default 50) since
 it is O(k₁·k₂). Pair count stays bounded by the existing `MAX_CORRELATION_PAIRS`.
@@ -164,10 +167,20 @@ alert and then discarded, and there was no kurtosis / MAD / entropy / monotonici
   measure is O(k₁·k₂) per pair and O(rows) per pair, the pass is additionally bounded by
   `CRAMERS_V_MAX_COLUMNS = 25` and `CRAMERS_V_MAX_PAIRS = 100`, and returns `None`
   (→ pair omitted) when the association is undefined.
-- **Shape change, called out:** `doc["correlations"]` was a dict in schema_version 1 and
-  is a list in 2. No in-repo consumer read the key (verified by grep across every
-  service, the BFF and the UI); `render_html_report` accepts **both** shapes so a stored
-  v1 document still renders.
+- **Shape: additive, after a correction.** This increment first changed
+  `doc["correlations"]` from the v1 `{method, pairs}` dict into the list of matrices.
+  That is a silent break — a consumer doing `doc["correlations"]["pairs"]` raises
+  `TypeError` against a v2 document and nothing in the document says the shape moved.
+  It shipped justified as "no in-repo consumer reads the key" (true, and verified by
+  grep across every service, the BFF and the UI), but that says nothing about
+  consumers **outside** this repo, which is precisely the part nobody here can check.
+  Corrected 2026-08-05: `correlations` keeps its v1 spearman dict shape and the list
+  moved to a new `correlation_matrices` key, so schema_version 2 is additive
+  throughout. The legacy value **is** the spearman entry from the list, not a
+  separately-computed copy that could drift. `render_html_report` accepts all three
+  historical shapes (v1 dict, the interim list, v2), and
+  `TestCorrelationsStayBackwardCompatible` pins the guarantee — including the exact
+  v1 access pattern that broke — so it cannot be re-broken silently.
 
 ### inc3 — report artifact — DONE (content only; storage already existed)
 
