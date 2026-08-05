@@ -98,7 +98,8 @@ def rules() -> list[tuple[str, int, re.Pattern[str], bool]]:
         ("BRDs", n_brds(),
          re.compile(r"\b(\d{1,3})\+?\s+numbered\s+BRDs\b"), False),
         ("packs with a seeded demo scenario", n_demo_bundles(),
-         re.compile(r"\b(\d{1,3})\s+of\s+\d{1,3}\s+packs\s+have\s+productized\s+demo\s+bundles"), False),
+         re.compile(r"\b(\d{1,3})\s+of\s+\d{1,3}\s+packs\s+have\s+"
+                    r"productized\s+demo\s+bundles"), False),
         ("services", n_services(),
          re.compile(r"\b(\d{1,3})\s+services\b"), True),
         ("capability packs", n_packs(),

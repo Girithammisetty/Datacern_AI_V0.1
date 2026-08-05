@@ -471,6 +471,13 @@ jobs:
       # granted. Per-service manifest tests each accepted their own service's
       # habits and all stayed green while ten actions across three services were
       # unregistrable; this reads rbac's AllVerbs directly so it cannot drift.
+      # tools/ was the only Python in the repo nothing linted — which is how the
+      # checkers below accumulated long lines, semicolon statements and an
+      # unsorted import block while gating everyone else's docs. Same ruleset and
+      # line length every service uses (tools/pyproject.toml).
+      - name: Lint (tools/)
+        run: uv run --project tools --group dev ruff check tools/
+
       - name: Action verb grammar (fleet)
         run: python3 tools/authz/check_action_verbs.py
 

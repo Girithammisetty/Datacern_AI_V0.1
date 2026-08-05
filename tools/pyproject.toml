@@ -27,7 +27,26 @@ dev = [
     # tools/docs/check_doc_facts.py (deploy/services.yaml) and
     # tools/compliance/check_soc2_evidence.py (the control register).
     "pyyaml>=6",
+    "ruff>=0.5",
 ]
 
 [tool.uv]
 package = false
+
+# Same ruleset and line length every service uses, so a script moving between
+# tools/ and a service does not change shape. Added 2026-08-05 with the CI gate;
+# before that tools/ was the only Python in the repo nothing linted.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# docx_to_md.py places its two `xml.*` imports AFTER a comment block explaining
+# why each `# nosemgrep` pragma must be bare with nothing after it. Import
+# sorting would hoist them into the stdlib group and orphan that explanation
+# from the lines it is about — trading a real security note for alphabetical
+# order. The ordering is deliberate; the lint is not.
+"docs/docx_to_md.py" = ["I001"]

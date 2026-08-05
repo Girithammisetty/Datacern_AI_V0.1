@@ -81,7 +81,8 @@ def validate(reg: dict, repo_root: Path = REPO_ROOT) -> list[str]:
             ext = crit.get("external_evidence") or []
             if not ext:
                 problems.append(
-                    f"{cid}: status {status!r} but no `external_evidence` — a gap must name what to collect"
+                    f"{cid}: status {status!r} but no `external_evidence` — "
+                    "a gap must name what to collect"
                 )
 
         # An `implemented` criterion must actually cite in-repo evidence.
@@ -136,32 +137,37 @@ def self_test() -> int:
     bad["criteria"][0]["evidence"] = [{"path": "does/not/exist.xyz"}]
     probs = validate(bad)
     if not any("does not exist" in p for p in probs):
-        print("SELF-TEST FAIL: missing path not caught"); ok = False
+        print("SELF-TEST FAIL: missing path not caught")
+        ok = False
 
     # A blank gap must be flagged.
     blankgap = {"criteria": [{"id": c, "status": "gap", "summary": "x",
                               "external_evidence": ["y"]} for c in REQUIRED_COMMON_CRITERIA]}
     blankgap["criteria"][1]["external_evidence"] = []
     if not any("must name what to collect" in p for p in validate(blankgap)):
-        print("SELF-TEST FAIL: blank gap not caught"); ok = False
+        print("SELF-TEST FAIL: blank gap not caught")
+        ok = False
 
     # A bad status must be flagged.
     badstatus = {"criteria": [{"id": c, "status": "gap", "summary": "x",
                                "external_evidence": ["y"]} for c in REQUIRED_COMMON_CRITERIA]}
     badstatus["criteria"][2]["status"] = "sorta"
     if not any("not in" in p for p in validate(badstatus)):
-        print("SELF-TEST FAIL: bad status not caught"); ok = False
+        print("SELF-TEST FAIL: bad status not caught")
+        ok = False
 
     # A missing CC must be flagged.
     missing = {"criteria": [{"id": c, "status": "gap", "summary": "x",
                              "external_evidence": ["y"]}
                             for c in REQUIRED_COMMON_CRITERIA if c != "CC5"]}
     if not any("missing required Common Criteria" in p for p in validate(missing)):
-        print("SELF-TEST FAIL: missing criterion not caught"); ok = False
+        print("SELF-TEST FAIL: missing criterion not caught")
+        ok = False
 
     # The real register must be clean.
     if validate(load_register()):
-        print("SELF-TEST FAIL: the committed register does not validate"); ok = False
+        print("SELF-TEST FAIL: the committed register does not validate")
+        ok = False
 
     print("SELF-TEST PASS" if ok else "SELF-TEST FAILED")
     return 0 if ok else 1
