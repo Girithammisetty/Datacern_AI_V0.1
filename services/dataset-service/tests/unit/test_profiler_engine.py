@@ -53,7 +53,7 @@ def col(doc: dict, name: str) -> dict:
 
 
 def matrix(doc: dict, method: str) -> dict:
-    return next(m for m in doc["correlations"] if m["method"] == method)
+    return next(m for m in doc["correlation_matrices"] if m["method"] == method)
 
 
 class TestTypeInference:
@@ -445,7 +445,7 @@ class TestCorrelationMatrices:
         n = 200
         x = np.arange(1, n + 1, dtype="float64")
         doc = profile(pd.DataFrame({"x": x, "linear": x * 3 - 4, "cubed": x**3}))
-        assert [m["method"] for m in doc["correlations"]] == [
+        assert [m["method"] for m in doc["correlation_matrices"]] == [
             "pearson", "spearman", "cramers_v",
         ]
         pearson, spearman = matrix(doc, "pearson"), matrix(doc, "spearman")
@@ -540,7 +540,7 @@ class TestReproducibilityAndCompatibility:
         second = profile(df, max_rows=500)
         assert first["sample"]["strategy"] == "reservoir"
         assert first == second
-        assert first["correlations"] == second["correlations"]
+        assert first["correlation_matrices"] == second["correlation_matrices"]
 
     def test_ac7_schema_version_bumped(self):
         doc = profile(pd.DataFrame({"a": [1, 2, 3]}))
@@ -667,3 +667,51 @@ SCHEMA_V1_DOC = {
          "detail": "33.3333% null"},
     ],
 }
+
+
+class TestCorrelationsStayBackwardCompatible:
+    """schema_version 2 must be ADDITIVE.
+
+    An earlier v2 draft changed `correlations` from the v1 `{method, pairs}` dict
+    into a list of matrices. That is a silent break: any consumer doing
+    `doc["correlations"]["pairs"]` starts raising TypeError against a v2 document,
+    and nothing in the document says the shape moved. The multi-method matrices
+    now live under a NEW key instead, so a v1 reader is unaffected.
+    """
+
+    def _doc(self):
+        return profile(pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 4, 6, 8],
+                                     "c": ["x", "y", "x", "y"]}))
+
+    def test_correlations_keeps_the_v1_dict_shape(self):
+        corr = self._doc()["correlations"]
+        assert isinstance(corr, dict), "v1 readers index this as a dict"
+        assert corr["method"] == "spearman"
+        assert isinstance(corr["pairs"], list)
+
+    def test_a_v1_reader_still_works_against_a_v2_document(self):
+        # The exact access pattern that broke: no branching on schema_version.
+        doc = self._doc()
+        pairs = doc["correlations"]["pairs"]
+        assert isinstance(pairs, list)
+
+    def test_every_method_is_available_under_the_new_key(self):
+        methods = [m["method"] for m in self._doc()["correlation_matrices"]]
+        assert methods == ["pearson", "spearman", "cramers_v"]
+
+    def test_the_legacy_key_is_the_same_object_as_the_spearman_matrix(self):
+        # Not a separately-computed copy that could drift from the list.
+        doc = self._doc()
+        spearman = next(m for m in doc["correlation_matrices"] if m["method"] == "spearman")
+        assert doc["correlations"] == spearman
+
+    def test_the_renderer_accepts_all_three_historical_shapes(self):
+        from app.domain.profiling.engine import render_html_report
+        base = self._doc()
+        v1 = {**base, "schema_version": 1, "correlations": {"method": "spearman", "pairs": []}}
+        v1.pop("correlation_matrices", None)
+        # The brief window where v2 made `correlations` a list.
+        interim = {**base, "correlations": [{"method": "spearman", "pairs": []}]}
+        interim.pop("correlation_matrices", None)
+        for doc in (base, v1, interim):
+            assert "<html" in render_html_report(doc).lower()

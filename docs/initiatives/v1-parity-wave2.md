@@ -38,14 +38,16 @@ contract-server fix, and the LIKE-escaping fix.
 
 ## Risk register — the five things worth a careful look
 
-### Risk 1 · A non-additive schema change (BRD 75)
-`doc["correlations"]` changed **dict → list**. Everything else in `schema_version`
-2 is additive and optional.
+### Risk 1 · A non-additive schema change (BRD 75) — **RESOLVED 2026-08-05**
+`doc["correlations"]` had changed **dict → list**, which breaks any consumer doing
+`doc["correlations"]["pairs"]` with a `TypeError` and says nothing about why.
 
-*Checked:* grepped every service, BFF and UI — no consumer outside dataset-service
-reads that key, and `render_html_report` accepts both shapes, so stored v1
-documents still render.
-*Ask:* is there an external/downstream consumer outside this repo?
+**Fixed rather than accepted.** `correlations` keeps its v1 `{method, pairs}`
+spearman shape and the multi-method matrices moved to a NEW `correlation_matrices`
+key, so `schema_version` 2 is now additive throughout. A v1 reader is unaffected;
+the renderer accepts v1, the interim list form, and v2. No open question remains —
+including for consumers outside this repo, which was the part nobody here could
+check.
 
 ### Risk 2 · Authorization change (BRD 74 AC-10) — the highest-risk item
 tool-plane now forwards the verified caller bearer to a backend facade, gated on a

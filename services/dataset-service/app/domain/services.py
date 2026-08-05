@@ -1394,7 +1394,9 @@ class ProfileService(_Base):
             "schema_version": doc.get("schema_version"),
             "generated_at": profile.finished_at.isoformat() if profile.finished_at else None,
             "columns": stats,
-            "correlations": doc.get("correlations"),
+            # Every method for grounding; `correlations` (the v1 spearman dict)
+            # stays on the document for older readers.
+            "correlations": doc.get("correlation_matrices") or doc.get("correlations"),
         }
 
     async def metric_artifact(

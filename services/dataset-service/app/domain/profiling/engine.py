@@ -15,7 +15,9 @@ schema_version 2 (BRD 75 — profiling depth parity) adds, additively:
   removed in pandas 2, so it is computed here);
 - ordered columns (numeric + temporal) only: `monotonic`
   (`none|increasing|decreasing|strictly_increasing|strictly_decreasing`);
-- `correlations` is now a LIST of matrices (`pearson`, `spearman`, `cramers_v`)
+- `correlation_matrices` (NEW) is a LIST of matrices (`pearson`, `spearman`,
+  `cramers_v`); `correlations` keeps its v1 `{method, pairs}` spearman shape so
+  schema_version 2 stays additive
   instead of the single spearman matrix of schema_version 1.
 
 Fields that do not apply to a column are **absent**, never zero, so a consumer
@@ -421,6 +423,19 @@ def _categorical_association(df: pd.DataFrame, columns: list[dict]) -> dict:
     }
 
 
+def _legacy_correlations(matrices: list[dict]) -> dict:
+    """The schema_version 1 `correlations` value: the single spearman matrix.
+
+    v1 emitted exactly `{method: "spearman", pairs: [...]}`. Keeping that key at
+    that shape is what makes v2 additive rather than breaking — a consumer that
+    never learned about `correlation_matrices` reads the same thing it always did.
+    """
+    for m in matrices:
+        if m.get("method") == "spearman":
+            return m
+    return {"method": "spearman", "pairs": []}
+
+
 def _correlations(df: pd.DataFrame, columns: list[dict]) -> list[dict]:
     """All correlation/association matrices (schema_version 2 — a LIST).
 
@@ -503,6 +518,7 @@ def profile_dataframe(
         columns.append(_profile_column(str(name), series, inferred, generated_at, k))
 
     dup_pct = round(float(df.duplicated().mean()) * 100, 4) if len(df) else 0.0
+    matrices = _correlations(df, columns)
     doc = {
         "schema_version": SCHEMA_VERSION,
         "dataset_urn": dataset_urn,
@@ -517,7 +533,14 @@ def profile_dataframe(
             "duplicate_row_pct": dup_pct,
         },
         "columns": columns,
-        "correlations": _correlations(df, columns),
+        # schema_version 2 adds the multi-method matrices ADDITIVELY: the
+        # original `correlations` key keeps its v1 `{method, pairs}` shape so a
+        # reader written against v1 still works on a v2 document, and every
+        # method lives under the new `correlation_matrices`. Changing
+        # `correlations` from a dict to a list was a silent break for any
+        # consumer doing `doc["correlations"]["pairs"]`.
+        "correlations": _legacy_correlations(matrices),
+        "correlation_matrices": matrices,
     }
     doc["alerts"] = _alerts(columns)
     return doc
@@ -569,9 +592,14 @@ def _cell(value: Any) -> str:
 def _correlation_matrices(doc: dict) -> list[dict]:
     """The doc's correlation matrices as a list.
 
-    schema_version 1 stored a single `{method, pairs}` dict; 2 stores a list.
-    Both are accepted so an older stored profile still renders.
+    v2 stores every method under `correlation_matrices` and keeps `correlations`
+    at its v1 `{method, pairs}` shape. Older documents have only `correlations`,
+    which may be that dict or — for profiles written by the brief window when v2
+    made it a list — a list. All three are accepted.
     """
+    matrices = doc.get("correlation_matrices")
+    if matrices:
+        return list(matrices)
     corr = doc.get("correlations")
     if isinstance(corr, dict):
         return [corr]
