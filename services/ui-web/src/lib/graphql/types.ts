@@ -2707,6 +2707,103 @@ export interface CreatePipelineScheduleInput {
   runParameters?: JSONValue;
 }
 
+/* ---------- BRD 73: batch jobs (chained ingest → run) ---------- */
+
+/** One source connection a batch job pulls before its pipeline runs. */
+export interface BatchJobBinding {
+  connectionId: string;
+  bindingKey?: string | null;
+  datasetUrn?: string | null;
+  workspaceId?: string | null;
+  ingestionParams?: JSONValue;
+}
+
+/** A recurring `trigger → ingestion → pipeline` job (pipeline-orchestrator
+ * /batch-jobs). */
+export interface BatchJob {
+  id: ID;
+  urn: string;
+  name: string;
+  workspaceId?: ID | null;
+  pipelineTemplateId: ID;
+  pipelineVersionId?: ID | null;
+  /** V1's `connections` JSON, typed. Served as JSON, so narrow before use. */
+  connectionBindings: JSONValue;
+  cron?: string | null;
+  timezone?: string | null;
+  runParameters?: JSONValue;
+  paused: boolean;
+  phaseTimeoutSeconds?: number | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  nextFireAt?: string | null;
+  lastFireAt?: string | null;
+  lastRunId?: ID | null;
+  createdBy?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+/** One binding's ingestion inside a batch job run — a row of the phase timeline. */
+export interface BatchJobRunIngestion {
+  bindingKey: string;
+  ingestionId?: ID | null;
+  /** triggered | completed | failed | cancelled. */
+  status: string;
+  datasetUrn?: string | null;
+  icebergSnapshotId?: string | null;
+  /** The exact dataset VERSION this ingestion produced — the AC-3 pin. Null
+   * until dataset-service has minted it, even for a completed ingestion. */
+  datasetVersionUrn?: string | null;
+  error?: JSONValue;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+/** One `trigger → ingestion → pipeline` execution of a BatchJob. */
+export interface BatchJobRun {
+  id: ID;
+  urn: string;
+  batchJobId: ID;
+  batchKey: string;
+  pipelineTemplateId: ID;
+  pipelineVersionId?: ID | null;
+  /** trigger | ingestion | pipeline — where the run is, or where it stopped. */
+  phase: string;
+  /** pending | running | succeeded | failed | cancelled. */
+  status: string;
+  /** schedule | manual | retry. */
+  trigger: string;
+  pipelineRunId?: ID | null;
+  inputDatasetUrns: string[];
+  outputDatasetUrns: string[];
+  error?: JSONValue;
+  phaseDeadlineAt?: string | null;
+  retriedFromRunId?: ID | null;
+  submittedBy?: string | null;
+  createdAt?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  /** NULL on the runs LIST (the backend does not serialize it there) and an
+   * array only on the single-run read. Null means "not loaded"; [] means "this
+   * run has fired no ingestions". The two must not be conflated. */
+  ingestions?: BatchJobRunIngestion[] | null;
+}
+
+export interface CreateBatchJobInput {
+  name: string;
+  pipelineTemplateId: string;
+  pipelineVersionId?: string | null;
+  connectionBindings: BatchJobBinding[];
+  cron?: string | null;
+  timezone?: string;
+  runParameters?: JSONValue;
+  startAt?: string | null;
+  endAt?: string | null;
+  paused?: boolean;
+  phaseTimeoutSeconds?: number | null;
+}
+
 /** One immutable pipeline-template version (pipeline-orchestrator). */
 export interface PipelineTemplateVersion {
   id: ID;

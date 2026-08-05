@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Workflow, Plus, Loader2, CalendarClock } from "lucide-react";
+import { Workflow, Plus, Loader2, CalendarClock, Layers } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { DataTable, type Column } from "@/components/primitives/DataTable";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
@@ -197,6 +197,13 @@ export default function PipelinesPage() {
             <Can gate={FEATURE_GATES.viewPipelineSchedules}>
               <Button variant="outline" onClick={() => router.push("/data/pipelines/schedules")}>
                 <CalendarClock /> {t("pipelines.schedules.view")}
+              </Button>
+            </Can>
+            {/* BRD 73. Surfaced here rather than in NAV_ITEMS, matching how the
+                neighbouring Runs / Schedules pages are reached. */}
+            <Can gate={FEATURE_GATES.viewBatchJobs}>
+              <Button variant="outline" onClick={() => router.push("/data/pipelines/batch-jobs")}>
+                <Layers /> {t("pipelines.batchJobs.view")}
               </Button>
             </Can>
             <Can gate={FEATURE_GATES.buildPipeline}>

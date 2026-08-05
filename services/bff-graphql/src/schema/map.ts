@@ -113,6 +113,7 @@ import type {
 import type {
   ComponentDTO, AlgorithmDTO, TemplateDTO, PipelineRunDTO, ValidationReportDTO, StepParamDTO,
   TemplateVersionDTO, CompiledManifestDTO, RunManifestDTO, PipelineScheduleDTO,
+  BatchJobDTO, BatchJobRunDTO, BatchJobRunIngestionDTO,
 } from "../clients/pipelines.js";
 import type {
   SemanticModelDTO, SemanticDefinitionDTO, SemanticDimensionDTO, SemanticMeasureDTO,
@@ -2093,6 +2094,85 @@ export function mapPipelineSchedule(ctx: GraphQLContext, d: PipelineScheduleDTO)
     lastFireAt: d.last_fire_at ?? null,
     lastRunId: d.last_run_id ?? null,
     createdAt: d.created_at ?? null,
+  };
+}
+
+// ---- batch jobs (BRD 73) ----------------------------------------------------
+
+export function mapBatchJob(ctx: GraphQLContext, d: BatchJobDTO) {
+  return {
+    __typename: "BatchJob" as const,
+    id: d.id,
+    urn: urn(ctx, "pipeline", "batch-job", d.id),
+    name: d.name,
+    workspaceId: d.workspace_id ?? null,
+    pipelineTemplateId: d.pipeline_template_id,
+    pipelineVersionId: d.pipeline_version_id ?? null,
+    // Passed through verbatim: the backend stores V1's `connections` JSON typed
+    // as [{binding_key, connection_id, dataset_urn, workspace_id,
+    // ingestion_params}] and the BFF adds no shape of its own.
+    connectionBindings: (d.connection_bindings ?? []) as unknown,
+    cron: d.cron ?? null,
+    timezone: d.timezone ?? null,
+    runParameters: (d.run_parameters ?? null) as unknown,
+    paused: d.paused ?? false,
+    phaseTimeoutSeconds: d.phase_timeout_seconds ?? null,
+    startAt: d.start_at ?? null,
+    endAt: d.end_at ?? null,
+    nextFireAt: d.next_fire_at ?? null,
+    lastFireAt: d.last_fire_at ?? null,
+    lastRunId: d.last_run_id ?? null,
+    createdBy: d.created_by ?? null,
+    createdAt: d.created_at ?? null,
+    updatedAt: d.updated_at ?? null,
+  };
+}
+
+export function mapBatchJobRunIngestion(d: BatchJobRunIngestionDTO) {
+  return {
+    __typename: "BatchJobRunIngestion" as const,
+    bindingKey: d.binding_key,
+    ingestionId: d.ingestion_id ?? null,
+    status: d.status,
+    datasetUrn: d.dataset_urn ?? null,
+    icebergSnapshotId: d.iceberg_snapshot_id ?? null,
+    datasetVersionUrn: d.dataset_version_urn ?? null,
+    error: d.error ?? null,
+    createdAt: d.created_at ?? null,
+    updatedAt: d.updated_at ?? null,
+  };
+}
+
+/**
+ * `ingestions` is deliberately null (not []) when the payload omits the key.
+ * Only GET /batch-job-runs/{id} serializes it; the runs LIST does not, and
+ * "the timeline was not requested" must stay distinguishable from "this run
+ * fired no ingestions" — collapsing both to [] would render an empty timeline
+ * for a run that actually has one.
+ */
+export function mapBatchJobRun(ctx: GraphQLContext, d: BatchJobRunDTO) {
+  return {
+    __typename: "BatchJobRun" as const,
+    id: d.id,
+    urn: urn(ctx, "pipeline", "batch-job-run", d.id),
+    batchJobId: d.batch_job_id,
+    batchKey: d.batch_key,
+    pipelineTemplateId: d.pipeline_template_id,
+    pipelineVersionId: d.pipeline_version_id ?? null,
+    phase: d.phase,
+    status: d.status,
+    trigger: d.trigger,
+    pipelineRunId: d.pipeline_run_id ?? null,
+    inputDatasetUrns: d.input_dataset_urns ?? [],
+    outputDatasetUrns: d.output_dataset_urns ?? [],
+    error: d.error ?? null,
+    phaseDeadlineAt: d.phase_deadline_at ?? null,
+    retriedFromRunId: d.retried_from_run_id ?? null,
+    submittedBy: d.submitted_by ?? null,
+    createdAt: d.created_at ?? null,
+    startedAt: d.started_at ?? null,
+    finishedAt: d.finished_at ?? null,
+    ingestions: d.ingestions ? d.ingestions.map(mapBatchJobRunIngestion) : null,
   };
 }
 

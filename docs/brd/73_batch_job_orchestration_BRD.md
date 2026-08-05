@@ -1,6 +1,6 @@
 # BRD 73 — Batch job orchestration (chained ingest → pipeline)
 
-**Status:** inc1–inc3 (backend) DONE — 2026-08-05 · BFF/UI + agent deferred · part of the [V1 parity wave-2 index](71_v1_parity_wave2_index.md)
+**Status:** inc1–inc3 DONE (backend + BFF + UI) — 2026-08-05 · AC-9 CLOSED · agent (AC-10 / inc4) deferred · part of the [V1 parity wave-2 index](71_v1_parity_wave2_index.md)
 **Owner:** platform · **Services:** `pipeline-orchestrator` (owner) · `ingestion-service` · `bff-graphql` · `ui-web` · `agent-runtime`
 **Gaps closed:** B1 (chained ingest→run batch job), B2 (`batch-trigger` component)
 
@@ -128,7 +128,7 @@ single proposal under four-eyes.
 | AC-6 | `retry` resumes from the failed phase, not from `trigger`. |
 | AC-7 | A per-phase deadline fails the run with a phase-scoped error rather than hanging. |
 | AC-8 | `batch-trigger` executes in the local executor and is idempotent under re-run. |
-| AC-9 | Phase transitions emit outbox events; the UI timeline reflects them. |
+| AC-9 | Phase transitions emit outbox events; the UI timeline reflects them. **DONE** (event half inc3, UI half inc3b). |
 | AC-10 | `data_pipeline_builder` proposes a batch job in proposal-mode; cross-tenant reads 404. |
 
 ## Implement & Test log
@@ -158,7 +158,20 @@ Checked before building, and the code won:
    consumes **both** topics, and a completed binding is only "landed" once its version is
    known. That is what makes AC-3 a real pin instead of a timestamp guess.
 
-A third premise held but is narrower than it reads: `PipelineRun`'s lease machinery
+Two more, found in inc3b while building the BFF **against the code rather than against
+this document's Design §1/§4**:
+
+3. **`BatchJobRun` has no `ingestion_ids[]`** (Design §1). The shipped aggregate keeps a
+   separate `BatchJobRunIngestion` row per binding — id, status, dataset urn, snapshot
+   id, dataset **version** urn, error — which is what makes the per-binding UI timeline
+   possible at all; an array of ids could not carry a per-binding outcome. Design §1's
+   `BatchJob` also lists `lease_*`, but the lease columns are on the **RUN**, not the
+   job: a job is never "held", a run being driven is.
+4. **§4 undercounts the run surface.** `PUT /batch-job-runs/{id}/terminate` exists and is
+   in the action manifest but is absent from §4's route list, so the BFF exposes
+   `terminateBatchJobRun` on evidence from `app/api/routes/batch_jobs.py`, not from here.
+
+A third original premise held but is narrower than it reads: `PipelineRun`'s lease machinery
 (`claim_lease` / heartbeat at ⅓ TTL / `recover_orphans`) is reused **exactly**, but a
 batch run holds its lease only while a phase is actively being DRIVEN. The ingestion
 phase is a *wait*, not work, so a run parked in it holds nothing and the orphan scan
@@ -247,6 +260,62 @@ that phase.
   `batch_job.run.{started,phase_changed,succeeded,failed,cancelled}` on the existing
   transactional outbox, resource_urn `wr:{tenant}:pipeline:batch-job-run/{id}`.
 
+### inc3b — the BFF leg + the Batch Jobs page (AC-9's UI half) — DONE
+
+The backend already served everything this needs; nothing about the aggregate changed.
+
+- **`services/bff-graphql/src/clients/pipelines.ts`** — `BatchJobDTO`,
+  `BatchJobRunDTO`, `BatchJobRunIngestionDTO` and eleven methods over the REST
+  surface exactly as it exists: list/get jobs, list a job's runs, get one run,
+  create/update/pause/resume/run-now/delete, retry and terminate a RUN.
+- **`src/schema/typeDefs.ts` + `map.ts` + `resolvers/index.ts`** — `BatchJob`,
+  `BatchJobRun`, `BatchJobRunIngestion`, `BatchJobList`, `BatchJobRunList`,
+  `CreateBatchJobInput` / `UpdateBatchJobInput` / `BatchJobBindingInput`; four
+  root queries and eight mutations. Pure passthrough on the established pattern —
+  JWT forwarded verbatim, the orchestrator enforces every `pipeline.batch_job.*`
+  guard, the BFF makes no authz decision and keeps its CI-enforced
+  no-DB / no-consumer / no-cache shape (nothing was added to `eslint.config.js`'s
+  `no-restricted-imports` or `deploy/services.yaml`'s `db: ~` / `migrate: false`).
+  SDL snapshot regenerated (+237 lines).
+- **Three places the REST contract forced a decision rather than a convention:**
+  1. **`ingestions` is nullable, never `[]`-by-default.** `GET /batch-jobs/{id}/runs`
+     omits the key entirely; only `GET /batch-job-runs/{id}` serializes it. Mapping
+     an absent key to `[]` would render an empty timeline for a run that has two
+     bindings, so `mapBatchJobRun` emits `null` and the SDL says so.
+  2. **No `idempotencyKey` argument anywhere.** pipeline-orchestrator's API layer
+     reads no `Idempotency-Key` header on ANY route — `SqlIdempotencyRepo` exists
+     but is not wired to one — so accepting a key would advertise a guarantee the
+     backend does not make. AC-4's idempotency is server-side
+     (`{batch_key}:{binding_key}` against ingestion-service) and needs nothing
+     from the caller.
+  3. **`updateBatchJob` sends only the keys the caller supplied.** The backend
+     PATCH is `model_dump(exclude_unset=True)`, so presence — not nullishness —
+     is the test: `{cron: null}` is a deliberate clear and must be forwarded,
+     while an omitted `cron` must not be.
+- **`services/ui-web`** — types / operations / query keys / hooks, five new
+  `FEATURE_GATES` on the real rbac actions the routes guard
+  (`pipeline.batch_job.{read,create,update,delete,execute}`; note the backend
+  guards run-now, retry AND terminate with `execute`, so the UI does not invent a
+  finer split), and a `ROUTE_RULES` entry for `/data/pipelines/batch-jobs` gated
+  on `pipeline.batch_job.read` — a LONGER prefix than `/data/pipelines`, because a
+  persona holding `pipeline.template.read` does not automatically hold the
+  batch-job capability. **Not added to `NAV_ITEMS`**: checked, and the neighbouring
+  Runs / Schedules pages are not there either — they are reached from buttons in
+  the Pipelines page header, so Batch Jobs is surfaced the same way.
+- **`/data/pipelines/batch-jobs`** — the jobs grid (cadence, bindings count,
+  paused/scheduled, next fire) with run-now / pause / resume / delete and a create
+  dialog bound to the real pipeline-template and connection lists; below it, the
+  picked job's runs, and per run the `trigger → ingestion → pipeline` timeline with
+  each phase's state, the per-binding ingestion outcomes (status, ingestion id,
+  the pinned dataset **version** urn and Iceberg snapshot id, the per-binding
+  error) and the input/output dataset URNs the run recorded.
+- **`BatchRunTimeline.phaseStates`** is a projection, not invented data. The
+  backend records exactly two things — where the run IS (`phase`) and how it is
+  doing there (`status`) — so phases before the current one completed (the machine
+  cannot advance otherwise), the current one carries the run's status, and later
+  ones were never reached. A phase name the enum does not contain returns `null`
+  and renders an error, rather than guessing a position on the timeline.
+
 ### What the tests prove
 
 `tests/unit/test_batch_jobs.py` (**40**, pipeline-orchestrator) — every assertion is
@@ -306,19 +375,73 @@ repeated `idempotency_key` replays the SAME ingestion (one row in the table, not
 different key creates a genuinely new one; and a call with NO key still works, so
 mcp-gateway's existing path is unchanged.
 
+`tests/unit/batch-jobs.test.ts` (**14**, bff-graphql) — against a double that mirrors
+the orchestrator's real payloads, including the asymmetry that matters: the runs list
+omits `ingestions` and the single-run read carries it.
+
+- the jobs list paginates with a `wr:{t}:pipeline:batch-job/{id}` urn and forwards the
+  bindings verbatim; an unknown job id is `null`, not an error;
+- **the runs LIST leaves `ingestions` null** and the single-run read carries both
+  bindings, with `datasetVersionUrn` + `icebergSnapshotId` on the one that landed and
+  its phase-scoped error on the one that failed — plus the run's own
+  `inputDatasetUrns == ["wr:{t}:dataset:version/claims@v12"]` (AC-3);
+- **a 503 on the jobs list surfaces as `SERVICE_UNAVAILABLE` with `data.batchJobs`
+  null** — never an empty list;
+- `createBatchJob` sources `workspace_id` from the JWT, maps camel bindings to the
+  snake `ConnectionBinding` shape, and **fails closed with nothing sent downstream**
+  when the token carries no workspace;
+- `updateBatchJob` sends ONLY `{name}` for a name-only edit and forwards an explicit
+  `{cron: null}` as a clear;
+- pause/resume, run-now (a new run in `trigger`, `ingestions` null), retry (the NEW
+  run resumes at `ingestion` with `retriedFromRunId` — not at `trigger`, AC-6),
+  terminate, and delete-on-204.
+
+`batch-jobs.test.tsx` (**10**, ui-web) and `BatchRunTimeline.test.tsx` (**9**, ui-web) —
+the AC-9 UI half, with the error-vs-empty distinction asserted explicitly at every level:
+
+- the jobs grid reflects the real `batchJobs` result; **no jobs** renders "No batch jobs
+  yet" with NO alert, and a **failed** query renders the error panel with the downstream
+  message and NO "No batch jobs yet" and no grid;
+- the same split for a job's runs ("This batch job has not run yet" vs the error panel)
+  and for the single-run read (an error panel, and **no** half-rendered timeline);
+- a run that failed in `ingestion` renders trigger=`succeeded`, ingestion=`failed`,
+  pipeline=`not reached`, both per-binding rows with the completed one's version pin and
+  snapshot id and the failed one's `SOURCE_UNREACHABLE`, the recorded input urn, "None
+  recorded." for the outputs it never produced, and the run's `BATCH_INGESTION_FAILED`;
+- `phaseStates` unit-tested over succeeded / failed-in-ingestion / parked-in-ingestion /
+  cancelled-in-trigger, and returning `null` (→ an error, not a drawn timeline) for a
+  phase name the enum does not contain;
+- **`ingestions: null` renders "the per-source timeline was not returned" while
+  `ingestions: []` renders "no ingestions recorded yet"** — two different facts, two
+  different strings;
+- retry fires the real mutation for the failed run; create sends the real camel
+  variables and refuses to submit with no binding (the backend requires ≥1).
+
 **Suites:** pipeline-orchestrator unit **260** (was 220) green, `ruff` clean;
 pipeline-orchestrator integration 16 green (the one pre-existing failure,
 `test_corrections_produce_a_real_model_in_mlflow`, an xgboost string-label issue, fails
 identically on a clean tree — untouched by this work). ingestion-service unit **596**
-(was 591) green, `ruff` clean.
+(was 591) green, `ruff` clean. bff-graphql **482** (was 468) green, `tsc --noEmit` and
+`eslint src` clean; ui-web **965** (was 946) green, `tsc --noEmit` clean.
 
 ### Deferred, honestly
 
-- **AC-9's UI half and the BFF leg.** The backend serves the phase timeline
-  (`GET /batch-job-runs/{id}` returns one row per binding with its ingestion, status,
-  dataset urn, snapshot id and version urn) and the events are on the outbox, but there is
-  no `bff-graphql` schema and no Batch Jobs page. Deliberate: the priority was the
-  backend + tests. AC-9's event half is proven; the UI half is not.
+- ~~**AC-9's UI half and the BFF leg.**~~ CLOSED in inc3b — see above.
+- **The batch-run timeline does not live-update off the outbox events.** AC-9's event
+  half emits `batch_job.run.phase_changed`, but there is no realtime topic wiring it to
+  the browser: the runs list and the run detail POLL every 5s while any loaded run is
+  non-terminal and stop once they are all terminal. Honest and correct, but it is a poll,
+  not a push. Closing it means a hub topic for `batch-job-run` alongside the existing
+  `pipeline-run` one.
+- **The UI edits nothing but lifecycle.** `updateBatchJob` is served by the BFF and
+  tested, but the page has no edit form — create, pause/resume, run-now, retry,
+  terminate and delete only. Deliberate: editing bindings mid-flight is a governance
+  question (which runs does the change apply to?) that this increment does not answer.
+- **`connectionBindings` is served as opaque JSON.** The backend stores V1's
+  `connections` blob and `batch_job_payload` returns it unshaped; the UI narrows it only
+  far enough to count bindings, and the create form writes `{connectionId}` per row
+  (no per-binding `ingestion_params` or `dataset_urn` editor). Typing it in the SDL
+  would mean asserting a shape the backend does not enforce on read.
 - **AC-10 / inc4 — the `data_pipeline_builder` agent proposal.** Not started. The
   cross-tenant-404 half of AC-10 IS covered (unit + the RLS integration test).
 - **Version-scoped READS.** AC-3 is satisfied as *recorded* pinning: the exact dataset

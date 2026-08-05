@@ -259,6 +259,11 @@ const ROUTE_RULES: RouteRule[] = [
   { prefix: "/data/upload", gate: cap("ingestion.upload.create") },
   { prefix: "/data/ingestions", gate: cap("ingestion.ingestion.read") },
   { prefix: "/data/queries", gate: cap("query.query.read") },
+  // Batch jobs (BRD 73) sit under /data/pipelines but are a distinct aggregate
+  // with its own rbac actions — a persona that can read pipeline templates does
+  // not automatically hold pipeline.batch_job.read. The longer prefix wins the
+  // longest-match resolution below.
+  { prefix: "/data/pipelines/batch-jobs", gate: cap("pipeline.batch_job.read") },
   // Pipelines also sit under /data but need the pipeline capability.
   { prefix: "/data/pipelines", gate: cap("pipeline.template.read") },
   // Semantic models also sit under /data but need the semantic capability.
@@ -954,4 +959,20 @@ export const FEATURE_GATES = {
   deletePipelineSchedule: cap("pipeline.schedule.delete"),
   /** Force one immediate fire (POST /pipeline-schedules/{id}/run-now). */
   runPipelineScheduleNow: cap("pipeline.schedule.execute"),
+
+  /* -- BRD 73: batch jobs (chained ingest → run). The capability names are the
+     rbac actions pipeline-orchestrator's batch-job routes guard on
+     (app/api/routes/batch_jobs.py `require("pipeline.batch_job.*")`). Note the
+     execute action covers run-now, retry AND terminate — the backend guards all
+     three with it, so the UI must not invent a finer split. -- */
+  /** Browse batch jobs and their runs (GET /batch-jobs, /batch-job-runs/{id}). */
+  viewBatchJobs: cap("pipeline.batch_job.read"),
+  /** Create a batch job (POST /batch-jobs). */
+  createBatchJob: cap("pipeline.batch_job.create"),
+  /** Pause/resume a batch job (POST /batch-jobs/{id}/pause|resume). */
+  updateBatchJob: cap("pipeline.batch_job.update"),
+  /** Delete a batch job (DELETE /batch-jobs/{id}). */
+  deleteBatchJob: cap("pipeline.batch_job.delete"),
+  /** Run-now, retry a failed run, terminate an active run. */
+  executeBatchJob: cap("pipeline.batch_job.execute"),
 } as const;

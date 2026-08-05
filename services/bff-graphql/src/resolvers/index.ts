@@ -16,6 +16,7 @@ import { budgetScopeString } from "../clients/usage.js";
 import type { AgentKillSwitchDTO, AgentDefinitionDTO, TenantAgentConfigDTO, AgentRolloutDTO } from "../clients/agent.js";
 import type { EvalGateResultDTO } from "../clients/eval.js";
 import type { WriteMemoryParams } from "../clients/memory.js";
+import type { BatchJobBindingDTO, UpdateBatchJobBody } from "../clients/pipelines.js";
 import {
   mapUser, mapDataset, mapProfile, mapCase, mapDashboard, mapChart,
   // Tier 4b: case ops (lifecycle, comments/timeline, export, catalog, SLA).
@@ -47,6 +48,8 @@ import {
   mapPipelineTemplateVersion, mapCompiledPipelineManifest, mapPipelineRunManifest,
   mapPipelineStepType, mapAlgorithmTemplate, mapPipelineTemplate, mapPipelineRun, mapValidationReport,
   mapPipelineSchedule,
+  // BRD 73: batch jobs (chained ingest -> run) + their per-binding phase timeline.
+  mapBatchJob, mapBatchJobRun,
   mapSemanticModel,
   mapDatasetSchema, mapSemanticModelSummary, mapSemanticModelVersion, mapSemanticCompileResult,
   mapWorkspace, mapGroup, mapGroupMember, mapRole, mapAuthzExplanation, mapServiceAccount, mapTenant, mapAuditEvent,
@@ -101,6 +104,45 @@ async function nullOn404<T>(p: Promise<T>): Promise<T | null> {
     if (e instanceof DownstreamError && e.httpStatus === 404) return null;
     throw e;
   }
+}
+
+// ---- BRD 73: batch-job mutation argument shapes ------------------------------
+/** SDL `BatchJobBindingInput`. */
+interface BatchJobBindingArgs {
+  connectionId: string;
+  bindingKey?: string | null;
+  datasetUrn?: string | null;
+  workspaceId?: string | null;
+  ingestionParams?: Record<string, unknown> | null;
+}
+
+/** SDL `CreateBatchJobInput` (workspaceId comes from the JWT, not the input). */
+interface CreateBatchJobArgs {
+  name: string;
+  pipelineTemplateId: string;
+  pipelineVersionId?: string | null;
+  connectionBindings: BatchJobBindingArgs[];
+  cron?: string | null;
+  timezone?: string | null;
+  runParameters?: Record<string, unknown> | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  paused?: boolean | null;
+  phaseTimeoutSeconds?: number | null;
+}
+
+/** SDL `UpdateBatchJobInput` — every key optional; presence is meaningful. */
+type UpdateBatchJobArgs = Partial<Omit<CreateBatchJobArgs, "pipelineTemplateId" | "startAt" | "paused">>;
+
+/** camelCase binding -> the snake_case ConnectionBinding the orchestrator takes. */
+function toBindingBody(b: BatchJobBindingArgs): BatchJobBindingDTO {
+  return {
+    connection_id: b.connectionId,
+    binding_key: b.bindingKey ?? null,
+    dataset_urn: b.datasetUrn ?? null,
+    workspace_id: b.workspaceId ?? null,
+    ingestion_params: b.ingestionParams ?? {},
+  };
 }
 
 /** After a sync query execution, fetch its first results page (only when the run
@@ -2285,6 +2327,29 @@ export const resolvers = {
 
     pipelineSchedules: async (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
       (await ctx.clients.pipelines.pipelineSchedules()).map((d) => mapPipelineSchedule(ctx, d)),
+
+    // ---- BRD 73: batch jobs (chained ingest -> run) ---------------------------
+    batchJobs: async (_p: unknown, a: ConnectionArgs, ctx: GraphQLContext) => {
+      const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
+      const page = await ctx.clients.pipelines.batchJobs(limit, cursor);
+      return toConnection(page, (d) => mapBatchJob(ctx, d));
+    },
+
+    batchJob: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.pipelines.batchJob(a.id).then((d) => mapBatchJob(ctx, d))),
+
+    batchJobRuns: async (
+      _p: unknown,
+      a: ConnectionArgs & { batchJobId: string },
+      ctx: GraphQLContext,
+    ) => {
+      const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
+      const page = await ctx.clients.pipelines.batchJobRuns(a.batchJobId, limit, cursor);
+      return toConnection(page, (d) => mapBatchJobRun(ctx, d));
+    },
+
+    batchJobRun: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      nullOn404(ctx.clients.pipelines.batchJobRun(a.id).then((d) => mapBatchJobRun(ctx, d))),
 
     // ==== Tier 2a: eval (eval-service) =======================================
     evalSuite: (_p: unknown, a: { suiteId: string; version?: number }, ctx: GraphQLContext) =>
@@ -5308,6 +5373,83 @@ export const resolvers = {
       await ctx.clients.pipelines.deletePipelineSchedule(a.id);
       return true;
     },
+
+    // ---- BRD 73: batch jobs (chained ingest -> run) ---------------------------
+    createBatchJob: async (
+      _p: unknown,
+      a: { input: CreateBatchJobArgs },
+      ctx: GraphQLContext,
+    ) => {
+      // Same discipline as createPipeline: the backend requires a workspace and
+      // the SDL input omits it, so it comes from the caller's verified JWT claim.
+      // Fail closed rather than misfile the job under an empty workspace.
+      const workspaceId = String(ctx.identity.claims.workspace_id ?? "").trim();
+      if (!workspaceId) {
+        throw gqlError(ErrorCode.VALIDATION_FAILED, "createBatchJob: no workspace in caller token", {
+          field: "workspace_id",
+        });
+      }
+      const i = a.input;
+      const d = await ctx.clients.pipelines.createBatchJob({
+        workspace_id: workspaceId,
+        name: i.name,
+        pipeline_template_id: i.pipelineTemplateId,
+        pipeline_version_id: i.pipelineVersionId ?? null,
+        connection_bindings: i.connectionBindings.map(toBindingBody),
+        cron: i.cron ?? null,
+        timezone: i.timezone ?? undefined,
+        run_parameters: i.runParameters ?? undefined,
+        start_at: i.startAt ?? null,
+        end_at: i.endAt ?? null,
+        paused: i.paused ?? undefined,
+        phase_timeout_seconds: i.phaseTimeoutSeconds ?? null,
+      });
+      return mapBatchJob(ctx, d);
+    },
+
+    updateBatchJob: async (
+      _p: unknown,
+      a: { id: string; input: UpdateBatchJobArgs },
+      ctx: GraphQLContext,
+    ) => {
+      // The backend PATCH is model_dump(exclude_unset=True), so only keys the
+      // caller actually supplied may be sent — a key present with `null` is a
+      // deliberate clear (e.g. cron), not "leave alone". Presence, not
+      // nullishness, is therefore the test.
+      const i = a.input;
+      const body: UpdateBatchJobBody = {};
+      if ("name" in i) body.name = i.name ?? undefined;
+      if ("pipelineVersionId" in i) body.pipeline_version_id = i.pipelineVersionId ?? null;
+      if ("connectionBindings" in i && i.connectionBindings) {
+        body.connection_bindings = i.connectionBindings.map(toBindingBody);
+      }
+      if ("cron" in i) body.cron = i.cron ?? null;
+      if ("timezone" in i) body.timezone = i.timezone ?? undefined;
+      if ("runParameters" in i) body.run_parameters = i.runParameters ?? undefined;
+      if ("endAt" in i) body.end_at = i.endAt ?? null;
+      if ("phaseTimeoutSeconds" in i) body.phase_timeout_seconds = i.phaseTimeoutSeconds ?? null;
+      return mapBatchJob(ctx, await ctx.clients.pipelines.updateBatchJob(a.id, body));
+    },
+
+    pauseBatchJob: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapBatchJob(ctx, await ctx.clients.pipelines.pauseBatchJob(a.id)),
+
+    resumeBatchJob: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapBatchJob(ctx, await ctx.clients.pipelines.resumeBatchJob(a.id)),
+
+    runBatchJobNow: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapBatchJobRun(ctx, await ctx.clients.pipelines.runBatchJobNow(a.id)),
+
+    deleteBatchJob: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) => {
+      await ctx.clients.pipelines.deleteBatchJob(a.id);
+      return true;
+    },
+
+    retryBatchJobRun: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapBatchJobRun(ctx, await ctx.clients.pipelines.retryBatchJobRun(a.id)),
+
+    terminateBatchJobRun: async (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
+      mapBatchJobRun(ctx, await ctx.clients.pipelines.terminateBatchJobRun(a.id)),
 
     // ---- ml: experiment create + promotion + inference (JWT passthrough) -----
     createExperiment: async (
