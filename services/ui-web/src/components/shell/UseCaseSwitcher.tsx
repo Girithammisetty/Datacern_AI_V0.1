@@ -8,6 +8,7 @@ import { Input, Label } from "@/components/ui/primitives";
 import { Can } from "@/components/authz/Can";
 import { FEATURE_GATES } from "@/lib/authz/registry";
 import { useWorkspaces, useCreateWorkspace } from "@/lib/graphql/hooks";
+import { t } from "@/lib/i18n/messages";
 import { useSession } from "@/lib/session/SessionContext";
 import { useMe } from "@/lib/graphql/hooks";
 import { GraphQLRequestError } from "@/lib/graphql/client";
@@ -26,6 +27,11 @@ import type { Workspace } from "@/lib/graphql/types";
 export function UseCaseSwitcher() {
   const session = useSession();
   const { data: me } = useMe();
+  // When identity is down, tenantName is null and this falls back to the raw
+  // tenant ID — which looks like an ordinary (if ugly) label. tenantDegraded is
+  // what distinguishes "the lookup failed" from "this tenant has no name", so the
+  // fallback is announced instead of silently standing in for the real thing.
+  const tenantDegraded = me?.me.tenantDegraded === true;
   const tenantLabel = me?.me.tenantName || session.tenantId;
   const currentLabel = me?.me.workspaceName || session.workspaceId;
 
@@ -61,7 +67,13 @@ export function UseCaseSwitcher() {
     <>
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Building2 className="size-4" aria-hidden />
-        <span className="font-medium text-foreground" title={session.tenantId}>{tenantLabel}</span>
+        <span
+          className={`font-medium ${tenantDegraded ? "text-muted-foreground italic" : "text-foreground"}`}
+          title={tenantDegraded ? t("shell.tenantUnavailable") : session.tenantId}
+          data-testid={tenantDegraded ? "tenant-degraded" : undefined}
+        >
+          {tenantLabel}
+        </span>
         <span aria-hidden>/</span>
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>

@@ -105,6 +105,9 @@ export interface Viewer {
   /** True when the rbac lookup FAILED and roles/capabilities are the fail-closed
    * empty fallback — show "permissions unavailable", not "you have no access". */
   capsDegraded: boolean;
+  /** True when the identity /tenants/self lookup FAILED, so a null tenantName is
+   * the fallback rather than a tenant with no display name. */
+  tenantDegraded?: boolean | null;
   /** Per-tenant UI label overrides (BRD 23 inc3) the app overlays onto its base
    * i18n catalog to white-label the vertical (e.g. "Cases" -> "AP Exceptions"). */
   displayLabels?: LabelOverride[];
