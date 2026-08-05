@@ -33,7 +33,7 @@ export const WALKTHROUGH_CONTENT = {
     pre: "The most honest 30 seconds in the product: install a vertical pack against a tenant with no data, and it ",
     emphasis: "refuses",
     post:
-      " — failing closed and naming every data field it needs before it will run. Nothing on this platform half-works quietly. When your real data satisfies the contract, the same install completes cleanly.",
+      " — failing closed and naming every data field it needs before it will run. Nothing here half-works quietly. When your real data satisfies the contract, the same install completes cleanly.",
   },
 
   stepLabel: "Step {n} of {total}",
@@ -96,7 +96,7 @@ export const WALKTHROUGH_CONTENT = {
     sub: "We'd rather you know exactly what you're looking at.",
     isTitle: "What the live demo is",
     is: [
-      'A real, isolated tenant of the real platform — the same services, the same governance gates, no separate "demo build."',
+      'A real, isolated tenant of the real product — the same services, the same governance gates, no separate "demo build."',
       "A seeded healthcare prior-authorization scenario with clearly synthetic sample data, and a guided five-step tour inside the product.",
       "Self-serve: no sales call, no operator. It expires and tears itself down automatically after 14 days.",
     ],

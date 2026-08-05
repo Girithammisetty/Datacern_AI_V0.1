@@ -13,14 +13,14 @@ export const PRICING_CONTENT = {
   meta: {
     title: "Datacern AI — Pricing you can put a ceiling on",
     description:
-      "Datacern is priced on governed decisions — the unit your operation already thinks in — with seats and solution packs as the only other levers, and a hard monthly budget cap the platform structurally will not cross. No public rate card: contact us and we'll quote from your volumes.",
+      "Datacern is priced on governed decisions — the unit your operation already thinks in — with seats and solution packs as the only other levers, and a hard monthly budget cap the engine structurally will not cross. No public rate card: contact us and we'll quote from your volumes.",
   },
 
   hero: {
-    eyebrow: "Pricing with a ceiling",
-    headline: "The one agentic-AI bill that can’t run away from you",
+    eyebrow: "Performance-first, with a ceiling",
+    headline: "Pay from the queue it clears — never past your cap",
     sub:
-      "Most agentic products meter usage with no floor and no ceiling — spend is whatever the agents decide to do. A Datacern plan can be given a hard monthly budget cap: when it’s reached, the platform stops serving new value-delivering writes for the cycle rather than overspending. The number you commit to is a number, not a hope.",
+      "Where the queue recovers revenue — disputes, chargebacks, underpayments — pricing is performance-first: a share of what you win back, the model those categories already pay, with a flat per-cleared-case option. Other queues meter on governed decisions. And unlike most agentic products, where spend is whatever the agents decide to do, a Datacern plan can carry a hard monthly budget cap: when it’s reached, the engine stops serving new value-delivering writes for the cycle rather than overspending. The number you commit to is a number, not a hope.",
   },
 
   /* how the bill is built — the levers, no rates attached */
@@ -65,7 +65,7 @@ export const PRICING_CONTENT = {
     items: [
       ["Human approval on every write", "Agents propose; nothing takes effect until a named person approves it, and no one can approve their own work."],
       ["Tamper-evident audit trail", "Every decision leaves a receipt an examiner can follow — who, what, why and on what evidence."],
-      ["Tenant isolation", "Row-level security keeps each tenant’s data its own; the platform makes no cross-tenant reads."],
+      ["Tenant isolation", "Row-level security keeps each tenant’s data its own; the engine makes no cross-tenant reads."],
       ["Governed analytics", "Business metrics defined once, reviewed, and reused — so dashboards agree and answers are grounded."],
       ["The hard budget cap", "The commercial gate refuses value-delivering writes once a plan hits its ceiling — a spend limit that’s enforced, not advisory."],
       ["Bring your own model & data", "Runs against your governed data and your permissions; the copilot can’t do anything you couldn’t do yourself."],
@@ -75,6 +75,10 @@ export const PRICING_CONTENT = {
   faq: {
     title: "Pricing, answered",
     items: [
+      [
+        "How does performance pricing work?",
+        "For recovery queues (disputes, chargebacks, underpayments) the primary model is a share of recovered revenue — you pay from what the queue wins back, with a flat per-cleared-case alternative if you prefer predictability. The share is agreed per portfolio from your actual volumes; the free 90-day scoring on the overview page gives both sides the same baseline before anyone signs anything.",
+      ],
       [
         "How is usage actually metered?",
         "By governed decisions — one per case an agent resolves or a human approves. It’s the unit your operation already thinks in, and every metered event is itself in the audit trail.",
@@ -89,7 +93,7 @@ export const PRICING_CONTENT = {
       ],
       [
         "Can fixed costs still accrue under a cap?",
-        "Yes — the platform floor, seats and packs commit when a plan is active. The cap governs the variable, decision-driven spend on top of them, which is the part that can otherwise run away.",
+        "Yes — the base floor, seats and packs commit when a plan is active. The cap governs the variable, decision-driven spend on top of them, which is the part that can otherwise run away.",
       ],
     ],
   },

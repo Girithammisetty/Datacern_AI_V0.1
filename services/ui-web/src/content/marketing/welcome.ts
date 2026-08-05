@@ -28,7 +28,7 @@ export const WELCOME_CONTENT = {
   },
 
   hero: {
-    eyebrow: "Governed AI for regulated operations",
+    eyebrow: "AI adjudication for regulated operations",
     /* rendered as: line1 <br/> line2lead <gradient>line2accent</gradient> */
     headline: {
       line1: "AI does the work.",
@@ -49,6 +49,20 @@ export const WELCOME_CONTENT = {
       href: "/welcome/walkthrough",
       note: "— one decision, end to end, in five steps.",
     },
+  },
+
+  /* the entry offer — costs nothing to fulfill: the shipped ingestion +
+   * scoring path runs the scan, so the number the prospect sees is the number
+   * the product computes, not a sales estimate. Disputes is the fastest
+   * start (processor data connects same-day), but any queue qualifies. */
+  offer: {
+    eyebrow: "Start with your own numbers",
+    title: "Connect your queue's data. We'll score your last 90 days — free.",
+    body:
+      "The same ingestion and scoring that runs the product reads your recent cases — disputes, claims, alerts, invoices — and shows you what you're leaving on the table today: winnable disputes written off, recoverable revenue unclaimed, backlog that never needed a human. No integration project, no invented benchmarks — the figure you see is computed from your own data, and it's yours to keep either way.",
+    fastest: "Fastest start: card disputes & chargebacks — processor data connects same-day.",
+    action: "Score my last 90 days",
+    note: "Fulfilled by the product's own ingestion and scoring path — not a spreadsheet estimate.",
   },
 
   /* the moving agent roster — business-facing roles, each with the job it
@@ -137,9 +151,9 @@ export const WELCOME_CONTENT = {
 
   industriesIntro: {
     eyebrow: "Solutions by industry",
-    title: "Decision intelligence for every industry",
+    title: "AI adjudication for every industry",
     sub:
-      "If a team reads evidence, applies a policy and makes a call — at volume and under scrutiny — Datacern runs it. Four domains ship deep today; the same governed platform adapts to any data-driven decision queue.",
+      "If a team reads evidence, applies a policy and makes a call — at volume and under scrutiny — Datacern runs it. Four domains ship deep today; the same adjudication engine adapts to any data-driven decision queue — we sell a cleared queue, not a toolkit.",
     flagshipLabel: "Flagship solutions — built deep",
   },
 
@@ -377,7 +391,7 @@ export const WELCOME_CONTENT = {
    * only says the boundary and hands off. */
   moreIndustries: {
     title: "…and any other decision that runs on data",
-    note: "Same platform · same governance",
+    note: "Same engine · same governance",
     dontSee: {
       lead: "Don't see yours?",
       body:
@@ -395,10 +409,10 @@ export const WELCOME_CONTENT = {
   },
 
   capabilitiesIntro: {
-    eyebrow: "One platform under every industry",
+    eyebrow: "One engine under every industry",
     title: "Every solution runs on the same AI operation.",
     sub:
-      "The industry packs above aren't separate products — they're the same coordinated set of AI capabilities that read, reason, decide and learn, with governance running through all of it. Learn the platform once; reuse it in every queue.",
+      "The industry packs above aren't separate products — they're the same coordinated set of AI capabilities that read, reason, decide and learn, with governance running through all of it. Learn it once; reuse it in every queue.",
   },
 
   /* Category comparison — the boundary a BI vendor cannot cross. The
@@ -409,7 +423,7 @@ export const WELCOME_CONTENT = {
     eyebrow: "Where the work actually lands",
     title: "A different category from BI and AI",
     sub:
-      "Business intelligence tells you what happened. AI models predict what might. Decision intelligence makes the call — governed, evidenced and accountable — and learns from every one.",
+      "Business intelligence tells you what happened. AI models predict what might. AI adjudication makes the call — governed, evidenced and accountable — and learns from every one.",
     dimensionLabel: "By this measure",
     datacernSubtitle: "Approved actions",
     cols: ["Traditional BI", "AI / ML models", "Approved actions"],
@@ -444,7 +458,7 @@ export const WELCOME_CONTENT = {
   architecture: {
     title: "Under the hood, on your cloud",
     sub:
-      "Twenty-three services in five planes over an all-open-source backbone — and one Terraform + Helm path each for AWS, Google Cloud and Azure, shipped in the same repository as the platform. The diagrams below are generated from that code, not drawn from ambition.",
+      "Twenty-three services in five planes over an all-open-source backbone — and one Terraform + Helm path each for AWS, Google Cloud and Azure, shipped in the same repository as the product. The diagrams below are generated from that code, not drawn from ambition.",
   },
 
   spotlights: {
@@ -455,7 +469,7 @@ export const WELCOME_CONTENT = {
     outro: {
       lead: "…and your operation next.",
       body:
-        " New solutions install onto the same governed platform — your teams learn the tool once and reuse it everywhere.",
+        " New solutions install onto the same governed engine — your teams learn the tool once and reuse it everywhere.",
     },
   },
 
@@ -479,7 +493,9 @@ export const WELCOME_CONTENT = {
     title: "Questions, answered",
     items: [
       ["What does Datacern actually do?",
-        "It works your regulated back-office queues — disputes, claims, alerts, invoices — and keeps a named person accountable for every outcome. Agents read the case, apply your rules and draft the recommendation with its evidence. A person approves it, someone other than the requester signs anything sensitive, and the whole chain is recorded. Ask any vendor for the complete record of one decision — who proposed it, who approved it, what evidence they saw, what changed in the source system. That record is what this platform is built to produce."],
+        "It works your regulated back-office queues — disputes, claims, alerts, invoices — and keeps a named person accountable for every outcome. Agents read the case, apply your rules and draft the recommendation with its evidence. A person approves it, someone other than the requester signs anything sensitive, and the whole chain is recorded. Ask any vendor for the complete record of one decision — who proposed it, who approved it, what evidence they saw, what changed in the source system. That record is what this product is built to produce."],
+      ["How is pricing structured?",
+        "Performance-first where the queue recovers revenue: for disputes and similar recovery queues, a share of what we help you win back — the model those categories already pay — with a flat per-cleared-case option. Other queues meter on governed decisions. Every plan can carry a hard monthly budget cap the engine will not cross, and there's an enterprise floor when you need SLAs and SSO. Shares and rates are agreed per portfolio from your actual volumes; the free 90-day scoring gives both sides the baseline."],
       ["What exactly is “agentic AI”?",
         "A chatbot answers a question; a model returns a score. An agentic AI takes on multi-step work: it reads the evidence, checks it against your rules, uses tools to gather what it needs, and drafts a decision or action — then hands it to a person to approve. Datacern runs a team of these specialist agents (triage, analytics, governance and more), each scoped to what it's allowed to see and do. They propose; they never act on their own."],
       ["How is this different from BI or analytics?",

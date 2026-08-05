@@ -18,8 +18,8 @@ export const MARKETING_SHELL = {
   liveDemoCta: { label: "Live demo", href: "/live-demo" },
 
   footer: {
-    left: "Datacern AI — governed AI for regulated operations",
-    right: "AI proposes. A named person approves. The platform remembers.",
+    left: "Datacern AI — AI adjudication for regulated queues",
+    right: "Powered by the Datacern adjudication engine — AI proposes, a named person signs, the record remembers.",
   },
 } as const;
 

@@ -88,8 +88,12 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   // Guard everything except login, the public marketing pages (welcome and its
-  // subpages, pricing, live-demo signup, solutions catalog, security), API routes, and static assets.
+  // subpages, pricing, live-demo signup, solutions catalog, security), API
+  // routes, and static assets — including /architecture/*.svg, the generated
+  // diagrams the signed-out /welcome page embeds (middleware runs for
+  // public/-folder files too, so an unlisted asset 307s to /login and renders
+  // as a broken image).
   matcher: [
-    "/((?!login|welcome|pricing|live-demo|solutions|security|api|_next/static|_next/image|favicon.ico|icon.svg|datacern-embed.js).*)",
+    "/((?!login|welcome|pricing|live-demo|solutions|security|api|architecture|_next/static|_next/image|favicon.ico|icon.svg|datacern-embed.js).*)",
   ],
 };

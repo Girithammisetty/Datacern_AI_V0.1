@@ -2,7 +2,7 @@
  *
  * House rule carried over from the evidence-ledger discipline: every claim on
  * this page names the mechanism that enforces it. Nothing here says
- * "enterprise-grade"; it says what the platform does and where.
+ * "enterprise-grade"; it says what the product does and where.
  */
 
 export const SECURITY_CONTENT = {
