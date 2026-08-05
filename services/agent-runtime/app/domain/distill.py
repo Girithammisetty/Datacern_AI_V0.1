@@ -81,7 +81,7 @@ class DistilledStudent:
 
     @classmethod
     def train(cls, examples: list[tuple[str, str]], *, alpha: float = 1.0
-              ) -> "DistilledStudent":
+              ) -> DistilledStudent:
         classes = sorted({label for _, label in examples})
         cidx = {c: i for i, c in enumerate(classes)}
         vocab: dict[str, int] = {}
@@ -131,7 +131,7 @@ class DistilledStudent:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "DistilledStudent":
+    def from_dict(cls, d: dict) -> DistilledStudent:
         return cls(classes=d["classes"], vocab=d["vocab"],
                    class_log_prior=d["class_log_prior"],
                    feature_log_prob=d["feature_log_prob"])

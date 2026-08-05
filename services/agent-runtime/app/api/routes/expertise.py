@@ -15,7 +15,7 @@ scoped (RLS); authN-only, matching the sibling learning-loop reads.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query, Request
 
@@ -38,7 +38,7 @@ async def expertise_ledger(
     principal = await principal_of(request)
     tenant = principal.tenant_id
     store = request.app.state.container.store
-    since = datetime.now(timezone.utc) - timedelta(days=window_days)
+    since = datetime.now(UTC) - timedelta(days=window_days)
 
     # --- 1. Governed decisions captured (exact counts, windowed + all-time) ---
     counts_window = await store.count_proposals_by_status(tenant, since=since)
