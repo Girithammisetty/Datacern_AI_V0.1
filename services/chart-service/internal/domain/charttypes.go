@@ -253,6 +253,30 @@ type FieldDetail struct {
 // dimension/measure names discovered from the semantic/query metadata; unknown
 // refs produce UNKNOWN_DIMENSION details (CHART-FR-013). Returns a *Error with
 // per-field Details on failure.
+// RequiresSavedQuery reports whether a family can ONLY resolve through a saved
+// query, because its config has no measures for the semantic compiler to use.
+//
+// ParseConfig never populates cfg.Y for these three: heatmap maps "y" to a
+// DIMENSION (cfg.YDim), grid carries only cfg.Columns, network only
+// cfg.Nodes/Children. So buildCompile always produces zero metrics for them, and
+// Resolve's default branch — compileAndRun — fails with "chart has no measures
+// to resolve" on every request, forever. Such a chart is not misconfigured in a
+// way a user can correct from the chart editor; it is unresolvable by
+// construction.
+//
+// ValidateConfig checked the config and never the SOURCE, so the API accepted
+// these charts happily and the failure surfaced only at render time, as an
+// error naming an internal state ("no measures") rather than the missing thing.
+// Requiring the source up front turns a permanently broken chart into a field
+// error at the point of creation (CHART-FR-012).
+func RequiresSavedQuery(family string) bool {
+	switch family {
+	case FamilyHeatmap, FamilyGrid, FamilyNetwork:
+		return true
+	}
+	return false
+}
+
 func ValidateConfig(chartType string, raw json.RawMessage, knownFields map[string]bool) error {
 	ct, ok := LookupType(chartType)
 	if !ok {

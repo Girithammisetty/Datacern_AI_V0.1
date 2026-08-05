@@ -193,6 +193,14 @@ func TestAC10_CircularLinkAndCleanup(t *testing.T) {
 	bResp := h.do(t, "POST", "/api/v1/dashboards/"+dashID.String()+"/charts", tok, map[string]any{
 		"name": "child", "chart_type": "grid_chart",
 		"config": map[string]any{"columns": []string{"region"}},
+		// A grid-family chart carries no measures, so it resolves only through a
+		// saved query — the API now refuses one without it rather than accepting a
+		// chart that could never render (see domain.RequiresSavedQuery). This
+		// fixture used to create exactly that.
+		"sources": []map[string]any{{
+			"position": 0, "source_type": "saved_query",
+			"source_urn": "wr:t:query:saved_query/" + uuid.New().String(),
+		}},
 	}, nil)
 	if bResp.status != http.StatusCreated {
 		t.Fatalf("create child chart: %d %v", bResp.status, bResp.body)

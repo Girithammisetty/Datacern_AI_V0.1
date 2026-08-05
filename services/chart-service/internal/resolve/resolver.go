@@ -72,7 +72,19 @@ func (r *Resolver) Resolve(ctx context.Context, token string, chart *domain.Char
 func (r *Resolver) compileAndRun(ctx context.Context, token string, chart *domain.Chart, cfg domain.ChartConfig, req domain.ResolveRequest, limit int) (ExecResult, error) {
 	creq := r.buildCompile(chart, cfg, req)
 	if len(creq.Metrics) == 0 {
-		return ExecResult{}, domain.EValidation("chart has no measures to resolve")
+		// Name the missing THING, not the internal state. "no measures to resolve"
+		// described a fact about cfg.Y that no user could act on — and for the
+		// heatmap/grid/network families it is not even correctable, since their
+		// configs never carry measures at all. Creation now refuses these
+		// (domain.RequiresSavedQuery); this is defence in depth for charts saved
+		// before that rule existed.
+		if ct, ok := domain.LookupType(chart.ChartType); ok && domain.RequiresSavedQuery(ct.Family) {
+			return ExecResult{}, domain.EValidation(
+				"chart type " + chart.ChartType + " resolves through a saved query, and this " +
+					"chart has none — add a saved_query source (this chart type carries no measures)")
+		}
+		return ExecResult{}, domain.EValidation(
+			"chart has no measures to resolve — add at least one measure to config.y")
 	}
 	compiled, err := r.Semantic.Compile(ctx, token, creq)
 	if err != nil {
