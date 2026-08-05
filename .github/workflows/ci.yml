@@ -789,6 +789,7 @@ jobs:
         run: uv sync --frozen || uv sync
 
       - name: Boot the real platform (deploy/local/up.sh)
+        id: boot
         working-directory: deploy/local
         run: ./up.sh
 
@@ -876,7 +877,18 @@ jobs:
       # Restart-survival soak: prove the platform survives an infra restart with
       # its data + projections intact. Runs AFTER the e2e suite so it never
       # perturbs it; CI is the ideal clean env for this (fresh volumes).
+      #
+      # DECOUPLED from journey/suite success (2026-08-05): the soaks measure
+      # stack survival and volume — they depend on the stack being UP, not on
+      # every async journey passing. Under CI load one of the seven journeys
+      # flakes on roughly half the runs (streams twice, learn once today, each
+      # passing on the other runs of the SAME commit), and for five consecutive
+      # runs that upstream flake skipped the soaks — which is how "the soaks
+      # have never executed in CI" stayed true for weeks. `!cancelled()` keeps
+      # timeout/cancel semantics; a failing soak still fails the job on its own
+      # merits.
       - name: Restart-survival soak (make soak)
+        if: ${{ !cancelled() && steps.boot.outcome == 'success' }}
         run: make soak
 
       # WS5 (BRD 58): volume/load proof that B1 (streaming Iceberg commit) and
@@ -886,6 +898,7 @@ jobs:
       # `make soak-volume VOLUME_ROWS=1000000` runs the BRD's literal 1M scale
       # locally in ~90s.
       - name: Volume/load soak (make soak-volume)
+        if: ${{ !cancelled() && steps.boot.outcome == 'success' }}
         run: make soak-volume
 
       # 100 lines was too small to be useful on the failure it mattered for.
