@@ -207,6 +207,22 @@ On Linux drop the `''` after `-i`. Do this on a branch — it edits tracked file
 Self-hosted Postgres, Redpanda, MinIO, Iceberg REST, OpenSearch, ClickHouse, Redis, OPA,
 Keycloak, Temporal, MLflow, Ollama, Trino — the same components as `docker-compose.dev.yml`.
 
+**First, the OPA policy bundle.** This is a required manual pre-step — the Rego lives in
+rbac-service and is loaded from files rather than inlined, so it is created imperatively to
+avoid drift. Skip it and the `opa` pod sits in `ContainerCreating` forever with
+`MountVolume.SetUp failed for volume "policy" : configmap "opa-policy" not found`, and authz
+fails downstream:
+
+```bash
+kubectl create namespace datacern --dry-run=client -o yaml | kubectl apply -f -
+```
+
+```bash
+kubectl -n datacern create configmap opa-policy --from-file=services/rbac-service/policy/datacern_authz.rego --from-file=services/rbac-service/policy/datacern_authz_input.rego
+```
+
+Then the data tier itself:
+
 ```bash
 kubectl apply -k deploy/k8s/data-tier
 ```

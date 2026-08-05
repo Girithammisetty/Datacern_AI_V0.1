@@ -29,7 +29,16 @@ spec:
       containers:
         - name: opa
           image: openpolicyagent/opa:1.4.2
-          args: ["run", "--server", "--addr=0.0.0.0:8281", "--log-level=error", "/policy"]
+          # --ignore=..* is REQUIRED, not tuning. A ConfigMap volume is not a flat
+          # directory: kubelet writes the real files into a timestamped dir and
+          # leaves two symlinks beside them (`..data` -> `..2026_08_05_23_48_23.x`),
+          # so `opa run /policy` walks the same two .rego files three times and
+          # refuses to start with
+          #   rego_type_error: multiple default rules data.datacern.authz.allow found
+          # listing all three paths. Nothing is wrong with the policy; OPA is being
+          # handed three copies of it. --ignore skips the dot-dot entries so only
+          # the real files load.
+          args: ["run", "--server", "--addr=0.0.0.0:8281", "--log-level=error", "--ignore=..*", "/policy"]
           ports:
             - containerPort: 8281
           volumeMounts:
@@ -75,8 +84,8 @@ spec:
           ports:
             - containerPort: 8080
           resources:
-            requests: { cpu: "100m", memory: 384Mi }
-            limits: { memory: 768Mi }
+            requests: { cpu: "100m", memory: 512Mi }
+            limits: { memory: 2Gi }
 ---
 apiVersion: v1
 kind: Service
@@ -161,13 +170,14 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
           resources:
-            requests: { cpu: "100m", memory: 384Mi }
-            limits: { memory: 1Gi }
+            requests: { cpu: "100m", memory: 512Mi }
+            limits: { memory: 4Gi }
 ---
 # Ollama — local CPU LLM (NOT in docker-compose.dev.yml; on the Mac dev stack it
 # runs natively on the host. In-cluster it needs its own Deployment + a volume
 # for pulled models). Pull a small model after rollout:
-#   kubectl -n datacern exec deploy/ollama -- ollama pull llama3.2:3b
+#   kubectl -n datacern exec statefulset/ollama -- ollama pull llama3.2:3b
+# (statefulset/, not deploy/ — this is a StatefulSet, as the volume below requires.)
 apiVersion: v1
 kind: Service
 metadata:
@@ -207,7 +217,7 @@ spec:
         name: ollamadata
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: hcloud-volumes
+        storageClassName: local-path
         resources:
           requests:
             storage: 20Gi
