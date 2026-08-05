@@ -105,6 +105,7 @@ Other deliberate deviations (documented, non-blocking):
 | DST-FR-025 type-inference contract (logical types, semantics, boolean coercion) | Done | `profiling/types.py` | `test_profiler_engine.py::TestTypeInference/TestSemantics` |
 | DST-FR-026 (S) PII merge/pii_suspect | Partial | ingestion tags merged via schema tags; `pii_suspect` TODO | — |
 | DST-FR-027 (S) summary + 24h signed URLs | Done | `ProfileService.get_summary` | `test_profiles_api.py::test_profile_summary_endpoint…` |
+| BRD 75 profiling depth parity (`schema_version` 2): per-column entropy / skewness / kurtosis / mad / variance / monotonic / top_values, pearson + spearman + Cramér's V, enriched HTML artifact, MCP column stats | Done | `profiling/engine.py`, `ProfileService.column_stats`, `mcp/facade.py::get_dataset_column_stats` | `test_profiler_engine.py::TestRicherColumnStatistics/TestMonotonicity/TestCorrelationMatrices/TestReproducibilityAndCompatibility/TestReportArtifact`, `test_mcp_and_events.py::test_ac10…`, `test_profiles_api.py::test_ac7…` |
 | DST-FR-040 URN nodes/typed edges | Done | `domain/urn.py`, `LineageService` | `test_lineage.py` |
 | DST-FR-041 edge write API, idempotent upsert | Done | `POST /lineage/edges` (NULLS NOT DISTINCT unique) | `test_lineage.py::test_duplicate_edge_idempotent_upsert` |
 | DST-FR-042 graph query, depth ≤10, 1000-node cap, truncated | Done | `domain/lineage.py::traverse` | `test_lineage.py::TestTraversal`, AC-7 test |

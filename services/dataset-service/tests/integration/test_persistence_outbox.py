@@ -52,7 +52,7 @@ class TestPersistence:
                 text("SELECT set_config('app.tenant_id', :t, true)"), {"t": TENANT_A}
             )
             row = (await conn.execute(text(
-                "SELECT status, object_key_json, summary, "
+                "SELECT status, object_key_json, object_key_html, summary, "
                 "pg_column_size(summary) AS sz FROM profiles"
             ))).mappings().one()
         assert row["status"] == "completed"
@@ -63,6 +63,19 @@ class TestPersistence:
         )
         assert {c["name"] for c in summary["columns"]} == {"order_id", "order_total"}
         assert await container.object_store.exists(row["object_key_json"])
+
+        # BRD 75: the persisted blob is schema_version 2 and carries the depth
+        # statistics; the HTML artifact stored beside it renders them.
+        doc = json.loads(await container.object_store.get(row["object_key_json"]))
+        assert doc["schema_version"] == 2
+        total = next(c for c in doc["columns"] if c["name"] == "order_total")
+        assert {"entropy", "skewness", "kurtosis", "mad", "variance", "monotonic",
+                "top_values"} <= set(total)
+        assert [m["method"] for m in doc["correlations"]] == [
+            "pearson", "spearman", "cramers_v",
+        ]
+        html = (await container.object_store.get(row["object_key_html"])).decode()
+        assert "Distribution statistics" in html and "Correlations" in html
 
         got = await client.get(f"/api/v1/datasets/{ds['id']}", headers=auth())
         assert got.json()["data"]["status"] == "ready"

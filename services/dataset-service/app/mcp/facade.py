@@ -113,6 +113,24 @@ class McpFacade:
         summary.pop("html_report_url", None)
         return summary
 
+    async def get_dataset_column_stats(self, ctx: CallCtx, urn: str,
+                                       version: int | None = None,
+                                       columns: list[str] | None = None) -> dict:
+        """Per-column depth statistics + correlations (BRD 75) for grounding.
+
+        The profile summary an agent gets from `get_dataset_profile` is capped at
+        64KB and carries headline stats only; this tool returns the statistics
+        schema_version 2 added — entropy, skewness/kurtosis/mad/variance,
+        monotonicity, top values with counts and pcts, and the pearson /
+        spearman / Cramér's V matrices — read from profile.json. Still read
+        tier: statistics, never a signed URL.
+        """
+        await self._audit_tool(ctx, "get_dataset_column_stats",
+                               {"urn": urn, "version": version, "columns": columns})
+        return await self.profiles.column_stats(
+            ctx, self._dataset_id(ctx, urn), version, columns
+        )
+
     async def get_lineage(self, ctx: CallCtx, urn: str, direction: str = "both",
                           depth: int = 3) -> dict:
         await self._audit_tool(ctx, "get_lineage", {"urn": urn, "direction": direction,

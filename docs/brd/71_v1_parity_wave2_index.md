@@ -1,6 +1,6 @@
 # BRD 71–75 — V1 → Datacern Parity Wave 2 (initiative index)
 
-**Status:** IN PROGRESS — 2026-08-05 · 3/11 gaps closed (BRD 71 landed; 72–75 open)
+**Status:** IN PROGRESS — 2026-08-05 · 4/11 gaps closed (BRD 71 + 75 landed; 72–74 open)
 **Owner:** platform · **Driver:** a second cross-verification of the legacy V1 platform
 (Rails/Flask services + Argo + pandas component containers) against Datacern's rebuilt
 services. The [wave-1 index](62_pipeline_ml_parity_index.md) audited **pipeline + ML
@@ -143,4 +143,4 @@ over-engineer.
 | **72** chart renderer completeness | V1c, V2c | OPEN |
 | **73** batch job orchestration | B1, B2 | OPEN |
 | **74** discovery & export completeness | D1, D2, D3 | OPEN |
-| **75** profiling depth parity | F1 | OPEN |
+| **75** profiling depth parity | F1 | **inc1–inc3 DONE** — schema_version 2: per-column entropy / skewness / kurtosis / mad / variance / monotonicity / top_values (numeric-only fields absent, never zeroed), correlations as a list of pearson + spearman + bias-corrected Cramér's V (cardinality cap 50, skipped not faked), depth rendered into the existing HTML artifact, and a new read-tier MCP tool `get_dataset_column_stats`. 34 new tests; dataset-service unit 304 + integration 19 green. Live-verified against real Iceberg REST + MinIO. Interactions / missing-value matrix / duplicate-row samples and Kendall's τ deferred (see the BRD). |

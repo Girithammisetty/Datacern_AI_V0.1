@@ -48,6 +48,45 @@ class TestMcpFacade:
         similar = await container.mcp.find_similar_datasets(AGENT_CTX, ["customer_id"])
         assert similar and similar[0]["name"] == "McpSearch"
 
+    async def test_ac10_column_stats_tool_returns_the_depth_fields(
+        self, client, container
+    ):
+        """BRD 75 AC-10: the MCP facade exposes the schema_version-2 statistics
+        (entropy / shape / monotonicity / top values / correlations) so agents
+        ground on them — still without a signed URL."""
+        ds = await create_dataset(client, name="McpStats")
+        await register_version(client, container, ds)
+        result = await container.mcp.get_dataset_column_stats(AGENT_CTX, ds["urn"])
+
+        assert result["schema_version"] == 2
+        by_name = {c["name"]: c for c in result["columns"]}
+        total = by_name["order_total"]
+        for field in ("entropy", "skewness", "kurtosis", "mad", "variance",
+                      "monotonic", "top_values"):
+            assert field in total, field
+        assert total["monotonic"] == "strictly_increasing"
+        assert total["top_values"][0]["pct"] > 0
+        # numeric-only fields stay absent on the non-numeric column
+        for field in ("skewness", "kurtosis", "mad", "variance"):
+            assert field not in by_name["discount_code"]
+        assert by_name["discount_code"]["top_values"][0]["value"] == "SAVE10"
+        assert [m["method"] for m in result["correlations"]] == [
+            "pearson", "spearman", "cramers_v",
+        ]
+        assert "histogram" not in total  # bins are a rendering concern
+        assert "full_json_url" not in result and "html_report_url" not in result
+
+        audits = container.memory_state.events_of_type("ai.tool_invoked.v1")
+        assert audits[-1]["payload"]["tool"] == "get_dataset_column_stats"
+
+    async def test_column_stats_tool_can_select_columns(self, client, container):
+        ds = await create_dataset(client, name="McpStatsSelect")
+        await register_version(client, container, ds)
+        result = await container.mcp.get_dataset_column_stats(
+            AGENT_CTX, ds["urn"], columns=["order_total"]
+        )
+        assert [c["name"] for c in result["columns"]] == ["order_total"]
+
     async def test_lineage_depth_capped_at_5(self, container):
         with pytest.raises(ValidationFailed):
             await container.mcp.get_lineage(

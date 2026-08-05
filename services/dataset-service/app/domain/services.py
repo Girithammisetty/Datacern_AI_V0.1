@@ -1300,8 +1300,9 @@ class ProfileService(_Base):
             await self.deps.runner_provider().launch(relaunch)
         return profile
 
-    async def get_summary(self, ctx: CallCtx, dataset_id: str,
-                          version_no: int | None) -> dict:
+    async def _resolve_profile(
+        self, ctx: CallCtx, dataset_id: str, version_no: int | None
+    ) -> tuple[DatasetVersion, Profile]:
         async with self.uow(ctx.tenant_id) as uow:
             dataset = await uow.datasets.get(dataset_id)
             if not dataset:
@@ -1317,6 +1318,11 @@ class ProfileService(_Base):
             profile = await uow.profiles.get(version.profile_id)
             if not profile:
                 raise NotFound("no profile for this dataset/version")
+        return version, profile
+
+    async def get_summary(self, ctx: CallCtx, dataset_id: str,
+                          version_no: int | None) -> dict:
+        version, profile = await self._resolve_profile(ctx, dataset_id, version_no)
 
         result: dict = {
             "profile_id": profile.id,
@@ -1340,6 +1346,50 @@ class ProfileService(_Base):
             result["full_json_url"] = await store.signed_url(profile.object_key_json, ttl)
             result["html_report_url"] = await store.signed_url(profile.object_key_html, ttl)
         return result
+
+    async def column_stats(
+        self,
+        ctx: CallCtx,
+        dataset_id: str,
+        version_no: int | None = None,
+        columns: list[str] | None = None,
+    ) -> dict:
+        """Full per-column statistics + correlation matrices (BRD 75).
+
+        The ≤64KB Postgres summary deliberately carries headline stats only
+        (BR-4 no-blob rule), so the depth schema_version 2 adds — entropy,
+        skewness/kurtosis/mad/variance, monotonicity, top values, and the
+        pearson / spearman / Cramér's V matrices — lives in profile.json and is
+        read from the object store on demand. Histogram bins are dropped (they
+        are a rendering concern, and the payload grounds an agent).
+        """
+        import json
+
+        version, profile = await self._resolve_profile(ctx, dataset_id, version_no)
+        if profile.status != ProfileStatus.COMPLETED or not profile.object_key_json:
+            raise NotFound("no completed profile for this dataset/version")
+        store = self.deps.object_store
+        if not await store.exists(profile.object_key_json):
+            raise Gone("profile objects have been garbage-collected")
+        try:
+            doc = json.loads(await store.get(profile.object_key_json))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise Gone("profile blob is unreadable") from exc
+
+        wanted = {c for c in (columns or []) if c}
+        stats = [
+            {k: v for k, v in c.items() if k != "histogram"}
+            for c in doc.get("columns") or []
+            if not wanted or c.get("name") in wanted
+        ]
+        return {
+            "profile_id": profile.id,
+            "version_no": version.version_no,
+            "schema_version": doc.get("schema_version"),
+            "generated_at": profile.finished_at.isoformat() if profile.finished_at else None,
+            "columns": stats,
+            "correlations": doc.get("correlations"),
+        }
 
     async def metric_artifact(
         self, ctx: CallCtx, dataset_id: str, version_no: int | None

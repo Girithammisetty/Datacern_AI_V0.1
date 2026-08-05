@@ -11,6 +11,8 @@ from hashlib import sha256
 import pandas as pd
 
 from app.adapters.profiler_runner import sign_callback
+from app.domain.profiling.engine import render_html_report
+from app.domain.services import CallCtx
 from tests.conftest import (
     SPIFFE_INGESTION,
     SPIFFE_PROFILER,
@@ -18,6 +20,11 @@ from tests.conftest import (
     auth,
     create_dataset,
 )
+
+
+def _profile_ctx() -> CallCtx:
+    return CallCtx(tenant_id=TENANT_A, actor={"type": "user", "id": "user-1"},
+                   trace_id="trace-profile")
 
 DF = pd.DataFrame(
     {
@@ -64,7 +71,7 @@ class TestProfileFlow:
         assert await container.object_store.exists(profile.object_key_json)
         assert await container.object_store.exists(profile.object_key_html)
         doc = json.loads(await container.object_store.get(profile.object_key_json))
-        assert doc["schema_version"] == 1
+        assert doc["schema_version"] == 2
         assert doc["table"]["row_count"] == 100
 
         assert len(json.dumps(profile.summary).encode()) <= 64 * 1024
@@ -117,6 +124,41 @@ class TestProfileFlow:
         assert "expires=" in data["html_report_url"]
         hn = next(a for a in data["alerts"] if a["flag"] == "HIGH_NULLS")
         assert hn["column"] == "discount_code"
+
+    async def test_ac7_previously_stored_schema_v1_profile_still_reads(
+        self, client, container
+    ):
+        """BRD 75 AC-7: a profile.json written before the schema_version bump
+        (no entropy / shape stats / top-value pcts, `correlations` a single
+        dict) is still served end to end — the new fields are additive and
+        optional, so nothing in the read path requires them."""
+        from tests.unit.test_profiler_engine import SCHEMA_V1_DOC
+
+        ds = await create_dataset(client, name="LegacyProfile")
+        await register_version(client, container, ds)
+        version = next(iter(container.memory_state.versions.values()))
+        profile = container.memory_state.profiles[version.profile_id]
+        # Replace the blob with one exactly as schema_version 1 wrote it.
+        await container.object_store.put(
+            profile.object_key_json, json.dumps(SCHEMA_V1_DOC).encode(), "application/json"
+        )
+
+        resp = await client.get(f"/api/v1/datasets/{ds['id']}/profile", headers=auth())
+        assert resp.status_code == 200, resp.text
+
+        stats = await container.profile_service.column_stats(
+            _profile_ctx(), ds["id"], None
+        )
+        assert stats["schema_version"] == 1
+        legacy = {c["name"]: c for c in stats["columns"]}
+        assert set(legacy) == {"amount", "region"}
+        assert "entropy" not in legacy["amount"]  # honestly absent, not faked
+        assert legacy["region"]["top_values"][0] == {"value": "emea", "count": 2}
+        assert stats["correlations"] == {"method": "spearman", "pairs": []}
+
+        # and the same document still renders as an HTML artifact
+        html = render_html_report(SCHEMA_V1_DOC)
+        assert "wr:t1:dataset:dataset/legacy" in html
 
     async def test_ac4_empty_data_fails_profile_not_dataset(self, client, container):
         """AC-4: 0 rows -> profile failed/EMPTY_DATA; dataset still ready."""
