@@ -188,7 +188,7 @@ def land_dataset(tok: str, tenant: str, ws: str, name: str, columns: list[str]) 
         print(f"       complete {r.status_code}: {r.text[:160]}")
         return None
 
-    for _ in range(60):
+    for _ in range(150):  # 5 min — CI-load headroom for async landing
         g = api("GET", f"{c.INGESTION}/api/v1/ingestions/{ing_id}", tok)
         st = ((g.json().get("data") or {}) if g.status_code == 200 else {}).get("status")
         if st in ("completed", "succeeded"):
@@ -204,7 +204,7 @@ def land_dataset(tok: str, tenant: str, ws: str, name: str, columns: list[str]) 
     # dataset-service registers the dataset from the ingestion.completed Kafka
     # event — poll for the row the CONSUMER created, not an API create.
     ds_id = None
-    for _ in range(60):
+    for _ in range(150):  # 5 min — CI-load headroom for async landing
         g = api("GET", f"{c.DATASET}/api/v1/datasets?workspace_id={ws}", tok)
         if g.status_code == 200:
             ds_id = next((d.get("id") for d in g.json().get("data", [])
@@ -219,7 +219,7 @@ def land_dataset(tok: str, tenant: str, ws: str, name: str, columns: list[str]) 
     # The browse is the real gate: bind_dataset treats unreadable columns as
     # unverifiable and fails the component, so waiting on the dataset ROW alone
     # would just move the failure into the install.
-    for _ in range(60):
+    for _ in range(150):  # 5 min — CI-load headroom for async landing
         g = api("GET", f"{c.DATASET}/api/v1/datasets/{ds_id}/rows?limit=1", tok)
         if g.status_code == 200 and isinstance(
                 (g.json().get("data") or g.json()).get("columns"), list):
