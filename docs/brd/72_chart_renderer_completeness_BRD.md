@@ -1,6 +1,6 @@
 # BRD 72 — Chart renderer completeness
 
-**Status:** inc1–inc3a DONE (unit-verified) — 2026-08-05 · part of the [V1 parity wave-2 index](71_v1_parity_wave2_index.md)
+**Status:** inc1–inc3b DONE (unit-verified) — 2026-08-05 · part of the [V1 parity wave-2 index](71_v1_parity_wave2_index.md)
 **Owner:** platform · **Services:** `ui-web` (+ `pipeline-orchestrator` / `experiment-service` for inc3)
 **Gaps closed:** V1c (distinct renderers for the catalogued types) · V2c (run charts) — **inc3 open, see below**
 
@@ -149,7 +149,7 @@ fetched at render time under the deployment's CSP. `UnsupportedChart` names the 
 | AC-8 | `toForest` terminates on a cycle and preserves every root of a multi-root forest. | ✅ |
 | AC-9 | `bubble_chart` uses the second measure as the radius and does not plot it as its own series. | ✅ |
 | AC-10 | Option builders are pure and unit-tested without a DOM; `ChartView` keeps its SSR-safe fallback. | ✅ |
-| AC-11 | `roc_curve` renders the curve, the y=x reference and the AUC from the run artifact. | ◐ AUC real; **curve points need inc3b** |
+| AC-11 | `roc_curve` renders the curve, the y=x reference and the AUC from the run artifact. | ✅ |
 | AC-12 | `confusion_matrix` renders an N×N labelled matrix whose cells sum to the run's sample count. | ✅ |
 | AC-13 | The chart-proposal agent can propose any renderable type, grounded in the shaped family. | ⛔ inc4 |
 
@@ -253,13 +253,47 @@ HTTP reachability, cross-tenant 404.
 Suites: orchestrator **241**, experiment-service **80**, ui-web **932** — all green;
 ruff + `tsc` clean.
 
-### inc3b — remaining (ROC curve + decision tree visuals)
+### inc3b — ROC curve + decision tree, for real — DONE
 
-The curve points and tree structure exist in the run's `evaluation.json` but the
-mirror does not carry artifact blobs, so the two renderers have nothing to draw
-yet. Closing it means fetching that blob — either into the reconciliation sweep
-(keeping reads local, consistent with the service's invariant) or through an
-object-store read leg on the artifact endpoint. Deliberately **not** guessed at
-here: the alternative was a renderer drawing a curve nobody computed.
+`S3ArtifactSigner.fetch_json` reads `evaluation.json` out of the run's artifact
+store, and `metric_artifact` merges its `roc_curve` points and `tree` structure into
+the payload. This is an **object-store** read, not an MLflow one — the "never call
+MLflow in the request path" invariant is about the tracking server, and
+dataset-service already reads `profile.json` from its own store the same way. The
+blob's confusion matrix wins over the reconstruction when both are present: it is
+what the fit produced, labels included.
+
+`RunChart` now draws the real ROC curve (with the y=x chance reference — without it
+a ROC plot cannot be read, since "better than chance" is the entire question) and
+the real decision tree, reusing the tree builder **inc2 already added for
+`tree_chart`** rather than growing a second tree renderer.
+
+**Applying the no-fallback rule.** Two things this increment originally did were
+hiding failures, and both were changed:
+
+- `fetch_json` caught **every** exception and returned `None`. A wrong endpoint, an
+  expired key, a denied bucket policy and an unreachable store all became "this run
+  has no artifact", and the chart would render a confident empty state over a broken
+  deployment. Now only `NoSuchKey` is silent — the one case that is genuinely not an
+  error (runs predating the artifact, and objects the retention sweep removed).
+  Everything else raises, and an oversized blob raises `ArtifactTooLarge`.
+- The confusion matrix fabricated `Class 0` / `Class 1` when the class-labels tag was
+  missing. A reader cannot tell an invented label from a real one, so a run whose
+  executor never wrote the tag looked identical to one that did. The matrix is still
+  returned (the numbers are real) but the labels are positional indices carrying an
+  explicit `labels_available: false`, which the UI surfaces as a note.
+
+**Test:** experiment-service **87** (+7: points and tree merged from the blob, the
+blob's matrix winning over the reconstruction, an absent blob still serving mirrored
+data, a pointless curve rejected, no store read attempted without an `artifact_uri`,
+and missing labels flagged rather than fabricated). ui-web **939** (+7: the real
+curve rendered, a degenerate ≤2-point curve refused, non-finite points dropped rather
+than plotted as NaN, the real tree rendered with split conditions as node labels, and
+the positional-index note shown only when labels are genuinely absent).
+
+A note on the tree's pre-hydration path: it renders a real text **outline** of the
+tree, not the "unavailable" message. jsdom and SSR take that path, and claiming the
+tree is missing while holding it is exactly the confident-wrong output this BRD
+exists to remove.
 
 _inc4 (agent proposal over the full type set) also remains._

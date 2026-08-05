@@ -10,9 +10,15 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import json
 import time
 from hashlib import sha256
 from urllib.parse import urlparse
+
+
+class ArtifactTooLarge(Exception):
+    """An artifact exceeded the in-request read cap. Raised, not swallowed: a blob
+    that outgrew its budget is a real condition someone must see."""
 
 
 class S3ArtifactSigner:
@@ -49,6 +55,41 @@ class S3ArtifactSigner:
             Params={"Bucket": bucket, "Key": key}, ExpiresIn=ttl_seconds,
         )
 
+    async def fetch_json(self, artifact_uri: str, path: str,
+                         max_bytes: int = 4 << 20) -> dict | None:
+        """BRD 72 inc3b — read a small JSON artifact out of the run's artifact store.
+
+        This is an OBJECT-STORE read, not an MLflow read: the "never call MLflow in
+        the request path" invariant is about the tracking server, and dataset-service
+        already reads `profile.json` from its own object store the same way.
+
+        Returns None — never raises — when the object is absent, too large or not
+        JSON. A run that predates the artifact, or whose blob was GC'd, must still
+        serve its mirrored metrics rather than failing the whole chart.
+        """
+        bucket, key = self._resolve(artifact_uri, path)
+
+        def _get():
+            try:
+                obj = self._client.get_object(Bucket=bucket, Key=key)
+            except self._client.exceptions.NoSuchKey:
+                # The ONLY silent case, and it is not an error: runs predating the
+                # artifact, and runs whose object the retention sweep removed,
+                # legitimately have no evaluation.json.
+                return None
+            # Everything else — a wrong endpoint, an expired key, a denied policy,
+            # an unreachable store — is a REAL failure. Swallowing it here would
+            # make a misconfigured object store indistinguishable from "this run
+            # has no artifact", and the chart would render a confident empty state
+            # over a broken deployment. Let it raise.
+            size = int(obj.get("ContentLength") or 0)
+            if size > max_bytes:
+                raise ArtifactTooLarge(
+                    f"{key} is {size} bytes, over the {max_bytes} read cap")
+            return json.loads(obj["Body"].read(max_bytes))
+
+        return await asyncio.to_thread(_get)
+
 
 class LocalArtifactSigner:
     """Unit-tier HMAC pseudo-URL signer (never wired from app.main)."""
@@ -62,3 +103,10 @@ class LocalArtifactSigner:
                        sha256).hexdigest()[:32]
         return (f"https://artifacts.datacern.local/{artifact_uri}/{path}"
                 f"?expires={expires}&sig={sig}")
+
+    async def fetch_json(self, artifact_uri: str, path: str,
+                         max_bytes: int = 4 << 20) -> dict | None:
+        """No object store in the unit tier. Returns None — the same answer a
+        genuinely absent object gives — because there is nothing to read, not
+        because a failure is being hidden."""
+        return None

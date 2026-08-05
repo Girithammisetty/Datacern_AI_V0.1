@@ -293,6 +293,7 @@ export const en = {
   "charts.run.actualVsPredicted": "Actual \\ Predicted",
   "charts.run.confusionCaption": "Confusion matrix over {total} test rows.",
   "charts.run.noConfusionMatrix": "This run has no confusion matrix — it is only computed for classification runs with 10 or fewer classes.",
+  "charts.run.labelsUnavailable": "Class names are unavailable for this run — the row/column headers are positional indices, not labels.",
   "charts.run.aucLabel": "ROC AUC",
   "charts.run.curvePending": "Curve points come from the run's evaluation artifact, which is not mirrored yet.",
   "charts.run.treePending": "The tree structure comes from the run's evaluation artifact, which is not mirrored yet.",

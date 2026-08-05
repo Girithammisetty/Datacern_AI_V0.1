@@ -88,6 +88,11 @@ MODEL_URI_TAG = "datacern.model_uri"
 #: pipeline-orchestrator executor/local.py::CLASS_LABELS_TAG.
 CLASS_LABELS_TAG = "datacern.class_labels"
 
+#: MLflow artifact path holding the run's evaluation payload (ROC curve points,
+#: labelled confusion matrix, decision-tree structure). CROSS-SERVICE CONTRACT —
+#: must match pipeline-orchestrator executor/local.py::EVAL_ARTIFACT_PATH.
+EVAL_ARTIFACT_PATH = "evaluation.json"
+
 #: Metrics surfaced as headline key/value pairs on a run artifact, in this order.
 #: Everything else is still available through the run detail endpoint; a metric
 #: card with forty rows is not a metric card.
@@ -129,11 +134,19 @@ def _confusion_matrix(metrics: dict, tags: dict) -> dict | None:
                 labels = [str(x) for x in parsed]
         except (ValueError, TypeError):
             labels = []
-    if not labels:
-        labels = [f"Class {i}" for i in range(n)]
     matrix = [[int(cells.get((i, j), 0)) for j in range(n)] for i in range(n)]
-    return {"labels": labels, "matrix": matrix,
-            "total": sum(sum(row) for row in matrix)}
+    out = {"labels": labels, "matrix": matrix,
+           "total": sum(sum(row) for row in matrix)}
+    if not labels:
+        # Positional placeholders, EXPLICITLY marked. Emitting "Class 0"/"Class 1"
+        # as if they were the real class names would make a run whose executor
+        # never wrote the labels tag look identical to one that did — the reader
+        # cannot tell an invented label from a real one. The numbers are real, so
+        # the matrix is still returned; the flag is how the UI says the names are
+        # not.
+        out["labels"] = [str(i) for i in range(n)]
+        out["labels_available"] = False
+    return out
 
 
 def _run_metric_artifact(run, metrics: dict, tags: dict) -> dict:
@@ -578,7 +591,35 @@ class RunService(_Base):
                 raise NotFound("run not found")
             metrics = {m.key: m.value for m in await uow.runs.get_metrics(run.id)}
             tags = {t.key: t.value for t in await uow.runs.get_tags(run.id)}
-        return _run_metric_artifact(run, metrics, tags)
+        artifact = _run_metric_artifact(run, metrics, tags)
+
+        # BRD 72 inc3b — the ROC curve POINTS and the tree STRUCTURE are too big to
+        # mirror as metrics, so they live in the run's evaluation.json. Read it from
+        # the artifact store (an object-store read, not an MLflow one) and merge.
+        # Absent blob -> the mirrored payload above stands on its own, which is also
+        # what a run predating the artifact, or one whose blob was GC'd, returns.
+        blob = await self._evaluation_blob(run)
+        if blob:
+            roc = blob.get("roc_curve")
+            if isinstance(roc, dict) and roc.get("points"):
+                artifact["roc_curve"] = roc
+            tree = blob.get("tree")
+            if isinstance(tree, dict) and tree.get("root"):
+                artifact["tree"] = tree
+            # The blob's matrix is the one the fit produced, labels included; prefer
+            # it over the reconstruction when both are present.
+            cm = blob.get("confusion_matrix")
+            if isinstance(cm, dict) and cm.get("matrix") and cm.get("labels"):
+                prev = artifact.get("confusion_matrix") or {}
+                artifact["confusion_matrix"] = {**cm, "total": prev.get("total")
+                                                or sum(sum(r) for r in cm["matrix"])}
+        return artifact
+
+    async def _evaluation_blob(self, run) -> dict | None:
+        signer = self.deps.artifact_signer
+        if not run.artifact_uri or signer is None or not hasattr(signer, "fetch_json"):
+            return None
+        return await signer.fetch_json(run.artifact_uri, EVAL_ARTIFACT_PATH)
 
     async def artifacts(self, ctx: CallCtx, run_id: str) -> list[dict]:
         async with self.uow(ctx.tenant_id) as uow:

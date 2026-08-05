@@ -80,20 +80,29 @@ async def test_confusion_matrix_is_labelled_from_the_class_labels_tag(container)
     assert cm["labels"] == ["denied", "approved"]
 
 
-async def test_matrix_is_still_returned_unlabelled_when_the_tag_is_missing(container):
-    # An unlabelled REAL matrix beats no matrix — older runs predate the tag.
+async def test_missing_labels_are_flagged_not_fabricated(container):
+    # The numbers are real, so the matrix is returned — but emitting "Class 0" as
+    # if it were the class NAME would make a run whose executor never wrote the
+    # tag look identical to one that did.
     ctx, run = await _run_with(container, _BINARY)
     art = await container.run_service.metric_artifact(ctx, run_urn(TENANT_A, run.id))
     cm = art["confusion_matrix"]
-    assert cm["labels"] == ["Class 0", "Class 1"]
+    assert cm["labels_available"] is False
+    assert cm["labels"] == ["0", "1"]
     assert cm["matrix"] == [[18, 2], [2, 18]]
+
+
+async def test_real_labels_carry_no_unavailable_flag(container):
+    ctx, run = await _run_with(container, _BINARY, _LABELS)
+    art = await container.run_service.metric_artifact(ctx, run_urn(TENANT_A, run.id))
+    assert "labels_available" not in art["confusion_matrix"]
 
 
 async def test_a_malformed_labels_tag_falls_back_instead_of_failing(container):
     ctx, run = await _run_with(container, _BINARY, {CLASS_LABELS_TAG: "not json"})
     art = await container.run_service.metric_artifact(ctx, run_urn(TENANT_A, run.id))
     cm = art["confusion_matrix"]
-    assert cm["labels"] == ["Class 0", "Class 1"]
+    assert cm["labels_available"] is False
 
 
 async def test_a_labels_tag_of_the_wrong_length_is_ignored(container):
@@ -101,7 +110,7 @@ async def test_a_labels_tag_of_the_wrong_length_is_ignored(container):
     ctx, run = await _run_with(container, _BINARY, {CLASS_LABELS_TAG: json.dumps(["a", "b", "c"])})
     art = await container.run_service.metric_artifact(ctx, run_urn(TENANT_A, run.id))
     cm = art["confusion_matrix"]
-    assert cm["labels"] == ["Class 0", "Class 1"]
+    assert cm["labels_available"] is False
 
 
 async def test_a_3x3_matrix_reconstructs_at_the_right_size(container):
@@ -167,3 +176,95 @@ async def test_cross_tenant_run_is_not_readable(client, container):
     resp = await client.get(f"/api/v1/artifacts?urn={run_urn(TENANT_A, run.id)}",
                             headers=auth(tenant_id=other, scopes=["experiment.run.read"]))
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# BRD 72 inc3b — the evaluation blob (ROC points + tree) merged from the store
+# ---------------------------------------------------------------------------
+
+_BLOB = {
+    "roc_curve": {
+        "positive_label": "approved",
+        "points": [{"fpr": 0.0, "tpr": 0.0}, {"fpr": 0.1, "tpr": 0.8, "threshold": 0.6},
+                   {"fpr": 1.0, "tpr": 1.0, "threshold": 0.0}],
+    },
+    "confusion_matrix": {"labels": ["denied", "approved"], "matrix": [[19, 1], [1, 19]]},
+    "tree": {"root": {"feature": "amount", "threshold": 1.5, "samples": 40, "leaf": False,
+                      "children": [{"samples": 20, "leaf": True, "prediction": "denied"},
+                                   {"samples": 20, "leaf": True, "prediction": "approved"}]},
+             "node_count": 3},
+}
+
+
+class _Signer:
+    """Unit-tier stand-in for the object store. Real S3 reads are integration-tier."""
+
+    def __init__(self, blob=None, uri_seen=None):
+        self.blob = blob
+        self.calls: list[tuple[str, str]] = []
+
+    async def signed_url(self, artifact_uri, path, ttl_seconds):  # pragma: no cover
+        return "https://example/x"
+
+    async def fetch_json(self, artifact_uri, path, max_bytes=None):
+        self.calls.append((artifact_uri, path))
+        return self.blob
+
+
+async def _run_with_blob(container, blob, *, artifact_uri="s3://mlflow/1/abc/artifacts"):
+    ctx, run = await _run_with(container, _BINARY, _LABELS)
+    async with container.run_service.uow(TENANT_A) as uow:
+        fresh = await uow.runs.get(run.id)
+        fresh.artifact_uri = artifact_uri
+        await uow.runs.update(fresh)
+        await uow.commit()
+    signer = _Signer(blob)
+    container.run_service.deps.artifact_signer = signer
+    return ctx, run, signer
+
+
+async def test_roc_curve_points_are_merged_from_the_evaluation_blob(container):
+    ctx, run, signer = await _run_with_blob(container, _BLOB)
+    art = await container.run_service.metric_artifact(ctx, run_urn(TENANT_A, run.id))
+    assert len(art["roc_curve"]["points"]) == 3
+    assert art["roc_curve"]["positive_label"] == "approved"
+    assert signer.calls == [("s3://mlflow/1/abc/artifacts", "evaluation.json")]
+
+
+async def test_tree_structure_is_merged_from_the_evaluation_blob(container):
+    ctx, run, _ = await _run_with_blob(container, _BLOB)
+    art = await container.run_service.metric_artifact(ctx, run_urn(TENANT_A, run.id))
+    assert art["tree"]["root"]["feature"] == "amount"
+    assert len(art["tree"]["root"]["children"]) == 2
+
+
+async def test_the_blob_matrix_wins_over_the_reconstruction(container):
+    # The blob's matrix is what the fit actually produced, labels included; the
+    # flattened-metric reconstruction is the fallback, not the source of truth.
+    ctx, run, _ = await _run_with_blob(container, _BLOB)
+    art = await container.run_service.metric_artifact(ctx, run_urn(TENANT_A, run.id))
+    cm = art["confusion_matrix"]
+    assert cm["matrix"] == [[19, 1], [1, 19]]
+    assert cm["total"] == 40
+
+
+async def test_an_absent_blob_still_serves_the_mirrored_payload(container):
+    # A run predating the artifact, or one whose blob was GC'd, must not fail the
+    # whole chart — the mirrored confusion matrix stands on its own.
+    ctx, run, _ = await _run_with_blob(container, None)
+    art = await container.run_service.metric_artifact(ctx, run_urn(TENANT_A, run.id))
+    assert art["confusion_matrix"]["matrix"] == [[18, 2], [2, 18]]  # reconstruction
+    assert "roc_curve" not in art and "tree" not in art
+
+
+async def test_a_blob_without_points_does_not_claim_a_curve(container):
+    ctx, run, _ = await _run_with_blob(container, {"roc_curve": {"points": []}})
+    art = await container.run_service.metric_artifact(ctx, run_urn(TENANT_A, run.id))
+    assert "roc_curve" not in art
+
+
+async def test_no_store_read_is_attempted_without_an_artifact_uri(container):
+    ctx, run, signer = await _run_with_blob(container, _BLOB, artifact_uri="")
+    art = await container.run_service.metric_artifact(ctx, run_urn(TENANT_A, run.id))
+    assert signer.calls == []
+    assert "roc_curve" not in art
