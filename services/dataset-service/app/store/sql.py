@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import uuid
 from datetime import datetime
 
 from sqlalchemy import func, select, text, update
@@ -65,6 +66,25 @@ def make_engine(database_url: str):
     )
 
 
+def _is_uuid(value: str | None) -> bool:
+    """Is `value` something the UUID-typed primary keys can even be compared to?
+
+    Route ids arrive as free text. Handing a non-UUID straight to a UUID column
+    makes asyncpg raise DataError, which surfaces as a 500 with a SQLAlchemy
+    traceback instead of the 404 the caller earned — observed live as
+    `GET /api/v1/datasets/forms-journey` -> 500. A lookup for an id that cannot
+    exist is a miss, not a server fault, so the by-id readers below screen the
+    id first and return None.
+    """
+    if not value:
+        return False
+    try:
+        uuid.UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return True
+
+
 def _to_entity(row, fields, cls):
     return cls(**{f: getattr(row, f) for f in fields})
 
@@ -85,6 +105,8 @@ class SqlDatasetRepo:
         await self.s.flush()
 
     async def _row(self, dataset_id: str) -> DatasetRow | None:
+        if not _is_uuid(dataset_id):
+            return None
         return await self.s.get(DatasetRow, dataset_id)
 
     async def get(self, dataset_id: str, include_deleted: bool = False) -> Dataset | None:
@@ -277,6 +299,8 @@ class SqlVersionRepo:
         return _to_entity(row, _VERSION_FIELDS, DatasetVersion) if row else None
 
     async def get_by_id(self, version_id: str) -> DatasetVersion | None:
+        if not _is_uuid(version_id):
+            return None
         row = await self.s.get(DatasetVersionRow, version_id)
         return _to_entity(row, _VERSION_FIELDS, DatasetVersion) if row else None
 
@@ -366,6 +390,8 @@ class SqlProfileRepo:
         await self.s.flush()
 
     async def get(self, profile_id: str) -> Profile | None:
+        if not _is_uuid(profile_id):
+            return None
         row = await self.s.get(ProfileRow, profile_id)
         return _to_entity(row, _PROFILE_FIELDS, Profile) if row else None
 
@@ -565,6 +591,8 @@ class SqlEntityResolutionRepo:
         await self.s.flush()
 
     async def get_config(self, config_id: str) -> EntityResolutionConfig | None:
+        if not _is_uuid(config_id):
+            return None
         row = await self.s.get(ResolutionConfigRow, config_id)
         return _to_entity(row, _ERCONFIG_FIELDS, EntityResolutionConfig) if row else None
 
@@ -575,6 +603,8 @@ class SqlEntityResolutionRepo:
         await self.s.flush()
 
     async def get_run(self, run_id: str) -> EntityResolutionRun | None:
+        if not _is_uuid(run_id):
+            return None
         row = await self.s.get(ResolutionRunRow, run_id)
         return _to_entity(row, _ERRUN_FIELDS, EntityResolutionRun) if row else None
 
@@ -630,6 +660,8 @@ class SqlEntityResolutionRepo:
         return [_to_entity(r, _CAND_FIELDS, EntityMergeCandidate) for r in rows]
 
     async def get_candidate(self, candidate_id: str) -> EntityMergeCandidate | None:
+        if not _is_uuid(candidate_id):
+            return None
         row = await self.s.get(MergeCandidateRow, candidate_id)
         return _to_entity(row, _CAND_FIELDS, EntityMergeCandidate) if row else None
 

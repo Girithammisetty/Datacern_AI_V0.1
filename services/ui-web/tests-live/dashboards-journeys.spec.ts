@@ -105,7 +105,7 @@ test.describe("dashboards: create, add a chart from a dataset, cross-filter, dri
     // module defaults to "insights" — a valid chart-service module.
     const [createResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("CreateDashboard") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation CreateDashboard(") ?? false),
       ),
       createDialog.getByRole("button", { name: "Create dashboard" }).click(),
     ]);
@@ -148,9 +148,15 @@ test.describe("dashboards: create, add a chart from a dataset, cross-filter, dri
     // when the dataset has no profile yet; the chart still persists its spec).
     const saveBtn = editor.getByRole("button", { name: "Save chart" });
     await expect(saveBtn).toBeEnabled({ timeout: 20_000 });
+    // Match "mutation CreateChart", NOT "CreateChart". The editor's live
+    // preview is `query ChartPreview($input: CreateChartInput!)`, whose body
+    // also contains "CreateChart" — a substring match grabs the preview
+    // response instead of the save. That response carries no `errors` and no
+    // `data.createChart`, so the assertions below fail with a bare
+    // "Cannot read properties of undefined" against a working save.
     const [chartResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("CreateChart") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation CreateChart(") ?? false),
       ),
       saveBtn.click(),
     ]);
@@ -223,7 +229,7 @@ test.describe("dashboards: create, add a chart from a dataset, cross-filter, dri
     const chartName = `E2E Grid ${tag}`;
     await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("CreateChart") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation CreateChart(") ?? false),
       ),
       saveBtn.click(),
     ]);

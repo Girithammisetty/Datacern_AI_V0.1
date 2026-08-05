@@ -19,11 +19,19 @@ refused by name (Rule 2) rather than flattened into meaningless rows.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET  # nosemgrep
 from collections.abc import AsyncIterator
 from typing import Any
 
-from app.domain.decode import _reject_dtd, _spool_to_tempfile, _xml_localname
+# Parsed through defusedxml, same as decode.py. forbid_dtd is NOT the default
+# there — it is passed explicitly below (see decode.py's import note).
+import defusedxml.ElementTree as DET
+
+from app.domain.decode import (
+    XmlElement,
+    _reject_dtd,
+    _spool_to_tempfile,
+    _xml_localname,
+)
 from app.domain.errors import ErrorCategory, PermanentJobError
 
 MAX_ROWS_GUARD = 50_000_000  # backstop against a pathological element count
@@ -57,11 +65,11 @@ def _fail(msg: str) -> PermanentJobError:
     return PermanentJobError(ErrorCategory.DECODE_ERROR, msg)
 
 
-def _text(elem: ET.Element | None) -> str:
+def _text(elem: XmlElement | None) -> str:
     return (elem.text or "").strip() if elem is not None else ""
 
 
-def _find(parent: ET.Element, *localnames: str) -> ET.Element | None:
+def _find(parent: XmlElement, *localnames: str) -> XmlElement | None:
     """Namespace-agnostic descendant find by a path of local-names."""
     cur = parent
     for name in localnames:
@@ -76,18 +84,18 @@ def _find(parent: ET.Element, *localnames: str) -> ET.Element | None:
     return cur
 
 
-def _first_text(parent: ET.Element, localname: str) -> str:
+def _first_text(parent: XmlElement, localname: str) -> str:
     for el in parent.iter():
         if el is not parent and _xml_localname(el.tag) == localname:
             return _text(el)
     return ""
 
 
-def _iter_local(root: ET.Element, localname: str) -> list[ET.Element]:
+def _iter_local(root: XmlElement, localname: str) -> list[XmlElement]:
     return [el for el in root.iter() if _xml_localname(el.tag) == localname]
 
 
-def _sub_text(parent: ET.Element, container: str, leaf: str) -> str:
+def _sub_text(parent: XmlElement, container: str, leaf: str) -> str:
     """Text of `leaf` within the `container` subtree, or "". Explicit `is None`
     checks throughout — an ElementTree element with no children is FALSY, so
     `_find(...) or parent` would silently mis-scope (and is deprecated)."""
@@ -95,7 +103,7 @@ def _sub_text(parent: ET.Element, container: str, leaf: str) -> str:
     return _first_text(node, leaf) if node is not None else ""
 
 
-def _map_iso20022_entry(ntry: ET.Element, stmt_id: str, account: str) -> list[Any]:
+def _map_iso20022_entry(ntry: XmlElement, stmt_id: str, account: str) -> list[Any]:
     amt_el = _find(ntry, "Amt")
     return [
         stmt_id,
@@ -111,7 +119,7 @@ def _map_iso20022_entry(ntry: ET.Element, stmt_id: str, account: str) -> list[An
     ]
 
 
-def _map_acord_policy(el: ET.Element) -> list[Any]:
+def _map_acord_policy(el: XmlElement) -> list[Any]:
     return [
         "ACORD",
         _first_text(el, "PolicyNumber") or _first_text(el, "ContractNumber"),
@@ -151,11 +159,11 @@ async def _decode(
     try:
         _reject_dtd(path)  # billion-laughs guard BEFORE parsing content (reused)
         try:
-            # Safe post-guard: _reject_dtd bails on any DOCTYPE (the only place
-            # internal entities can be defined) and stdlib expat never resolves
-            # external entities — same reviewed posture as decode.py.
-            tree = ET.parse(str(path))  # nosemgrep
-        except ET.ParseError as e:
+            # forbid_dtd=True is required, not decorative: defusedxml defaults
+            # it to False. _reject_dtd already screened the prolog; this is the
+            # same guard enforced by the parser that reads the content.
+            tree = DET.parse(str(path), forbid_dtd=True)
+        except DET.ParseError as e:
             raise _fail(f"{kind}: not well-formed XML ({e})") from e
         root = tree.getroot()
         root_name = _xml_localname(root.tag)

@@ -557,6 +557,22 @@ jobs:
   #   1. `use_real_adapters` DEFAULTS to False in any app/config.py.
   #   2. A Fake*/Stub*/Mock* adapter is imported from a service main.py / container.py.
   # ---------------------------------------------------------------------------
+  # Cross-layer wiring audit: every GraphQL field the UI's operations reference
+  # must exist in the BFF schema, and every schema field must have a resolver.
+  # tsc cannot check either (GraphQL documents are opaque strings to it), and a
+  # miss is a guaranteed runtime error / silent null. Pure-stdlib static
+  # analysis, ~3s. Informational layers (dead surface, downstream path diff)
+  # print in the log but do not gate.
+  wiring-audit:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: UI -> BFF -> downstream wiring audit
+        run: python3 tools/wiring/audit_ui_wiring.py
+
   no-stub-gate:
     needs: setup
     runs-on: ubuntu-latest

@@ -48,8 +48,16 @@ async function graphql<T>(page: Page, query: string, variables?: Record<string, 
   return body.data as T;
 }
 
-const SAVED_QUERIES_Q = /* GraphQL */ `
-  query SavedQueriesForE2E($first: Int) { savedQueries(first: $first) { nodes { id name } } }
+const DATASETS_Q = /* GraphQL */ `
+  query DatasetsForQueryE2E($first: Int) {
+    datasets(first: $first) { nodes { id name status } }
+  }
+`;
+
+const CREATE_SAVED_QUERY = /* GraphQL */ `
+  mutation CreateSavedQueryForE2E($input: SavedQueryInput!) {
+    createSavedQuery(input: $input) { id name }
+  }
 `;
 
 test.describe("queries: governed SELECT renders rows, non-SELECT is refused, route is gated", () => {
@@ -69,7 +77,7 @@ test.describe("queries: governed SELECT renders rows, non-SELECT is refused, rou
     // precedes the saved-queries sidebar, whose per-row Run buttons come later).
     const [runResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("RunSql") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation RunSql(") ?? false),
       ),
       page.getByRole("button", { name: "Run", exact: true }).first().click(),
     ]);
@@ -82,27 +90,51 @@ test.describe("queries: governed SELECT renders rows, non-SELECT is refused, rou
     expect((result.rows ?? []).length, "SELECT 1 must return exactly one row").toBeGreaterThanOrEqual(1);
 
     // The results table renders the real column + cell (not just a toast).
+    // Scope the column assertion to the table: "example" is also the alias the
+    // SQL editor still holds ("SELECT 1 AS example"), so an unscoped getByText
+    // matches the textarea too and fails strict mode regardless of the result.
+    // The header cell renders name+type, hence the substring match.
     await expect(page.getByRole("heading", { name: "Results" })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("example")).toBeVisible();
+    await expect(
+      page.getByRole("table").getByRole("columnheader", { name: /example/i }),
+    ).toBeVisible();
     await expect(page.getByRole("table").getByText("1", { exact: true }).first()).toBeVisible();
   });
 
   test("running a seeded saved query returns real rows from a governed dataset", async ({ page }) => {
     await loginAs(page, PERSONAS().admin);
 
-    // A saved query targets governed, published datasets — the real "SELECT
-    // against a seeded dataset" path. Skip honestly when the tenant has none
-    // rather than inventing a dataset name.
-    const { savedQueries } = await graphql<{ savedQueries: { nodes: { id: string; name: string }[] } }>(
-      page,
-      SAVED_QUERIES_Q,
-      { first: 10 },
+    // This test used to run whatever savedQueries.nodes[0] happened to be. That
+    // is not a fixture, it is whatever an earlier run left behind: on a live
+    // stack it picked a saved query pointing at `auto-claims-<timestamp>`, a
+    // dataset created by a previous run and long gone, so runSavedQuery
+    // returned VALIDATION_FAILED "dataset not found" and the spec failed on
+    // stale state rather than on the behaviour it names.
+    //
+    // Build the fixture instead: find a dataset that is READY *now*, save a
+    // query against it, then run that. Same governed dataset-backed path, but
+    // the dataset is one we just confirmed exists.
+    const { datasets } = await graphql<{
+      datasets: { nodes: { id: string; name: string; status: string }[] };
+    }>(page, DATASETS_Q, { first: 50 });
+    const dataset = datasets.nodes.find(
+      (d) => (d.status ?? "").toUpperCase() === "READY" && !/['{}]/.test(d.name),
     );
-    if (savedQueries.nodes.length === 0) {
-      test.fixme(true, "No saved query is seeded in the tenant to exercise a governed dataset-backed SELECT.");
+    if (!dataset) {
+      test.fixme(true, "No READY dataset in the tenant to exercise a governed dataset-backed SELECT.");
       return;
     }
-    const target = savedQueries.nodes[0];
+    const { createSavedQuery: target } = await graphql<{
+      createSavedQuery: { id: string; name: string };
+    }>(page, CREATE_SAVED_QUERY, {
+      input: {
+        name: `e2e-saved-${Date.now()}`,
+        description: "Created by query-journeys e2e; targets a dataset verified READY in this run.",
+        // {{dataset(...)}} is the planner macro the governed engine resolves —
+        // the same path the seeded saved queries use.
+        sqlText: `SELECT * FROM {{dataset('${dataset.name}')}} LIMIT 1`,
+      },
+    });
 
     await page.goto("/data/queries");
     await expectPageHealthy(page, { notRedirectedFrom: "/data/queries" });
@@ -112,7 +144,7 @@ test.describe("queries: governed SELECT renders rows, non-SELECT is refused, rou
     await expect(row).toBeVisible({ timeout: 20_000 });
     const [runResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("RunSavedQuery") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation RunSavedQuery(") ?? false),
       ),
       row.getByRole("button", { name: "Run" }).click(),
     ]);
@@ -137,7 +169,7 @@ test.describe("queries: governed SELECT renders rows, non-SELECT is refused, rou
 
     const [runResp] = await Promise.all([
       page.waitForResponse(
-        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("RunSql") ?? false),
+        (r) => r.url().includes("/api/graphql") && (r.request().postData()?.includes("mutation RunSql(") ?? false),
       ),
       page.getByRole("button", { name: "Run", exact: true }).first().click(),
     ]);
