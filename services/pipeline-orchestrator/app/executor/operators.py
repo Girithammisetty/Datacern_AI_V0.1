@@ -58,7 +58,46 @@ def select_columns(inputs, params):
     if not cols:
         raise OperatorError("select-columns: 'columns' is required")
     _require_cols(df, cols, "select-columns")
+    # BRD 71 (P6): exclude mode inverts the projection. Column ORDER is the frame's,
+    # not the param's, so the result is a true projection of the input.
+    if params.get("exclude"):
+        keep = [c for c in df.columns if c not in set(cols)]
+        if not keep:
+            raise OperatorError("select-columns(exclude): would drop every column")
+        return [df[keep].copy()]
     return [df[cols].copy()]
+
+
+@_register("drop-columns")
+def drop_columns(inputs, params):
+    """BRD 71 (P6). Drops the named columns.
+
+    Two V1 behaviors are deliberate, not incidental:
+
+    * **Unknown columns are ignored, not an error.** A drop list that outlives a
+      schema change should not fail the run — the intent ("this column must not be
+      here") is already satisfied.
+    * **The label column is never dropped.** V1 reads it from the MLflow run and
+      removes it from the drop list, because dropping the label always fails the fit
+      and the failure surfaces deep inside training rather than here. The executor
+      injects ``label_column`` from the run for the same reason.
+
+    (V1's ``drop_columns/component.js`` header function is inverted — it *keeps* the
+    listed columns. ``src/component.py`` is authoritative; this follows the Python.)
+    """
+    df = _one(inputs)
+    cols = list(params.get("columns") or [])
+    if not cols:
+        raise OperatorError("drop-columns: 'columns' is required")
+
+    label = params.get("label_column")
+    if label and label in cols:
+        cols = [c for c in cols if c != label]
+
+    to_drop = [c for c in cols if c in df.columns]
+    if to_drop and len(to_drop) == len(df.columns):
+        raise OperatorError("drop-columns: would drop every column")
+    return [df.drop(columns=to_drop).copy()]
 
 
 @_register("rename-columns")
@@ -620,6 +659,13 @@ def data_profiler(inputs, params):
     # Profiling is computed by dataset-service; at execution time this is a
     # transparent passthrough so a compiled DAG with an injected profiler still runs.
     return [_one(inputs).copy()]
+
+
+#: Operators that take the run's ``label_column`` into account. The executor injects it
+#: from the run parameters (V1 reads it off the MLflow run) so the node definition does
+#: not have to repeat what the training step already declares. An explicit node param
+#: always wins.
+LABEL_AWARE_OPERATORS: frozenset[str] = frozenset({"drop-columns"})
 
 
 def run_operator(name: str, inputs: list[pd.DataFrame], params: dict) -> list[pd.DataFrame]:

@@ -32,6 +32,7 @@ export function PipelineBuilder({
   const edges = useCanvasStore((s) => s.edges);
   const addNode = useCanvasStore((s) => s.addNode);
   const setIssues = useCanvasStore((s) => s.setIssues);
+  const setEffectiveResources = useCanvasStore((s) => s.setEffectiveResources);
   const load = useCanvasStore((s) => s.load);
   const reset = useCanvasStore((s) => s.reset);
 
@@ -117,6 +118,9 @@ export function PipelineBuilder({
       {
         onSuccess: (res) => {
           applyIssues({}, res.issues);
+          // BRD 71 (U1): the resolved envelope per node, so the config drawer can show
+          // what an un-overridden step will actually get.
+          setEffectiveResources(res.effectiveResources ?? null);
           setSummary(res.issues.map((i) => (i.node ? `${i.node}: ${i.message}` : i.message)));
           setBanner(res.valid ? t("pipelines.valid") : t("pipelines.invalid"));
         },

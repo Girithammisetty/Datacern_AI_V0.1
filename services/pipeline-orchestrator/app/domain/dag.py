@@ -33,7 +33,12 @@ class ValidationReport:
                            "problem": problem})
 
     def to_dict(self) -> dict:
-        return {"status": "valid" if self.valid else "draft", "items": self.items}
+        # BRD 71 (U1): the resolved per-node envelope is what the compiler turns into
+        # pod limits, and inheritance means a node's effective values are often not
+        # the ones its author typed. Returning them is what makes that legible in the
+        # builder instead of surprising at run time.
+        return {"status": "valid" if self.valid else "draft", "items": self.items,
+                "effective_resources": self.effective_resources}
 
 
 def _edge_endpoint(ref: str) -> tuple[str, str]:

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from app.domain.resources import topo_order
-from app.executor.operators import OperatorError, run_operator
+from app.executor.operators import LABEL_AWARE_OPERATORS, OperatorError, run_operator
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,11 @@ class LocalPipelineExecutor:
         self._reader = reader
         self._writer = writer
 
-    def run(self, definition: dict) -> PipelineResult:
+    def run(self, definition: dict, run_parameters: dict | None = None) -> PipelineResult:
+        """Execute the DAG. ``run_parameters`` carries run-scoped context (currently
+        ``label_column``) that label-aware operators need but that the node definition
+        should not have to restate — see ``LABEL_AWARE_OPERATORS``."""
+        label_column = (run_parameters or {}).get("label_column")
         nodes = definition.get("nodes") or []
         edges = definition.get("edges") or []
         by_alias = {n.get("alias"): n for n in nodes}
@@ -108,6 +112,8 @@ class LocalPipelineExecutor:
                 continue
             comp = node.get("component", "")
             params = node.get("parameters") or {}
+            if label_column and comp in LABEL_AWARE_OPERATORS and "label_column" not in params:
+                params = {**params, "label_column": label_column}
             try:
                 if comp in _PASSTHROUGH:
                     continue

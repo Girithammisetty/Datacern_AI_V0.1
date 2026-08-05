@@ -245,7 +245,14 @@ class FakePipelineReader:
     agent's grounding."""
 
     def __init__(self, algorithms: list[dict] | None = None,
-                 algorithm: dict | None = None) -> None:
+                 algorithm: dict | None = None,
+                 resource_policy: dict | None = None) -> None:
+        # BRD 71 (U1): None = the endpoint is unavailable, which must degrade to
+        # "propose no resources" rather than to an unbounded guess.
+        self._resource_policy = resource_policy if resource_policy is not None else {
+            "defaults": {"cpus": 1, "ram_gb": 2, "timeout_minutes": 30},
+            "floor": {"cpus": 1, "ram_gb": 2, "timeout_minutes": 5},
+            "ceiling": {"cpus": 7, "ram_gb": 24, "timeout_minutes": 480}}
         self._algorithms = algorithms if algorithms is not None else [
             {"name": "xgboost", "label": "XGBoost", "model_type": "classification",
              "runnable": True},
@@ -279,6 +286,10 @@ class FakePipelineReader:
             {"name": "join-data", "component_type": 1},
             {"name": "write-to-warehouse", "component_type": 0},
         ]
+
+    async def resource_policy(self, *, tenant_id, auth_token) -> dict:
+        self.calls.append({"op": "resource_policy", "tenant_id": tenant_id})
+        return self._resource_policy
 
     async def get_algorithm(self, *, tenant_id, algorithm, auth_token) -> dict:
         self.calls.append({"op": "get_algorithm", "algorithm": algorithm})

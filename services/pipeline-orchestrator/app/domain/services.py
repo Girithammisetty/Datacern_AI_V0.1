@@ -49,6 +49,7 @@ from app.domain.errors import (
 from app.domain.ports import RunFilters, TemplateFilters, TrainingResult, TrainingSpec
 from app.domain.resources import (
     DEFAULTS,
+    FLOOR,
     PLATFORM_CEILING,
     resolve_resources,
     training_row_budget,
@@ -120,6 +121,19 @@ class TemplateService:
     def _components_for(self, ctx: CallCtx) -> dict:
         # Tenant catalog view (per-tenant enablement would filter here; BR-11).
         return self.d.components
+
+    async def resource_policy(self, ctx: CallCtx) -> dict:
+        """BRD 71 (U1): the resource envelope the builder must respect — defaults, the
+        hard floor, and the caller's TENANT-EFFECTIVE ceiling (not the platform one).
+
+        Serving this instead of hardcoding it in the UI is what guarantees the form can
+        never offer a value the compiler will clamp, and that a quota change takes
+        effect without a UI deploy.
+        """
+        async with self.d.uow_factory(ctx.tenant_id) as uow:
+            quota = await uow.quotas.get(ctx.tenant_id)
+        return {"defaults": dict(DEFAULTS), "floor": dict(FLOOR),
+                "ceiling": _ceiling(quota)}
 
     async def validate(self, ctx: CallCtx, definition: dict, *, pipeline_type: str,
                        model_type: str | None, mode: str = "all"):
@@ -802,7 +816,8 @@ class RunService:
         # this process queued behind one tenant's data-prep run, and the lease
         # heartbeat could not fire either. Hand it to a thread like training does.
         result = await asyncio.to_thread(
-            LocalPipelineExecutor(reader=_reader, writer=_writer).run, definition)
+            LocalPipelineExecutor(reader=_reader, writer=_writer).run, definition,
+            run.run_parameters or {})
         await self._finish_data_prep_success(ctx, run.id, result, written)
 
     async def _finish_data_prep_success(self, ctx, run_id, result, written) -> None:

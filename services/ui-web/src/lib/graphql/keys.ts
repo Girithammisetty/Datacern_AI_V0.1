@@ -70,6 +70,7 @@ export const qk = {
 
   pipelineStepTypes: () => ["pipelines", "stepTypes"] as const,
   algorithmTemplates: () => ["pipelines", "algorithmTemplates"] as const,
+  pipelineResourcePolicy: () => ["pipelines", "resourcePolicy"] as const,
   pipelines: (filters: unknown) => ["pipelines", "templates", filters] as const,
   pipeline: (id: string) => ["pipelines", "template", id] as const,
   pipelineRuns: (filters: unknown) => ["pipelines", "runs", filters] as const,

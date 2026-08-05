@@ -3915,6 +3915,24 @@ export const typeDefs = gql`
   type PipelineValidationResult {
     valid: Boolean!
     issues: [PipelineValidationIssue!]!
+    """
+    BRD 71 (U1): the resolved per-node resource envelope, keyed by node alias
+    ({alias: {cpus, ram_gb, timeout_minutes}}). Inheritance means a node's effective
+    values are often not the ones its author typed — the builder shows these so that
+    is legible before the run rather than surprising during it.
+    """
+    effectiveResources: JSON
+  }
+
+  """
+  BRD 71 (U1): the resource envelope the builder must respect
+  (pipeline-orchestrator GET /resource-policy). The ceiling is the caller's
+  TENANT-effective ceiling, so the form can never offer a value the compiler clamps.
+  """
+  type PipelineResourcePolicy {
+    defaults: JSON!
+    floor: JSON!
+    ceiling: JSON!
   }
 
   """A pipeline run (pipeline-orchestrator GET /runs/{id})."""
@@ -5697,6 +5715,8 @@ export const typeDefs = gql`
     pipelineStepTypes: [PipelineStepType!]!
     """The algorithm-step catalog (pipeline-orchestrator GET /algorithm-templates)."""
     algorithmTemplates: [AlgorithmTemplate!]!
+    """Resource defaults / floor / tenant-effective ceiling for pipeline nodes."""
+    pipelineResourcePolicy: PipelineResourcePolicy!
     """Saved pipeline templates, cursor-paginated (pipeline-orchestrator GET
     /pipelines). \`includeArchived\` also returns soft-deleted templates (their
     \`archived\` flag is true) so they can be restored."""

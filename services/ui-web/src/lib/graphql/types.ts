@@ -2738,6 +2738,8 @@ export interface ValidationIssue {
 export interface ValidationResult {
   valid: boolean;
   issues: ValidationIssue[];
+  /** BRD 71 (U1): alias -> {cpus, ram_gb, timeout_minutes}. Null when not computed. */
+  effectiveResources?: Record<string, Record<string, number>> | null;
 }
 
 export interface CreatePipelineInput {

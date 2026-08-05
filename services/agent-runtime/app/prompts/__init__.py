@@ -35,7 +35,8 @@ VERSIONS: dict[str, int] = {
     "onboarding.system": 1,
     "model_training.system": 1,
     "ml_engineer.system": 1,
-    "data_pipeline_builder.system": 1,
+    # v2 (BRD 71 U1): the optional `resources` envelope, bounded by the served policy.
+    "data_pipeline_builder.system": 2,
 }
 
 # agent catalog key -> its system-prompt id (drives catalog prompt_refs wiring).

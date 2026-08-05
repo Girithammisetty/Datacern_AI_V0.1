@@ -2210,6 +2210,10 @@ export const resolvers = {
     algorithmTemplates: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
       ctx.clients.pipelines.algorithmTemplates().then((as) => as.map(mapAlgorithmTemplate)),
 
+    // BRD 71 (U1). Pure passthrough — the ceiling is resolved per tenant upstream.
+    pipelineResourcePolicy: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
+      ctx.clients.pipelines.resourcePolicy(),
+
     pipelineTemplates: async (
       _p: unknown,
       a: ConnectionArgs & { q?: string; pipelineType?: string; includeArchived?: boolean },

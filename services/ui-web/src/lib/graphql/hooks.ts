@@ -1488,6 +1488,18 @@ export function usePipelineStepTypes() {
   });
 }
 
+/** BRD 71 (U1). Cached like the catalog: it only moves when the tenant quota does. */
+export function usePipelineResourcePolicy() {
+  return useQuery({
+    queryKey: qk.pipelineResourcePolicy(),
+    queryFn: () =>
+      graphqlRequest<ops.PipelineResourcePolicyResult>(ops.PIPELINE_RESOURCE_POLICY).then(
+        (r) => r.pipelineResourcePolicy,
+      ),
+    staleTime: 30 * 60_000,
+  });
+}
+
 export function useAlgorithmTemplates() {
   return useQuery({
     queryKey: qk.algorithmTemplates(),
