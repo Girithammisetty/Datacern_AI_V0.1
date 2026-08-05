@@ -4,24 +4,18 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { DatacernLogo } from "@/components/brand/DatacernLogo";
 import { Button } from "@/components/ui/button";
+import { MARKETING_SHELL, type MarketingNavHref } from "@/content/marketing/shell";
 
 /** Shared header/footer for the secondary marketing pages (/solutions,
- * /security). /welcome and /pricing keep their bespoke shells; this exists so
- * new pages get consistent chrome without duplicating it per page. Links are
- * config, not hard-coded per page. */
-
-const NAV: Array<{ label: string; href: string }> = [
-  { label: "Overview", href: "/welcome" },
-  { label: "Solutions", href: "/solutions" },
-  { label: "Security", href: "/security" },
-  { label: "Pricing", href: "/pricing" },
-];
+ * /security, /pricing). /welcome keeps its bespoke shell (anchor nav + demo
+ * dialog) but renders the same MARKETING_SHELL footer/product config, so the
+ * chrome never disagrees between pages. */
 
 export function MarketingShell({
   active,
   children,
 }: {
-  active: "/solutions" | "/security";
+  active: MarketingNavHref;
   children: React.ReactNode;
 }) {
   return (
@@ -30,10 +24,10 @@ export function MarketingShell({
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <Link href="/welcome" className="flex items-center gap-2">
             <DatacernLogo className="size-6" />
-            <span className="text-sm font-semibold">Datacern AI</span>
+            <span className="text-sm font-semibold">{MARKETING_SHELL.product}</span>
           </Link>
           <nav className="flex items-center gap-1 sm:gap-2">
-            {NAV.map((n) => (
+            {MARKETING_SHELL.nav.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
@@ -48,8 +42,8 @@ export function MarketingShell({
               </Link>
             ))}
             <Button asChild size="sm" className="ml-2">
-              <Link href="/live-demo">
-                Live demo <ArrowRight className="size-4" />
+              <Link href={MARKETING_SHELL.liveDemoCta.href}>
+                {MARKETING_SHELL.liveDemoCta.label} <ArrowRight className="size-4" />
               </Link>
             </Button>
           </nav>
@@ -60,8 +54,8 @@ export function MarketingShell({
 
       <footer className="border-t border-border/60">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-6 py-6 text-xs text-muted-foreground sm:flex-row">
-          <span>Datacern AI — governed AI for regulated operations</span>
-          <span>AI proposes. A named person approves. The platform remembers.</span>
+          <span>{MARKETING_SHELL.footer.left}</span>
+          <span>{MARKETING_SHELL.footer.right}</span>
         </div>
       </footer>
     </main>

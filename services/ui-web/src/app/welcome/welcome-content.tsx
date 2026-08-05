@@ -6,37 +6,22 @@ import {
   BarChart3,
   Bot,
   Building2,
-  Car,
   Check,
   ChevronDown,
   Cpu,
-  CreditCard,
-  Factory,
-  FlaskConical,
-  Gavel,
-  GraduationCap,
-  HardHat,
   HeartPulse,
   History,
-  Home,
   Landmark,
   ListChecks,
   MessageSquareText,
   Network,
-  Plane,
-  Radio,
-  Rocket,
   Scale,
   ShieldCheck,
-  ShoppingBag,
   Sparkles,
-  Sprout,
-  Truck,
   Umbrella,
   Users,
   Workflow,
   X,
-  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { DatacernLogo } from "@/components/brand/DatacernLogo";
@@ -44,6 +29,38 @@ import { ArchitectureDiagrams } from "@/components/marketing/ArchitectureDiagram
 import { DecisionLoopDiagram } from "@/components/marketing/DecisionLoopDiagram";
 import { Button } from "@/components/ui/button";
 import { SOLUTION_PACK_COUNT } from "@/content/marketing/packs.gen";
+import { MARKETING_SHELL } from "@/content/marketing/shell";
+import {
+  WELCOME_CONTENT as C,
+  type WelcomeIndustry,
+  type WelcomeWfRow,
+} from "@/content/marketing/welcome";
+
+/* Pure renderer: every sentence comes from src/content/marketing/welcome.ts.
+ * This file owns only structure, icons (looked up by config keys) and the
+ * illustrative product mocks — which are diagram components, labeled as mocks
+ * where rendered. */
+
+type IconType = React.ComponentType<{ className?: string }>;
+
+/* icon lookups for config keys — config stores strings, never components */
+const CAP_ICONS: Record<string, IconType> = {
+  agents: Bot,
+  worklist: ListChecks,
+  copilot: MessageSquareText,
+  entity: Network,
+  decisions: Workflow,
+  analytics: BarChart3,
+  audit: History,
+  ml: Cpu,
+};
+
+const INDUSTRY_ICONS: Record<string, IconType> = {
+  healthcare: HeartPulse,
+  banking: Landmark,
+  insurance: Umbrella,
+  "risk-ops": Scale,
+};
 
 /* ------------------------------------------------------------------ */
 /* scroll-reveal (dependency-free)                                     */
@@ -84,423 +101,6 @@ function Reveal({
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* the AI-capability tabs (the centerpiece)                            */
-/* ------------------------------------------------------------------ */
-const CAPS = [
-  {
-    key: "agents",
-    icon: Bot,
-    eyebrow: "Agentic workforce",
-    title: "A team of specialist AI agents",
-    body:
-      "Purpose-built agents do the reading and draft the work — triaging cases, answering data questions, designing dashboards, training models, watching for drift. They propose; they never act on their own.",
-    points: ["Draft dispositions with cited evidence", "Route work to the right specialist", "Open proposals, never silent writes"],
-  },
-  {
-    key: "worklist",
-    icon: ListChecks,
-    eyebrow: "Governed queue",
-    title: "A worklist built for decisions",
-    body:
-      "Every case lands pre-scored by risk and age, with the evidence and the agent's draft already attached — so your reviewers open a case ready to decide, not to dig for context.",
-    points: ["Auto-prioritized by risk and SLA", "Evidence and draft attached on open", "Assign, escalate or approve in one place"],
-  },
-  {
-    key: "copilot",
-    icon: MessageSquareText,
-    eyebrow: "Conversational",
-    title: "An assistant that knows your role",
-    body:
-      "Ask in plain language and get an answer grounded in your governed data and your permissions. Need a change made? The assistant proposes it for a human to approve — it can't do anything you couldn't.",
-    points: ["Grounded in your metrics, not guesses", "Aware of what you're allowed to see", "Turns a question into a governed action"],
-  },
-  {
-    key: "entity",
-    icon: Network,
-    eyebrow: "Data unification",
-    title: "Entity resolution",
-    body:
-      "The same person or party shows up across systems under different identifiers. Datacern unifies those fragmented records into one resolved entity — so decisions run on the full picture, not a single row.",
-    points: ["Deterministic + probabilistic matching", "Ambiguous merges reviewed by a human", "Decide on total exposure, not one record"],
-  },
-  {
-    key: "decisions",
-    icon: Workflow,
-    eyebrow: "Codified policy",
-    title: "No-code decision automation",
-    body:
-      "Turn your operating policy into decision tables anyone can read. Apply them consistently across thousands of cases — and every table change is itself reviewed before it goes live.",
-    points: ["Author rules without engineering", "Consistent outcomes, every case", "Change control on the logic itself"],
-  },
-  {
-    key: "analytics",
-    icon: BarChart3,
-    eyebrow: "Governed insight",
-    title: "Analytics your team can trust",
-    body:
-      "Business metrics are defined once, reviewed, and reused everywhere — so dashboards agree. Click any bar, slice or row and the whole board filters to match.",
-    points: ["One trusted definition per metric", "Cross-filter the entire board", "From a chart straight into a work queue"],
-  },
-  {
-    key: "audit",
-    icon: History,
-    eyebrow: "Tamper-evident",
-    title: "An audit trail for every decision",
-    body:
-      "Every proposal, approval and override is time-stamped and chained together — so when a regulator or auditor asks why a call was made, the answer is already written down.",
-    points: ["Immutable, chained record", "A second reviewer on sensitive changes", "Exportable evidence, case by case"],
-  },
-  {
-    key: "ml",
-    icon: Cpu,
-    eyebrow: "Own your models",
-    title: "Machine learning, built in",
-    body:
-      "Train candidate models on your own decisions, evaluate them against your benchmarks, and promote the winner through an approval gate. Repetitive calls move off expensive AI and onto models you own.",
-    points: ["No-code pipelines over a rich algorithm catalog", "Evaluated before anything ships", "Cost per decision trends down"],
-  },
-] as const;
-
-/* the specialist AI agents, as a moving roster — business-facing roles, each with
- * the job it does. (Internal orchestration agents like routing/inference plumbing
- * are intentionally not surfaced here.) */
-const AGENTS: [string, string][] = [
-  ["Claims Triage Agent", "reads each case and drafts the disposition"],
-  ["Analytics assistant", "answers data questions in plain language"],
-  ["Governance & Compliance Agent", "checks every action against policy"],
-  ["Data Onboarding Agent", "profiles new data and gets it decision-ready"],
-  ["Reporting Designer Agent", "builds the dashboards your team needs"],
-  ["Model Ops Agent", "trains, evaluates and promotes your models"],
-];
-
-/* The "how it works" steps now live in the diagram itself
- * (components/marketing/DecisionLoopDiagram) so the copy and the picture can
- * never drift apart. */
-
-/* Solutions organized by industry — each use case is a real installable
- * capability pack. Industry is the primary way a buyer navigates: pick your
- * world (payer, bank, carrier, ops) and see the exact queues Datacern runs, the
- * outcomes that move, and the packs that ship it. */
-const INDUSTRIES = [
-  {
-    id: "healthcare",
-    name: "Healthcare",
-    who: "Payers, providers & pharmacy",
-    icon: HeartPulse,
-    tag: "Claims, care and revenue decisions — the reasoning attached to every call.",
-    headline: "Adjudicate, appeal and recover — without leaving revenue or defensibility behind.",
-    blurb:
-      "From prior authorization to payment integrity, specialist agents do the reading and your clinicians and analysts make the call — with the evidence and the rules on the record.",
-    outcomes: ["Faster prior-auth turnaround", "Higher clean-claim rates", "Audit-ready determinations"],
-    segments: [
-      {
-        id: "payer",
-        name: "Payer",
-        useCases: [
-          ["Claims Adjudication & Appeals", "Resolve denials, appeals and prior authorizations faster."],
-          ["Payment Integrity (FWA / SIU)", "Surface suspect claims and providers, then close each case defensibly."],
-          ["Care Management", "Enroll, track and bill chronic-care and remote-monitoring programs."],
-        ],
-        workflow: {
-          kpis: [["Open cases", "482"], ["Clean-claim rate", "94%"], ["Auto-drafted", "76%"]],
-          rows: [
-            ["PA-48213", "Prior authorization · duplicate flag", "hi", "VP"],
-            ["FWA-1187", "Payment integrity · suspect billing", "md", "AC"],
-            ["CM-3390", "Care management · enrollment review", "lo", "JR"],
-          ],
-        },
-      },
-      {
-        id: "provider",
-        name: "Provider",
-        useCases: [
-          ["Provider Revenue Cycle", "Lift clean-claim rates and recover the revenue you've earned."],
-          ["Post-Acute Care", "Run episodes and assessments cleanly and stay ahead of readmissions."],
-        ],
-        workflow: {
-          kpis: [["Open cases", "318"], ["Clean-claim rate", "91%"], ["Recovered revenue", "$640K"]],
-          rows: [
-            ["RCM-77021", "Denial · timely filing appeal", "hi", "DL"],
-            ["RCM-77088", "Underpayment · recovery review", "md", "NT"],
-            ["PAC-2201", "Post-acute episode · assessment due", "lo", "KM"],
-          ],
-        },
-      },
-      {
-        id: "pharmacy",
-        name: "Pharmacy & Life Sciences",
-        useCases: [
-          ["Pharmacy Benefits (PBM)", "Speed authorization turnaround while protecting safety and rebates."],
-          ["Pharmacovigilance", "Triage and assess adverse-event reports on the regulatory clock."],
-          ["Device Complaints", "Route and assess medical-device complaints toward an MDR call."],
-        ],
-        workflow: {
-          kpis: [["Open cases", "203"], ["PA turnaround", "−31%"], ["Safety signals triaged", "58"]],
-          rows: [
-            ["PBM-5510", "Prior auth · specialty drug", "hi", "SW"],
-            ["ICSR-9042", "Adverse event · causality review", "md", "RB"],
-            ["DEV-1187", "Device complaint · MDR assessment", "lo", "HP"],
-          ],
-        },
-      },
-    ],
-  },
-  {
-    id: "banking",
-    name: "Banking & Financial Services",
-    who: "Fraud, AML, disputes & lending",
-    icon: Landmark,
-    tag: "Monitor, adjudicate and file with a decision you can stand behind.",
-    headline: "Reach the filing, the dispute call and the credit decision — and prove how you got there.",
-    blurb:
-      "Route alerts and cases to the right specialist, cut false positives, and reach determinations a regulator can follow — every step logged with the evidence it stood on.",
-    outcomes: ["Fewer false positives", "Consistent filing decisions", "Regulator-ready trails"],
-    segments: [
-      {
-        id: "fraud-aml",
-        name: "Fraud & AML",
-        useCases: [
-          ["Financial Crime & AML", "Monitor transactions, screen sanctions and reach defensible filing decisions."],
-        ],
-        workflow: {
-          kpis: [["Open alerts", "318"], ["False positives", "−42%"], ["Filing SLA", "On track"]],
-          rows: [
-            ["AML-90142", "Structuring pattern · escalate", "hi", "MK"],
-            ["SAR-2207", "Suspicious activity · filing review", "md", "JB"],
-            ["SCR-8810", "Sanctions screening · auto-cleared", "lo", "RS"],
-          ],
-        },
-      },
-      {
-        id: "disputes",
-        name: "Disputes",
-        useCases: [
-          ["Card Disputes & Chargebacks", "Adjudicate disputes and representment with the evidence attached."],
-          ["Credit Bureau Disputes", "Investigate and resolve consumer disputes inside the regulatory clock."],
-        ],
-        workflow: {
-          kpis: [["Open disputes", "540"], ["Reg E SLA", "98%"], ["Recovery rate", "61%"]],
-          rows: [
-            ["DSP-33871", "Card dispute · evidence attached", "hi", "LT"],
-            ["CBK-1290", "Chargeback · representment drafted", "md", "FS"],
-            ["CBD-4471", "Credit bureau dispute · reinvestigation", "lo", "AN"],
-          ],
-        },
-      },
-      {
-        id: "lending",
-        name: "Lending",
-        useCases: [
-          ["Mortgage Loss Mitigation", "Work borrowers through options consistently and on time."],
-          ["Underwriting Intake", "Turn messy application packages into a clean, ranked decision."],
-        ],
-        workflow: {
-          kpis: [["Open applications", "276"], ["Time to decision", "−38%"], ["Loss mit. on track", "89%"]],
-          rows: [
-            ["UW-6621", "Underwriting · income verification", "hi", "TC"],
-            ["LM-3390", "Loss mitigation · options review", "md", "PV"],
-            ["UW-6688", "Underwriting · auto-ranked", "lo", "EG"],
-          ],
-        },
-      },
-    ],
-  },
-  {
-    id: "insurance",
-    name: "Insurance",
-    who: "P&C, specialty & warranty",
-    icon: Umbrella,
-    tag: "Triage and resolve claims across lines with a consistent, auditable call.",
-    headline: "Triage severity, catch leakage and settle — the same defensible way, every claim.",
-    blurb:
-      "Score severity on arrival, route each claim to the right desk, and settle with the coverage read and the reasoning captured — so outcomes hold up on review.",
-    outcomes: ["Less claims leakage", "Right-desk routing", "Consistent settlements"],
-    segments: [
-      {
-        id: "claims",
-        name: "Auto & Property Claims",
-        useCases: [
-          ["Auto & Trucking Claims", "Triage severity, spot leakage and route each claim to the right desk."],
-          ["Construction & Property", "Handle defect and property claims with the evidence in one place."],
-        ],
-        workflow: {
-          kpis: [["Open claims", "647"], ["Leakage caught", "$1.2M"], ["Right-desk routing", "98%"]],
-          rows: [
-            ["CLM-55210", "Auto claim · high severity", "hi", "DW"],
-            ["PROP-9021", "Construction claim · defect review", "md", "IK"],
-            ["CLM-55344", "Property claim · standard review", "lo", "BT"],
-          ],
-        },
-      },
-      {
-        id: "workers-comp",
-        name: "Workers' Compensation",
-        useCases: [
-          ["Workers' Compensation", "Manage claims and reserves with the reasoning captured end to end."],
-        ],
-        workflow: {
-          kpis: [["Open claims", "214"], ["Reserve accuracy", "92%"], ["Return-to-work", "+18%"]],
-          rows: [
-            ["WC-19042", "Workers' comp · reserve review", "hi", "NB"],
-            ["WC-19088", "Workers' comp · medical review", "md", "OL"],
-            ["WC-19110", "Workers' comp · closed, validated", "lo", "QF"],
-          ],
-        },
-      },
-      {
-        id: "warranty",
-        name: "Warranty",
-        useCases: [
-          ["Warranty Claims", "Validate coverage and settle warranty claims at scale."],
-        ],
-        workflow: {
-          kpis: [["Open claims", "389"], ["Validation rate", "96%"], ["Cycle time", "−27%"]],
-          rows: [
-            ["WAR-8821", "Warranty · coverage validated", "hi", "EK"],
-            ["WAR-8855", "Warranty · parts dispute", "md", "GC"],
-            ["WAR-8890", "Warranty · auto-approved", "lo", "ZM"],
-          ],
-        },
-      },
-    ],
-  },
-  {
-    id: "risk-ops",
-    name: "Risk, Trust & Operations",
-    who: "Back-office adjudication queues",
-    icon: Scale,
-    tag: "The judgment-heavy back-office queues, standardized and sped up.",
-    headline: "Standardize the judgment calls buried in operations — and clear the backlog.",
-    blurb:
-      "Invoice audit, screening, appeals and notices are all the same shape: read the evidence, apply the policy, decide. Datacern runs each as a governed queue your team can trust.",
-    outcomes: ["Shorter backlogs", "Policy applied consistently", "Every call defensible"],
-    segments: [
-      {
-        id: "invoice-vetting",
-        name: "Invoice & Vetting",
-        useCases: [
-          ["AP Invoice Audit", "Catch duplicate, non-compliant and over-billed invoices before they pay."],
-          ["Background & Seller Vetting", "Adjudicate screening and marketplace-vetting cases against policy."],
-        ],
-        workflow: {
-          kpis: [["Open cases", "890"], ["Duplicate billing caught", "$310K"], ["Backlog", "−58%"]],
-          rows: [
-            ["INV-40213", "Invoice audit · duplicate billing", "hi", "TS"],
-            ["SCR-9042", "Seller vetting · flagged pattern", "md", "GH"],
-            ["INV-40255", "Invoice audit · auto-cleared", "lo", "WD"],
-          ],
-        },
-      },
-      {
-        id: "trust-safety",
-        name: "Trust & Safety",
-        useCases: [
-          ["Trust & Safety Appeals", "Review enforcement appeals quickly and consistently."],
-        ],
-        workflow: {
-          kpis: [["Open appeals", "412"], ["Review SLA", "94%"], ["Consistency score", "99%"]],
-          rows: [
-            ["APP-2201", "Enforcement appeal · standard review", "hi", "CP"],
-            ["APP-2244", "Enforcement appeal · escalated", "md", "YB"],
-            ["APP-2290", "Enforcement appeal · upheld", "lo", "MR"],
-          ],
-        },
-      },
-      {
-        id: "tax-compliance",
-        name: "Tax & Compliance",
-        useCases: [
-          ["Tax Notice Resolution", "Classify notices, draft the response and track each to closure."],
-        ],
-        workflow: {
-          kpis: [["Open notices", "1,204"], ["Response SLA", "100%"], ["Auto-classified", "82%"]],
-          rows: [
-            ["TAX-7710", "Notice · deadline this week", "hi", "JL"],
-            ["TAX-7744", "Notice · response drafted", "md", "VK"],
-            ["TAX-7790", "Notice · closed", "lo", "SF"],
-          ],
-        },
-      },
-    ],
-  },
-] as const;
-
-/* The wider industry map — Datacern runs ANY judgment-heavy, data-driven decision
- * queue, not just the four flagship packs above. Each entry names the industry and
- * a representative decision it automates. Icon + name + example. */
-const MORE_INDUSTRIES: [React.ComponentType<{ className?: string }>, string, string][] = [
-  [HeartPulse, "Healthcare & Life Sciences", "Prior auth, claims, payment integrity"],
-  [Landmark, "Banking & Capital Markets", "AML alerts, disputes, credit decisions"],
-  [Umbrella, "Insurance", "Claim triage, leakage, settlements"],
-  [Building2, "Government & Public Sector", "Benefits, eligibility, case adjudication"],
-  [Factory, "Manufacturing & Industrial", "Quality dispositions, MRB, warranty"],
-  [ShoppingBag, "Retail & Consumer Goods", "Returns, chargebacks, seller vetting"],
-  [Zap, "Energy & Utilities", "Inspections, outage triage, safety cases"],
-  [Radio, "Telecom & Media", "Fraud, provisioning, content appeals"],
-  [Truck, "Transportation & Logistics", "Freight claims, safety, exceptions"],
-  [FlaskConical, "Pharma & Biotech", "Pharmacovigilance, device complaints"],
-  [CreditCard, "Fintech & Payments", "Onboarding/KYC, disputes, risk"],
-  [Home, "Real Estate & Mortgage", "Underwriting intake, loss mitigation"],
-  [Gavel, "Legal & Compliance", "Contract review, sanctions, filings"],
-  [GraduationCap, "Education", "Admissions, aid, integrity cases"],
-  [Plane, "Travel & Hospitality", "Refunds, chargebacks, fraud"],
-  [Car, "Automotive", "Warranty, recalls, defect claims"],
-  [Rocket, "Aerospace & Defense", "Nonconformance, compliance, audits"],
-  [Sprout, "Agriculture & Food", "Inspections, quality, traceability"],
-  [HardHat, "Construction & Engineering", "Defect claims, safety, change orders"],
-  [ShieldCheck, "Technology & Trust/Safety", "Abuse review, appeals, moderation"],
-];
-
-const TRUST = [
-  ["Your data stays yours", "Cleanly isolated for your organization — never mingled, never shared."],
-  ["Least-privilege access", "Everyone sees and does exactly what their role allows, and nothing more."],
-  ["A second set of eyes", "The changes that matter most require another reviewer to sign off before they go live."],
-  ["A tamper-evident trail", "Who decided what, when, and on what evidence — captured for every action, ready for any review."],
-] as const;
-
-/* Category comparison — the boundary a BI vendor cannot cross. The separating
- * question is deliberately concrete: "show me the record of ONE decision — who
- * proposed it, who approved it, what evidence they saw, what changed in the
- * source system." A dashboard tool holds data ABOUT the business; this holds
- * the action and its approver. cols map to [dimension, BI, models, Datacern]. */
-const COMPARE_COLS = ["Traditional BI", "AI / ML models", "Approved actions"] as const;
-const COMPARE: [string, string, string, string][] = [
-  ["What it delivers", "Dashboards & reports", "Predictions & scores", "A governed decision + its reasoning"],
-  ["Unit of work", "A metric or a chart", "A model output", "A case, handled end to end"],
-  ["Who acts on it", "An analyst reads, then acts by hand", "A person interprets the score", "Agents draft, your expert approves, the action is taken"],
-  ["Evidence & audit", "Numbers, no per-decision trail", "Often a black box", "Every decision has evidence, an owner and a trail"],
-  ["Governance", "Access control", "Model governance (sometimes)", "Four-eyes, row-level isolation, policy-as-code, immutable audit"],
-  ["Learning loop", "Static until rebuilt", "Retrained offline", "Every human correction trains the next model"],
-  ["Consistency", "Depends on the analyst", "Consistent scores", "Consistent, policy-driven determinations"],
-  ["Time to value", "Build the dashboards", "Build & train the models", "Install a solution pack for the decision"],
-];
-
-const FAQ = [
-  ["What does Datacern actually do?",
-    "It works your regulated back-office queues — disputes, claims, alerts, invoices — and keeps a named person accountable for every outcome. Agents read the case, apply your rules and draft the recommendation with its evidence. A person approves it, someone other than the requester signs anything sensitive, and the whole chain is recorded. Ask any vendor for the complete record of one decision — who proposed it, who approved it, what evidence they saw, what changed in the source system. That record is what this platform is built to produce."],
-  ["What exactly is “agentic AI”?",
-    "A chatbot answers a question; a model returns a score. An agentic AI takes on multi-step work: it reads the evidence, checks it against your rules, uses tools to gather what it needs, and drafts a decision or action — then hands it to a person to approve. Datacern runs a team of these specialist agents (triage, analytics, governance and more), each scoped to what it's allowed to see and do. They propose; they never act on their own."],
-  ["How is this different from BI or analytics?",
-    "BI tells you what happened and leaves the decision to you. Datacern is built around the decision itself: it reads the case, drafts the call with cited evidence, records who decided and why, and learns from every correction — end to end, under governance. Dashboards are one capability inside it, not the point."],
-  ["How is it different from just using an LLM or an ML model?",
-    "An LLM or model gives you an output; you still have to ground it, govern it, route the work, capture the audit trail and close the loop. Datacern is that surrounding system — grounding on your governed data, four-eyes approval, immutable audit, and a correction-to-retrain loop — with the models plugged in where they help."],
-  ["Does the AI ever act on its own?",
-    "No. Agents draft recommendations and the assistant proposes changes, but a person approves, adjusts or rejects every outcome. Sensitive changes require a second reviewer (four-eyes) before they go live."],
-  ["Do the agents replace my team?",
-    "No — they do the reading and drafting so your experts spend their time on judgment, not busywork. People stay accountable for every determination; the routine gets automated and the hard calls get more attention."],
-  ["How do you prevent hallucinations and wrong decisions?",
-    "Answers and drafts are grounded in your governed data and cite the evidence they used. Nothing is a silent write — every decision is gated by a human, sensitive ones by a second reviewer. Models are evaluated against your benchmarks before they're ever promoted, and every action is logged for review."],
-  ["Is our data secure and compliant?",
-    "Your data is cleanly isolated for your organization (row-level security), everyone operates under least-privilege access, the changes that matter need a second set of eyes, and every action lands in a tamper-evident trail. You can bring your own identity provider, secrets store and cloud."],
-  ["Will it work with our existing data, models and stack?",
-    "Bring data as files or from your sources; it's profiled on arrival and queryable quickly. Define metrics and models on top, or plug in models you already own — you keep your system of record."],
-  ["How quickly can we get value?",
-    "Start from a solution pack shaped for your domain — the data model, metrics, work queues and expertise already in place — instead of a blank slate. New verticals install onto the same governed core."],
-  ["How do you keep AI costs from spiraling?",
-    "Work is routed across model tiers, and repetitive decisions migrate onto smaller models you own — so scaling volume doesn't mean scaling the bill."],
-];
 
 /* ------------------------------------------------------------------ */
 /* small illustrative product mocks (divs, not screenshots)            */
@@ -679,18 +279,16 @@ function CapVisual({ k }: { k: string }) {
 
 /* shared case-row mockup: risk tag + human-reviewer avatar chip, reused by
  * both the "worklist" capability tab and each industry spotlight's
- * "In your workflow" panel. Rows are clearly illustrative placeholder data
- * (Rule #1 — no invented stats presented as real). */
-type WfRow = readonly [id: string, desc: string, tag: "hi" | "md" | "lo", initials: string];
-
-const TAG_LABEL: Record<WfRow[2], string> = { hi: "High", md: "Med", lo: "Low" };
-const TAG_CLASS: Record<WfRow[2], string> = {
+ * "In your workflow" panel. Rows come from config and are clearly illustrative
+ * placeholder data (Rule #1 — no invented stats presented as real). */
+const TAG_LABEL: Record<WelcomeWfRow[2], string> = { hi: "High", md: "Med", lo: "Low" };
+const TAG_CLASS: Record<WelcomeWfRow[2], string> = {
   hi: "bg-red-500/12 text-red-700 dark:text-red-400",
   md: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   lo: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
 };
 
-function WfRowItem({ row }: { row: WfRow }) {
+function WfRowItem({ row }: { row: WelcomeWfRow }) {
   const [id, desc, tag, initials] = row;
   return (
     <div className="flex items-center gap-2.5 rounded-lg border border-border/70 bg-background/60 px-2.5 py-2 transition-transform hover:translate-x-0.5">
@@ -705,7 +303,7 @@ function WfRowItem({ row }: { row: WfRow }) {
 }
 
 function WorklistRows() {
-  const rows: WfRow[] = [
+  const rows: WelcomeWfRow[] = [
     ["#48213", "Prior auth · duplicate flag", "hi", "VP"],
     ["#48219", "Appeal · missing docs", "md", "AC"],
     ["#48224", "Claim · ready to pay", "lo", "JR"],
@@ -724,7 +322,7 @@ function WorklistRows() {
  * real sub-verticals a buyer actually navigates by (e.g. Healthcare's Payer
  * vs. Provider vs. Pharmacy teams run different queues) — so this is the
  * primary intra-industry navigation, not decoration. */
-function IndustryShipsCard({ ind }: { ind: (typeof INDUSTRIES)[number] }) {
+function IndustryShipsCard({ ind }: { ind: WelcomeIndustry }) {
   const [segIdx, setSegIdx] = useState(0);
   const [view, setView] = useState<"solutions" | "workflow">("solutions");
   const seg = ind.segments[segIdx];
@@ -762,7 +360,7 @@ function IndustryShipsCard({ ind }: { ind: (typeof INDUSTRIES)[number] }) {
               : "border-border/70 text-muted-foreground hover:border-primary/30"
           }`}
         >
-          Solutions that ship
+          {C.spotlights.solutionsTab}
         </button>
         <button
           type="button"
@@ -774,7 +372,7 @@ function IndustryShipsCard({ ind }: { ind: (typeof INDUSTRIES)[number] }) {
           }`}
         >
           <Users className="size-3.5" />
-          In your workflow
+          {C.spotlights.workflowTab}
         </button>
       </div>
 
@@ -797,7 +395,7 @@ function IndustryShipsCard({ ind }: { ind: (typeof INDUSTRIES)[number] }) {
           {/* Rule #1: the stat tiles below are a product mock, and the rendered
            * page must say so — not just this comment. */}
           <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Illustrative product mock — not customer data
+            {C.spotlights.mockLabel}
           </div>
           <div className="grid grid-cols-3 gap-2">
             {seg.workflow.kpis.map(([label, value]) => (
@@ -814,7 +412,7 @@ function IndustryShipsCard({ ind }: { ind: (typeof INDUSTRIES)[number] }) {
           </div>
           <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
             <Check className="size-3.5 shrink-0 text-primary" />
-            Reviewed and approved by your team — logged automatically
+            {C.spotlights.reviewNote}
           </div>
         </div>
       )}
@@ -834,11 +432,11 @@ export default function WelcomeContent() {
   useEffect(() => {
     if (!auto) return;
     // eslint-disable-next-line no-restricted-syntax -- decorative tab carousel on the pre-login marketing page; not data polling (UI-FR-012 targets SSE-vs-poll for live data)
-    const t = setInterval(() => setTab((v) => (v + 1) % CAPS.length), 4200);
+    const t = setInterval(() => setTab((v) => (v + 1) % C.caps.length), 4200);
     return () => clearInterval(t);
   }, [auto]);
 
-  const Cap = CAPS[tab];
+  const Cap = C.caps[tab];
 
   return (
     <main id="main" className="relative isolate min-h-screen bg-background text-foreground">
@@ -856,27 +454,29 @@ export default function WelcomeContent() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
             <DatacernLogo className="size-8" />
-            <span className="text-lg font-bold tracking-tight">Datacern AI</span>
+            <span className="text-lg font-bold tracking-tight">{MARKETING_SHELL.product}</span>
           </div>
           <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
-            <Link href="/solutions" className="transition-colors hover:text-foreground">Solutions</Link>
-            <a href="#industries" className="transition-colors hover:text-foreground">Industries</a>
-            <a href="#capabilities" className="transition-colors hover:text-foreground">Platform</a>
-            <a href="#difference" className="transition-colors hover:text-foreground">Why not BI</a>
-            <a href="#how" className="transition-colors hover:text-foreground">How it works</a>
-            <a href="#architecture" className="transition-colors hover:text-foreground">Architecture</a>
-            <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
-            <Link href="/security" className="transition-colors hover:text-foreground">Security</Link>
-            <Link href="/pricing" className="transition-colors hover:text-foreground">Pricing</Link>
+            {C.header.anchors.map((n) =>
+              n.href.startsWith("#") ? (
+                <a key={n.href} href={n.href} className="transition-colors hover:text-foreground">
+                  {n.label}
+                </a>
+              ) : (
+                <Link key={n.href} href={n.href} className="transition-colors hover:text-foreground">
+                  {n.label}
+                </Link>
+              ),
+            )}
           </nav>
           <div className="flex items-center gap-4">
             <Link
               href="/login"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
-              Sign in
+              {C.header.signIn}
             </Link>
-            <Button onClick={() => setDemoOpen(true)}>Request a demo</Button>
+            <Button onClick={() => setDemoOpen(true)}>{C.header.demoCta}</Button>
           </div>
         </div>
       </header>
@@ -888,52 +488,43 @@ export default function WelcomeContent() {
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
               <Sparkles className="size-3.5" />
-              Governed AI for regulated operations
+              {C.hero.eyebrow}
             </span>
             <h1 className="wr-glowtext mt-6 text-balance text-4xl font-bold leading-[1.03] tracking-tight md:text-6xl">
-              AI does the work.
+              {C.hero.headline.line1}
               <br />
-              A named human{" "}
-              <span className="wr-grad bg-clip-text text-transparent">signs it.</span>
+              {C.hero.headline.line2Lead}
+              <span className="wr-grad bg-clip-text text-transparent">{C.hero.headline.line2Accent}</span>
             </h1>
             <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
-              Point Datacern at the data behind your regulated back-office work — card disputes,
-              health claims, financial-crime alerts, insurance losses, supplier invoices. Write one
-              intake rule and matching rows become a worklist on their own. Your team works that
-              queue with an agent drafting the recommendation and its evidence; nothing takes effect
-              until a named person approves it, no one can approve their own work, and every action
-              leaves a receipt an examiner can follow.
+              {C.hero.sub}
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Button size="lg" onClick={() => setDemoOpen(true)}>
-                Request a demo <ArrowRight className="size-4" />
+                {C.header.demoCta} <ArrowRight className="size-4" />
               </Button>
               <Button asChild size="lg" variant="outline">
-                <a href="#industries">Explore by industry</a>
+                <a href={C.hero.ctaSecondary.href}>{C.hero.ctaSecondary.label}</a>
               </Button>
             </div>
-            <p className="mt-6 text-sm text-muted-foreground">
-              Governed end to end — every determination has evidence, an owner, and a trail.
-            </p>
+            <p className="mt-6 text-sm text-muted-foreground">{C.hero.assurance}</p>
             <p className="mt-3 text-sm">
               <Link
-                href="/live-demo"
+                href={C.hero.liveDemo.href}
                 className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
               >
-                Or start a live demo yourself right now <ArrowRight className="size-3.5" />
+                {C.hero.liveDemo.label} <ArrowRight className="size-3.5" />
               </Link>
-              <span className="ml-1.5 text-muted-foreground">— no sales call, no operator.</span>
+              <span className="ml-1.5 text-muted-foreground">{C.hero.liveDemo.note}</span>
             </p>
             <p className="mt-2 text-sm">
               <Link
-                href="/welcome/walkthrough"
+                href={C.hero.walkthrough.href}
                 className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
               >
-                See the walkthrough first <ArrowRight className="size-3.5" />
+                {C.hero.walkthrough.label} <ArrowRight className="size-3.5" />
               </Link>
-              <span className="ml-1.5 text-muted-foreground">
-                — one decision, end to end, in five steps.
-              </span>
+              <span className="ml-1.5 text-muted-foreground">{C.hero.walkthrough.note}</span>
             </p>
           </div>
           <div className="flex justify-center md:justify-end">
@@ -947,11 +538,11 @@ export default function WelcomeContent() {
             <div className="flex items-center gap-3">
               <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-primary">
                 <Sparkles className="size-3.5" />
-                Agentic AI at work
+                {C.agentsMarquee.eyebrow}
               </span>
               <div className="wr-marquee-wrap flex-1">
                 <div className="wr-marquee flex gap-2">
-                  {[...AGENTS, ...AGENTS].map(([name, role], i) => (
+                  {[...C.agentsMarquee.agents, ...C.agentsMarquee.agents].map(([name, role], i) => (
                     <span
                       key={i}
                       className="flex shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background px-3 py-1.5 text-xs"
@@ -973,24 +564,20 @@ export default function WelcomeContent() {
         <Reveal>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
             <Sparkles className="size-3.5" />
-            Solutions by industry
+            {C.industriesIntro.eyebrow}
           </span>
           <h2 className="mt-5 text-balance text-3xl font-bold tracking-tight md:text-4xl">
-            Decision intelligence for every industry
+            {C.industriesIntro.title}
           </h2>
-          <p className="mt-3 max-w-2xl text-muted-foreground">
-            If a team reads evidence, applies a policy and makes a call — at volume and under scrutiny —
-            Datacern runs it. Four domains ship deep today; the same governed platform adapts to any
-            data-driven decision queue.
-          </p>
+          <p className="mt-3 max-w-2xl text-muted-foreground">{C.industriesIntro.sub}</p>
         </Reveal>
 
         <div className="mt-9 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Flagship solutions — built deep
+          {C.industriesIntro.flagshipLabel}
         </div>
         <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          {INDUSTRIES.map((ind, i) => {
-            const Icon = ind.icon;
+          {C.industries.map((ind, i) => {
+            const Icon = INDUSTRY_ICONS[ind.id] ?? Building2;
             return (
               <Reveal key={ind.id} delay={(i % 2) * 80}>
                 <a
@@ -1020,47 +607,31 @@ export default function WelcomeContent() {
           })}
         </div>
 
-        {/* the wider industry map — Datacern runs any data-driven decision */}
+        {/* breadth beyond the flagships — deliberately NOT an industry grid;
+         * the full industry-grouped catalog lives on /solutions (generated
+         * from pack manifests), so this page only states the boundary and
+         * hands off. Avoids duplicating the catalog's content here. */}
         <div className="mt-14">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h3 className="text-xl font-bold tracking-tight">…and any other decision that runs on data</h3>
-            <span className="text-sm text-muted-foreground">Same platform · same governance</span>
+            <h3 className="text-xl font-bold tracking-tight">{C.moreIndustries.title}</h3>
+            <span className="text-sm text-muted-foreground">{C.moreIndustries.note}</span>
           </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {MORE_INDUSTRIES.map(([Icon, name, ex], i) => (
-              <Reveal key={name} delay={(i % 4) * 40}>
-                <div className="group flex h-full items-start gap-3 rounded-xl wr-glass wr-ring p-3.5 transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_50px_-30px_hsl(var(--primary)/0.6)]">
-                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                    <Icon className="size-4" />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold leading-tight">{name}</div>
-                    <div className="mt-0.5 text-xs leading-snug text-muted-foreground">{ex}</div>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-          <p className="mt-7 max-w-2xl text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">Don&apos;t see yours?</span> Datacern isn&apos;t
-            built around an industry — it&apos;s built around the decision. New verticals install as
-            capability packs onto the same core, so any judgment-heavy queue is a fit.
+          <p className="mt-4 max-w-2xl text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{C.moreIndustries.dontSee.lead}</span>
+            {C.moreIndustries.dontSee.body}
           </p>
           {/* the pack catalog CTA — the count is generated from the shipped
            * pack manifests (packs.gen.ts), so this headline cannot drift. */}
           <div className="mt-8 flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/25 bg-primary/[0.04] p-6 sm:flex-row sm:items-center">
             <div>
               <div className="text-lg font-bold tracking-tight">
-                {SOLUTION_PACK_COUNT} installable solution packs — and counting
+                {C.catalogCta.headline.replace("{count}", String(SOLUTION_PACK_COUNT))}
               </div>
-              <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-                Every queue above ships as a pack: intake rules, dispositions, regulatory
-                grounding, dashboards and roles — installed onto the same governed engine.
-              </p>
+              <p className="mt-1 max-w-xl text-sm text-muted-foreground">{C.catalogCta.body}</p>
             </div>
             <Button asChild size="lg" className="shrink-0">
-              <Link href="/solutions">
-                Browse the catalog <ArrowRight className="size-4" />
+              <Link href={C.catalogCta.action.href}>
+                {C.catalogCta.action.label} <ArrowRight className="size-4" />
               </Link>
             </Button>
           </div>
@@ -1072,23 +643,19 @@ export default function WelcomeContent() {
         <Reveal>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
             <Cpu className="size-3.5" />
-            One platform under every industry
+            {C.capabilitiesIntro.eyebrow}
           </span>
           <h2 className="mt-5 text-balance text-3xl font-bold tracking-tight md:text-4xl">
-            Every solution runs on the same AI operation.
+            {C.capabilitiesIntro.title}
           </h2>
-          <p className="mt-3 max-w-2xl text-muted-foreground">
-            The industry packs above aren&apos;t separate products — they&apos;re the same coordinated set
-            of AI capabilities that read, reason, decide and learn, with governance running through all
-            of it. Learn the platform once; reuse it in every queue.
-          </p>
+          <p className="mt-3 max-w-2xl text-muted-foreground">{C.capabilitiesIntro.sub}</p>
         </Reveal>
 
         <div className="mt-10 grid gap-8 lg:grid-cols-[1.1fr_1fr]">
           {/* tab list */}
           <div className="grid gap-2.5 sm:grid-cols-2">
-            {CAPS.map((c, i) => {
-              const Icon = c.icon;
+            {C.caps.map((c, i) => {
+              const Icon = CAP_ICONS[c.key];
               const active = i === tab;
               return (
                 <button
@@ -1146,7 +713,7 @@ export default function WelcomeContent() {
 
         {/* progress dots */}
         <div className="mt-6 flex items-center justify-center gap-1.5">
-          {CAPS.map((c, i) => (
+          {C.caps.map((c, i) => (
             <button
               key={c.key}
               aria-label={c.title}
@@ -1166,15 +733,12 @@ export default function WelcomeContent() {
           <Reveal>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
               <Sparkles className="size-3.5" />
-              Where the work actually lands
+              {C.compare.eyebrow}
             </span>
             <h2 className="mt-5 text-balance text-3xl font-bold tracking-tight md:text-4xl">
-              A different category from BI and AI
+              {C.compare.title}
             </h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">
-              Business intelligence tells you what happened. AI models predict what might. Decision
-              intelligence makes the call — governed, evidenced and accountable — and learns from every one.
-            </p>
+            <p className="mt-3 max-w-2xl text-muted-foreground">{C.compare.sub}</p>
           </Reveal>
 
           <Reveal delay={80}>
@@ -1183,10 +747,10 @@ export default function WelcomeContent() {
                 <thead>
                   <tr>
                     <th className="w-[22%] px-4 pb-4 align-bottom text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      By this measure
+                      {C.compare.dimensionLabel}
                     </th>
-                    {COMPARE_COLS.map((c, i) => {
-                      const di = i === COMPARE_COLS.length - 1;
+                    {C.compare.cols.map((c, i) => {
+                      const di = i === C.compare.cols.length - 1;
                       return (
                         <th
                           key={c}
@@ -1200,7 +764,7 @@ export default function WelcomeContent() {
                           </span>
                           {di && (
                             <span className="mt-0.5 block text-xs font-medium normal-case tracking-normal text-primary/80">
-                              Approved actions
+                              {C.compare.datacernSubtitle}
                             </span>
                           )}
                         </th>
@@ -1209,8 +773,8 @@ export default function WelcomeContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {COMPARE.map(([dim, bi, ai, di], r) => {
-                    const last = r === COMPARE.length - 1;
+                  {C.compare.rows.map(([dim, bi, ai, di], r) => {
+                    const last = r === C.compare.rows.length - 1;
                     return (
                       <tr key={dim}>
                         <td className="border-t border-border/60 px-4 py-4 font-semibold text-foreground">{dim}</td>
@@ -1234,10 +798,7 @@ export default function WelcomeContent() {
             </div>
           </Reveal>
 
-          <p className="mt-5 max-w-2xl text-sm text-muted-foreground">
-            Keep your dashboards and your models — Datacern adds a governed decision layer on top, so the
-            insight actually becomes an auditable action.
-          </p>
+          <p className="mt-5 max-w-2xl text-sm text-muted-foreground">{C.compare.note}</p>
         </div>
       </section>
 
@@ -1245,11 +806,8 @@ export default function WelcomeContent() {
       <section id="how" className="border-t border-border/60 bg-card/50">
         <div className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
           <Reveal>
-            <h2 className="text-3xl font-bold tracking-tight">How every decision flows</h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">
-              A loop, not a pipeline — the work moves quickly, the accountability never leaves your
-              people, and every decision makes the next one better.
-            </p>
+            <h2 className="text-3xl font-bold tracking-tight">{C.how.title}</h2>
+            <p className="mt-3 max-w-2xl text-muted-foreground">{C.how.sub}</p>
           </Reveal>
           <Reveal delay={90}>
             <div className="mt-10">
@@ -1257,8 +815,8 @@ export default function WelcomeContent() {
             </div>
           </Reveal>
           <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="text-sm font-medium text-foreground">What changes for your team:</span>
-            {["Shorter backlogs", "Consistent determinations", "Confident audits", "Lower cost per decision", "Experts on judgment, not busywork"].map((o) => (
+            <span className="text-sm font-medium text-foreground">{C.how.outcomesLabel}</span>
+            {C.how.outcomes.map((o) => (
               <span key={o} className="rounded-full border border-border/70 bg-card px-3 py-1 text-xs text-muted-foreground">
                 {o}
               </span>
@@ -1271,13 +829,8 @@ export default function WelcomeContent() {
       <section id="architecture" className="border-t border-border/60">
         <div className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
           <Reveal>
-            <h2 className="text-3xl font-bold tracking-tight">Under the hood, on your cloud</h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">
-              Twenty-three services in five planes over an all-open-source backbone — and one
-              Terraform + Helm path each for AWS, Google Cloud and Azure, shipped in the same
-              repository as the platform. The diagrams below are generated from that code, not
-              drawn from ambition.
-            </p>
+            <h2 className="text-3xl font-bold tracking-tight">{C.architecture.title}</h2>
+            <p className="mt-3 max-w-2xl text-muted-foreground">{C.architecture.sub}</p>
           </Reveal>
           <Reveal delay={90}>
             <div className="mt-10">
@@ -1289,8 +842,8 @@ export default function WelcomeContent() {
 
       {/* per-industry spotlights */}
       <div id="solutions">
-        {INDUSTRIES.map((ind, idx) => {
-          const Icon = ind.icon;
+        {C.industries.map((ind, idx) => {
+          const Icon = INDUSTRY_ICONS[ind.id] ?? Building2;
           const alt = idx % 2 === 1;
           return (
             <section
@@ -1326,7 +879,7 @@ export default function WelcomeContent() {
                     ))}
                   </div>
                   <Button variant="outline" className="mt-7" onClick={() => setDemoOpen(true)}>
-                    Request a demo <ArrowRight className="size-4" />
+                    {C.header.demoCta} <ArrowRight className="size-4" />
                   </Button>
                 </Reveal>
 
@@ -1340,8 +893,8 @@ export default function WelcomeContent() {
         })}
         <div className="border-t border-border/60">
           <p className="mx-auto max-w-2xl px-6 py-12 text-center text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">…and your operation next.</span> New solutions
-            install onto the same governed platform — your teams learn the tool once and reuse it everywhere.
+            <span className="font-medium text-foreground">{C.spotlights.outro.lead}</span>
+            {C.spotlights.outro.body}
           </p>
         </div>
       </div>
@@ -1352,16 +905,13 @@ export default function WelcomeContent() {
           <Reveal>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
               <ShieldCheck className="size-3.5" />
-              Built for scrutiny
+              {C.trust.eyebrow}
             </span>
-            <h2 className="mt-5 text-3xl font-bold tracking-tight">Governance isn&apos;t a feature. It&apos;s the foundation.</h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">
-              The controls a regulated buyer needs are how the whole thing works — so security and
-              compliance are on your side from day one.
-            </p>
+            <h2 className="mt-5 text-3xl font-bold tracking-tight">{C.trust.title}</h2>
+            <p className="mt-3 max-w-2xl text-muted-foreground">{C.trust.sub}</p>
           </Reveal>
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {TRUST.map(([title, body], i) => (
+            {C.trust.items.map(([title, body], i) => (
               <Reveal key={title} delay={i * 70}>
                 <div>
                   <h3 className="text-sm font-semibold">{title}</h3>
@@ -1370,14 +920,23 @@ export default function WelcomeContent() {
               </Reveal>
             ))}
           </div>
+          {/* the mechanisms live on /security — link, don't repeat them here */}
+          <p className="mt-8 text-sm">
+            <Link
+              href={C.trust.more.href}
+              className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+            >
+              {C.trust.more.label} <ArrowRight className="size-3.5" />
+            </Link>
+          </p>
         </div>
       </section>
 
       {/* faq */}
       <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-6 py-20">
-        <h2 className="text-center text-3xl font-bold tracking-tight">Questions, answered</h2>
+        <h2 className="text-center text-3xl font-bold tracking-tight">{C.faq.title}</h2>
         <div className="wr-glass wr-ring mt-8 divide-y divide-border/60 rounded-2xl">
-          {FAQ.map(([q, a], i) => {
+          {C.faq.items.map(([q, a], i) => {
             const open = faq === i;
             return (
               <div key={q}>
@@ -1406,22 +965,19 @@ export default function WelcomeContent() {
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-6 py-24 text-center">
           <DatacernLogo className="size-12 drop-shadow-[0_0_28px_hsl(var(--primary)/0.6)]" />
           <h2 className="text-balance text-3xl font-bold tracking-tight md:text-4xl">
-            Many directions. One confident, auditable bearing.
+            {C.closingCta.title}
           </h2>
-          <p className="max-w-xl text-pretty text-muted-foreground">
-            Put an AI operation to work on the calls that matter — with your experts in command and a
-            record that speaks for itself when anyone asks.
-          </p>
+          <p className="max-w-xl text-pretty text-muted-foreground">{C.closingCta.body}</p>
           <Button size="lg" className="mt-2" onClick={() => setDemoOpen(true)}>
-            Request a demo <ArrowRight className="size-4" />
+            {C.header.demoCta} <ArrowRight className="size-4" />
           </Button>
         </div>
       </section>
 
       <footer className="border-t border-border/60">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-6 py-6 text-xs text-muted-foreground sm:flex-row">
-          <span>Datacern AI — governed AI for regulated operations</span>
-          <span>AI proposes. A named person approves. The platform remembers.</span>
+          <span>{MARKETING_SHELL.footer.left}</span>
+          <span>{MARKETING_SHELL.footer.right}</span>
         </div>
       </footer>
 
@@ -1458,6 +1014,7 @@ const Field = forwardRef<
 });
 
 function DemoDialog({ onClose }: { onClose: () => void }) {
+  const D = C.demoDialog;
   const [state, setState] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [err, setErr] = useState("");
   const [bad, setBad] = useState<string[]>([]);
@@ -1499,14 +1056,10 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
         return;
       }
       setBad(Array.isArray(json.fields) ? json.fields : []);
-      setErr(
-        json.error === "validation"
-          ? "Please check the highlighted fields."
-          : "Something went wrong. Please try again.",
-      );
+      setErr(json.error === "validation" ? D.errors.validation : D.errors.generic);
       setState("error");
     } catch {
-      setErr("Couldn't reach the server. Please try again.");
+      setErr(D.errors.network);
       setState("error");
     }
   }
@@ -1516,7 +1069,7 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Request a demo"
+      aria-label={D.title}
     >
       <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={onClose} />
       <div className="wr-swap relative w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
@@ -1533,20 +1086,16 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Check className="size-6" />
             </div>
-            <h3 className="mt-4 text-lg font-bold tracking-tight">Thanks — we&apos;ll be in touch.</h3>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Your request is in. Someone from our team will reach out to set up your demo.
-            </p>
+            <h3 className="mt-4 text-lg font-bold tracking-tight">{D.done.title}</h3>
+            <p className="mt-1.5 text-sm text-muted-foreground">{D.done.body}</p>
             <Button className="mt-5" onClick={onClose}>
-              Close
+              {D.done.close}
             </Button>
           </div>
         ) : (
           <>
-            <h3 className="text-lg font-bold tracking-tight">Request a demo</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              See Datacern AI on your kind of decisions. Tell us a little about you.
-            </p>
+            <h3 className="text-lg font-bold tracking-tight">{D.title}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{D.sub}</p>
             <form onSubmit={onSubmit} className="mt-5 space-y-3.5">
               {/* honeypot — hidden from real users; bots fill it */}
               <input
@@ -1557,12 +1106,12 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
                 aria-hidden="true"
                 className="hidden"
               />
-              <Field label="Full name" name="name" autoComplete="name" ref={firstRef} bad={bad.includes("name")} />
-              <Field label="Work email" name="email" type="email" autoComplete="email" bad={bad.includes("email")} />
-              <Field label="Company" name="company" autoComplete="organization" bad={bad.includes("company")} />
+              <Field label={D.fields.name} name="name" autoComplete="name" ref={firstRef} bad={bad.includes("name")} />
+              <Field label={D.fields.email} name="email" type="email" autoComplete="email" bad={bad.includes("email")} />
+              <Field label={D.fields.company} name="company" autoComplete="organization" bad={bad.includes("company")} />
               <div>
                 <label htmlFor="teamSize" className="text-xs font-medium">
-                  Team size <span className="text-muted-foreground">(optional)</span>
+                  {D.fields.teamSize} <span className="text-muted-foreground">{D.fields.optional}</span>
                 </label>
                 <select
                   id="teamSize"
@@ -1570,16 +1119,15 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
                   defaultValue=""
                   className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
                 >
-                  <option value="">Select…</option>
-                  <option>1–10</option>
-                  <option>11–50</option>
-                  <option>51–200</option>
-                  <option>200+</option>
+                  <option value="">{D.fields.selectPlaceholder}</option>
+                  {D.fields.teamSizeOptions.map((o) => (
+                    <option key={o}>{o}</option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label htmlFor="message" className="text-xs font-medium">
-                  What are you looking to solve? <span className="text-muted-foreground">(optional)</span>
+                  {D.fields.message} <span className="text-muted-foreground">{D.fields.optional}</span>
                 </label>
                 <textarea
                   id="message"
@@ -1590,11 +1138,9 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
               </div>
               {err && <p className="text-sm text-destructive">{err}</p>}
               <Button type="submit" className="w-full" disabled={state === "submitting"}>
-                {state === "submitting" ? "Sending…" : "Request a demo"}
+                {state === "submitting" ? D.submitting : D.submit}
               </Button>
-              <p className="text-center text-[11px] text-muted-foreground">
-                We&apos;ll only use your details to arrange your demo.
-              </p>
+              <p className="text-center text-[11px] text-muted-foreground">{D.privacy}</p>
             </form>
           </>
         )}

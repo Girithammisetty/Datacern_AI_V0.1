@@ -113,7 +113,7 @@ const PLATFORM_ROUTES = [
 const PUBLIC_ROUTES = [
   { path: "/welcome", service: "marketing home" },
   { path: "/welcome/walkthrough", service: "demo walkthrough" },
-  { path: "/pricing", service: "pricing + cost calculator" },
+  { path: "/pricing", service: "pricing (contact-first, no public rates)" },
   { path: "/live-demo", service: "live-demo signup" },
   { path: "/solutions", service: "solutions catalog (generated from pack manifests)" },
   { path: "/security", service: "security & governance" },
