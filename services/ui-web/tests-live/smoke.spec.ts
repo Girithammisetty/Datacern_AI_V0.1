@@ -168,6 +168,19 @@ test.describe("smoke: public pages serve without a session", () => {
       await expect(page.getByRole("heading").first()).toBeVisible();
     });
   }
+
+  // The marketing pages embed static assets (the generated architecture SVGs)
+  // that must ALSO be excluded from the auth middleware — an unlisted asset
+  // 307s to /login and renders as a broken image on /welcome. Regression
+  // guard for the matcher in src/middleware.ts.
+  test("public static assets serve unauthenticated (architecture diagrams)", async ({ page }) => {
+    await logout(page);
+    const resp = await page.request.get("/architecture/layered-architecture.svg", {
+      maxRedirects: 0,
+    });
+    expect(resp.status(), "architecture SVG must not redirect to login").toBe(200);
+    expect(resp.headers()["content-type"] ?? "").toContain("svg");
+  });
 });
 
 test.describe("smoke: auth posture", () => {
