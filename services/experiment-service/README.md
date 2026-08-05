@@ -55,6 +55,7 @@ in-process tasks. The in-memory doubles are reachable only from unit tests.
 | Requirement | Code | Test |
 |---|---|---|
 | EXP-FR-001/002 experiment CRUD + archive/restore, sync MLflow create | `domain/services.py:ExperimentService`, `adapters/mlflow_client.py` | `unit/test_experiments_api.py`, `integration/test_real_mlflow_mirror.py` |
+| BRD 74 D3 text search (`GET /experiments?q=`, `GET /models?q=`) | `store/sql.py` `SqlExperimentRepo.list` / `SqlModelRepo.list_models` (`ILIKE … ESCAPE`), `utils.like_contains` | `unit/test_text_search.py` (11), `integration/test_text_search.py` (real SQL + RLS) |
 | EXP-FR-003/004 run create + status from pipeline events | `events/consumer.py`, `RunService.create_from_pipeline/transition_status`, `domain/state.py` | `unit/test_runs_mirror.py` (AC-1) |
 | EXP-FR-005/006 run mirror rows + hidden-param filtering + notes | `RunService.get_detail`, `domain/hidden.py` | `unit/test_runs_mirror.py` (BR-11) |
 | EXP-FR-010/011/012 webhook ingest + inbox applier + metric/param upsert | `api/routes/internal.py`, `MirrorService`, `store/sql.py:SqlRunRepo` | `unit/test_runs_mirror.py` (AC-4), live probe |

@@ -138,27 +138,35 @@ func (s *PG) GetDashboard(ctx context.Context, tenant, id uuid.UUID) (*domain.Da
 }
 
 // ListDashboards lists non-deleted dashboards for a workspace with filters +
-// keyset pagination (MASTER-FR-022).
-func (s *PG) ListDashboards(ctx context.Context, tenant, workspace uuid.UUID, module string, archived bool, tag string, limit int, after *uuid.UUID) ([]domain.Dashboard, error) {
+// keyset pagination (MASTER-FR-022). RLS scopes the statement to the tenant, so
+// a cross-tenant workspace_id simply matches nothing.
+func (s *PG) ListDashboards(ctx context.Context, tenant uuid.UUID, f domain.DashboardListFilter) ([]domain.Dashboard, error) {
 	var out []domain.Dashboard
 	err := s.withTenant(ctx, tenant, func(tx pgx.Tx) error {
 		q := strings.Builder{}
 		q.WriteString(`SELECT id,tenant_id,workspace_id,name,module,description,layout,meta,tags,owner_user_id,status,archived,archived_at,created_at,updated_at
 			FROM dashboards WHERE deleted_at IS NULL AND workspace_id=$1 AND archived=$2`)
-		args := []any{workspace, archived}
-		if module != "" {
-			args = append(args, module)
+		args := []any{f.WorkspaceID, f.Archived}
+		if f.Module != "" {
+			args = append(args, f.Module)
 			fmt.Fprintf(&q, " AND module=$%d", len(args))
 		}
-		if tag != "" {
-			args = append(args, tag)
+		if f.Tag != "" {
+			args = append(args, f.Tag)
 			fmt.Fprintf(&q, " AND $%d = ANY(tags)", len(args))
 		}
-		if after != nil {
-			args = append(args, *after)
+		// BRD 74 D3: server-side name/description search, so the caller never has
+		// to page the whole workspace and filter client-side.
+		if f.Q != "" {
+			args = append(args, LikePattern(f.Q))
+			n := len(args)
+			fmt.Fprintf(&q, ` AND (name ILIKE $%d ESCAPE '\' OR description ILIKE $%d ESCAPE '\')`, n, n)
+		}
+		if f.After != nil {
+			args = append(args, *f.After)
 			fmt.Fprintf(&q, " AND id > $%d", len(args))
 		}
-		args = append(args, limit)
+		args = append(args, f.Limit)
 		fmt.Fprintf(&q, " ORDER BY id ASC LIMIT $%d", len(args))
 		rows, err := tx.Query(ctx, q.String(), args...)
 		if err != nil {

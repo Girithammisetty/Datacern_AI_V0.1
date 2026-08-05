@@ -33,6 +33,7 @@ from app.domain.entities import (
     Transcript,
     new_uuid,
 )
+from app.store.paging import like_contains
 
 
 def make_engine(database_url: str):
@@ -340,11 +341,31 @@ class SqlStore:
                 {"id": model_id, "t": tenant_id})).mappings().first()
         return _decision_model(r) if r else None
 
-    async def list_decision_models(self, tenant_id: str) -> list:
+    async def list_decision_models(self, tenant_id: str, *, q: str | None = None,
+                                   limit: int | None = None,
+                                   after: tuple[str, int] | None = None) -> list:
+        """List decision tables, newest version of each name first.
+
+        BRD 74 D3 added `q` (a real `ILIKE … ESCAPE '\\'` over name +
+        dataset_urn) and keyset pagination. The sort key is `(name ASC, version
+        DESC)`, so the keyset predicate is the tuple comparison written out:
+        a strictly later name, or the same name at a lower version.
+        """
+        clauses = ["tenant_id=:t"]
+        params: dict = {"t": tenant_id}
+        if q:
+            clauses.append(r"(name ILIKE :q ESCAPE '\' OR dataset_urn ILIKE :q ESCAPE '\')")
+            params["q"] = like_contains(q)
+        if after is not None:
+            clauses.append("(name > :an OR (name = :an AND version < :av))")
+            params["an"], params["av"] = after[0], after[1]
+        sql = ("SELECT * FROM decision_models WHERE " + " AND ".join(clauses)
+               + " ORDER BY name, version DESC")
+        if limit is not None:
+            sql += " LIMIT :lim"
+            params["lim"] = limit
         async with self._plain() as s:
-            rows = (await s.execute(text(
-                "SELECT * FROM decision_models WHERE tenant_id=:t ORDER BY name, version DESC"),
-                {"t": tenant_id})).mappings().all()
+            rows = (await s.execute(text(sql), params)).mappings().all()
         return [_decision_model(r) for r in rows]
 
     async def list_decision_model_versions(self, tenant_id: str, name: str,

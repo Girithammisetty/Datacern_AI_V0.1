@@ -56,6 +56,21 @@ paths:
     get: { summary: Run status, security: [{ bearer: [] }], parameters: [{ name: run_id, in: path, required: true, schema: { type: string } }], responses: { "200": { description: run } } }
   /api/v1/runs/{run_id}/trace:
     get: { summary: Run trace (tool tree, reflections, citations), security: [{ bearer: [] }], parameters: [{ name: run_id, in: path, required: true, schema: { type: string } }], responses: { "200": { description: trace } } }
+  /api/v1/decision-models:
+    get:
+      summary: >
+        List decision tables (BRD 54), keyset-paged on (name ASC, version DESC).
+        `q` (BRD 74 D3) is a case-insensitive contains over name + dataset_urn,
+        applied in Postgres — before it, this route returned every table for the
+        tenant with no filter and no page. Requires case.disposition.read.
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        "200": { description: page of decision tables }
+        "422": { description: invalid cursor }
   /api/v1/proposals:
     get:
       summary: Approval inbox (paginated, scoped to approvable)

@@ -39,10 +39,16 @@ paths:
         "422": {description: pipeline-URN validation failed}
         "503": {description: MLflow unavailable (DEPENDENCY_UNAVAILABLE)}
     get:
-      summary: List experiments (cursor-paginated)
+      summary: "List experiments (cursor-paginated). q= is a case-insensitive contains over name + description (BRD 74 D3)."
+      parameters:
+        - {name: q, in: query, schema: {type: string, maxLength: 200}}
       responses: {"200": {description: ok}}
   /experiments/list_archived:
-    get: {summary: List archived experiments, responses: {"200": {description: ok}}}
+    get:
+      summary: "List archived experiments. q= as on /experiments (BRD 74 D3)."
+      parameters:
+        - {name: q, in: query, schema: {type: string, maxLength: 200}}
+      responses: {"200": {description: ok}}
   /experiments/{experiment_id}:
     get: {summary: Get experiment, responses: {"200": {description: ok}, "404": {description: not found}}}
     patch: {summary: Update name/description/note/tags, responses: {"200": {description: ok}}}
@@ -77,7 +83,11 @@ paths:
   /runs/{run_id}/artifacts/url:
     get: {summary: Short-lived signed artifact URL (EXP-FR-014), responses: {"200": {description: ok}, "404": {description: not found}}}
   /models:
-    get: {summary: "List registered models — EXP-FR-035. filter[stage]=production, filter[workspace_id], and filter[id] (comma-separated id set, IN, <=200, for bff dataloader batching). Tenant-scoped via RLS.", responses: {"200": {description: ok}, "422": {description: too many ids}}}
+    get:
+      summary: "List registered models — EXP-FR-035. filter[stage]=production, filter[workspace_id], and filter[id] (comma-separated id set, IN, <=200, for bff dataloader batching). q= is a case-insensitive contains over name + description (BRD 74 D3). Tenant-scoped via RLS."
+      parameters:
+        - {name: q, in: query, schema: {type: string, maxLength: 200}}
+      responses: {"200": {description: ok}, "422": {description: too many ids}}
   /models/{model_id}:
     get: {summary: Model + versions, responses: {"200": {description: ok}, "404": {description: not found}}}
   /models/{model_id}/versions/{version}:

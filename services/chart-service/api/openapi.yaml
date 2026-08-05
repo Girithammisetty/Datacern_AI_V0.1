@@ -27,9 +27,14 @@ paths:
         '409': { description: name conflict }
         '422': { description: validation }
     get:
-      summary: List dashboards (filter[module|archived|tag], sort=-updated_at)
+      summary: >
+        List dashboards (filter[module|archived|tag], sort=-updated_at). `q`
+        (BRD 74 D3) is a case-insensitive contains over name + description, so
+        a dashboard beyond the first page is findable without client-side
+        filtering. Tenant-scoped by RLS.
       parameters:
         - { name: workspace_id, in: query, required: true, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
         - { name: cursor, in: query, schema: { type: string } }
       responses: { '200': { description: page } }

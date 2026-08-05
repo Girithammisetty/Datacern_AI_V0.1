@@ -103,10 +103,21 @@ func (s *Server) handleListDashboards(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, err)
 		return
 	}
-	archived := q.Get("filter[archived]") == "true"
-	module := q.Get("filter[module]")
-	tag := q.Get("filter[tag]")
-	rows, err := s.Store.ListDashboards(r.Context(), tenant, wsID, module, archived, tag, page.Limit+1, after)
+	// `q` (BRD 74 D3) is a case-insensitive contains over the dashboard's own
+	// name + description. It exists so callers that need to FIND a dashboard —
+	// the ⌘K palette above all — can do it server-side instead of fetching a
+	// page and filtering in the browser, which silently hid every dashboard
+	// ranked below that page.
+	f := domain.DashboardListFilter{
+		WorkspaceID: wsID,
+		Q:           q.Get("q"),
+		Module:      q.Get("filter[module]"),
+		Tag:         q.Get("filter[tag]"),
+		Archived:    q.Get("filter[archived]") == "true",
+		Limit:       page.Limit + 1,
+		After:       after,
+	}
+	rows, err := s.Store.ListDashboards(r.Context(), tenant, f)
 	if err != nil {
 		writeErr(w, r, err)
 		return

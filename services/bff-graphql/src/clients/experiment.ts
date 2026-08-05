@@ -131,6 +131,8 @@ export interface PromotionRequestDTO {
 
 export interface ModelListParams {
   stage?: string;
+  /** BRD 74 D3 — case-insensitive contains over the model name + description. */
+  q?: string;
   limit: number;
   cursor?: string;
 }
@@ -259,8 +261,12 @@ export interface PromotionDTO {
 export class ExperimentClient {
   constructor(private readonly http: ServiceClient) {}
 
-  experiments(limit: number, cursor?: string): Promise<Page<ExperimentDTO>> {
-    return this.http.get<Page<ExperimentDTO>>("/api/v1/experiments", { query: { limit, cursor } });
+  /** `q` (BRD 74 D3) is experiment-service's own case-insensitive contains over
+   * the experiment name + description, applied in Postgres. */
+  experiments(limit: number, cursor?: string, q?: string): Promise<Page<ExperimentDTO>> {
+    return this.http.get<Page<ExperimentDTO>>("/api/v1/experiments", {
+      query: { q, limit, cursor },
+    });
   }
 
   /** GET /experiments/list_archived — a DEDICATED archived-only list route
@@ -353,7 +359,7 @@ export class ExperimentClient {
   /** GET /models — registered model headers (no versions), cursor-paginated. */
   models(p: ModelListParams): Promise<Page<RegistryModelDTO>> {
     return this.http.get<Page<RegistryModelDTO>>("/api/v1/models", {
-      query: { "filter[stage]": p.stage, limit: p.limit, cursor: p.cursor },
+      query: { "filter[stage]": p.stage, q: p.q, limit: p.limit, cursor: p.cursor },
     });
   }
 

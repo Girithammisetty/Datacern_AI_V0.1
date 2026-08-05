@@ -18,7 +18,7 @@ import type {
   CaseSchemaDTO, CaseFormDTO, CaseFormFieldDTO, QueueIntelligenceDTO,
 } from "../clients/case.js";
 import type {
-  DashboardDTO, ChartDTO, ChartTypeDTO, ChartShapedDataDTO,
+  DashboardDTO, ChartDTO, ChartTypeDTO, ChartShapedDataDTO, ChartSearchHitDTO,
   // Drilldown + export + portability + links (CHART-FR-005/015/040/041).
   ChartDrilldownDTO, ChartOperationDTO, ChartLinkDTO,
 } from "../clients/chart.js";
@@ -1201,6 +1201,24 @@ export function mapChart(ctx: GraphQLContext, d: ChartDTO) {
     config: d.config ?? null,
     displayMeta: d.display_meta ?? null,
     sources: d.sources ?? null,
+  };
+}
+
+/** Map one cross-dashboard chart-search hit (chart-service `chartSearchView`,
+ * BRD 74 D2) into the flat ChartSearchHit — chart identity plus the parent
+ * dashboard, and deliberately no `data` field (see the SDL note on N+1). */
+export function mapChartSearchHit(ctx: GraphQLContext, d: ChartSearchHitDTO) {
+  return {
+    __typename: "ChartSearchHit" as const,
+    id: d.id,
+    urn: urn(ctx, "chart", "chart", d.id),
+    name: d.name ?? null,
+    chartType: d.chart_type ?? null,
+    description: d.description ?? null,
+    dashboardId: d.dashboard_id ?? "",
+    dashboardName: d.dashboard_name ?? null,
+    dashboardModule: d.dashboard_module ?? null,
+    dashboardTags: d.dashboard_tags ?? [],
   };
 }
 

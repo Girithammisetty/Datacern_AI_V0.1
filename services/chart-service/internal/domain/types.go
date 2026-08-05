@@ -78,6 +78,23 @@ type Chart struct {
 	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
+// DashboardListFilter is the parameter set for GET /dashboards (BRD 74 D3).
+//
+// Q was added by the D3 fan-out increment: without it the ⌘K palette had to
+// fetch a page of dashboards and filter them in the browser, which made any
+// dashboard ranked below that page unfindable. Q matches the dashboard's own
+// name and description with a case-insensitive contains (see LikePattern);
+// Module/Tag/Archived are the pre-existing exact-match filters.
+type DashboardListFilter struct {
+	WorkspaceID uuid.UUID
+	Q           string
+	Module      string
+	Tag         string
+	Archived    bool
+	Limit       int
+	After       *uuid.UUID
+}
+
 // ChartSearchFilter is the parameter set for a cross-dashboard chart search
 // (BRD 74 D2). WorkspaceID is mandatory: `chart.chart.read` is a
 // workspace-scoped grant, so a search that spanned workspaces could not be

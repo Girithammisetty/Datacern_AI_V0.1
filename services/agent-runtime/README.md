@@ -131,6 +131,7 @@ Fakes exist only in `adapters/fakes.py` + `store/memory.py`, reachable only from
 | ART-FR-044 approver eligibility (OPA) + self-approval | ✅ | `proposals/service._check_eligibility`, `test_proposals.py` |
 | ART-FR-045 expiry/supersede | ✅ | `store.supersede_pending`, workflow expiry branch |
 | ART-FR-046 proposal events (rejection/diff) | ✅ | `events/ai_proposal.avsc`, `proposals/service._emit` |
+| BRD 74 D3 decision-table search + paging | ✅ | `api/routes/decisions.list_decision_models` (`q`, keyset cursor), `store/paging.py`, `test_decision_model_search.py` |
 | ART-FR-050 signed A2A cards | ✅ | `signing/cards.py`, `GET /a2a/cards/:key` |
 | ART-FR-051 meta-router delegation | ⚠️ partial | definition present; delegation semantics = follow-up |
 | ART-FR-060 publish eval gate | ✅ | `POST .../publish` (422 EVAL_GATE_FAILED), `test_api` (422 path via registry) |
