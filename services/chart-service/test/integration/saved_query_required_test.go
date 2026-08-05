@@ -21,6 +21,8 @@ func TestCreatingAMeasurelessChartWithoutASavedQueryIsRefused(t *testing.T) {
 	tok := h.token(t, tenant)
 	_, dashID, _ := h.seedChart(t, tenant, nil)
 
+	// grid WITHOUT measures, plus the heatmap family (whose "y" is a dimension,
+	// so cfg.Y can never populate).
 	for _, ct := range []string{"grid_chart", "heatmap_chart", "sunburst_chart", "sankey_chart"} {
 		body := map[string]any{"name": "x", "chart_type": ct, "config": configFor(ct)}
 		resp := h.do(t, "POST", "/api/v1/dashboards/"+dashID.String()+"/charts", tok, body, nil)
@@ -67,6 +69,32 @@ func TestTheSameChartIsAcceptedWithASavedQuery(t *testing.T) {
 	}, nil)
 	if resp.status != http.StatusCreated {
 		t.Fatalf("with a saved query: got %d %v, want 201", resp.status, resp.body)
+	}
+}
+
+// A GRID carrying x + y — the shape every pack dashboard writes — must still
+// create. An earlier family-based version of this rule refused it, which would
+// have broken the install of 27 packs.
+func TestAPackShapedGridChartStillCreates(t *testing.T) {
+	h := requireHarness(t)
+	tenant := uuid.New()
+	tok := h.token(t, tenant)
+	_, dashID, _ := h.seedChart(t, tenant, nil)
+
+	resp := h.do(t, "POST", "/api/v1/dashboards/"+dashID.String()+"/charts", tok, map[string]any{
+		"name": "pack grid", "chart_type": "grid_chart",
+		"config": map[string]any{
+			"columns": []string{"program", "determination_count"},
+			"x":       map[string]any{"dimension": "program"},
+			"y":       []map[string]any{{"measure": "determination_count", "agg_fn": "count"}},
+		},
+		"sources": []map[string]any{{
+			"position": 0, "source_type": "semantic_measure",
+			"source_urn": "wr:t:semantic:measure/determination_count",
+		}},
+	}, nil)
+	if resp.status != http.StatusCreated {
+		t.Fatalf("a pack-shaped grid must create: %d %v", resp.status, resp.body)
 	}
 }
 

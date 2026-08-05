@@ -78,13 +78,9 @@ func (r *Resolver) compileAndRun(ctx context.Context, token string, chart *domai
 		// configs never carry measures at all. Creation now refuses these
 		// (domain.RequiresSavedQuery); this is defence in depth for charts saved
 		// before that rule existed.
-		if ct, ok := domain.LookupType(chart.ChartType); ok && domain.RequiresSavedQuery(ct.Family) {
-			return ExecResult{}, domain.EValidation(
-				"chart type " + chart.ChartType + " resolves through a saved query, and this " +
-					"chart has none — add a saved_query source (this chart type carries no measures)")
-		}
 		return ExecResult{}, domain.EValidation(
-			"chart has no measures to resolve — add at least one measure to config.y")
+			"chart has no measures to resolve — add at least one measure to config.y, " +
+				"or attach a saved_query source")
 	}
 	compiled, err := r.Semantic.Compile(ctx, token, creq)
 	if err != nil {

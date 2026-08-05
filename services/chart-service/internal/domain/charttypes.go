@@ -253,28 +253,26 @@ type FieldDetail struct {
 // dimension/measure names discovered from the semantic/query metadata; unknown
 // refs produce UNKNOWN_DIMENSION details (CHART-FR-013). Returns a *Error with
 // per-field Details on failure.
-// RequiresSavedQuery reports whether a family can ONLY resolve through a saved
-// query, because its config has no measures for the semantic compiler to use.
+// NeedsSavedQuery reports whether a chart can ONLY resolve through a saved
+// query: its PARSED config yields no metrics for the semantic compiler.
 //
-// ParseConfig never populates cfg.Y for these three: heatmap maps "y" to a
-// DIMENSION (cfg.YDim), grid carries only cfg.Columns, network only
-// cfg.Nodes/Children. So buildCompile always produces zero metrics for them, and
-// Resolve's default branch — compileAndRun — fails with "chart has no measures
-// to resolve" on every request, forever. Such a chart is not misconfigured in a
-// way a user can correct from the chart editor; it is unresolvable by
-// construction.
+// Derived from the parse, never from the family. An earlier version of this
+// gated on family and listed grid alongside heatmap and network — which was
+// simply wrong. Every family except heatmap decodes through ChartConfig's struct
+// tags, so a grid chart carrying `x` + `y` (which every pack dashboard and both
+// local seeders write) populates cfg.X and cfg.Y and compiles exactly like an
+// axis chart. Gating on family would have refused 82 working pack charts at
+// install time.
 //
-// ValidateConfig checked the config and never the SOURCE, so the API accepted
-// these charts happily and the failure surfaced only at render time, as an
-// error naming an internal state ("no measures") rather than the missing thing.
-// Requiring the source up front turns a permanently broken chart into a field
-// error at the point of creation (CHART-FR-012).
-func RequiresSavedQuery(family string) bool {
-	switch family {
-	case FamilyHeatmap, FamilyGrid, FamilyNetwork:
-		return true
+// Heatmap genuinely cannot: its "y" is a DIMENSION (cfg.YDim), so cfg.Y is
+// always empty. A network chart carrying only nodes/children is in the same
+// position. Those, and a grid with columns but no measures, resolve to
+// compileAndRun with zero metrics and fail on every request, forever.
+func NeedsSavedQuery(family string, cfg ChartConfig) bool {
+	if family == FamilyMetric {
+		return false // resolves via an artifact, never the compiler
 	}
-	return false
+	return len(cfg.Y) == 0
 }
 
 func ValidateConfig(chartType string, raw json.RawMessage, knownFields map[string]bool) error {

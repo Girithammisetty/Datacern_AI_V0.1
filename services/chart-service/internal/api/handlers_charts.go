@@ -304,27 +304,31 @@ func (s *Server) validateChartInput(r *http.Request, in *chartWrite) error {
 			return domain.EValidation("source_urn is required", []domain.FieldDetail{{Field: "sources[" + strconv.Itoa(i) + "].source_urn", Code: "REQUIRED"}})
 		}
 	}
-	// A family with no measures can only resolve through a saved query. Without
-	// one the chart is unresolvable BY CONSTRUCTION — every render returns "chart
-	// has no measures to resolve" and no edit to the config can fix it, because
-	// the config was never the problem. Refuse it here, naming the missing thing.
-	if ct, ok := domain.LookupType(in.ChartType); ok && domain.RequiresSavedQuery(ct.Family) {
-		hasQuery := false
-		for _, src := range in.Sources {
-			if src.SourceType == domain.SourceSavedQuery {
-				hasQuery = true
-				break
+	// A chart whose parsed config yields no metrics can only resolve through a
+	// saved query. Without one it is unresolvable BY CONSTRUCTION — every render
+	// returns "chart has no measures to resolve" and no config edit fixes it.
+	// Checked against the PARSED config, never the family: a grid carrying x + y
+	// compiles exactly like an axis chart, and gating on family would refuse 82
+	// working pack charts at install time.
+	if ct, ok := domain.LookupType(in.ChartType); ok {
+		if cfg, perr := domain.ParseConfig(ct.Family, in.Config); perr == nil &&
+			domain.NeedsSavedQuery(ct.Family, cfg) {
+			hasQuery := false
+			for _, src := range in.Sources {
+				if src.SourceType == domain.SourceSavedQuery {
+					hasQuery = true
+					break
+				}
 			}
-		}
-		if !hasQuery {
-			return domain.EValidation(
-				"chart type "+in.ChartType+" resolves through a saved query; add one to sources",
-				[]domain.FieldDetail{{
-					Field: "sources", Code: "REQUIRED",
-					Message: "a " + ct.Family + "-family chart carries no measures, so it can " +
-						"only be resolved by a saved query (source_type=" +
-						domain.SourceSavedQuery + ")",
-				}})
+			if !hasQuery {
+				return domain.EValidation(
+					"chart has no measures, so it needs a saved_query source to resolve",
+					[]domain.FieldDetail{{
+						Field: "sources", Code: "REQUIRED",
+						Message: "add a measure to config.y, or a source with " +
+							"source_type=" + domain.SourceSavedQuery,
+					}})
+			}
 		}
 	}
 
