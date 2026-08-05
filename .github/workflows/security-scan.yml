@@ -125,6 +125,14 @@ jobs:
             echo "vuln-DB download attempt $i failed — retrying in 20s"
             sleep 20
           done
+          # Informational table FIRST (--exit-code 0, never gates). Without it the
+          # only artifact of a failure is the SARIF file, so the log says nothing
+          # but "exit code 1" and the offending package has to be guessed from the
+          # Security tab. Print the findings where the failure is read.
+          echo "::group::trivy findings (informational)"
+          trivy fs --skip-db-update --scanners vuln --severity HIGH,CRITICAL --exit-code 0 \
+            --format table .
+          echo "::endgroup::"
           trivy fs --skip-db-update --scanners vuln --severity HIGH,CRITICAL --exit-code 1 \
             --format sarif --output trivy.sarif .
       - uses: github/codeql-action/upload-sarif@v3
