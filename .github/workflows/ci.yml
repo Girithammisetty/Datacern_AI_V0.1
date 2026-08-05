@@ -682,7 +682,16 @@ jobs:
     needs: [live-e2e-paths, test-go, test-python, test-node, no-stub-gate]
     if: ${{ always() && needs.live-e2e-paths.result == 'success' && (needs.live-e2e-paths.outputs.run == 'true' || github.event_name == 'workflow_dispatch') && !contains(fromJSON('["failure","cancelled"]'), needs.test-go.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-python.result) && !contains(fromJSON('["failure","cancelled"]'), needs.test-node.result) && !contains(fromJSON('["failure","cancelled"]'), needs.no-stub-gate.result) }}
     runs-on: ${{ vars.E2E_LIVE_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 45
+    # 45 was sized before (a) the smoke sweep covered every static-path route
+    # (~60 added tests, each a real login + render on this loaded runner) and
+    # (b) anything downstream of the suite had ever actually executed — the two
+    # soaks always got skipped by earlier failures, so their runtime was never
+    # in the measurement. Observed budget arithmetic on attempt 3 of run #361:
+    # ~16m setup+boot, ~3m journeys, suite in progress at 36m — the 45m ceiling
+    # killed the job before the soaks could run EVEN WITH everything passing.
+    # 90 = measured setup+journeys (~19m) + suite headroom (~35m) + both soaks
+    # (~25m allowance, unmeasured until they complete once) + teardown margin.
+    timeout-minutes: 90
     # Same per-commit rule as the workflow-level group above, and for the same
     # reason. Making the WORKFLOW group per-commit was not enough: this job
     # carries its own group, so a per-ref group here kept doing exactly what
