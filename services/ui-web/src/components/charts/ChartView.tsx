@@ -9,6 +9,7 @@ import { WordCloudChart } from "./WordCloudChart";
 import { NetworkChart } from "./NetworkChart";
 import { UnsupportedChart } from "./UnsupportedChart";
 import { MetricChart } from "./MetricChart";
+import { RunChart } from "./RunChart";
 import { EChartsChart } from "./EChartsChart";
 
 /**
@@ -130,6 +131,8 @@ export function ChartView({
       return <GridChart columns={columns} rows={rows} title={title} onSelect={onSelect} selectedValue={selectedValue} />;
     case "wordcloud":
       return <WordCloudChart columns={columns} rows={rows} title={title} />;
+    case "run":
+      return <RunChart chartType={chartType} artifact={artifact} title={title} />;
     case "metric":
       return <MetricChart columns={columns} rows={rows} artifact={artifact} title={title} />;
     default:
@@ -145,7 +148,7 @@ type RenderKind =
   | "bar" | "line" | "pie" | "grid" | "heatmap" | "gauge" | "wordcloud" | "metric"
   // BRD 72: types that previously collapsed onto bar / grid / a generic network.
   | "boxplot" | "waterfall" | "combination" | "histogram"
-  | "sankey" | "treemap" | "sunburst" | "chord" | "network" | "tree"
+  | "sankey" | "treemap" | "sunburst" | "chord" | "network" | "tree" | "run"
   // geo_map_chart needs GeoJSON basemaps that are not bundled — declared, not faked.
   | "unsupported";
 
@@ -195,12 +198,11 @@ const EXACT_KIND: Record<string, RenderKind> = {
   // metric family (artifact, not rows)
   metric_chart: "metric",
   parameter_chart: "metric",
-  // dataClass="run". These resolve to an artifact too, so routing them here
-  // keeps them off the bar fallback they hit before. Dedicated ROC / confusion
-  // matrix / tree visuals are gated on the run-artifact endpoint (BRD 72 inc3).
-  roc_curve: "metric",
-  confusion_matrix: "metric",
-  decision_tree: "metric",
+  // dataClass="run" — BRD 72 inc3. These resolve to a run artifact from
+  // experiment-service GET /artifacts?urn=, not to rows.
+  roc_curve: "run",
+  confusion_matrix: "run",
+  decision_tree: "run",
 };
 
 /** Resolve chartType (preferred) then family to a renderer kind. */

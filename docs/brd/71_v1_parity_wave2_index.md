@@ -1,6 +1,6 @@
 # BRD 71–75 — V1 → Datacern Parity Wave 2 (initiative index)
 
-**Status:** IN PROGRESS — 2026-08-05 · 4/11 gaps closed (BRD 71 landed; 72 inc1–inc2 landed; 73–75 open)
+**Status:** IN PROGRESS — 2026-08-05 · 5/11 gaps closed (BRD 71 landed; 72 inc1–inc3a landed; 73–75 in progress)
 **Owner:** platform · **Driver:** a second cross-verification of the legacy V1 platform
 (Rails/Flask services + Argo + pandas component containers) against Datacern's rebuilt
 services. The [wave-1 index](62_pipeline_ml_parity_index.md) audited **pipeline + ML

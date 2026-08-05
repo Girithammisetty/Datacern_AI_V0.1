@@ -8,6 +8,7 @@ experiment creation (EXP-FR-001) and run-create forwarding.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -53,9 +54,11 @@ from app.domain.state import (
     validate_stage_transition,
 )
 from app.domain.urn import (
+    SERVICE,
     experiment_urn,
     model_urn,
     model_version_urn,
+    parse_urn,
     promotion_urn,
     run_urn,
 )
@@ -79,6 +82,80 @@ STAGE_TO_MLFLOW = {0: "None", 1: "Staging", 2: "Production", 3: "Archived"}
 #: Run tag written by pipeline-orchestrator carrying the loadable model uri.
 #: CROSS-SERVICE CONTRACT — must match executor/local.py::MODEL_URI_TAG.
 MODEL_URI_TAG = "datacern.model_uri"
+
+#: Run tag carrying the JSON class-label list, in the same order as the flattened
+#: `cm_{i}_{j}` metrics. CROSS-SERVICE CONTRACT — must match
+#: pipeline-orchestrator executor/local.py::CLASS_LABELS_TAG.
+CLASS_LABELS_TAG = "datacern.class_labels"
+
+#: Metrics surfaced as headline key/value pairs on a run artifact, in this order.
+#: Everything else is still available through the run detail endpoint; a metric
+#: card with forty rows is not a metric card.
+_HEADLINE_METRICS = (
+    ("accuracy", "Accuracy"), ("f1_weighted", "F1 (weighted)"),
+    ("precision_weighted", "Precision"), ("recall_weighted", "Recall"),
+    ("roc_auc", "ROC AUC"), ("r2", "R²"), ("rmse", "RMSE"), ("mae", "MAE"),
+    ("silhouette", "Silhouette"), ("cv_score", "CV score"),
+    ("train_rows", "Train rows"), ("test_rows", "Test rows"),
+)
+
+
+def _confusion_matrix(metrics: dict, tags: dict) -> dict | None:
+    """Rebuild the N×N matrix from the flattened `cm_{i}_{j}` metrics.
+
+    Labels come from the class-labels tag the executor writes; the mirror holds
+    metrics and tags but not artifact blobs, which is exactly why that tag exists.
+    Without it the matrix is still returned — as positional `Class 0..n-1` — since
+    an unlabelled real matrix beats no matrix.
+    """
+    cells: dict[tuple[int, int], float] = {}
+    for key, value in metrics.items():
+        if not key.startswith("cm_"):
+            continue
+        try:
+            _, i, j = key.split("_")
+            cells[(int(i), int(j))] = value
+        except ValueError:
+            continue  # not a cm_<int>_<int> key
+    if not cells:
+        return None
+    n = max(max(i, j) for i, j in cells) + 1
+    labels: list[str] = []
+    raw = tags.get(CLASS_LABELS_TAG)
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list) and len(parsed) == n:
+                labels = [str(x) for x in parsed]
+        except (ValueError, TypeError):
+            labels = []
+    if not labels:
+        labels = [f"Class {i}" for i in range(n)]
+    matrix = [[int(cells.get((i, j), 0)) for j in range(n)] for i in range(n)]
+    return {"labels": labels, "matrix": matrix,
+            "total": sum(sum(row) for row in matrix)}
+
+
+def _run_metric_artifact(run, metrics: dict, tags: dict) -> dict:
+    """Render a mirrored run as the chart "metric artifact" (BRD 72 inc3)."""
+    headline = [{"label": label, "value": metrics[key]}
+                for key, label in _HEADLINE_METRICS if key in metrics]
+    artifact: dict = {
+        "kind": "run_summary",
+        "run_id": run.id,
+        "algorithm": run.algorithm or None,
+        "metrics": headline,
+    }
+    cm = _confusion_matrix(metrics, tags)
+    if cm:
+        artifact["confusion_matrix"] = cm
+    if "roc_auc" in metrics:
+        # The AUC scalar is mirrored; the CURVE POINTS live in the run's
+        # evaluation.json artifact, which the mirror does not carry. Reporting the
+        # scalar without the points lets the UI say what it has rather than
+        # implying a curve it cannot draw.
+        artifact["roc_auc"] = metrics["roc_auc"]
+    return artifact
 
 # cap for comma-separated IN-filter batches (bff dataloader N+1 batching)
 MAX_BATCH_IDS = 200
@@ -481,6 +558,27 @@ class RunService(_Base):
             await self.deps.mlflow.delete_run(run.mlflow_run_id)
         except Exception:  # noqa: BLE001
             pass
+
+    async def metric_artifact(self, ctx: CallCtx, urn: str) -> dict:
+        """BRD 72 inc3 — a run rendered as the "metric artifact" chart-service's
+        ClassRun chart types render (`roc_curve`, `confusion_matrix`,
+        `decision_tree`).
+
+        Built from the Postgres mirror only: metrics and tags are mirrored, so the
+        confusion matrix reconstructs exactly and needs no MLflow call in the
+        request path. `metrics` is always present so a client that only knows the
+        generic `{kind, metrics}` shape still renders something real.
+        """
+        parsed = parse_urn(urn)
+        if parsed.service != SERVICE or parsed.rtype != "run":
+            raise ValidationFailed(f"not a run URN: {urn!r}")
+        async with self.uow(ctx.tenant_id) as uow:
+            run = await uow.runs.get(parsed.rid)
+            if not run:
+                raise NotFound("run not found")
+            metrics = {m.key: m.value for m in await uow.runs.get_metrics(run.id)}
+            tags = {t.key: t.value for t in await uow.runs.get_tags(run.id)}
+        return _run_metric_artifact(run, metrics, tags)
 
     async def artifacts(self, ctx: CallCtx, run_id: str) -> list[dict]:
         async with self.uow(ctx.tenant_id) as uow:

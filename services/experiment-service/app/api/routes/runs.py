@@ -165,6 +165,29 @@ async def metric_history(
     return page_envelope(page.items, page.next_cursor, page.has_more)
 
 
+@router.get("/artifacts")
+async def get_metric_artifact(
+    request: Request,
+    urn: str = Query(...),
+    principal: Principal = Depends(require("experiment.run.read")),
+):
+    """Resolve a RUN urn to its "metric artifact" — the run rendered as headline
+    metrics plus the typed payloads chart-service's ClassRun chart types draw
+    (BRD 72 inc3, CHART-FR-025).
+
+    chart-service's `HTTPArtifacts.FetchArtifact` has always sent run URNs to
+    `<experiment-service>/api/v1/artifacts?urn=`; the endpoint did not exist, so
+    every `roc_curve` / `confusion_matrix` / `decision_tree` chart resolved to a
+    404 surfaced as EUpstream. This is that endpoint, mirroring dataset-service's
+    identical route for dataset URNs.
+
+    Served entirely from the Postgres mirror — no MLflow in the request path.
+    """
+    c = _c(request)
+    return {"data": await c.run_service.metric_artifact(
+        principal.ctx(request.state.trace_id), urn)}
+
+
 @router.get("/runs/{run_id}/artifacts")
 async def list_artifacts(
     request: Request, run_id: str,
