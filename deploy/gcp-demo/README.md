@@ -79,24 +79,11 @@ brew install kubectl helm
 You also need a **GitHub PAT with `read:packages`** — the Datacern images are private on
 GHCR. Create one at github.com/settings/tokens.
 
-### Two things that bite new accounts
-
-**CPU quota.** A fresh project often ships with a low per-region CPU quota. The
-`e2-standard-8` below needs 8 vCPUs, which typically fits — but if you later resize to
-`e2-standard-16` you may hit the ceiling. Check before you need it:
-
-```bash
-gcloud compute regions describe us-central1 --format="value(quotas.filter(metric:CPUS).limit)"
-```
-
-If it's too low, request an increase under *IAM & Admin → Quotas* in the console. Approval is
-usually quick but is not instant, so do it before demo day, not during.
-
-**Trial accounts have restrictions** beyond quota — notably around GPUs. That doesn't affect
-this runbook (there's no GPU here), but it will if you later try
+**Trial accounts have restrictions** — notably around GPUs. That doesn't affect this runbook
+(there's no GPU here), but it will if you later try
 `deploy/terraform/gcp/gpu_training_pool.tf`.
 
-## Step 0b — Authenticate and set your shell
+## Step 0b — Authenticate and enable the Compute API
 
 ```bash
 gcloud auth login
@@ -113,11 +100,31 @@ export PROJECT=your-gcp-project-id; export ZONE=us-central1-a; export VM=datacer
 gcloud config set project "$PROJECT"
 ```
 
-Enabling the Compute API takes a minute or two on a new project:
+**Enable the Compute API before anything else touches compute.** On a brand-new project
+nothing compute-related works until this lands, including read-only calls like the quota
+check below — they fail with `API [compute.googleapis.com] not enabled on project`. It takes
+a minute or two:
 
 ```bash
 gcloud services enable compute.googleapis.com
 ```
+
+## Step 0c — Check your CPU quota
+
+A fresh project often ships with a low per-region CPU quota. The `e2-standard-8` below needs
+8 vCPUs, which typically fits — but if you later resize to `e2-standard-16` you may hit the
+ceiling. Check before you need it:
+
+```bash
+gcloud compute regions describe us-central1 --flatten="quotas[]" --filter="quotas.metric=CPUS" --format="value(quotas.limit)"
+```
+
+`--flatten` expands the quota list into one record each, then `--filter` picks the CPUS row.
+A `.filter()` call inside the `--format` projection is *not* valid there and fails with
+`Transform function expected`.
+
+If the limit is too low, request an increase under *IAM & Admin → Quotas* in the console.
+Approval is usually quick but is not instant, so do it before demo day, not during.
 
 ## Step 1 — Reserve a static IP
 
@@ -234,8 +241,8 @@ helm upgrade --install datacern deploy/helm/datacern -f deploy/helm/datacern/val
 ```
 
 Note the key is `global.registry`, not `global.image.registry` — the chart reads
-`$g.registry` in `_helpers.tpl`. (`cd-aws.yml` and `cd-azure.yml` set the latter, which the
-chart ignores; that's a bug in those workflows, not a pattern to copy.)
+`$g.registry` in `_helpers.tpl`. (`cd-aws.yml` and `cd-azure.yml` used to set the latter,
+which the chart ignored; both now set `global.registry`.)
 
 Database creation and migrations are Helm hooks (`bootstrap-job.yaml` at weight -10,
 `migrate-job.yaml` at -5), so schema setup happens automatically in the right order. Watch
