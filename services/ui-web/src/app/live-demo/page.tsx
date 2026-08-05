@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { LIVE_DEMO_CONTENT } from "@/content/marketing/live-demo";
 import LiveDemoContent from "./live-demo-content";
 
 /**
@@ -6,12 +8,12 @@ import LiveDemoContent from "./live-demo-content";
  * flow (docs/initiatives/demo-sandbox-poc-mode.md §Out of scope: "Public
  * self-serve demo signup ... explicitly rejected for v1"); this page is
  * that deferred item's v1.1 implementation. Server shell mirrors /welcome's
- * pattern: metadata here, interactive form in the client component.
+ * pattern: metadata + copy from src/content/marketing/live-demo.ts,
+ * interactive form in the client component.
  */
-export const metadata = {
-  title: "Try Datacern AI — live demo, no sales call",
-  description:
-    "Spin up your own live Datacern AI sandbox in minutes. See real governed decisioning on synthetic data — no calendar invite, no operator in the loop.",
+export const metadata: Metadata = {
+  title: LIVE_DEMO_CONTENT.meta.title,
+  description: LIVE_DEMO_CONTENT.meta.description,
 };
 
 export default function LiveDemoPage() {

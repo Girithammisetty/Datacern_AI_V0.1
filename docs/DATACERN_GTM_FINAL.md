@@ -42,12 +42,22 @@ What stays true from the earlier wedge analysis:
 
 | Page | Job | Content source |
 |---|---|---|
-| `/welcome` | The category + the engine story; industries as the way in | bespoke (existing), links into the system |
+| `/welcome` | The category + the engine story; industries as the way in | **config** (`welcome.ts`) |
 | `/solutions` | The full pack catalog, grouped by industry, with the one-engine hub diagram | **config + codegen** |
 | `/security` | The governance spine, drawn as the request path; the honesty section | **config** |
-| `/pricing` | Budget-cap-first calculator; illustrative rates disclosed | existing (already honest) |
-| `/live-demo` | Self-serve seeded sandbox, no sales gate | existing |
-| `/welcome/walkthrough` | One decision end-to-end in five steps | existing |
+| `/pricing` | Budget-cap-first, contact-first — NO prices shown; the levers and the cap explained, quote on request | **config** (`pricing.ts`) |
+| `/live-demo` | Self-serve seeded sandbox, no sales gate | **config** (`live-demo.ts`) |
+| `/welcome/walkthrough` | One decision end-to-end in five steps | **config** (`walkthrough.ts`) |
+
+Every pre-login page is now a pure renderer of `src/content/marketing/*.ts`;
+shared chrome (nav, footer, product name) is single-sourced in `shell.ts`.
+Dedup rule: breadth-by-industry lives ONLY on `/solutions` (generated);
+`/welcome` keeps the four flagship spotlights and hands off via the
+generated-count CTA. Security mechanisms live ONLY on `/security`; `/welcome`'s
+trust band is a teaser that links there. Pricing shows no dollar figures at
+all — not even labeled-illustrative ones; the page explains the meter and the
+hard cap, then asks for a contact. (The billing math stays unit-tested in
+`src/lib/pricing/calc.ts`.)
 
 Diagrams (all real-text components, light/dark aware, no image assets):
 

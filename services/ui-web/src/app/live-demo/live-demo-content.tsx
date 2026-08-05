@@ -7,6 +7,8 @@ import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from "@/components/ui/primitives";
 import { DatacernLogo } from "@/components/brand/DatacernLogo";
+import { LIVE_DEMO_CONTENT as C } from "@/content/marketing/live-demo";
+import { MARKETING_SHELL } from "@/content/marketing/shell";
 
 type Phase = "form" | "submitting" | "provisioning" | "error";
 
@@ -61,7 +63,7 @@ export default function LiveDemoContent() {
         if (res.status === 401) {
           // The claim link expired (visitor left the tab open too long) —
           // send them back to the form rather than polling forever.
-          setError(json.error || "This demo link expired. Please sign up again.");
+          setError(json.error || C.errors.expired);
           setPhase("error");
           return;
         }
@@ -71,7 +73,7 @@ export default function LiveDemoContent() {
           // "schedule the next check", so a permanently-failed tenant spun
           // the UI for the full 30-minute claim-token TTL before showing a
           // misleading "link expired" message instead of the real error.
-          setError(json.error || "Something went wrong while setting up your demo. Please try again.");
+          setError(json.error || C.errors.provisioning);
           setPhase("error");
           return;
         }
@@ -110,11 +112,11 @@ export default function LiveDemoContent() {
           setBadFields(json.details.map((d) => d.field).filter((f): f is string => !!f));
         }
         if (res.status === 429) {
-          setError("You've hit the demo signup limit — please try again in a little while.");
+          setError(C.errors.rateLimited);
         } else if (res.status === 503) {
-          setError("We're at capacity for live demos right now — please try again shortly.");
+          setError(C.errors.capacity);
         } else {
-          setError(json.error || "Something went wrong. Please try again.");
+          setError(json.error || C.errors.generic);
         }
         setPhase("error");
         return;
@@ -128,7 +130,7 @@ export default function LiveDemoContent() {
       setPhase("provisioning");
       startPolling();
     } catch {
-      setError("Couldn't reach the server. Please try again.");
+      setError(C.errors.network);
       setPhase("error");
     }
   }
@@ -138,30 +140,24 @@ export default function LiveDemoContent() {
       <div className="w-full max-w-md">
         <div className="mb-6 flex items-center justify-center gap-2.5">
           <DatacernLogo className="size-9" />
-          <span className="text-xl font-bold tracking-tight">Datacern AI</span>
+          <span className="text-xl font-bold tracking-tight">{MARKETING_SHELL.product}</span>
         </div>
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <Sparkles className="size-4 text-primary" />
-              <CardTitle className="text-xl">Try a live demo — no sales call</CardTitle>
+              <CardTitle className="text-xl">{C.card.title}</CardTitle>
             </div>
-            <CardDescription>
-              We&apos;ll spin up your own governed-decisioning sandbox on synthetic data and log
-              you straight in. It expires automatically in a couple of weeks.
-            </CardDescription>
+            <CardDescription>{C.card.description}</CardDescription>
           </CardHeader>
           <CardContent>
             {phase === "provisioning" ? (
               <div className="flex flex-col items-center gap-3 py-6 text-center">
                 <Loader2 className="size-8 animate-spin text-primary" />
                 <p className="text-sm font-medium">
-                  Spinning up {company ? `${company}'s` : "your"} live demo…
+                  {C.provisioning.title.replace("{company}", company ? `${company}'s` : "your")}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  This usually takes a couple of minutes. We&apos;ll bring you in automatically —
-                  no need to refresh.
-                </p>
+                <p className="text-xs text-muted-foreground">{C.provisioning.body}</p>
               </div>
             ) : (
               <form onSubmit={onSubmit} className="space-y-3.5">
@@ -175,7 +171,7 @@ export default function LiveDemoContent() {
                   className="hidden"
                 />
                 <div className="space-y-1">
-                  <Label htmlFor="full_name">Full name</Label>
+                  <Label htmlFor="full_name">{C.form.fullName}</Label>
                   <Input
                     id="full_name"
                     name="full_name"
@@ -185,7 +181,7 @@ export default function LiveDemoContent() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="work_email">Work email</Label>
+                  <Label htmlFor="work_email">{C.form.workEmail}</Label>
                   <Input
                     id="work_email"
                     name="work_email"
@@ -194,12 +190,10 @@ export default function LiveDemoContent() {
                     required
                     aria-invalid={badFields.includes("work_email")}
                   />
-                  <p className="text-[11px] text-muted-foreground">
-                    A business email, please — personal/throwaway addresses aren&apos;t accepted.
-                  </p>
+                  <p className="text-[11px] text-muted-foreground">{C.form.emailNote}</p>
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="company">Company</Label>
+                  <Label htmlFor="company">{C.form.company}</Label>
                   <Input
                     id="company"
                     name="company"
@@ -214,19 +208,16 @@ export default function LiveDemoContent() {
                   </p>
                 )}
                 <Button type="submit" className="w-full" disabled={phase === "submitting"}>
-                  {phase === "submitting" ? "Starting your demo…" : "Start my live demo"}
+                  {phase === "submitting" ? C.form.submitting : C.form.submit}
                 </Button>
-                <p className="text-center text-[11px] text-muted-foreground">
-                  This provisions a real, synthetic-data sandbox tenant. No credit card, no sales
-                  call — it self-expires.
-                </p>
+                <p className="text-center text-[11px] text-muted-foreground">{C.form.footnote}</p>
               </form>
             )}
             <div className="mt-4">
               <p className="text-center text-xs text-muted-foreground">
-                Prefer a guided tour instead?{" "}
-                <Link href="/welcome" className="underline underline-offset-2 hover:text-foreground">
-                  See what Datacern AI does
+                {C.guidedTour.lead}{" "}
+                <Link href={C.guidedTour.href} className="underline underline-offset-2 hover:text-foreground">
+                  {C.guidedTour.label}
                 </Link>
               </p>
             </div>

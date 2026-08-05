@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
+import { WALKTHROUGH_CONTENT } from "@/content/marketing/walkthrough";
 import WalkthroughContent from "./walkthrough-content";
 
 /**
  * Public marketing subpage: the demo walkthrough. Lives under /welcome so the
  * middleware's public matcher covers it automatically. Server shell only —
- * all content is in the client component.
+ * all copy lives in src/content/marketing/walkthrough.ts and the client
+ * component renders it.
  */
 export const metadata: Metadata = {
-  title: "Demo walkthrough — Datacern AI",
-  description:
-    "Follow one governed decision through Datacern AI, end to end: worklist, Jessie triage, four-eyes approval, learning loop, audit trail.",
+  title: WALKTHROUGH_CONTENT.meta.title,
+  description: WALKTHROUGH_CONTENT.meta.description,
 };
 
 export default function WalkthroughPage() {
