@@ -209,6 +209,15 @@ and `JWKSKeyProvider` are exercised end-to-end in
   shape (`parts: [{n, etag, size}]`) is unchanged.
 - Webhook `path_token` is prefixed with the tenant id (`<tenant>.<random>`) so
   the RLS tenant context can be established before endpoint lookup.
+- `POST /internal/v1/mcp/invoke` takes an **optional `idempotency_key`** body
+  field (BRD 73), applied by the same `run_idempotent` as the REST route's
+  `Idempotency-Key` header: a repeated key replays the original response instead
+  of creating a second ingestion. Purely additive — mcp-gateway sends no key and
+  is unaffected. pipeline-orchestrator's batch jobs are the caller that needs it
+  (a re-drive after a lost lease must not ingest the same batch twice), and its
+  SPIFFE (`spiffe://datacern/ns/ml/sa/pipeline-orchestrator`) is in
+  `internal_allowed_spiffe`. Covered by
+  `tests/unit/test_internal_mcp_idempotency.py`.
 - **Now real** (via `datacern_common`, tested against live infra): MinIO/S3
   object store, Iceberg REST-catalog table writer, Vault KV v2 secrets,
   Redpanda/Kafka event publisher, OPA policy engine, cached JWKS refresh.

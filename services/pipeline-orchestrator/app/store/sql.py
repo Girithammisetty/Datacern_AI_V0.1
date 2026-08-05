@@ -19,6 +19,9 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.domain.entities import (
+    BatchJob,
+    BatchJobRun,
+    BatchJobRunIngestion,
     LabeledExample,
     PipelineRun,
     PipelineSchedule,
@@ -26,9 +29,12 @@ from app.domain.entities import (
     TemplateVersion,
     TenantQuota,
 )
-from app.domain.enums import RunStatus
+from app.domain.enums import BATCH_ACTIVE_STATUSES, RunStatus
 from app.domain.ports import Page
 from app.store.orm import (
+    BatchJobRow,
+    BatchJobRunIngestionRow,
+    BatchJobRunRow,
     IdempotencyKeyRow,
     LabeledExampleRow,
     OutboxRow,
@@ -51,6 +57,12 @@ _LEASE_FIELDS = ("lease_owner", "lease_expires_at")
 _R_UPDATE_FIELDS = [f for f in _R_FIELDS if f not in _LEASE_FIELDS]
 _L_FIELDS = [f.name for f in dataclasses.fields(LabeledExample)]
 _S_FIELDS = [f.name for f in dataclasses.fields(PipelineSchedule)]
+_BJ_FIELDS = [f.name for f in dataclasses.fields(BatchJob)]
+_BR_FIELDS = [f.name for f in dataclasses.fields(BatchJobRun)]
+#: Same rule as pipeline_runs: the lease belongs to claim/renew/release alone.
+_BR_UPDATE_FIELDS = [f for f in _BR_FIELDS if f not in _LEASE_FIELDS]
+_BI_FIELDS = [f.name for f in dataclasses.fields(BatchJobRunIngestion)]
+_BATCH_ACTIVE = [int(s) for s in BATCH_ACTIVE_STATUSES]
 
 
 def make_engine(database_url: str):
@@ -397,6 +409,197 @@ class SqlScheduleRepo:
             await self.s.flush()
 
 
+class SqlBatchJobRepo:
+    """Tenant-scoped batch-job CRUD (RLS applies on this session)."""
+
+    def __init__(self, s, tid):
+        self.s, self.tid = s, tid
+
+    async def add(self, job: BatchJob):
+        row = BatchJobRow()
+        _apply(row, job, _BJ_FIELDS)
+        self.s.add(row)
+        await self.s.flush()
+
+    async def get(self, job_id, include_deleted=False):
+        row = await self.s.get(BatchJobRow, job_id)
+        if row is None or (row.deleted_at is not None and not include_deleted):
+            return None
+        return _to(row, _BJ_FIELDS, BatchJob)
+
+    async def get_by_name(self, workspace_id, name):
+        stmt = select(BatchJobRow).where(
+            BatchJobRow.workspace_id == workspace_id,
+            func.lower(BatchJobRow.name) == name.lower(),
+            BatchJobRow.deleted_at.is_(None))
+        row = (await self.s.execute(stmt)).scalars().first()
+        return _to(row, _BJ_FIELDS, BatchJob) if row else None
+
+    async def list(self, limit, cursor):
+        offset = int(decode_cursor(cursor).get("o", 0)) if cursor else 0
+        stmt = (select(BatchJobRow).where(BatchJobRow.deleted_at.is_(None))
+                .order_by(BatchJobRow.created_at.desc(), BatchJobRow.id.desc())
+                .offset(offset).limit(limit + 1))
+        rows = (await self.s.execute(stmt)).scalars().all()
+        return _page([_to(r, _BJ_FIELDS, BatchJob) for r in rows], limit, cursor)
+
+    async def update(self, job: BatchJob):
+        row = await self.s.get(BatchJobRow, job.id)
+        if row is not None:
+            _apply(row, job, _BJ_FIELDS)
+            await self.s.flush()
+
+
+class SqlBatchRunRepo:
+    def __init__(self, s, tid):
+        self.s, self.tid = s, tid
+
+    async def add(self, run: BatchJobRun):
+        row = BatchJobRunRow()
+        _apply(row, run, _BR_FIELDS)
+        self.s.add(row)
+        await self.s.flush()
+
+    async def get(self, run_id):
+        row = await self.s.get(BatchJobRunRow, run_id)
+        return _to(row, _BR_FIELDS, BatchJobRun) if row else None
+
+    async def update(self, run: BatchJobRun):
+        row = await self.s.get(BatchJobRunRow, run.id)
+        if row is not None:
+            _apply(row, run, _BR_UPDATE_FIELDS)
+            await self.s.flush()
+
+    async def list_for_job(self, job_id, limit, cursor):
+        offset = int(decode_cursor(cursor).get("o", 0)) if cursor else 0
+        stmt = (select(BatchJobRunRow).where(BatchJobRunRow.batch_job_id == job_id)
+                .order_by(BatchJobRunRow.created_at.desc(), BatchJobRunRow.id.desc())
+                .offset(offset).limit(limit + 1))
+        rows = (await self.s.execute(stmt)).scalars().all()
+        return _page([_to(r, _BR_FIELDS, BatchJobRun) for r in rows], limit, cursor)
+
+    async def active_for_job(self, job_id):
+        stmt = (select(BatchJobRunRow)
+                .where(BatchJobRunRow.batch_job_id == job_id,
+                       BatchJobRunRow.status.in_(_BATCH_ACTIVE))
+                .limit(1))
+        row = (await self.s.execute(stmt)).scalars().first()
+        return _to(row, _BR_FIELDS, BatchJobRun) if row else None
+
+    async def claim_lease(self, run_id, owner: str, now, expires_at) -> bool:
+        result = await self.s.execute(
+            update(BatchJobRunRow)
+            .where(BatchJobRunRow.id == run_id,
+                   or_(BatchJobRunRow.lease_owner.is_(None),
+                       BatchJobRunRow.lease_expires_at.is_(None),
+                       BatchJobRunRow.lease_expires_at < now))
+            .values(lease_owner=owner, lease_expires_at=expires_at))
+        return result.rowcount > 0
+
+    async def renew_lease(self, run_id, owner: str, expires_at) -> bool:
+        result = await self.s.execute(
+            update(BatchJobRunRow)
+            .where(BatchJobRunRow.id == run_id, BatchJobRunRow.lease_owner == owner)
+            .values(lease_expires_at=expires_at))
+        return result.rowcount > 0
+
+    async def release_lease(self, run_id) -> None:
+        await self.s.execute(
+            update(BatchJobRunRow).where(BatchJobRunRow.id == run_id)
+            .values(lease_owner=None, lease_expires_at=None))
+
+
+class SqlBatchIngestionRepo:
+    def __init__(self, s, tid):
+        self.s, self.tid = s, tid
+
+    async def add(self, rec: BatchJobRunIngestion):
+        row = BatchJobRunIngestionRow()
+        _apply(row, rec, _BI_FIELDS)
+        self.s.add(row)
+        await self.s.flush()
+
+    async def update(self, rec: BatchJobRunIngestion):
+        row = await self.s.get(BatchJobRunIngestionRow, rec.id)
+        if row is not None:
+            _apply(row, rec, _BI_FIELDS)
+            await self.s.flush()
+
+    async def list_for_run(self, run_id):
+        stmt = (select(BatchJobRunIngestionRow)
+                .where(BatchJobRunIngestionRow.batch_job_run_id == run_id)
+                .order_by(BatchJobRunIngestionRow.binding_key.asc()))
+        rows = (await self.s.execute(stmt)).scalars().all()
+        return [_to(r, _BI_FIELDS, BatchJobRunIngestion) for r in rows]
+
+    async def get_by_ingestion_id(self, ingestion_id):
+        stmt = select(BatchJobRunIngestionRow).where(
+            BatchJobRunIngestionRow.ingestion_id == ingestion_id)
+        row = (await self.s.execute(stmt)).scalars().first()
+        return _to(row, _BI_FIELDS, BatchJobRunIngestion) if row else None
+
+
+class SqlBatchJobScanner:
+    """Cross-tenant scans for the batch-job background workers, all through a
+    worker session (``app.worker=true``) exactly like SqlScheduleScanner and
+    SqlOrphanScanner. Reads only — every write goes back through the tenant-scoped
+    repos above so the tenant_isolation WITH CHECK still governs it."""
+
+    def __init__(self, session_factory: async_sessionmaker):
+        self._sf = session_factory
+
+    async def _worker(self, session):
+        await session.execute(text("SELECT set_config('app.worker', 'true', true)"))
+
+    async def due(self, now, limit: int = 100) -> list[BatchJob]:
+        async with self._sf() as session:
+            await self._worker(session)
+            stmt = (select(BatchJobRow)
+                    .where(BatchJobRow.deleted_at.is_(None),
+                           BatchJobRow.paused.is_(False),
+                           BatchJobRow.next_fire_at.is_not(None),
+                           BatchJobRow.next_fire_at <= now,
+                           or_(BatchJobRow.end_at.is_(None), BatchJobRow.end_at > now))
+                    .order_by(BatchJobRow.next_fire_at.asc()).limit(limit))
+            rows = (await session.execute(stmt)).scalars().all()
+            return [_to(r, _BJ_FIELDS, BatchJob) for r in rows]
+
+    async def orphaned(self, now, stale_before, limit: int = 50) -> list[BatchJobRun]:
+        """Batch runs nobody is driving: an expired lease, or a run left `pending`
+        with no lease at all because its pod died before it could claim.
+
+        A run sitting in the `ingestion` phase with no lease is NOT orphaned — it
+        is waiting for ingestion events by design, and the phase deadline (not the
+        reaper) is what stops it hanging.
+        """
+        from app.domain.enums import BatchPhase
+
+        async with self._sf() as session:
+            await self._worker(session)
+            stmt = (select(BatchJobRunRow)
+                    .where(BatchJobRunRow.status.in_(_BATCH_ACTIVE),
+                           or_(BatchJobRunRow.lease_expires_at < now,
+                               and_(BatchJobRunRow.lease_expires_at.is_(None),
+                                    BatchJobRunRow.phase != int(BatchPhase.ingestion),
+                                    BatchJobRunRow.created_at < stale_before)))
+                    .order_by(func.coalesce(BatchJobRunRow.lease_expires_at,
+                                            BatchJobRunRow.created_at).asc())
+                    .limit(limit))
+            rows = (await session.execute(stmt)).scalars().all()
+            return [_to(r, _BR_FIELDS, BatchJobRun) for r in rows]
+
+    async def past_deadline(self, now, limit: int = 50) -> list[BatchJobRun]:
+        async with self._sf() as session:
+            await self._worker(session)
+            stmt = (select(BatchJobRunRow)
+                    .where(BatchJobRunRow.status.in_(_BATCH_ACTIVE),
+                           BatchJobRunRow.phase_deadline_at.is_not(None),
+                           BatchJobRunRow.phase_deadline_at < now)
+                    .order_by(BatchJobRunRow.phase_deadline_at.asc()).limit(limit))
+            rows = (await session.execute(stmt)).scalars().all()
+            return [_to(r, _BR_FIELDS, BatchJobRun) for r in rows]
+
+
 class SqlScheduleScanner:
     """Cross-tenant DUE scan for the background ticker. Reads via a worker session
     (``app.worker=true``) so the permissive worker RLS policy lets fire_due see
@@ -501,6 +704,9 @@ class SqlUnitOfWork:
         self.run_queue = SqlQueueRepo(s, self.tenant_id)
         self.labeled_examples = SqlLabeledRepo(s, self.tenant_id)
         self.schedules = SqlScheduleRepo(s, self.tenant_id)
+        self.batch_jobs = SqlBatchJobRepo(s, self.tenant_id)
+        self.batch_runs = SqlBatchRunRepo(s, self.tenant_id)
+        self.batch_ingestions = SqlBatchIngestionRepo(s, self.tenant_id)
         self.outbox = SqlOutboxRepo(s, self.tenant_id)
         self.idempotency = SqlIdempotencyRepo(s, self.tenant_id)
         return self

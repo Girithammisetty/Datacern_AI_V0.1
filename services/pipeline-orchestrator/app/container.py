@@ -17,6 +17,7 @@ from app.adapters.manifest_store import LocalFSManifestStore, S3ManifestStore
 from app.adapters.mlflow_gateway import MlflowGateway
 from app.api.auth import LocalScopeAuthz, OpaAuthzClient, TokenVerifier
 from app.config import Settings
+from app.domain.batch import BatchJobService
 from app.domain.catalog import seed_algorithm_templates, seed_components
 from app.domain.scheduler import PipelineScheduleService
 from app.domain.services import (
@@ -45,6 +46,7 @@ class Container:
     template_service: TemplateService
     run_service: RunService
     schedule_service: PipelineScheduleService
+    batch_job_service: BatchJobService
     instantiation_service: AlgorithmInstantiationService
     admin_service: AdminService
     consumer: PipelineEventConsumer
@@ -65,6 +67,12 @@ class Container:
         self.extras.setdefault("drive_tasks", set()).add(task)
         task.add_done_callback(lambda t: self.extras["drive_tasks"].discard(t))
 
+    def drive_batch_run(self, tenant_id: str, run_id: str) -> None:
+        """Fire-and-forget drive of a batch job run (BRD 73). The 202 returns
+        before the trigger phase starts, exactly like a pipeline run's."""
+        self.batch_job_service._spawn(
+            self.batch_job_service.drive_run(tenant_id, run_id))
+
 
 def build_container(
     settings: Settings | None = None,
@@ -75,6 +83,7 @@ def build_container(
     executor=None,
     mlflow=None,
     feature_source=None,
+    ingestion_client=None,
 ) -> Container:
     settings = settings or Settings()
     clock = clock or Clock()
@@ -84,6 +93,7 @@ def build_container(
         memory_state = MemoryState()
         uow_factory = memory_uow_factory(memory_state)
         from app.store.memory import (
+            MemoryBatchJobScanner,
             MemoryOrphanScanner,
             MemoryScheduleScanner,
             _InMemoryDedup,
@@ -92,10 +102,12 @@ def build_container(
         dedup = _InMemoryDedup()
         schedule_scanner = MemoryScheduleScanner(memory_state)
         orphan_scanner = MemoryOrphanScanner(memory_state)
+        batch_scanner = MemoryBatchJobScanner(memory_state)
     elif mode == "sql":
         if session_factory is None:
             raise ValueError("sql mode requires a session_factory")
         from app.store.sql import (
+            SqlBatchJobScanner,
             SqlDedupStore,
             SqlOrphanScanner,
             SqlScheduleScanner,
@@ -106,6 +118,7 @@ def build_container(
         dedup = SqlDedupStore(session_factory)
         schedule_scanner = SqlScheduleScanner(session_factory)
         orphan_scanner = SqlOrphanScanner(session_factory)
+        batch_scanner = SqlBatchJobScanner(session_factory)
     else:
         raise ValueError(f"unknown mode {mode!r}")
 
@@ -161,21 +174,33 @@ def build_container(
 
     workflow_backend = resolve_workflow_backend(settings)
 
+    # BRD 73: the batch job trigger path. REAL only — there is no in-memory
+    # ingestion double in the runtime wiring, so a batch job with no configured
+    # client fails honestly in its `trigger` phase instead of inventing an
+    # ingestion id. Unit tests inject a double through this kwarg.
+    if ingestion_client is None and settings.use_real_adapters:
+        from app.adapters.ingestion_client import HttpIngestionClient
+
+        ingestion_client = HttpIngestionClient(settings.ingestion_service_url,
+                                               settings.ingestion_client_spiffe)
+
     deps = ServiceDeps(
         settings=settings, clock=clock, uow_factory=uow_factory, components=components,
         algorithms=algorithms, manifest_store=manifest_store, executor=executor,
         mlflow=mlflow, feature_source=feature_source, dataset_reader=dataset_reader,
         events_topic=settings.events_topic, workflow_backend=workflow_backend,
-        orphan_scanner=orphan_scanner)
+        orphan_scanner=orphan_scanner, ingestion_client=ingestion_client)
 
     catalog_service = CatalogService(deps)
     template_service = TemplateService(deps)
     run_service = RunService(deps, template_service)
     schedule_service = PipelineScheduleService(deps, run_service, schedule_scanner)
+    batch_job_service = BatchJobService(deps, run_service, batch_scanner)
     instantiation_service = AlgorithmInstantiationService(deps, template_service)
     admin_service = AdminService(deps)
     consumer = PipelineEventConsumer(
         deps, dedup, feature_source=feature_source,
+        batch_job_service=batch_job_service,
         default_quota={
             "max_concurrent_runs": settings.default_max_concurrent_runs,
             "max_concurrent_pods": settings.default_max_concurrent_pods,
@@ -189,7 +214,7 @@ def build_container(
     return Container(
         settings=settings, clock=clock, deps=deps, catalog_service=catalog_service,
         template_service=template_service, run_service=run_service,
-        schedule_service=schedule_service,
+        schedule_service=schedule_service, batch_job_service=batch_job_service,
         instantiation_service=instantiation_service, admin_service=admin_service,
         consumer=consumer, mcp=mcp, token_verifier=TokenVerifier(settings), authz=authz,
         dedup=dedup, memory_state=memory_state,

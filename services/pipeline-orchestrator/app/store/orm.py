@@ -171,6 +171,74 @@ class PipelineScheduleRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class BatchJobRow(Base):
+    __tablename__ = "batch_jobs"
+    id: Mapped[str] = _uuid(primary_key=True)
+    tenant_id: Mapped[str] = _uuid(nullable=False)
+    workspace_id: Mapped[str] = _uuid(nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    pipeline_template_id: Mapped[str] = _uuid(nullable=False)
+    pipeline_version_id: Mapped[str | None] = _uuid()
+    connection_bindings: Mapped[list] = mapped_column(JSONB, default=list)
+    cron: Mapped[str | None] = mapped_column(Text)
+    timezone: Mapped[str] = mapped_column(Text, nullable=False, default="UTC")
+    run_parameters: Mapped[dict] = mapped_column(JSONB, default=dict)
+    start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    phase_timeout_seconds: Mapped[int | None] = mapped_column(Integer)
+    next_fire_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_fire_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_run_id: Mapped[str | None] = _uuid()
+    created_by: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BatchJobRunRow(Base):
+    __tablename__ = "batch_job_runs"
+    id: Mapped[str] = _uuid(primary_key=True)
+    tenant_id: Mapped[str] = _uuid(nullable=False)
+    batch_job_id: Mapped[str] = _uuid(nullable=False)
+    pipeline_template_id: Mapped[str] = _uuid(nullable=False)
+    pipeline_version_id: Mapped[str | None] = _uuid()
+    batch_key: Mapped[str] = mapped_column(Text, nullable=False)
+    phase: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    status: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    trigger: Mapped[str] = mapped_column(Text, default="manual")
+    input_dataset_urns: Mapped[list] = mapped_column(ARRAY(Text), default=list)
+    output_dataset_urns: Mapped[list] = mapped_column(ARRAY(Text), default=list)
+    pipeline_run_id: Mapped[str | None] = _uuid()
+    error: Mapped[dict | None] = mapped_column(JSONB)
+    phase_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retried_from_run_id: Mapped[str | None] = _uuid()
+    submitted_by: Mapped[str | None] = mapped_column(Text)
+    via_agent: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_owner: Mapped[str | None] = mapped_column(Text)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BatchJobRunIngestionRow(Base):
+    __tablename__ = "batch_job_run_ingestions"
+    id: Mapped[str] = _uuid(primary_key=True)
+    tenant_id: Mapped[str] = _uuid(nullable=False)
+    batch_job_run_id: Mapped[str] = _uuid(nullable=False)
+    binding_key: Mapped[str] = mapped_column(Text, nullable=False)
+    ingestion_id: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="triggered")
+    dataset_urn: Mapped[str | None] = mapped_column(Text)
+    iceberg_snapshot_id: Mapped[str | None] = mapped_column(Text)
+    dataset_version_urn: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class OutboxRow(Base):
     __tablename__ = "outbox"
     id: Mapped[str] = _uuid(primary_key=True)

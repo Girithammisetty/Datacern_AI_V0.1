@@ -9,6 +9,9 @@ from datetime import datetime
 
 from app.domain.entities import (
     AlgorithmTemplate,
+    BatchJob,
+    BatchJobRun,
+    BatchJobRunIngestion,
     Component,
     LabeledExample,
     PipelineRun,
@@ -17,7 +20,8 @@ from app.domain.entities import (
     TemplateVersion,
     TenantQuota,
 )
-from app.domain.enums import RunStatus
+from app.domain.enums import BATCH_ACTIVE_STATUSES, BatchPhase, RunStatus
+from app.domain.errors import Conflict
 from app.domain.ports import Page
 from app.utils import decode_cursor, encode_cursor
 
@@ -33,6 +37,9 @@ class MemoryState:
         self.queue: list[tuple[str, str, datetime]] = []
         self.labeled: dict[tuple[str, str, str], LabeledExample] = {}
         self.schedules: dict[str, PipelineSchedule] = {}
+        self.batch_jobs: dict[str, BatchJob] = {}
+        self.batch_runs: dict[str, BatchJobRun] = {}
+        self.batch_ingestions: dict[str, BatchJobRunIngestion] = {}
         self.outbox: list[dict] = []
         self.idempotency: dict[tuple[str, str], dict] = {}
         self.processed: set[str] = set()
@@ -274,6 +281,165 @@ class _Schedules:
             self.s.schedules.pop(schedule_id, None)
 
 
+class _BatchJobs:
+    def __init__(self, s, tid):
+        self.s, self.tid = s, tid
+
+    async def add(self, job: BatchJob):
+        self.s.batch_jobs[job.id] = copy.deepcopy(job)
+
+    async def get(self, job_id, include_deleted=False):
+        job = self.s.batch_jobs.get(job_id)
+        if not job or job.tenant_id != self.tid:
+            return None
+        if job.deleted_at and not include_deleted:
+            return None
+        return copy.deepcopy(job)
+
+    async def get_by_name(self, workspace_id, name):
+        for job in self.s.batch_jobs.values():
+            if (job.tenant_id == self.tid and job.workspace_id == workspace_id
+                    and job.name.lower() == name.lower() and not job.deleted_at):
+                return copy.deepcopy(job)
+        return None
+
+    async def list(self, limit, cursor):
+        rows = [j for j in self.s.batch_jobs.values()
+                if j.tenant_id == self.tid and not j.deleted_at]
+        rows.sort(key=lambda j: j.created_at, reverse=True)
+        return _page([copy.deepcopy(j) for j in rows], limit, cursor)
+
+    async def update(self, job: BatchJob):
+        self.s.batch_jobs[job.id] = copy.deepcopy(job)
+
+
+class _BatchRuns:
+    def __init__(self, s, tid):
+        self.s, self.tid = s, tid
+
+    async def add(self, run: BatchJobRun):
+        # Mirrors migration 0005's ux_batch_runs_active_job partial unique index:
+        # a job may have at most ONE non-terminal run, so two instances racing a
+        # due job cannot both create one (and thus cannot both ingest the batch).
+        if await self.active_for_job(run.batch_job_id) is not None:
+            raise Conflict("batch job already has an active run")
+        self.s.batch_runs[run.id] = copy.deepcopy(run)
+
+    async def get(self, run_id):
+        run = self.s.batch_runs.get(run_id)
+        return copy.deepcopy(run) if run and run.tenant_id == self.tid else None
+
+    async def update(self, run: BatchJobRun):
+        # The lease belongs to claim/renew/release alone (mirrors SqlBatchRunRepo).
+        stored = self.s.batch_runs.get(run.id)
+        fresh = copy.deepcopy(run)
+        if stored is not None:
+            fresh.lease_owner = stored.lease_owner
+            fresh.lease_expires_at = stored.lease_expires_at
+        self.s.batch_runs[run.id] = fresh
+
+    async def list_for_job(self, job_id, limit, cursor):
+        rows = [r for r in self.s.batch_runs.values()
+                if r.tenant_id == self.tid and r.batch_job_id == job_id]
+        rows.sort(key=lambda r: r.created_at, reverse=True)
+        return _page([copy.deepcopy(r) for r in rows], limit, cursor)
+
+    async def active_for_job(self, job_id):
+        active = {int(s) for s in BATCH_ACTIVE_STATUSES}
+        for run in self.s.batch_runs.values():
+            if (run.tenant_id == self.tid and run.batch_job_id == job_id
+                    and run.status in active):
+                return copy.deepcopy(run)
+        return None
+
+    async def claim_lease(self, run_id, owner: str, now, expires_at) -> bool:
+        run = self.s.batch_runs.get(run_id)
+        if run is None:
+            return False
+        if run.lease_owner is not None and run.lease_expires_at is not None \
+                and run.lease_expires_at >= now:
+            return False
+        run.lease_owner, run.lease_expires_at = owner, expires_at
+        return True
+
+    async def renew_lease(self, run_id, owner: str, expires_at) -> bool:
+        run = self.s.batch_runs.get(run_id)
+        if run is None or run.lease_owner != owner:
+            return False
+        run.lease_expires_at = expires_at
+        return True
+
+    async def release_lease(self, run_id) -> None:
+        run = self.s.batch_runs.get(run_id)
+        if run is not None:
+            run.lease_owner, run.lease_expires_at = None, None
+
+
+class _BatchIngestions:
+    def __init__(self, s, tid):
+        self.s, self.tid = s, tid
+
+    async def add(self, rec: BatchJobRunIngestion):
+        for existing in self.s.batch_ingestions.values():
+            if (existing.batch_job_run_id == rec.batch_job_run_id
+                    and existing.binding_key == rec.binding_key):
+                raise Conflict("binding already triggered for this run")
+        self.s.batch_ingestions[rec.id] = replace(rec)
+
+    async def update(self, rec: BatchJobRunIngestion):
+        if rec.id in self.s.batch_ingestions:
+            self.s.batch_ingestions[rec.id] = replace(rec)
+
+    async def list_for_run(self, run_id):
+        rows = [r for r in self.s.batch_ingestions.values()
+                if r.tenant_id == self.tid and r.batch_job_run_id == run_id]
+        rows.sort(key=lambda r: r.binding_key)
+        return [replace(r) for r in rows]
+
+    async def get_by_ingestion_id(self, ingestion_id):
+        for rec in self.s.batch_ingestions.values():
+            if rec.tenant_id == self.tid and rec.ingestion_id == ingestion_id:
+                return replace(rec)
+        return None
+
+
+class MemoryBatchJobScanner:
+    """Cross-tenant batch scans (unit/dev tier). Mirrors SqlBatchJobScanner."""
+
+    def __init__(self, state: MemoryState):
+        self.s = state
+
+    async def due(self, now, limit: int = 100) -> list[BatchJob]:
+        rows = [j for j in self.s.batch_jobs.values()
+                if not j.deleted_at and not j.paused and j.next_fire_at is not None
+                and j.next_fire_at <= now and (j.end_at is None or j.end_at > now)]
+        rows.sort(key=lambda j: j.next_fire_at)
+        return [copy.deepcopy(j) for j in rows[:limit]]
+
+    async def orphaned(self, now, stale_before, limit: int = 50) -> list[BatchJobRun]:
+        active = {int(s) for s in BATCH_ACTIVE_STATUSES}
+        rows = []
+        for run in self.s.batch_runs.values():
+            if run.status not in active:
+                continue
+            if run.lease_expires_at is not None:
+                if run.lease_expires_at < now:
+                    rows.append(run)
+            elif (run.phase != int(BatchPhase.ingestion)
+                    and run.created_at < stale_before):
+                rows.append(run)
+        rows.sort(key=lambda r: r.lease_expires_at or r.created_at)
+        return [copy.deepcopy(r) for r in rows[:limit]]
+
+    async def past_deadline(self, now, limit: int = 50) -> list[BatchJobRun]:
+        active = {int(s) for s in BATCH_ACTIVE_STATUSES}
+        rows = [r for r in self.s.batch_runs.values()
+                if r.status in active and r.phase_deadline_at is not None
+                and r.phase_deadline_at < now]
+        rows.sort(key=lambda r: r.phase_deadline_at)
+        return [copy.deepcopy(r) for r in rows[:limit]]
+
+
 class MemoryScheduleScanner:
     """Cross-tenant DUE scan (unit/dev tier). Mirrors SqlScheduleScanner: returns
     enabled schedules whose next_fire_at is due, across all tenants."""
@@ -343,6 +509,9 @@ class MemoryUnitOfWork:
         self.run_queue = _Queue(self.s, self.tenant_id)
         self.labeled_examples = _Labeled(self.s, self.tenant_id)
         self.schedules = _Schedules(self.s, self.tenant_id)
+        self.batch_jobs = _BatchJobs(self.s, self.tenant_id)
+        self.batch_runs = _BatchRuns(self.s, self.tenant_id)
+        self.batch_ingestions = _BatchIngestions(self.s, self.tenant_id)
         self.outbox = _Outbox(self.s, self.tenant_id)
         self.idempotency = _Idempotency(self.s, self.tenant_id)
         return self

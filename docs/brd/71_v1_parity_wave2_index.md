@@ -141,6 +141,6 @@ over-engineer.
 |-----|------|-------|
 | **71** pipeline builder completeness | U1, U2, P6 | **inc1–inc4 DONE** — backend (`drop-columns`, exclude mode, `GET /resource-policy`, `effective_resources`), BFF (`pipelineResourcePolicy`, `effectiveResources`), UI (resource round trip + "Resource Parameters" group + DAG schema propagation), agent (clamped envelope proposal). 74 new tests; orchestrator 220 / bff 450 / ui-web 876 / agent-runtime 409 all green. Live-verify pending. |
 | **72** chart renderer completeness | V1c, V2c | OPEN |
-| **73** batch job orchestration | B1, B2 | OPEN |
+| **73** batch job orchestration | B1, B2 | **inc1–inc3 (backend) DONE** — `BatchJob`/`BatchJobRun` + migration 0005 (RLS + at-most-one-active-run), the 3-phase machine on the existing lease/reaper machinery, idempotent triggering via ingestion-service's internal MCP facade, an event-driven ingestion phase off `ingestion.events.v1` + `dataset.version_created`, phase deadlines, retry-from-the-failed-phase, REST + outbox events, and the `batch-trigger` component. 52 new tests; orchestrator unit 260 + integration 16, ingestion-service unit 596, all green. **BFF/UI (AC-9 UI half) and the agent proposal (AC-10 / inc4) deferred.** |
 | **74** discovery & export completeness | D1, D2, D3 | OPEN |
 | **75** profiling depth parity | F1 | OPEN |

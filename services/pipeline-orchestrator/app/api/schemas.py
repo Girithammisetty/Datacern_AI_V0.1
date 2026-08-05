@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.domain.enums import ModelType, PipelineType, RunStatus
+from app.domain.enums import (
+    BatchPhase,
+    BatchRunStatus,
+    ModelType,
+    PipelineType,
+    RunStatus,
+)
 
 _PT = Literal["data_prep", "feature_engineering", "model", "training", "inference",
               "profiling", "scheduled"]
@@ -55,6 +62,45 @@ class ScheduleCreate(BaseModel):
     name: str | None = Field(default=None, max_length=255)
     timezone: str = "UTC"
     run_parameters: dict = Field(default_factory=dict)
+
+
+class ConnectionBinding(BaseModel):
+    """One batch datasource to pull before the pipeline runs (V1's `connections`
+    JSON, typed). ``binding_key`` is stable across retries and is half of the
+    ingestion Idempotency-Key, so it defaults to the list position rather than
+    being generated."""
+
+    connection_id: str
+    binding_key: str | None = None
+    dataset_urn: str | None = None
+    workspace_id: str | None = None
+    ingestion_params: dict = Field(default_factory=dict)
+
+
+class BatchJobCreate(BaseModel):
+    workspace_id: str
+    name: str = Field(min_length=1, max_length=255)
+    pipeline_template_id: str
+    pipeline_version_id: str | None = None
+    connection_bindings: list[ConnectionBinding] = Field(min_length=1)
+    cron: str | None = None
+    timezone: str = "UTC"
+    run_parameters: dict = Field(default_factory=dict)
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    paused: bool = False
+    phase_timeout_seconds: int | None = Field(default=None, ge=1)
+
+
+class BatchJobUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    pipeline_version_id: str | None = None
+    connection_bindings: list[ConnectionBinding] | None = None
+    cron: str | None = None
+    timezone: str | None = None
+    run_parameters: dict | None = None
+    end_at: datetime | None = None
+    phase_timeout_seconds: int | None = Field(default=None, ge=1)
 
 
 class QuotaUpdate(BaseModel):
@@ -125,6 +171,58 @@ def schedule_payload(s) -> dict:
         "last_fire_at": s.last_fire_at.isoformat() if s.last_fire_at else None,
         "created_by": s.created_by,
         "created_at": s.created_at.isoformat(), "updated_at": s.updated_at.isoformat(),
+    }
+
+
+def _iso(value) -> str | None:
+    return value.isoformat() if value else None
+
+
+def batch_job_payload(j) -> dict:
+    return {
+        "id": j.id, "workspace_id": j.workspace_id, "name": j.name,
+        "pipeline_template_id": j.pipeline_template_id,
+        "pipeline_version_id": j.pipeline_version_id,
+        "connection_bindings": j.connection_bindings,
+        "cron": j.cron, "timezone": j.timezone,
+        "run_parameters": j.run_parameters, "paused": j.paused,
+        "phase_timeout_seconds": j.phase_timeout_seconds,
+        "start_at": _iso(j.start_at), "end_at": _iso(j.end_at),
+        "next_fire_at": _iso(j.next_fire_at), "last_fire_at": _iso(j.last_fire_at),
+        "last_run_id": j.last_run_id, "created_by": j.created_by,
+        "created_at": j.created_at.isoformat(), "updated_at": j.updated_at.isoformat(),
+    }
+
+
+def batch_run_payload(r, ingestions=None) -> dict:
+    data = {
+        "id": r.id, "batch_job_id": r.batch_job_id, "batch_key": r.batch_key,
+        "pipeline_template_id": r.pipeline_template_id,
+        "pipeline_version_id": r.pipeline_version_id,
+        "phase": BatchPhase(r.phase).name, "status": BatchRunStatus(r.status).name,
+        "trigger": r.trigger, "pipeline_run_id": r.pipeline_run_id,
+        "input_dataset_urns": r.input_dataset_urns,
+        "output_dataset_urns": r.output_dataset_urns,
+        "error": r.error, "phase_deadline_at": _iso(r.phase_deadline_at),
+        "retried_from_run_id": r.retried_from_run_id,
+        "submitted_by": r.submitted_by, "via_agent": r.via_agent,
+        "created_at": r.created_at.isoformat(),
+        "started_at": _iso(r.started_at), "finished_at": _iso(r.finished_at),
+    }
+    if ingestions is not None:
+        # The phase timeline the UI renders: one row per binding, with the
+        # ingestion it fired and the dataset version that ingestion produced.
+        data["ingestions"] = [batch_ingestion_payload(i) for i in ingestions]
+    return data
+
+
+def batch_ingestion_payload(i) -> dict:
+    return {
+        "binding_key": i.binding_key, "ingestion_id": i.ingestion_id,
+        "status": i.status, "dataset_urn": i.dataset_urn,
+        "iceberg_snapshot_id": i.iceberg_snapshot_id,
+        "dataset_version_urn": i.dataset_version_urn, "error": i.error,
+        "created_at": i.created_at.isoformat(), "updated_at": i.updated_at.isoformat(),
     }
 
 

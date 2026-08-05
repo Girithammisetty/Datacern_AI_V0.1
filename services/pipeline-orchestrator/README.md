@@ -101,6 +101,7 @@ if the runtime role owned the tables. Migrations run as a privileged role.
 | Quotas & node routing | PIPE-FR-040..042 | `RunService` quota/queue + compiler node affinity labels |
 | Component & algorithm catalog | PIPE-FR-050..053 | `domain/catalog.py`, `mcp/facade.py` |
 | Artifacts | PIPE-FR-060..062 | `adapters/manifest_store.py`, run `output_registered` events |
+| Batch jobs (BRD 73, B1/B2) | — | `domain/batch.py`, `adapters/ingestion_client.py`, `api/routes/batch_jobs.py`, `migrations/versions/0005_batch_jobs.py` |
 
 31 Must FRs implemented; PIPE-FR-005/037 (Should) implemented. Node-pool routing
 (PIPE-FR-041) is emitted as manifest labels/affinity (applied by the infra-gated Argo
@@ -125,6 +126,8 @@ drives the equivalent status transitions + events directly.
 | Run lifecycle on real Kafka | `integration/test_kafka_lifecycle.py::test_run_lifecycle_events_on_real_kafka` |
 | Labeled dataset from real disposition Kafka | `integration/test_kafka_lifecycle.py::test_labeled_dataset_from_real_disposition_kafka` |
 | Real adapters + local executor by default | `integration/test_dag_and_boot.py::test_app_main_wires_real_adapters_and_local_executor` |
+| BRD 73 AC-1..AC-9 batch jobs (ordering, failed-ingestion refusal, version pinning, no double-ingest, the lease, retry-from-phase, deadlines, `batch-trigger`, events) | `unit/test_batch_jobs.py` |
+| BRD 73 migration + RLS + at-most-one-active-run + lease, on real Postgres | `integration/test_batch_jobs_sql.py` |
 
 ## Remaining stubs / documented exceptions
 
@@ -136,6 +139,13 @@ drives the equivalent status transitions + events directly.
 - In-memory store / dedup / feature source are unit/dev-tier doubles selected only in
   `mode="memory"` with `use_real_adapters=False` — set only by tests, never reachable
   from the shipped `app.main` default.
+- **Batch jobs (BRD 73)** — there is deliberately NO in-memory ingestion double in the
+  runtime wiring: with no `HttpIngestionClient` configured a batch job run FAILS in its
+  `trigger` phase rather than skipping the phase and scoring stale data. AC-3 pins the
+  exact dataset version URN + Iceberg snapshot id onto the run, but the executor still
+  READS a dataset's *current* version — dataset-service has no version-scoped rows API;
+  flagged, not faked. The BFF/UI leg and the `data_pipeline_builder` agent proposal
+  (AC-10 / inc4) are deferred.
 
 Verified: `make test-unit` (44) + `make test-integration` (9) green; `ruff` clean; the
 shipped `app.main` wires real adapters by default and the default-DSN role

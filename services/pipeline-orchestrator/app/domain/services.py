@@ -74,6 +74,10 @@ class ServiceDeps:
     dataset_reader: Any = None  # HttpDatasetReader (real) / InMemoryDatasetReader (unit)
     workflow_backend: Any = None  # ArgoWorkflowExecutor when executor_backend="argo"
     orphan_scanner: Any = None  # Sql/MemoryOrphanScanner — cross-tenant, worker session
+    #: BRD 73 — HttpIngestionClient (real). None means batch triggering is not
+    #: configured, and a batch job run fails honestly in its `trigger` phase
+    #: rather than pretending to have started an ingestion.
+    ingestion_client: Any = None
     events_topic: str = "pipeline.events.v1"
     extras: dict = field(default_factory=dict)
 
@@ -511,6 +515,13 @@ class RunService:
                     urns.append(ds)
         if params.get("labeled_dataset_urn"):
             urns.append(params["labeled_dataset_urn"])
+        # BRD 73: a batch job run passes the EXACT dataset version URNs its
+        # ingestion phase produced. Recording them here is what lets "which data
+        # produced this score" be answered from the run itself rather than
+        # inferred from which ingestion happened to finish nearest in time.
+        for urn in params.get("input_dataset_urns") or []:
+            if urn and urn not in urns:
+                urns.append(urn)
         return urns
 
     # ---- execution (local executor path; Argo path via the informer adapter) ----
@@ -811,12 +822,39 @@ class RunService:
             written[alias] = res
             return res.ref
 
+        # BRD 73 (B2): the batch-trigger node's port. The DAG runs in a worker
+        # thread (below), so the async ingestion-service call is handed back to
+        # THIS loop rather than a second one — one client, one connection pool.
+        # The Idempotency-Key is the pipeline run id + node alias, so re-running
+        # the same run (a reaper re-drive) replays the ingestion instead of
+        # creating a second one, the same discipline the batch job's trigger phase
+        # uses.
+        loop = asyncio.get_running_loop()
+
+        def _trigger(alias, params):
+            client = self.d.ingestion_client
+            if client is None:
+                raise CannotCompile(
+                    "batch-trigger requires an ingestion client; none is configured")
+            args = {"ingestion_mode": (params or {}).get("ingestion_mode", "query"),
+                    "connection_id": (params or {}).get("connection_id"),
+                    "workspace_id": template.workspace_id if template else None}
+            if (params or {}).get("dataset"):
+                args["dataset_urn"] = params["dataset"]
+            if (params or {}).get("statement"):
+                args["statement"] = params["statement"]
+            future = asyncio.run_coroutine_threadsafe(
+                client.create_ingestion(tenant_id, args,
+                                        idempotency_key=f"{run.id}:{alias}"), loop)
+            return future.result()
+
         # Pandas over in-memory frames is CPU-bound and holds the GIL. Running it
         # inline blocked the event loop for the whole DAG — every HTTP request in
         # this process queued behind one tenant's data-prep run, and the lease
         # heartbeat could not fire either. Hand it to a thread like training does.
         result = await asyncio.to_thread(
-            LocalPipelineExecutor(reader=_reader, writer=_writer).run, definition,
+            LocalPipelineExecutor(reader=_reader, writer=_writer,
+                                  trigger=_trigger).run, definition,
             run.run_parameters or {})
         await self._finish_data_prep_success(ctx, run.id, result, written)
 
@@ -831,10 +869,16 @@ class RunService:
             run.metrics = {"output_rows": float(total_rows),
                            "outputs": float(len(written)),
                            "nodes": float(len(result.statuses))}
+            triggered = getattr(result, "triggered_ingestions", None) or {}
             run.components_status = {
                 s.alias: {"alias": s.alias, "component": s.component, "phase": s.phase,
                           "rows_out": s.rows_out,
-                          "finished_at": run.finished_at.isoformat()}
+                          "finished_at": run.finished_at.isoformat(),
+                          # BRD 73 (B2): a batch-trigger node's whole output is the
+                          # ingestion it started — record its id or the run says
+                          # "Succeeded" with nothing to show for it.
+                          **({"ingestion_id": triggered[s.alias].get("id")}
+                             if s.alias in triggered else {})}
                 for s in result.statuses}
             await uow.runs.update(run)
             duration = (run.finished_at - (run.started_at or run.finished_at)).total_seconds()
@@ -859,7 +903,12 @@ class RunService:
         hyper = {k: v for k, v in params.items()
                  if k not in {"algorithm", "label_column", "labeled_dataset_urn",
                               "dataset_urn", "training_data",
-                              "mlflow_experiment", "mlflow_experiment_id"}}
+                              "mlflow_experiment", "mlflow_experiment_id",
+                              # BRD 73: a batch job's provenance parameters are
+                              # lineage, not hyperparameters — passing them to the
+                              # estimator would be an unknown-kwarg crash.
+                              "batch_key", "batch_job_run_id", "batch_datasets",
+                              "input_dataset_urns"}}
         reg_name = f"{template.name if template else 'model'}".replace(" ", "_")
         reg_name = f"wr_{tenant_id[:8]}_{reg_name}"[:120]
         return TrainingSpec(

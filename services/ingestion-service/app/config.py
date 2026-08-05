@@ -107,7 +107,13 @@ class Settings:
     # (TPL-FR-012). Mirrors pipeline-orchestrator's config exactly.
     spiffe_header: str = "x-client-spiffe-id"
     internal_allowed_spiffe: list[str] = field(
-        default_factory=lambda: ["spiffe://datacern/ns/tools/sa/mcp-gateway"]
+        default_factory=lambda: [
+            "spiffe://datacern/ns/tools/sa/mcp-gateway",
+            # BRD 73: pipeline-orchestrator's batch jobs fire ingestions through
+            # this same facade. A cron-fired job has no user token and must not
+            # mint one, so SPIFFE is the only honest way for it to call in.
+            "spiffe://datacern/ns/ml/sa/pipeline-orchestrator",
+        ]
     )
 
     # Deploy-time action-catalog registration (RBC-FR-022).

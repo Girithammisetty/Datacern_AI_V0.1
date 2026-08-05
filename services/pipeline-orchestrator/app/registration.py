@@ -35,6 +35,13 @@ MANIFEST: list[str] = [
     "pipeline.schedule.update",
     "pipeline.schedule.delete",
     "pipeline.schedule.execute",
+    # BRD 73 — batch jobs. batch_job.execute covers run-now / retry / terminate;
+    # batch_job.update covers pause / resume, mirroring the schedule verbs.
+    "pipeline.batch_job.create",
+    "pipeline.batch_job.read",
+    "pipeline.batch_job.update",
+    "pipeline.batch_job.delete",
+    "pipeline.batch_job.execute",
     "pipeline.component.read",
     "pipeline.algorithm.read",
     "pipeline.quota.admin",
