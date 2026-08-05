@@ -20,6 +20,7 @@ const proposals: Proposal[] = Array.from({ length: 1000 }, (_, i) => ({
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => ({ get: () => null }),
+  usePathname: () => "/inbox",
 }));
 vi.mock("@/lib/realtime/useHubTopics", () => ({ useHubTopics: () => {} }));
 vi.mock("@/stores/ui", () => ({

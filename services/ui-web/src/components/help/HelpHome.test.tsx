@@ -19,7 +19,7 @@ vi.mock("@/lib/graphql/client", async (importActual) => {
     },
   };
 });
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/help" }));
 
 import { HelpHome } from "./HelpHome";
 

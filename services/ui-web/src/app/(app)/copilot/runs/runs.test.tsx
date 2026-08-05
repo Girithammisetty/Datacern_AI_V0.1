@@ -20,7 +20,7 @@ vi.mock("@/lib/graphql/client", async (importActual) => {
 });
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/copilot/runs" }));
 
 import AgentRunsIndex from "./page";
 

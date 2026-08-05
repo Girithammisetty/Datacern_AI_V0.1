@@ -17,8 +17,8 @@ import tempfile
 
 # DOCTYPE/entity-expansion is rejected by _guard below (NFR XML hardening), so the
 # stdlib parsers are safe here despite semgrep's use-defused-xml recommendation.
-import xml.etree.ElementTree as ET  # nosemgrep: use-defused-xml
-import xml.parsers.expat as expat  # nosemgrep: use-defused-xml
+import xml.etree.ElementTree as ET  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml  # noqa: E501
+import xml.parsers.expat as expat  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml  # noqa: E501
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path

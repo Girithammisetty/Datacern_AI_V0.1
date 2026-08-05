@@ -9,6 +9,7 @@ const replace = vi.fn();
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, refresh }),
+  usePathname: () => "/live-demo",
 }));
 
 async function fillAndSubmit(email = "ada@acme-corp.example") {

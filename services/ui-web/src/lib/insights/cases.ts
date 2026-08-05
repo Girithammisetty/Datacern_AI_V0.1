@@ -86,6 +86,13 @@ function isLive(c: Case): boolean {
   return LIVE.has(String(c.status ?? ""));
 }
 
+/** Public form of the "still represents work" predicate, so other case
+ * surfaces (e.g. the worklist's "My open cases" view) narrow with the SAME
+ * definition of open that these insights count with — one source of truth. */
+export function isLiveCase(c: Case): boolean {
+  return isLive(c);
+}
+
 /** Parse an ISO timestamp, returning null for absent or unparseable values —
  * a case with no due date is not overdue, and a malformed one must not be
  * silently treated as epoch (which would make everything overdue). */

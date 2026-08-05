@@ -1,7 +1,6 @@
 "use client";
 import { use, useMemo, useState } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
-import { Clock } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AsyncBoundary } from "@/components/primitives/AsyncBoundary";
 import { StatusChip } from "@/components/primitives/StatusChip";
@@ -11,6 +10,7 @@ import { AiLabel } from "@/components/primitives/AiLabel";
 import { DiffView } from "@/components/primitives/DiffView";
 import { Can } from "@/components/authz/Can";
 import { CaseActionsBar } from "@/components/cases/CaseActionsBar";
+import { headlineOf, EvidenceCard, LatestProposalCard, Field, SlaChip } from "@/components/cases/CaseWorkPane";
 import { FEATURE_GATES, cap } from "@/lib/authz/registry";
 import { Badge, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import { useToasts } from "@/stores/ui";
 import { GraphQLRequestError } from "@/lib/graphql/client";
 import { formatLocal } from "@/lib/utils";
 import { summarizeProjection, DeadlineChip } from "@/components/cases/projection";
-import type { Case, CaseActivity, CaseEvidence, Severity } from "@/lib/graphql/types";
+import type { CaseActivity, CaseEvidence, Severity } from "@/lib/graphql/types";
 
 
 export default function CaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -176,14 +176,6 @@ export default function CaseDetailPage({ params }: { params: Promise<{ id: strin
   );
 }
 
-
-/** Domain headline: the projection's subject when present, else the title. */
-function headlineOf(c: Case): string {
-  const s = summarizeProjection(c.displayProjection);
-  if (!s?.headline) return c.title ?? `Case #${c.caseNumber}`;
-  return s.reference ? `${s.headline} · ${s.reference}` : s.headline;
-}
-
 /**
  * The decision cockpit's evidence surface: the pack/dataset display projection
  * — investigator briefing first, then every projected field. Renders nothing
@@ -309,87 +301,6 @@ function AttachmentsPanel({
         </div>
       )}
     </div>
-  );
-}
-
-function EvidenceCard({ c }: { c: Case }) {
-  const s = summarizeProjection(c.displayProjection);
-  if (!s) return null;
-  const detailFields = s.fields.filter(([k]) => k !== "note");
-  return (
-    <Card className="mb-4">
-      <CardHeader>
-        <CardTitle className="text-sm">Evidence</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        {s.note && (
-          <p className="rounded-md border-l-2 border-primary bg-muted/50 p-3 leading-relaxed">{s.note}</p>
-        )}
-        {detailFields.length > 0 && (
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 md:grid-cols-3">
-            {detailFields.map(([k, v]) => (
-              <div key={k} className="min-w-0">
-                <dt className="truncate text-xs text-muted-foreground">{k.replaceAll("_", " ")}</dt>
-                <dd className="truncate font-medium" title={v}>{v}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * Surfaces the newest open AI proposal on the overview so the decision-maker
- * sees the recommendation without hunting through tabs; the full list (and
- * the four-eyes review path) stays on the Proposals tab / approval inbox.
- */
-function LatestProposalCard({ c }: { c: Case }) {
-  const pending = c.proposals.filter((p) => p.status === "PENDING");
-  const latest = (pending.length ? pending : c.proposals)[0];
-  if (!latest) return null;
-  return (
-    <Card className="mb-4 border-ai/40">
-      <CardHeader className="flex-row items-center gap-2">
-        <AiLabel />
-        <CardTitle className="text-sm">Recommended: {latest.tool}</CardTitle>
-        <ProvenanceBadge
-          provenance={{ agentKey: latest.agentKey ?? undefined, sourceRunId: undefined, createdAt: latest.createdAt ?? undefined }}
-          className="ml-auto"
-        />
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {latest.rationale && <p className="text-sm text-muted-foreground">{latest.rationale}</p>}
-        <Button asChild size="sm" variant="ai">
-          <a href={`/inbox?p=${latest.id}`}>Review &amp; decide in inbox</a>
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-muted-foreground">{label}</p>
-      <p className="font-medium">{value}</p>
-    </div>
-  );
-}
-
-function SlaChip({ due }: { due?: string | null }) {
-  if (!due) return null;
-  const overdue = new Date(due).getTime() < Date.now();
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-        overdue ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground"
-      }`}
-    >
-      <Clock className="size-3" aria-hidden />
-      {overdue ? "Overdue" : `Due ${formatLocal(due)}`}
-    </span>
   );
 }
 

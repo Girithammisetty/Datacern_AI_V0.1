@@ -5,7 +5,7 @@ import { renderWithProviders } from "@/test/utils";
 import { CommandPalette, CMDK_EVENT } from "./CommandPalette";
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/" }));
 
 let handler: (doc: string, vars: any) => any = () => ({});
 vi.mock("@/lib/graphql/client", async (importActual) => {

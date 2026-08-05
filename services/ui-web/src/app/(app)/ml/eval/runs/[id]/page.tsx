@@ -10,6 +10,7 @@ import { Badge, Card, CardHeader, CardTitle, CardContent, CardDescription } from
 import { Button } from "@/components/ui/button";
 import { EvalSuiteDialog } from "@/components/eval/EvalSuiteDialog";
 import { FEATURE_GATES } from "@/lib/authz/registry";
+import { truncateId } from "@/lib/nav/breadcrumbs";
 import { useEvalRun, useCancelEvalRun } from "@/lib/graphql/hooks";
 import type { EvalCaseResult } from "@/lib/graphql/types";
 import { formatLocal } from "@/lib/utils";
@@ -38,6 +39,8 @@ export default function EvalRunDetailPage({ params }: { params: Promise<{ id: st
     <div>
       <PageHeader
         title={`Run ${id}`}
+        // The heading can afford the full run id; the crumb cannot.
+        breadcrumbLabel={`Run ${truncateId(id)}`}
         description="Case results, suite pins, and promotion-gate status for one scoring run."
         actions={
           run && (run.status === "running" || run.status === "queued" || run.status === "scoring") ? (

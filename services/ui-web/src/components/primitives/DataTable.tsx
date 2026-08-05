@@ -23,6 +23,9 @@ export interface DataTableProps<T> {
   isFetchingMore?: boolean;
   onLoadMore?: () => void;
   onRowActivate?: (row: T) => void;
+  /** The row currently open in a companion detail pane (master-detail hosts
+   * like the Case Workbench) — rendered with a distinct highlight. */
+  activeRowId?: string;
   /** Selection (bulk ops). Controlled via selectedIds + onToggle. */
   selectable?: boolean;
   selectedIds?: Set<string>;
@@ -46,6 +49,7 @@ export function DataTable<T>({
   isFetchingMore,
   onLoadMore,
   onRowActivate,
+  activeRowId,
   selectable,
   selectedIds,
   onToggle,
@@ -140,6 +144,7 @@ export function DataTable<T>({
                 className={cn(
                   "absolute left-0 grid w-full cursor-pointer items-center border-b px-2 text-sm hover:bg-accent/50 focus-visible:bg-accent",
                   selected && "bg-primary/10",
+                  activeRowId === id && "bg-accent/70 shadow-[inset_2px_0_0_hsl(var(--primary))]",
                 )}
                 style={{
                   gridTemplateColumns: gridCols,

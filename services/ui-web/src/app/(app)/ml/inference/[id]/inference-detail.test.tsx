@@ -21,7 +21,7 @@ vi.mock("@/lib/graphql/client", async (importActual) => {
 // The realtime hub is out of scope here.
 vi.mock("@/lib/realtime/useHubTopics", () => ({ useHubTopics: () => {} }));
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/ml/inference/job-1" }));
 
 import InferenceJobDetailPage from "./page";
 
@@ -107,7 +107,9 @@ describe("Inference job detail — lifecycle buttons derive from the REAL state 
 
     job = jobResult({ status: "validating" });
     renderPage();
-    await screen.findByText("score claims");
+    // The job name appears twice now — once as the page title, once as the
+    // last breadcrumb — so wait on the heading specifically.
+    await screen.findByRole("heading", { name: "score claims" });
     expect(screen.queryByRole("button", { name: "Cancel job" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
