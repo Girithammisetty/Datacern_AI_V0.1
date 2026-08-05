@@ -49,6 +49,27 @@ export interface ChartDTO {
   version?: number;
 }
 
+/** One hit from GET /charts (chart-service `chartSearchView`, BRD 74 D2): the
+ * chart plus the parent-dashboard context that makes a cross-dashboard result
+ * actionable ("which dashboard has the denial-rate chart"). */
+export interface ChartSearchHitDTO extends ChartDTO {
+  dashboard_name?: string;
+  dashboard_module?: string;
+  dashboard_tags?: string[];
+}
+
+export interface ChartSearchParams {
+  /** REQUIRED — chart-service 422s without it (workspace-scoped authz). */
+  workspaceId: string;
+  q?: string;
+  module?: string;
+  tag?: string;
+  dashboardId?: string;
+  includeArchived?: boolean;
+  limit: number;
+  cursor?: string;
+}
+
 export interface ChartDataDTO {
   chart_id?: string;
   rows?: unknown[];
@@ -225,12 +246,42 @@ export class ChartClient {
     return unwrap<DashboardDTO>(r);
   }
 
-  /** GET /dashboards?workspace_id=…&filter[archived]=true|false. workspace_id is
-   * REQUIRED server-side (chart-service 400s without it); `archived` is a strict
-   * equality filter, not "include archived too" (defaults to false = live only). */
-  dashboards(workspaceId: string, limit: number, cursor?: string, archived?: boolean): Promise<Page<DashboardDTO>> {
+  /** GET /dashboards?workspace_id=…&q=…&filter[archived]=true|false. workspace_id
+   * is REQUIRED server-side (chart-service 400s without it); `archived` is a strict
+   * equality filter, not "include archived too" (defaults to false = live only).
+   * `q` (BRD 74 D3) is chart-service's own case-insensitive contains over the
+   * dashboard name + description — the server-side search that replaced the
+   * palette's fetch-50-and-filter-locally. */
+  dashboards(
+    workspaceId: string,
+    limit: number,
+    cursor?: string,
+    archived?: boolean,
+    q?: string,
+  ): Promise<Page<DashboardDTO>> {
     return this.http.get<Page<DashboardDTO>>("/api/v1/dashboards", {
-      query: { workspace_id: workspaceId, limit, cursor, "filter[archived]": archived ? "true" : undefined },
+      query: {
+        workspace_id: workspaceId, q, limit, cursor,
+        "filter[archived]": archived ? "true" : undefined,
+      },
+    });
+  }
+
+  /** GET /charts — the cross-dashboard chart search (BRD 74 D2). workspace_id is
+   * REQUIRED: `chart.chart.read` is a workspace-scoped grant, so chart-service
+   * cannot authorize a search spanning workspaces with one decision. */
+  searchCharts(p: ChartSearchParams): Promise<Page<ChartSearchHitDTO>> {
+    return this.http.get<Page<ChartSearchHitDTO>>("/api/v1/charts", {
+      query: {
+        workspace_id: p.workspaceId,
+        q: p.q,
+        module: p.module,
+        tag: p.tag,
+        dashboard_id: p.dashboardId,
+        include_archived: p.includeArchived ? "true" : undefined,
+        limit: p.limit,
+        cursor: p.cursor,
+      },
     });
   }
 

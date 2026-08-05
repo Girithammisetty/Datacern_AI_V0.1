@@ -1,9 +1,12 @@
 # BRD 74 — Discovery & export completeness
 
-**Status:** PARTIAL — 2026-08-05 · **D2 + D1 DONE, D3 DEFERRED** (see the Implement &
-Test log; the deferral is an architectural finding, not a time-box) · part of the
+**Status:** DONE — 2026-08-05 · **D2 + D1 + D3 DONE** (D3 built as the stateless
+fan-out redesign the earlier deferral recommended, NOT the projection the Design
+below specced — see C4 and the inc3 log; AC-6/AC-7 dropped as no longer
+applicable, AC-10 scoped out with a cited architectural reason) · part of the
 [V1 parity wave-2 index](71_v1_parity_wave2_index.md)
-**Owner:** platform · **Services:** `dataset-service` · `chart-service` · `bff-graphql` · `ui-web`
+**Owner:** platform · **Services:** `dataset-service` · `chart-service` ·
+`experiment-service` · `agent-runtime` · `bff-graphql` · `ui-web`
 **Gaps closed:** D1 (dataset export), D2 (cross-dashboard chart search), D3 (cross-service search index)
 
 ---
@@ -72,6 +75,11 @@ other list. Reuses the existing authz action `chart.chart.read`.
 
 ### D3 — search index
 
+> **NOT BUILT AS SPECIFIED.** Everything in this subsection was superseded by C4
+> and replaced by the stateless fan-out in the inc3 log. There is no
+> `search_entries` table, no consumer and no new datastore anywhere. Read inc3,
+> not this.
+
 A `search_entries` projection owned by **`bff-graphql`** (the one service that already
 fans out across every domain and holds the capability registry), fed by the existing
 `*.events.v1` topics each service already publishes — no new producer code in the owning
@@ -97,7 +105,9 @@ services, which is the difference between this and V1's approach.
 
 - **inc1** — D2 (chart search: smallest, self-contained).
 - **inc2** — D1 (dataset export via query-service delegation).
-- **inc3** — D3 (projection + consumers + GraphQL + palette + MCP tool).
+- **inc3** — D3. ~~projection + consumers + GraphQL + palette + MCP tool~~ →
+  **downstream `q` (chart/experiment/agent-runtime) + a stateless `search()`
+  fan-out + palette**; the MCP tool scoped out (see D-3).
 
 ## Acceptance criteria
 
@@ -292,6 +302,157 @@ cross-tenant matrix in `test_isolation_authz.py`.
 `make test-unit` **301 passed** (was 270); `make lint` clean;
 `make test-integration` **22 passed** (was 19).
 
+### inc3 — D3: cross-service search as a stateless fan-out — DONE
+
+The Design above put a `search_entries` projection table inside `bff-graphql`,
+fed by Kafka consumers. **That is not what was built, and it should not be** —
+see C4. This increment builds the redesign the earlier deferral recommended: a
+stateless `search()` root field that fans out to the services that own the data,
+after giving the three services that had no text search one.
+
+The shape of the decision, stated plainly: a projection buys freshness you have
+to maintain and an authorization model you have to reimplement, in exchange for
+one round trip you were going to make anyway. Five of the eight entity kinds
+already had, or trivially gained, a real server-side search in their own
+service. Fanning out to them costs one call per kind, keeps freshness at the
+source, and leaves every authorization decision with the service that already
+makes it. There is no index to fall behind and no delete event to miss — which
+is exactly why AC-6 and AC-7 stopped meaning anything.
+
+**Downstream first — the three services that could not be searched at all.**
+
+- **`chart-service` — `GET /dashboards?q=`.** `handleListDashboards` read only
+  `workspace_id/limit/cursor/filter[module|archived|tag]`; there was no way to
+  find a dashboard by name. `ListDashboards`' seven positional parameters became
+  `domain.DashboardListFilter`, and the statement gained
+  `(name ILIKE $n ESCAPE '\' OR description ILIKE $n ESCAPE '\')` reusing inc1's
+  `LikePattern`, so a term containing `%` or `_` matches literally. Still inside
+  `withTenant`, so **RLS** is what scopes it. This is the direct fix for the
+  palette's `first: 50` + client-side filter.
+- **`experiment-service` — `GET /experiments?q=`, `GET /experiments/list_archived?q=`,
+  `GET /models?q=`.** The service had no `q` of any kind. `SqlExperimentRepo.list`
+  and `SqlModelRepo.list_models` gained an `ILIKE … ESCAPE` over name +
+  description, composed with the existing workspace/stage/id filters and the
+  existing cursor page; `app/utils.like_contains` escapes the metacharacters, and
+  `MemoryState`'s `_text_match` mirrors it so the unit tier tests the same
+  semantics.
+- **`agent-runtime` — `GET /decision-models?q=&limit=&cursor=`.** This route
+  returned **every** decision table for the tenant, unfiltered and unpaged — the
+  reason the palette fetched the lot and matched names in the browser. It now
+  takes `q` (a real `ILIKE … ESCAPE` over `name` and `dataset_urn`) and a genuine
+  **keyset** page: the sort key is `(name ASC, version DESC)`, so the cursor
+  predicate is that tuple comparison written out —
+  `name > :n OR (name = :n AND version < :v)`. New `app/store/paging.py` holds
+  the cursor codec (a malformed cursor is a 422, not a 500) and the LIKE helper.
+
+**Then the BFF — `src/resolvers/search.ts`, and nothing else stateful.**
+
+`search(q, types, workspaceId, first)` settles one leg per requested type, each
+leg being exactly ONE call to the owning service using that service's own text
+search, with the caller's JWT forwarded verbatim:
+
+| type | owning call |
+|---|---|
+| `DATASET` | dataset-service `GET /datasets?q=` (Postgres FTS, `ts_rank`) |
+| `DASHBOARD` | chart-service `GET /dashboards?q=` (**new above**) |
+| `CHART` | chart-service `GET /charts?q=` (**this BRD's inc1**) |
+| `PIPELINE` | pipeline-orchestrator `GET /pipelines?filter[name]=` (a real ILIKE) |
+| `EXPERIMENT` | experiment-service `GET /experiments?q=` (**new above**) |
+| `MODEL` | experiment-service `GET /models?q=` (**new above**) |
+| `CASE` | case-service `GET /cases?q=` (OpenSearch) |
+| `DECISION_MODEL` | agent-runtime `GET /decision-models?q=` (**new above**) |
+
+Three properties are deliberate rather than incidental:
+
+- **The BFF still decides nothing.** A leg whose owner answers 403 is reported
+  `denied: true` with zero hits; the query still succeeds and the other legs
+  still answer. That is the downstream's verdict, *observed* — not a permission
+  check reimplemented in the BFF (BFF-FR-003). AC-8 is therefore true by
+  construction rather than by client-side discipline.
+- **Failures are reported, never swallowed.** A leg whose owner is down comes
+  back with its stable error code (`SERVICE_UNAVAILABLE`, …), so a caller can
+  distinguish "no matches" from "you may not read this" from "that service is
+  down". `DASHBOARD`/`CHART` without a `workspaceId` report
+  `error: "WORKSPACE_REQUIRED"` rather than failing the whole query —
+  `chart.*` grants are workspace-scoped (C2), so those two legs genuinely cannot
+  be answered workspace-agnostically.
+- **No eslint ban was touched.** `pg`, `kafkajs` and `ioredis` remain banned;
+  `deploy/services.yaml` still says `db: ~, migrate: false`; the service still
+  has no migration, no SQL and no stateful fixture.
+
+Also wired in the BFF, all of it passthrough: **`chartSearch(...)`** — inc1's
+`GET /charts` finally reachable from the graph (one client method, one root
+field, one resolver, one mapper `mapChartSearchHit`); `q` on `dashboards`,
+`experiments` and `models`; and `decisionModels` became a real
+`DecisionModelConnection` now that its downstream pages. `ChartSearchHit` is a
+flat type, **not** a `Chart` — `Chart.data` resolves per chart, so a list of
+search hits would have turned it into one downstream call per row (BFF-FR-030).
+It carries `dashboardId` instead, which is the actionable answer anyway.
+
+**`ui-web` — the ⌘K palette is one query.** `CommandPalette.tsx` replaces its
+three documents (`DATASETS` + `DASHBOARDS{first:50}` + `DECISION_MODELS`, the
+last two filtered in the browser) with a single `search()` call. `SEARCH_KINDS`
+binds each entity kind to the capability that unlocks it and the route a hit
+opens, so the palette asks only for kinds the viewer plausibly holds — a UX
+filter over the top of the real, downstream decision, never in place of it. The
+palette now reaches charts, cases, pipelines, experiments and models, which it
+never could before; a chart hit opens the dashboard it lives on, which is the
+question D2's search exists to answer.
+
+**Test.**
+
+- `chart-service` `internal/api/dashboardsearch_test.go` (**8**) — 60 dashboards
+  where the target sorts last: the unfiltered first page of 50 provably does not
+  contain it and `q=denial` returns exactly it (the palette defect at the service
+  tier); description match; case-insensitivity; `%` matching literally; `q`
+  composed with `filter[module|tag|archived]`; `limit=1` cursor paging with no
+  repeats; **cross-tenant search returns an empty page**; another workspace of the
+  same tenant is never returned; `chart.dashboard.read` denied → 403.
+  `test/integration/dashboardsearch_test.go` (**2 funcs / 5 subtests**) repeats the
+  load-bearing ones against **real Postgres** through the shipped non-owner
+  `chart_app` role, proving the ESCAPE clause and that **RLS**, not application
+  filtering, is what hides tenant A's dashboards from tenant B.
+- `experiment-service` `tests/unit/test_text_search.py` (**11**) — `like_contains`
+  escaping; name and description matching; case-insensitivity; `%` and `_`
+  literal; cursor paging over the `q` result set; `q` on the archived list;
+  **tenant isolation**; composition with `filter[workspace_id]` and `filter[id]`;
+  the model registry leg. `tests/integration/test_text_search.py` (**3**) against
+  real Postgres + FORCE RLS.
+- `agent-runtime` `tests/unit/test_decision_model_search.py` (**10**) — the LIKE
+  and cursor helpers; `q` over name and `dataset_urn`; case-insensitivity; `%`
+  literal; keyset paging that terminates with no row repeated; 60 tables where the
+  target sorts last and `q` still finds it; a bad cursor is **422 not 500**;
+  **tenant isolation**.
+- `bff-graphql` `tests/unit/search.test.ts` (**18**) — the real resolvers through
+  Apollo against a double that speaks each owning service's *actual* query
+  contract, so a leg that stopped forwarding `q` fails here. Every kind reached in
+  one query with exactly one downstream call per type; `q` forwarded under each
+  service's own parameter name (`q` / `filter[name]`); `types` narrows the fan-out
+  so an unrequested service is never called; `first` caps each leg; an empty term
+  calls nothing; JWT forwarded on every leg. **AC-8:** 403 on three legs → those
+  three `denied`, no hits of a denied type reach the caller, the rest unaffected;
+  all-denied is an empty *success*, not an error; a broken service reports
+  `SERVICE_UNAVAILABLE` rather than a silent "no matches"; `WORKSPACE_REQUIRED`
+  without a workspace. **AC-9:** 51 dashboards, the match ranked last, one call
+  carrying `q`, the 51st returned. Plus `chartSearch` mapping + filter forwarding
+  + its 403, `decisionModels` paging, `experiments`/`models` `q`, and
+  cross-tenant checks that hit URNs are built from the **caller's** tenant claim
+  and that two tenants' searches share no state.
+- `ui-web` `CommandPalette.test.tsx` (**9**, 4 new) — **AC-9 directly**: against a
+  server double holding 51 dashboards where only the last matches, the palette
+  finds it, issues **exactly one** query for that term, and never emits the three
+  legacy documents; a chart hit routes to its dashboard; **AC-8**: a viewer
+  holding only `dataset.dataset.list` + `case.case.read` requests exactly
+  `["CASE","DATASET"]` and no dashboard option is rendered.
+
+Measured on this branch: chart-service `make test-unit` green + `make lint`
+**0 issues** (integration green against real Postgres); experiment-service
+`make test-unit` **98 passed** (was 87) + `make lint` clean, integration `q`
+suite **3 passed**; agent-runtime `make test-unit` **419 passed** (was 409) +
+`make lint` clean; bff-graphql `tsc --noEmit` clean, `vitest run` **468 passed
+in 61 files** (was 450 in 60), `eslint .` clean, SDL snapshot regenerated;
+ui-web `tsc --noEmit` clean, `vitest run` **943 passed in 131 files** (was 939).
+
 ### Deferred
 
 **D-1 — parquet export.** `POST /datasets/{id}/exports {"format":"parquet"}` is a
@@ -308,51 +469,50 @@ index. No migration was added because `CREATE EXTENSION pg_trgm` requires privil
 the migration owner may not hold in production. Chart counts per workspace are small
 enough that this is not yet a problem; it is a known scaling item, not a defect.
 
-**D-3 — the cross-service search index (gap D3). NOT BUILT, and deliberately not
-half-built.**
+**D-3 — the search MCP tool (AC-10). SCOPED OUT, with a specific reason.**
 
-Per C4, the design as written cannot be implemented where it says to implement it
-without inverting bff-graphql's architecture: the service has no DB, no event
-consumer and no cache **by enforced policy** (three `no-restricted-imports` ESLint
-rules citing BRD clause numbers, `db: ~` + `migrate: false` in `deploy/services.yaml`,
-zero SQL, zero stateful test fixtures). Landing `search_entries` there would mean
-deleting those bans, adding the service's first migration directory, its first Kafka
-consumer, its first stateful test dependency, **and** reimplementing per-workspace
-authorization that five downstream services currently enforce — in a service that
-makes no authorization decision in any resolver today. That is an architecture
-change, not an increment, and it is not one to make silently at the tail of another
-BRD.
+AC-10 asks for the search to be exposed as an MCP read tool returning the same
+results as the GraphQL query for the same principal. Checked against the code,
+that cannot be built honestly today, and the blocker is one line of tool-plane:
 
-What the audit did establish, and what the next increment should use:
+- **tool-plane is the only MCP surface**, and `tools/call` federates to the
+  `mcp_backends.internal_url` resolved from the tool's `owner_service`
+  (`tool-plane/internal/api/gateway.go:344`).
+- The federated request body is `{tool_id, version, args, tenant, obo_sub,
+  agent_id}` plus `X-Trace-Id` and the SPIFFE headers. **No `Authorization`
+  header is forwarded** (`tool-plane/internal/mcp/backend.go:125-148`). That is
+  why every existing backend facade re-authorizes the effective human against
+  its OWN OPA sidecar and then reads its OWN database — e.g. fhir-bridge's
+  `handlers_facade.go:89-100` evaluating `Subject{ID: obo_sub, Typ: "user"}`.
+- `search` has no own database to read. Its only capability is calling eight
+  other services, and the only way bff-graphql can call them is by forwarding
+  the caller's JWT — which the facade contract does not give it. Serving the
+  facade would mean either minting a token in the BFF (a new signing authority
+  in a service that holds no keys) or making its own OPA decision (needs
+  `ioredis`, which `eslint.config.js` bans, and inverts BFF-FR-003).
+- No other service can host it either: the fan-out spans eight domains, and no
+  service other than the BFF has clients for more than its own.
 
-- **Two of the five entity types already have real server-side search that the BFF
-  already exposes.** `datasets(q:)` → dataset-service Postgres FTS with `ts_rank`;
-  `caseSearch(q:)` → case-service OpenSearch with facets.
-- **Charts now have one too — this BRD's own inc1** (`GET /api/v1/charts?q=`) — and
-  it is **not yet wired into bff-graphql**. That is roughly one client method, one
-  root field, one resolver and one mapper.
-- **Dashboards genuinely lack `q`.** `handleListDashboards` reads only
-  `workspace_id/limit/cursor/filter[module|archived|tag]`. That is the direct cause of
-  the palette's `first: 50` + client-side filter, and the fix is a small local change
-  in chart-service, next to the `SearchCharts` SQL inc1 just added.
-- **Pipelines** have `filter[name]` (a real `ILIKE`, name only), already adapted by the
-  BFF as `pipelineTemplates(q:)`.
-- **experiment-service and agent-runtime's decision models have nothing** — no `q`,
-  no ILIKE, no FTS; `decisionModels` is not even paginated. These need new downstream
-  endpoints *whichever* approach is chosen, which is precisely why a projection buys
-  less than it looks like it does.
+A partial tool — one MCP read tool per owning service — would be real code but
+would **not** satisfy AC-10 as written: it would return one entity kind, not the
+same results as `search()`. Shipping it under this AC would be mislabeling, so
+it was not shipped.
 
-**Recommended redesign for D3:** a stateless `search(q, types, workspaceId, first)`
-root field in bff-graphql that **fans out** to the services that own the data —
-exactly what that service is for — after adding `q` to chart-service's dashboards
-list and text search to experiment-service and the decision-model list. Freshness and
-authorization then stay where they already work, and no new datastore is introduced.
-AC-6/AC-7 (a projection and its delete-on-event) would be dropped as no longer
-applicable; AC-8/AC-9/AC-10 survive unchanged.
+**What would unblock it**, concretely and in tool-plane rather than here: have
+the gateway forward the verified caller token to the backend (`backend.go`
+`once()`), and widen the agent_obo scope model so a read tool's token carries
+the downstream actions the tool needs — today `mint_agent_obo` issues
+`scopes=[tool_id]` on the proposal-execution path
+(`agent-runtime/app/proposals/service.py:412-415`) and OPA's `user_path` for
+`typ=agent_obo` requires an exact `scopes` match on the action being checked
+(`rbac-service/policy/datacern_authz_input.rego:55-58,96-99`), so a token scoped
+`search.query` would be denied for `dataset.dataset.list` even if it were
+forwarded. Both are tool-plane/rbac decisions with their own blast radius; they
+do not belong at the tail of a discovery BRD.
 
-**Consequently unmet:** AC-6, AC-7, AC-8, AC-9, AC-10. The ⌘K palette still issues
-its three queries and still filters dashboards client-side; dashboard 51 remains
-unfindable. Nothing was changed in `ui-web` or `bff-graphql`.
+Meanwhile `search()` is a normal authenticated GraphQL field, so an agent
+holding a user JWT can already call it — it is only the governed **MCP**
+tool-plane path that is missing.
 
 ### AC status
 
@@ -363,4 +523,8 @@ unfindable. Nothing was changed in `ui-web` or `bff-graphql`.
 | AC-3 | **Met** — no artifact store, no signing key, no GC in dataset-service; all three stay in query-service. |
 | AC-4 | **Met** — name, description, documentation and dashboard tag, across dashboards, tenant-scoped. Workspace-scoped by necessity (C2). |
 | AC-5 | **Met** — cursor-paged on chart id; `chart.chart.read` enforced. |
-| AC-6..AC-10 | **Not met — D3 deferred** (see above). |
+| AC-6 | **Dropped — no longer applicable.** It asserts the *search projection* contains entries after events are consumed. D3 was built as a stateless fan-out (inc3): there is no projection, no consumer and no entry, by design (C4). Freshness is the owning service's, so the property this AC was protecting — results reflect reality — is met more directly than a projection could. |
+| AC-7 | **Dropped — no longer applicable.** Same reason: with no projection there is no entry to remove on a delete event. A deleted entity stops matching because the owning service stops returning it, which is the guarantee AC-7 was a proxy for. |
+| AC-8 | **Met** — `search()` reaches only the requested types, and a type whose owning service answers 403 comes back `denied: true` with zero hits while the rest of the query still succeeds. The BFF makes no authorization decision (BFF-FR-003) — it reports the downstream's. Covered in `bff-graphql/tests/unit/search.test.ts` (per-leg denial, all-denied, workspace-required) and in the palette test, where a viewer holding two capabilities requests exactly two types. |
+| AC-9 | **Met** — the ⌘K palette issues **one** `search()` query. `ui-web/src/components/shell/CommandPalette.test.tsx` drives a server double holding 51 dashboards where only the last matches: the palette finds it, makes exactly one request for that term, and never emits the three legacy documents. Proven again at the BFF tier and, against real Postgres, at the chart-service tier. |
+| AC-10 | **Scoped out** — the MCP read tool. tool-plane forwards **no** `Authorization` header to a backend facade (`internal/mcp/backend.go:125-148`), so a facade must re-authorize `obo_sub` itself and read its own store; `search` has no store and can only call other services with a forwarded JWT it would not receive. Full reasoning, and the two tool-plane/rbac changes that would unblock it, in D-3 above. Not faked, and not shipped as a per-service partial that would not satisfy the AC as written. |

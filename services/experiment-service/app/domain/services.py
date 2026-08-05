@@ -289,9 +289,9 @@ class ExperimentService(_Base):
             return exp
 
     async def list(self, ctx: CallCtx, workspace_id: str | None, limit: int,
-                   cursor: str | None, archived: bool = False):
+                   cursor: str | None, archived: bool = False, q: str | None = None):
         async with self.uow(ctx.tenant_id) as uow:
-            return await uow.experiments.list(workspace_id, archived, limit, cursor)
+            return await uow.experiments.list(workspace_id, archived, limit, cursor, q=q)
 
     async def patch(self, ctx: CallCtx, exp_id: str, changes: dict) -> Experiment:
         async with self.uow(ctx.tenant_id) as uow:
@@ -1221,12 +1221,14 @@ class RegistryService(_Base):
         return _version_payload(ctx, v, run.mlflow_run_id if run else None)
 
     async def list_models(self, ctx: CallCtx, workspace_id: str | None, stage: str | None,
-                          limit: int, cursor: str | None, ids: list[str] | None = None):
+                          limit: int, cursor: str | None, ids: list[str] | None = None,
+                          q: str | None = None):
         if ids is not None and len(ids) > MAX_BATCH_IDS:
             raise ValidationFailed(f"at most {MAX_BATCH_IDS} model ids per query")
         stage_code = STAGE[stage] if stage in STAGE else None
         async with self.uow(ctx.tenant_id) as uow:
-            page = await uow.models.list_models(workspace_id, stage_code, limit, cursor, ids=ids)
+            page = await uow.models.list_models(workspace_id, stage_code, limit, cursor,
+                                                ids=ids, q=q)
         page.items = [_model_payload(ctx, m) for m in page.items]
         return page
 

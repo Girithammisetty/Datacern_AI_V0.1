@@ -1,7 +1,7 @@
 # BRD 71–75 — V1 → Datacern Parity Wave 2 (initiative index)
 
-**Status:** IN PROGRESS — 2026-08-05 · 11/11 gaps closed (BRD 71, 72, 73 and 75 landed;
-74 partial — D1+D2 landed, D3 deferred and redesigned)
+**Status:** IN PROGRESS — 2026-08-05 · 11/11 gaps closed (BRD 71, 72, 73, 74 and 75
+landed; 74's D3 built as a stateless fan-out, not the specced projection)
 **Owner:** platform · **Driver:** a second cross-verification of the legacy V1 platform
 (Rails/Flask services + Argo + pandas component containers) against Datacern's rebuilt
 services. The [wave-1 index](62_pipeline_ml_parity_index.md) audited **pipeline + ML
@@ -57,7 +57,7 @@ takes `DEFAULTS` and a user cannot size a step at all (§U1).
 | **B2** | `batch-trigger` IO component | triggers dataset ingestions from inside a pipeline | absent | 73 |
 | **D1** | Dataset download / export | `Download` model + `/datasets/:id/downloads` | no dataset export endpoint (only `/rows` paging) | **74** |
 | **D2** | Cross-dashboard chart search | `POST /dashboards/search_charts` | absent | 74 |
-| **D3** | Cross-service search index | `search_entries` registry fed by ido / chart-service / pipeline-manager (dataset, dashboard, pipeline, model) | ⌘K palette queries datasets + dashboards + decision tables only; dashboards fetched `first:50` and filtered **client-side** | 74 |
+| **D3** | Cross-service search | `search_entries` registry fed by ido / chart-service / pipeline-manager (dataset, dashboard, pipeline, model) | ⌘K palette queries datasets + dashboards + decision tables only; dashboards fetched `first:50` and filtered **client-side** | **74** — closed as a stateless `search()` fan-out over 8 kinds, not a projection |
 | **F1** | Profiling depth | `pandas_profiling`: HTML report, interactions, multiple correlation methods, per-column entropy/skew/kurtosis/MAD/monotonicity | spearman-only correlations, no HTML report, no interactions; skew computed but only used to raise an alert | **75** |
 
 **Explicitly NOT gaps** (checked and closed as covered-by-design):
@@ -110,11 +110,17 @@ governed, schedulable, resumable unit — plus the `batch-trigger` component.
 
 ### BRD 74 — Discovery & export completeness
 Dataset export (async, signed artifact, reusing the query-service export path),
-cross-dashboard chart search, and a real cross-service search index covering datasets,
-dashboards, pipelines, models/experiments and cases — with server-side query instead of
-the current `first:50` + client-side filter.
-**Agent:** the search index is what makes every agent's grounding step cheap; expose it
-as an MCP read tool.
+cross-dashboard chart search, and real cross-service search covering datasets,
+dashboards, charts, pipelines, experiments, models, cases and decision tables — with
+server-side query instead of the current `first:50` + client-side filter. Delivered as
+a **stateless fan-out** in bff-graphql (~~`search_entries` projection~~ — rejected: the
+BFF has no DB/consumer/cache by CI-enforced policy and makes no authz decision), after
+giving chart-service's dashboards list, experiment-service and agent-runtime's decision
+tables the text search they lacked.
+**Agent:** the search is what makes every agent's grounding step cheap. Exposing it as
+an **MCP** read tool was scoped out — tool-plane forwards no bearer to a backend
+facade, and a stateless fan-out has no own store to authorize against; `search()` is
+still callable by any agent holding a user JWT. See BRD 74 D-3.
 
 ### BRD 75 — Profiling depth parity
 Pearson + spearman + a categorical association measure, per-column skew / kurtosis /
@@ -143,5 +149,5 @@ over-engineer.
 | **71** pipeline builder completeness | U1, U2, P6 | **inc1–inc4 DONE** — backend (`drop-columns`, exclude mode, `GET /resource-policy`, `effective_resources`), BFF (`pipelineResourcePolicy`, `effectiveResources`), UI (resource round trip + "Resource Parameters" group + DAG schema propagation), agent (clamped envelope proposal). 74 new tests; orchestrator 220 / bff 450 / ui-web 876 / agent-runtime 409 all green. Live-verify pending. |
 | **72** chart renderer completeness | V1c, V2c | **inc1–inc3b DONE** — every catalogued type now has a true renderer (boxplot / waterfall / combination / histogram / sankey / treemap / sunburst / chord / force-graph / tree / bubble size channel), the network family's `graph` data path is threaded through ui-web, and `geo_map_chart` is a declared gap. 45 tests; ui-web 921 green. **inc3 (run charts) is backend-first**: `experiment-service` has no `GET /artifacts?urn=` and the executor logs no ROC points or tree structure, so those renderers have no real data yet. |
 | **73** batch job orchestration | B1, B2 | **inc1–inc3 (backend) DONE** — `BatchJob`/`BatchJobRun` + migration 0005 (RLS + at-most-one-active-run), the 3-phase machine on the existing lease/reaper machinery, idempotent triggering via ingestion-service's internal MCP facade, an event-driven ingestion phase off `ingestion.events.v1` + `dataset.version_created`, phase deadlines, retry-from-the-failed-phase, REST + outbox events, and the `batch-trigger` component. 52 new tests; orchestrator unit 260 + integration 16, ingestion-service unit 596, all green. **BFF/UI (AC-9 UI half) and the agent proposal (AC-10 / inc4) deferred.** |
-| **74** discovery & export completeness | D1, D2, D3 | **PARTIAL — D2 + D1 DONE, D3 DEFERRED.** chart-service `GET /charts?q=` (cross-dashboard, RLS, cursor-paged); dataset-service `POST /datasets/{id}/exports` + `GET /exports/{id}`, version-pinned and delegated to query-service's export path (migration 0007, new action `dataset.dataset.export`). 58 new tests; chart-service unit+integration and dataset-service 301 unit / 22 integration all green. **D3 not built**: bff-graphql has no DB/consumer/cache *by CI-enforced policy*, so the specced projection would invert its architecture — the BRD records a fan-out redesign instead. Parquet export deferred (query-service returns 501). |
+| **74** discovery & export completeness | D1, D2, D3 | **DONE — D1 + D2 + D3.** chart-service `GET /charts?q=` (cross-dashboard, RLS, cursor-paged); dataset-service `POST /datasets/{id}/exports` + `GET /exports/{id}`, version-pinned and delegated to query-service's export path (migration 0007, new action `dataset.dataset.export`). **D3 built as the redesign, not the spec**: the projection was rejected (bff-graphql has no DB/consumer/cache *by CI-enforced policy* and makes no authz decision), so D3 is a stateless `search(q, types, workspaceId, first)` fan-out over 8 entity kinds — after adding real server-side text search to chart-service's dashboards list, experiment-service's experiments + models, and agent-runtime's decision tables (which was neither filtered nor paged). ⌘K now issues **one** query and finds dashboard 51; charts, cases, pipelines, experiments and models are searchable for the first time. 58 new D1+D2 tests plus 56 new D3 tests (8+2 chart-service, 11+3 experiment-service, 10 agent-runtime, 18 bff-graphql, 4 ui-web); chart-service unit+integration, experiment-service 98 unit / 3 new integration, agent-runtime 419 unit, bff-graphql 468, ui-web 943 all green. AC-6/AC-7 dropped as no longer applicable; the MCP tool (AC-10) and parquet export scoped out with reasons. |
 | **75** profiling depth parity | F1 | **inc1–inc3 DONE** — schema_version 2: per-column entropy / skewness / kurtosis / mad / variance / monotonicity / top_values (numeric-only fields absent, never zeroed), correlations as a list of pearson + spearman + bias-corrected Cramér's V (cardinality cap 50, skipped not faked), depth rendered into the existing HTML artifact, and a new read-tier MCP tool `get_dataset_column_stats`. 34 new tests; dataset-service unit 304 + integration 19 green. Live-verified against real Iceberg REST + MinIO. Interactions / missing-value matrix / duplicate-row samples and Kendall's τ deferred (see the BRD). |

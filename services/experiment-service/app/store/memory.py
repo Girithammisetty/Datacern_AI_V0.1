@@ -53,6 +53,16 @@ def _offset(cursor: str | None) -> int:
     return int(decode_cursor(cursor).get("o", 0)) if cursor else 0
 
 
+def _text_match(q: str | None, *fields: str | None) -> bool:
+    """In-memory stand-in for the SQL ``ILIKE '%q%'`` (BRD 74 D3): a
+    case-insensitive substring over the given fields, with LIKE metacharacters
+    treated literally exactly as ``like_contains`` makes Postgres treat them."""
+    if not q:
+        return True
+    needle = q.casefold()
+    return any(needle in (f or "").casefold() for f in fields)
+
+
 def _page(items: list, limit: int, cursor: str | None):
     from app.store.sql import Page
 
@@ -93,11 +103,12 @@ class _ExperimentRepo:
     async def update(self, exp: Experiment):
         self.st.experiments[exp.id] = copy.deepcopy(exp)
 
-    async def list(self, workspace_id, archived, limit, cursor):
+    async def list(self, workspace_id, archived, limit, cursor, q=None):
         items = sorted(
             (e for e in self.st.experiments.values()
              if e.tenant_id == self.t and (bool(e.deleted_at) == archived)
-             and (not workspace_id or e.workspace_id == workspace_id)),
+             and (not workspace_id or e.workspace_id == workspace_id)
+             and _text_match(q, e.name, e.description)),
             key=lambda e: (e.created_at, e.id), reverse=True,
         )
         return _page(list(items), limit, cursor)
@@ -325,7 +336,7 @@ class _ModelRepo:
     async def lock_model(self, model_id):
         return None  # in-memory unit tier: single-threaded, no lock needed
 
-    async def list_models(self, workspace_id, stage, limit, cursor, ids=None):
+    async def list_models(self, workspace_id, stage, limit, cursor, ids=None, q=None):
         def has_stage(model_id):
             return any(v.model_id == model_id and v.stage == stage and not v.deleted_at
                        for v in self.st.versions.values())
@@ -335,6 +346,7 @@ class _ModelRepo:
              if m.tenant_id == self.t and not m.deleted_at
              and (id_set is None or m.id in id_set)
              and (not workspace_id or m.workspace_id == workspace_id)
+             and _text_match(q, m.name, m.description)
              and (stage is None or has_stage(m.id))),
             key=lambda m: (m.created_at, m.id), reverse=True,
         )

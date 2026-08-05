@@ -54,12 +54,17 @@ async def list_experiments(
     request: Request,
     principal: Principal = Depends(require("experiment.experiment.read")),
     workspace_id: str | None = Query(default=None, alias="filter[workspace_id]"),
+    q: str | None = Query(default=None, max_length=200),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = None,
 ):
+    """`q` (BRD 74 D3) is a case-insensitive contains over the experiment's own
+    name + description, applied in Postgres and cursor-paged like the rest of
+    the list — experiment-service had no text search at all before, which is
+    why global search could not reach experiments."""
     c = _c(request)
     page = await c.experiment_service.list(
-        principal.ctx(request.state.trace_id), workspace_id, limit, cursor)
+        principal.ctx(request.state.trace_id), workspace_id, limit, cursor, q=q)
     return page_envelope([_experiment_payload(e) for e in page.items],
                          page.next_cursor, page.has_more)
 
@@ -69,12 +74,14 @@ async def list_archived(
     request: Request,
     principal: Principal = Depends(require("experiment.experiment.read")),
     workspace_id: str | None = Query(default=None, alias="filter[workspace_id]"),
+    q: str | None = Query(default=None, max_length=200),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = None,
 ):
     c = _c(request)
     page = await c.experiment_service.list(
-        principal.ctx(request.state.trace_id), workspace_id, limit, cursor, archived=True)
+        principal.ctx(request.state.trace_id), workspace_id, limit, cursor,
+        archived=True, q=q)
     return page_envelope([_experiment_payload(e) for e in page.items],
                          page.next_cursor, page.has_more)
 

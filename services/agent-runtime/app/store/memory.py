@@ -62,8 +62,21 @@ class InMemoryStore:
         m = self._decision_models.get(model_id)
         return m if m and m.tenant_id == tenant_id else None
 
-    async def list_decision_models(self, tenant_id: str) -> list:
-        return [m for m in self._decision_models.values() if m.tenant_id == tenant_id]
+    async def list_decision_models(self, tenant_id: str, *, q: str | None = None,
+                                   limit: int | None = None,
+                                   after: tuple[str, int] | None = None) -> list:
+        """Mirrors SqlStore.list_decision_models, including BRD 74 D3's `q`
+        and the (name ASC, version DESC) keyset window."""
+        from app.store.paging import text_match
+
+        out = [m for m in self._decision_models.values()
+               if m.tenant_id == tenant_id and text_match(q, m.name, m.dataset_urn)]
+        out.sort(key=lambda m: (m.name, -m.version))
+        if after is not None:
+            name, version = after
+            out = [m for m in out
+                   if m.name > name or (m.name == name and m.version < version)]
+        return out[:limit] if limit is not None else out
 
     async def list_decision_model_versions(self, tenant_id: str, name: str,
                                            workspace_id: str | None) -> list:

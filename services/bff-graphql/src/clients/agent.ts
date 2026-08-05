@@ -285,6 +285,12 @@ export interface DecisionModelDTO {
   rules: DecisionRuleDTO[];
   default_outcome?: DecisionOutcomeDTO | null;
 }
+export interface DecisionModelListParams {
+  /** BRD 74 D3 — contains over the table name or its bound dataset URN. */
+  q?: string;
+  limit?: number;
+  cursor?: string;
+}
 export interface CreateDecisionModelBody {
   name: string;
   workspace_id?: string;
@@ -798,9 +804,15 @@ export class AgentClient {
 
   // ---- BRD 54 inc2: governed decision tables (authoring + batch) ------------
 
-  async decisionModels(): Promise<DecisionModelDTO[]> {
-    const r = await this.http.get<{ data: DecisionModelDTO[] }>("/api/v1/decision-models");
-    return r.data ?? [];
+  /** GET /decision-models — keyset-paged on (name ASC, version DESC), with
+   * `q` (BRD 74 D3) matching the table name or its bound dataset URN in
+   * Postgres. Before D3 this route returned every table for the tenant with no
+   * filter and no page, which is what forced the ⌘K palette to fetch the lot
+   * and match names in the browser. */
+  decisionModels(p: DecisionModelListParams = {}): Promise<Page<DecisionModelDTO>> {
+    return this.http.get<Page<DecisionModelDTO>>("/api/v1/decision-models", {
+      query: { q: p.q, limit: p.limit, cursor: p.cursor },
+    });
   }
 
   async decisionModel(id: string): Promise<DecisionModelDTO> {

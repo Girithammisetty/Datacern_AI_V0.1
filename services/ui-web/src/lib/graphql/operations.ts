@@ -489,11 +489,51 @@ const DECISION_MODEL_FIELDS = `
 `;
 
 export const DECISION_MODELS = /* GraphQL */ `
-  query DecisionModels {
-    decisionModels { ${DECISION_MODEL_FIELDS} }
+  query DecisionModels($first: Int, $after: String, $q: String) {
+    decisionModels(first: $first, after: $after, q: $q) {
+      nodes { ${DECISION_MODEL_FIELDS} }
+      pageInfo { nextCursor hasMore }
+    }
   }
 `;
-export interface DecisionModelsResult { decisionModels: DecisionModel[] }
+export interface DecisionModelsResult { decisionModels: Connection<DecisionModel> }
+
+/**
+ * BRD 74 D3 — cross-service search. ONE query for the whole ⌘K palette:
+ * bff-graphql fans out to the service that owns each entity kind, so results
+ * are server-filtered (no client-side matching over a truncated page) and each
+ * leg is authorized by its owner. `types` narrows the fan-out to the kinds the
+ * viewer's capabilities allow; a kind the server still refuses comes back
+ * `denied` with no hits.
+ */
+export const SEARCH = /* GraphQL */ `
+  query GlobalSearch($q: String!, $types: [SearchEntityType!], $workspaceId: ID, $first: Int) {
+    search(q: $q, types: $types, workspaceId: $workspaceId, first: $first) {
+      hits { key id type title subtitle parentId }
+      types { type denied error }
+    }
+  }
+`;
+export type SearchEntityType =
+  | "DATASET" | "DASHBOARD" | "CHART" | "PIPELINE"
+  | "EXPERIMENT" | "MODEL" | "CASE" | "DECISION_MODEL";
+export interface SearchHit {
+  key: string;
+  id: string;
+  type: SearchEntityType;
+  title: string;
+  subtitle?: string | null;
+  /** The container a non-addressable hit lives in (a CHART's dashboard id). */
+  parentId?: string | null;
+}
+export interface SearchTypeResult {
+  type: SearchEntityType;
+  denied: boolean;
+  error?: string | null;
+}
+export interface SearchResult {
+  search: { hits: SearchHit[]; types: SearchTypeResult[] };
+}
 
 export const DECISION_MODEL = /* GraphQL */ `
   query DecisionModelDetail($id: ID!) {

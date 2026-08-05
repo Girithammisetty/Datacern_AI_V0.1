@@ -22,15 +22,19 @@ async def list_models(
     workspace_id: str | None = Query(default=None, alias="filter[workspace_id]"),
     stage: str | None = Query(default=None, alias="filter[stage]"),
     ids: str | None = Query(default=None, alias="filter[id]"),
+    q: str | None = Query(default=None, max_length=200),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = None,
 ):
+    """`q` (BRD 74 D3) is a case-insensitive contains over the registered
+    model's name + description, applied in Postgres and cursor-paged."""
     c = _c(request)
     # filter[id] accepts a comma-separated model-id set (IN filter) so the bff
     # dataloader can batch models without N+1. Tenant-scoped via RLS.
     id_list = ([x for x in (s.strip() for s in ids.split(",")) if x] if ids else None)
     page = await c.registry_service.list_models(
-        principal.ctx(request.state.trace_id), workspace_id, stage, limit, cursor, ids=id_list)
+        principal.ctx(request.state.trace_id), workspace_id, stage, limit, cursor,
+        ids=id_list, q=q)
     return page_envelope(page.items, page.next_cursor, page.has_more)
 
 

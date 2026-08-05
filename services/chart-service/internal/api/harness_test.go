@@ -65,14 +65,37 @@ func (m *memStore) GetDashboard(_ context.Context, tenant, id uuid.UUID) (*domai
 	cp := *d
 	return &cp, nil
 }
-func (m *memStore) ListDashboards(_ context.Context, tenant, ws uuid.UUID, module string, archived bool, tag string, limit int, after *uuid.UUID) ([]domain.Dashboard, error) {
+// ListDashboards models store.PG.ListDashboards (incl. BRD 74 D3's `q`) closely
+// enough to exercise the handler contract: workspace + archived + module + tag
+// equality, q over name + description, keyset order by id. The authoritative
+// test of the SQL itself lives in the integration tier.
+func (m *memStore) ListDashboards(_ context.Context, tenant uuid.UUID, f domain.DashboardListFilter) ([]domain.Dashboard, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []domain.Dashboard
+	needle := strings.ToLower(f.Q)
 	for _, d := range m.dash {
-		if d.TenantID == tenant && d.WorkspaceID == ws && d.Archived == archived {
-			out = append(out, *d)
+		if d.TenantID != tenant || d.WorkspaceID != f.WorkspaceID || d.Archived != f.Archived {
+			continue
 		}
+		if f.Module != "" && d.Module != f.Module {
+			continue
+		}
+		if f.Tag != "" && !slices.Contains(d.Tags, f.Tag) {
+			continue
+		}
+		if needle != "" && !strings.Contains(strings.ToLower(d.Name), needle) &&
+			!strings.Contains(strings.ToLower(d.Description), needle) {
+			continue
+		}
+		if f.After != nil && d.ID.String() <= f.After.String() {
+			continue
+		}
+		out = append(out, *d)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
+	if f.Limit > 0 && len(out) > f.Limit {
+		out = out[:f.Limit]
 	}
 	return out, nil
 }

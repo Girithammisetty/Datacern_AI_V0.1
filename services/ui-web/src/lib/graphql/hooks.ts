@@ -406,7 +406,12 @@ function useWritebackTransition<TResult>(doc: string, pick: (r: TResult) => Writ
 export function useDecisionModels() {
   return useQuery({
     queryKey: qk.decisionModels(),
-    queryFn: () => graphqlRequest<ops.DecisionModelsResult>(ops.DECISION_MODELS).then((r) => r.decisionModels),
+    // decisionModels became a cursor connection in BRD 74 D3 (agent-runtime's
+    // route was unpaged before). This surface wants the whole catalog, so it
+    // asks for the max page rather than pretending pagination doesn't exist.
+    queryFn: () =>
+      graphqlRequest<ops.DecisionModelsResult>(ops.DECISION_MODELS, { first: 200 })
+        .then((r) => r.decisionModels.nodes),
   });
 }
 

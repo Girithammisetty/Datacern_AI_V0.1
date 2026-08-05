@@ -51,7 +51,7 @@ from app.store.orm import (
     RunRow,
     RunTagRow,
 )
-from app.utils import decode_cursor, encode_cursor, utcnow, uuid7
+from app.utils import LIKE_ESCAPE, decode_cursor, encode_cursor, like_contains, utcnow, uuid7
 
 _EXPERIMENT_FIELDS = [f.name for f in dataclasses.fields(Experiment)]
 _RUN_FIELDS = [f.name for f in dataclasses.fields(Run)]
@@ -132,7 +132,7 @@ class SqlExperimentRepo:
             await self.s.flush()
 
     async def list(self, workspace_id: str | None, archived: bool, limit: int,
-                   cursor: str | None) -> Page:
+                   cursor: str | None, q: str | None = None) -> Page:
         stmt = select(ExperimentRow)
         stmt = stmt.where(
             ExperimentRow.deleted_at.isnot(None) if archived
@@ -140,6 +140,14 @@ class SqlExperimentRepo:
         )
         if workspace_id:
             stmt = stmt.where(ExperimentRow.workspace_id == workspace_id)
+        # BRD 74 D3: server-side text search over the experiment's own
+        # name + description, so global search never has to page the tenant.
+        if q:
+            pattern = like_contains(q)
+            stmt = stmt.where(
+                ExperimentRow.name.ilike(pattern, escape=LIKE_ESCAPE)
+                | ExperimentRow.description.ilike(pattern, escape=LIKE_ESCAPE)
+            )
         stmt = stmt.order_by(ExperimentRow.created_at.desc(), ExperimentRow.id.desc())
         offset = _offset(cursor)
         rows = (await self.s.execute(stmt.offset(offset).limit(limit + 1))).scalars().all()
@@ -476,12 +484,19 @@ class SqlModelRepo:
 
     async def list_models(self, workspace_id: str | None, stage: int | None,
                           limit: int, cursor: str | None,
-                          ids: list[str] | None = None) -> Page:
+                          ids: list[str] | None = None, q: str | None = None) -> Page:
         stmt = select(RegisteredModelRow).where(RegisteredModelRow.deleted_at.is_(None))
         if ids is not None:
             stmt = stmt.where(RegisteredModelRow.id.in_(ids))
         if workspace_id:
             stmt = stmt.where(RegisteredModelRow.workspace_id == workspace_id)
+        # BRD 74 D3: server-side text search over name + description.
+        if q:
+            pattern = like_contains(q)
+            stmt = stmt.where(
+                RegisteredModelRow.name.ilike(pattern, escape=LIKE_ESCAPE)
+                | RegisteredModelRow.description.ilike(pattern, escape=LIKE_ESCAPE)
+            )
         if stage is not None:
             v = ModelVersionRow.__table__.alias("v_stage")
             stmt = stmt.where(

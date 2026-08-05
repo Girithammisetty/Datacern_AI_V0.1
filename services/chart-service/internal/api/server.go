@@ -38,7 +38,7 @@ func chiRoutePattern(r *http.Request) string {
 type Store interface {
 	CreateDashboard(ctx context.Context, d *domain.Dashboard, envs []event.Envelope) error
 	GetDashboard(ctx context.Context, tenant, id uuid.UUID) (*domain.Dashboard, error)
-	ListDashboards(ctx context.Context, tenant, ws uuid.UUID, module string, archived bool, tag string, limit int, after *uuid.UUID) ([]domain.Dashboard, error)
+	ListDashboards(ctx context.Context, tenant uuid.UUID, f domain.DashboardListFilter) ([]domain.Dashboard, error)
 	UpdateDashboard(ctx context.Context, d *domain.Dashboard, envs []event.Envelope) error
 	SetDashboardArchived(ctx context.Context, tenant, id uuid.UUID, archived bool, envs []event.Envelope) error
 	DeleteDashboard(ctx context.Context, tenant, id uuid.UUID, envs []event.Envelope) error

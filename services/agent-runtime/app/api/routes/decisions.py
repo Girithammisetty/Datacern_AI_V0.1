@@ -31,6 +31,7 @@ from app.graphs.triage import (
     TRIAGE_TOOL_VERSION,
     _resolve_disposition_id,
 )
+from app.store.paging import decode_cursor, encode_cursor
 
 router = APIRouter(prefix="/api/v1")
 
@@ -109,12 +110,39 @@ async def create_decision_model(request: Request, body: dict = Body(...)):
 
 
 @router.get("/decision-models")
-async def list_decision_models(request: Request):
+async def list_decision_models(
+    request: Request,
+    q: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None),
+):
+    """List decision tables (BRD 74 D3: `q` + a real keyset page).
+
+    Before this increment the route returned EVERY decision table for the
+    tenant, unfiltered and unpaged — which is why global search had to fetch
+    the lot and match names in the browser. `q` is a case-insensitive contains
+    over the table's name and its bound dataset URN, applied in Postgres.
+    """
     principal = await principal_of(request)
     await _require(request, principal, "case.disposition.read")
     c = request.app.state.container
-    models = await c.store.list_decision_models(principal.tenant_id)
-    return {"data": [_model_view(m) for m in models]}
+
+    after: tuple[str, int] | None = None
+    if cursor:
+        try:
+            payload = decode_cursor(cursor)
+            after = (str(payload["n"]), int(payload["v"]))
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ValidationFailed("invalid cursor") from exc
+
+    rows = await c.store.list_decision_models(
+        principal.tenant_id, q=q, limit=limit + 1, after=after)
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    next_cursor = (encode_cursor({"n": rows[-1].name, "v": rows[-1].version})
+                   if has_more and rows else None)
+    return {"data": [_model_view(m) for m in rows],
+            "page": {"next_cursor": next_cursor, "has_more": has_more}}
 
 
 @router.get("/decision-models/{model_id}")

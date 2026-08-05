@@ -1773,6 +1773,95 @@ export const typeDefs = gql`
   type DashboardConnection { nodes: [Dashboard!]! pageInfo: PageInfo! }
 
   """
+  One hit from the cross-dashboard chart search (chart-service GET /charts,
+  BRD 74 D2) — the chart plus the parent-dashboard context that makes the
+  result actionable ("which dashboard has the denial-rate chart").
+
+  Deliberately NOT a \`Chart\`: \`Chart.data\` resolves per chart, and a list of
+  search hits would turn that into one downstream call per row (BFF-FR-030).
+  Follow \`dashboardId\` to the dashboard to get resolved chart data in a batch.
+  """
+  type ChartSearchHit implements Node {
+    id: ID!
+    urn: String!
+    name: String
+    chartType: String
+    description: String
+    dashboardId: ID!
+    dashboardName: String
+    dashboardModule: String
+    dashboardTags: [String!]!
+  }
+
+  type ChartSearchConnection { nodes: [ChartSearchHit!]! pageInfo: PageInfo! }
+
+  # ---- BRD 74 D3: cross-service search (stateless fan-out) --------------------
+
+  """The entity kinds \`search\` can reach. Each maps to exactly one owning
+  service's own text search — there is no index in the BFF."""
+  enum SearchEntityType {
+    DATASET
+    DASHBOARD
+    CHART
+    PIPELINE
+    EXPERIMENT
+    MODEL
+    CASE
+    DECISION_MODEL
+  }
+
+  """One cross-service search result, normalised to what a jump-to list needs."""
+  type SearchHit {
+    """Composite and stable: \`<type>:<id>\`. Ids are only unique per service."""
+    key: ID!
+    id: ID!
+    type: SearchEntityType!
+    title: String!
+    """Secondary line — the owning dashboard, the model type, the case number…"""
+    subtitle: String
+    """Datacern URN when the owning service or mapper produces one."""
+    urn: String
+    workspaceId: ID
+    """
+    The container the hit belongs to, when it is not independently addressable:
+    a CHART's dashboard id. Null for every other kind.
+    """
+    parentId: ID
+  }
+
+  """
+  The outcome of ONE leg of the fan-out. \`denied\` and \`error\` are reported
+  rather than swallowed: a caller must be able to tell "no matches" from
+  "this service refused you" from "this service is down".
+  """
+  type SearchTypeResult {
+    type: SearchEntityType!
+    hits: [SearchHit!]!
+    """
+    True when the owning service answered PERMISSION_DENIED for this caller.
+    The BFF makes no authorization decision of its own (BFF-FR-003) — this is
+    the downstream's verdict, observed and reported.
+    """
+    denied: Boolean!
+    """
+    A non-authorization reason this leg produced nothing: a stable error code
+    (SERVICE_UNAVAILABLE, VALIDATION_FAILED, …) or WORKSPACE_REQUIRED when the
+    type needs a workspaceId the caller did not supply. Null on success.
+    """
+    error: String
+  }
+
+  """
+  Cross-service search results (BRD 74 D3). \`hits\` is every allowed leg's hits
+  concatenated in the requested type order; \`types\` keeps the per-leg outcome.
+  """
+  type SearchResults {
+    q: String!
+    types: [SearchTypeResult!]!
+    hits: [SearchHit!]!
+  }
+
+  """
   A scheduled dashboard-report email subscription (notification-service,
   NOTIF-FR-060 — "Case Reports / Team Reports"). Each enabled
   subscription backs one real Temporal Schedule that periodically emails a live
@@ -5282,6 +5371,30 @@ export const typeDefs = gql`
     the record wasn't altered. Needs audit.compliance.read."""
     evidencePack(proposalId: ID!): EvidencePack!
 
+    """
+    Cross-service search (BRD 74 D3) — one query, every entity kind the caller
+    can actually read.
+
+    STATELESS: there is no search index in the BFF. Each requested type is
+    answered by a single call to the service that OWNS the data, using that
+    service's own text search, so results are as fresh as the source and
+    authorization stays exactly where it already works — the BFF forwards the
+    caller's JWT and makes no authorization decision (BFF-FR-003). A leg the
+    caller may not read comes back \`denied: true\` with no hits, which is what
+    makes "only the types your capabilities allow" true rather than advisory.
+
+    \`types\` defaults to every kind. DASHBOARD and CHART require
+    \`workspaceId\` (chart-service's grants are workspace-scoped); without one
+    they report \`error: "WORKSPACE_REQUIRED"\` instead of failing the query.
+    \`first\` caps EACH type, not the total.
+    """
+    search(
+      q: String!
+      types: [SearchEntityType!]
+      workspaceId: ID
+      first: Int = 10
+    ): SearchResults!
+
     dataset(id: ID!): Dataset
     datasets(first: Int = 50, after: String, q: String, filter: DatasetFilter): DatasetConnection!
 
@@ -5361,10 +5474,35 @@ export const typeDefs = gql`
     queryLimits: QueryLimits!
 
     dashboard(id: ID!): Dashboard
-    dashboards(workspaceId: ID!, first: Int = 50, after: String): DashboardConnection!
+    """
+    Dashboards in a workspace, cursor-paginated. \`q\` (BRD 74 D3) is
+    chart-service's own case-insensitive contains over the dashboard name +
+    description — server-side, so a dashboard ranked below the first page is
+    still findable. Needs chart.dashboard.read.
+    """
+    dashboards(workspaceId: ID!, first: Int = 50, after: String, q: String): DashboardConnection!
     """Archived-only dashboards (chart-service GET /dashboards?filter[archived]=true).
     Needs chart.dashboard.read."""
     archivedDashboards(workspaceId: ID!, first: Int = 50, after: String): DashboardConnection!
+
+    """
+    Cross-dashboard chart search (chart-service GET /charts, BRD 74 D2). \`q\`
+    matches the chart's name, description and chart-scoped documentation body;
+    \`module\` and \`tag\` filter on the PARENT dashboard, which is where those
+    columns live. \`workspaceId\` is required — \`chart.chart.read\` is a
+    workspace-scoped grant, so chart-service cannot authorize a search spanning
+    workspaces with one decision. Cursor-paginated.
+    """
+    chartSearch(
+      workspaceId: ID!
+      q: String
+      module: String
+      tag: String
+      dashboardId: ID
+      includeArchived: Boolean
+      first: Int = 50
+      after: String
+    ): ChartSearchConnection!
 
     """A single report subscription (notification-service GET /reports/{id})."""
     reportSubscription(id: ID!): ReportSubscription
@@ -5582,7 +5720,10 @@ export const typeDefs = gql`
     resolves to null."""
     slmAdapter(id: ID!): SlmAdapter
 
-    experiments(first: Int = 50, after: String): ExperimentConnection!
+    """Experiments, cursor-paginated. \`q\` (BRD 74 D3) is experiment-service's
+    own case-insensitive contains over the experiment name + description.
+    Needs experiment.experiment.read."""
+    experiments(first: Int = 50, after: String, q: String): ExperimentConnection!
     experiment(id: ID!): Experiment
     """Archived-only experiments (experiment-service GET /experiments/list_archived
     — a dedicated route, unlike dataset-service). Needs experiment.experiment.read."""
@@ -5590,8 +5731,10 @@ export const typeDefs = gql`
     run(id: ID!): Run
 
     """Registered models (experiment-service GET /models). \`stage\` filters to a
-    single promotion stage (e.g. "production"). Needs experiment.model.read."""
-    models(first: Int = 50, after: String, stage: String): ModelConnection!
+    single promotion stage (e.g. "production"); \`q\` (BRD 74 D3) is a
+    case-insensitive contains over the model name + description. Needs
+    experiment.model.read."""
+    models(first: Int = 50, after: String, stage: String, q: String): ModelConnection!
     """A single registered model WITH its versions + stages (experiment-service GET /models/{id})."""
     model(id: ID!): Model
     """
@@ -5935,9 +6078,11 @@ export const typeDefs = gql`
     agentFleetSummary(workspace: ID, periodFrom: String, periodTo: String): AgentFleetSummary!
 
     # ---- BRD 54 inc2: governed decision tables --------------------------------
-    """Tenant decision tables (agent-runtime GET /decision-models). Needs
+    """Tenant decision tables (agent-runtime GET /decision-models),
+    cursor-paginated on (name ASC, version DESC). \`q\` (BRD 74 D3) matches the
+    table name or its bound dataset URN, server-side. Needs
     case.disposition.read."""
-    decisionModels: [DecisionModel!]!
+    decisionModels(first: Int = 50, after: String, q: String): DecisionModelConnection!
     """One decision table by id (GET /decision-models/{id})."""
     decisionModel(id: ID!): DecisionModel
     """Change log: every version of one logical table, newest first."""
@@ -6027,6 +6172,7 @@ export const typeDefs = gql`
     rules: [DecisionRule!]!
     defaultOutcome: DecisionOutcome
   }
+  type DecisionModelConnection { nodes: [DecisionModel!]! pageInfo: PageInfo! }
   input DecisionConditionInput { column: String! op: String! value: JSON }
   input DecisionOutcomeInput { dispositionCode: String! severity: String! }
   input DecisionRuleInput { when: [DecisionConditionInput!]! then: DecisionOutcomeInput! note: String }

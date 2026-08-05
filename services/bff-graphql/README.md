@@ -71,10 +71,23 @@ description names the downstream service + endpoint that backs it (BR-12).
 | **agentic** | `Proposal`, `AgentRun`, `TokenUsage` | agent-runtime `/proposals`, `/runs`, `/runs/{id}/trace` |
 | **ml** | `Experiment`, `Run`, `RegisteredModel` | experiment-service `/experiments`, `/runs`, `/models` |
 | **usage** | `CostPanel`, `UsageRow`, `BudgetState` | usage-service `/reports/usage`, `/budget-states` |
+| **search** | `SearchResults`, `SearchHit`, `ChartSearchHit` | a stateless fan-out (`src/resolvers/search.ts`) over dataset-service `/datasets?q=`, chart-service `/dashboards?q=` + `/charts?q=`, pipeline-orchestrator `/pipelines?filter[name]=`, experiment-service `/experiments?q=` + `/models?q=`, case-service `/cases?q=`, agent-runtime `/decision-models?q=` |
 
 Root operations: `me`, `user`, `dataset(s)`, `dashboard(s)`, `case`,
-`caseSearch`, `proposalsInbox`, `proposal`, `agentRun`, `experiment(s)`, `run`,
-`workspaceCostPanel`; mutations `updateCase`, `decideProposal`.
+`caseSearch`, `chartSearch`, `search`, `proposalsInbox`, `proposal`,
+`agentRun`, `experiment(s)`, `run`, `workspaceCostPanel`; mutations
+`updateCase`, `decideProposal`.
+
+### `search` — cross-service, and still stateless (BRD 74 D3)
+
+`search(q, types, workspaceId, first)` is ONE query that reaches every entity
+kind the caller can read. There is **no search index here**: each requested
+type costs exactly one call to the service that owns it, using that service's
+own text search. That is deliberate and it is what keeps the three architectural
+bans in `eslint.config.js` (`pg`, `kafkajs`, `ioredis`) intact — freshness is
+the source's, and authorization stays downstream. A leg whose owner answers 403
+comes back `denied: true` with no hits; a leg whose owner is down comes back
+with its error code. Neither is swallowed, and the BFF decides neither.
 
 ## How JWT passthrough + downstream authz works
 

@@ -43,6 +43,19 @@ def decode_cursor(cursor: str) -> dict:
         raise ValueError("invalid cursor") from exc
 
 
+LIKE_ESCAPE = "\\"
+
+
+def like_contains(term: str) -> str:
+    """Turn a user search term into a contains-style ILIKE pattern, escaping the
+    LIKE metacharacters so a term containing ``%`` or ``_`` matches literally
+    (BRD 74 D3). Paired with ``escape="\\\\"`` at every call site."""
+    escaped = (term.replace(LIKE_ESCAPE, LIKE_ESCAPE * 2)
+               .replace("%", LIKE_ESCAPE + "%")
+               .replace("_", LIKE_ESCAPE + "_"))
+    return f"%{escaped}%"
+
+
 def json_size_bytes(doc) -> int:
     return len(json.dumps(doc, default=str).encode())
 

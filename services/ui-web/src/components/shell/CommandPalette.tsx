@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   Search, CornerDownLeft, ArrowUp, ArrowDown, Database, LayoutDashboard,
-  TableProperties, type LucideIcon,
+  TableProperties, BarChart3, Workflow, FlaskConical, Boxes, Briefcase,
+  type LucideIcon,
 } from "lucide-react";
 import { NAV_ITEMS, FEATURE_GATES, cap, type Gate } from "@/lib/authz/registry";
 import { useCapabilities } from "@/lib/authz/useCapabilities";
@@ -29,11 +30,54 @@ const norm = (s: string) => s.toLowerCase().trim();
 const matches = (text: string, q: string) => norm(text).includes(norm(q));
 
 /**
+ * The searchable entity kinds, in the order they are offered. Each row binds
+ * one bff `SearchEntityType` to the capability that unlocks it and the route a
+ * hit opens.
+ *
+ * `gate` is a UX filter, not the security boundary: it keeps the palette from
+ * asking for kinds the viewer plainly cannot read. The real decision is made
+ * by the owning service on the forwarded JWT, and a kind it refuses comes back
+ * `denied` with no hits regardless of what the client asked for (BRD 74 AC-8).
+ */
+const SEARCH_KINDS: {
+  type: ops.SearchEntityType;
+  gate: Gate;
+  section: string;
+  hint: string;
+  icon: LucideIcon;
+  href: (hit: ops.SearchHit) => string;
+}[] = [
+  { type: "DATASET", gate: cap("dataset.dataset.list"), section: "Datasets", hint: "Dataset",
+    icon: Database, href: (h) => `/data/datasets/${h.id}` },
+  { type: "DASHBOARD", gate: cap("chart.dashboard.read"), section: "Dashboards", hint: "Dashboard",
+    icon: LayoutDashboard, href: (h) => `/dashboards/${h.id}` },
+  // A chart is not independently addressable — open the dashboard it lives on,
+  // which is exactly the question BRD 74 D2's chart search answers.
+  { type: "CHART", gate: cap("chart.chart.read"), section: "Charts", hint: "Chart",
+    icon: BarChart3, href: (h) => (h.parentId ? `/dashboards/${h.parentId}` : "/dashboards") },
+  { type: "CASE", gate: cap("case.case.read"), section: "Cases", hint: "Case",
+    icon: Briefcase, href: (h) => `/cases/${h.id}` },
+  { type: "PIPELINE", gate: cap("pipeline.template.read"), section: "Pipelines", hint: "Pipeline",
+    icon: Workflow, href: (h) => `/data/pipelines/${h.id}` },
+  { type: "EXPERIMENT", gate: cap("experiment.experiment.read"), section: "Experiments",
+    hint: "Experiment", icon: FlaskConical, href: (h) => `/ml/experiments/${h.id}` },
+  { type: "MODEL", gate: cap("experiment.model.read"), section: "Models", hint: "Model",
+    icon: Boxes, href: (h) => `/ml/models/${h.id}` },
+  { type: "DECISION_MODEL", gate: cap("case.disposition.read"), section: "Decision tables",
+    hint: "Decision table", icon: TableProperties, href: () => "/decisions" },
+];
+
+/**
  * ⌘K command palette + global search. Keyboard-first: open with ⌘K / Ctrl+K,
  * type to filter navigation and quick actions, and (2+ chars) search across
- * datasets, dashboards and decision tables. Every entry is capability-gated —
- * the palette only ever offers what the viewer can actually reach, and the
- * search only queries services the viewer can read.
+ * every entity kind the viewer can read.
+ *
+ * BRD 74 D3: the search is ONE `search()` query. It used to be three — and one
+ * of them fetched `first: 50` dashboards and matched titles in the browser,
+ * which made dashboard 51 unfindable and left charts, cases, pipelines,
+ * experiments and models unsearchable entirely. bff-graphql now fans out to
+ * the service that owns each kind, so the matching happens server-side and the
+ * authorization stays with the owner.
  */
 export function CommandPalette() {
   const router = useRouter();
@@ -67,28 +111,29 @@ export function CommandPalette() {
 
   useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
 
-  // ---- capability gates for the searchable services -------------------------
-  const canData = can(cap("dataset.dataset.list"));
-  const canDash = can(cap("chart.dashboard.read"));
-  const canDec = can(cap("case.disposition.read"));
+  // ---- the entity kinds this viewer may search ------------------------------
+  // Only kinds whose capability the viewer holds are requested, so the palette
+  // never provokes a 403 it would have to hide. Memoised on `can` so the query
+  // key is stable across renders.
+  const kinds = useMemo(() => SEARCH_KINDS.filter((k) => can(k.gate)), [can]);
+  const kindByType = useMemo(
+    () => new Map(SEARCH_KINDS.map((k) => [k.type, k])),
+    [],
+  );
+  const types = useMemo(() => kinds.map((k) => k.type), [kinds]);
 
   const q = query.trim();
   const search = useQuery({
-    queryKey: ["cmdk", "search", workspaceId, q],
-    enabled: open && q.length >= 2,
+    queryKey: ["cmdk", "search", workspaceId, q, types.join(",")],
+    enabled: open && q.length >= 2 && types.length > 0,
     staleTime: 15_000,
-    queryFn: async () => {
-      const [ds, dsh, dm] = await Promise.all([
-        canData ? graphqlRequest<ops.DatasetsResult>(ops.DATASETS, { first: 6, q }) : null,
-        canDash ? graphqlRequest<ops.DashboardsResult>(ops.DASHBOARDS, { workspaceId, first: 50 }) : null,
-        canDec ? graphqlRequest<ops.DecisionModelsResult>(ops.DECISION_MODELS) : null,
-      ]);
-      return {
-        datasets: (ds?.datasets.nodes ?? []).slice(0, 6),
-        dashboards: (dsh?.dashboards.nodes ?? []).filter((d) => matches(d.title ?? "", q)).slice(0, 6),
-        decisions: (dm?.decisionModels ?? []).filter((m) => matches(m.name ?? "", q)).slice(0, 6),
-      };
-    },
+    // ONE query (BRD 74 AC-9). Every kind is matched by the service that owns
+    // it, so there is no client-side filtering of a truncated page here — the
+    // reason a dashboard ranked below the old `first: 50` used to vanish.
+    queryFn: () =>
+      graphqlRequest<ops.SearchResult>(ops.SEARCH, {
+        q, types, workspaceId, first: 6,
+      }).then((r) => r.search),
   });
 
   // ---- build the flat, ordered item list ------------------------------------
@@ -110,20 +155,25 @@ export function CommandPalette() {
       out.push({ id: `act:${a.href}`, label: a.label, hint: "Action", section: "Actions", icon: a.icon, run: () => go(a.href) });
     }
 
-    // Live search results (2+ chars).
+    // Live search results (2+ chars), grouped in SEARCH_KINDS order. `hits`
+    // already arrives in that order and already excludes any kind the owning
+    // service denied — nothing is re-filtered or re-authorized here.
     if (q.length >= 2 && search.data) {
-      for (const d of search.data.datasets) {
-        out.push({ id: `ds:${d.id}`, label: d.name, hint: "Dataset", section: "Datasets", icon: Database, run: () => go(`/data/datasets/${d.id}`) });
-      }
-      for (const d of search.data.dashboards) {
-        out.push({ id: `dsh:${d.id}`, label: d.title ?? d.id, hint: "Dashboard", section: "Dashboards", icon: LayoutDashboard, run: () => go(`/dashboards/${d.id}`) });
-      }
-      for (const m of search.data.decisions) {
-        out.push({ id: `dm:${m.id}`, label: m.name, hint: "Decision table", section: "Decision tables", icon: TableProperties, run: () => go(`/decisions`) });
+      for (const h of search.data.hits) {
+        const kind = kindByType.get(h.type);
+        if (!kind) continue; // a kind this build does not know how to open
+        out.push({
+          id: h.key,
+          label: h.title,
+          hint: kind.hint,
+          section: kind.section,
+          icon: kind.icon,
+          run: () => go(kind.href(h)),
+        });
       }
     }
     return out;
-  }, [can, q, search.data, go]);
+  }, [can, q, search.data, go, kindByType]);
 
   useEffect(() => { setActive(0); }, [q, search.data]);
 
@@ -168,7 +218,7 @@ export function CommandPalette() {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search or jump to…  (datasets, dashboards, decision tables)"
+            placeholder="Search or jump to…  (datasets, dashboards, charts, cases, pipelines, models)"
             className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             aria-label="Command palette search"
             aria-controls="cmdk-list"

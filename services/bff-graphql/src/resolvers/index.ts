@@ -9,6 +9,7 @@ import { DownstreamError, ErrorCode, gqlError } from "../errors/errors.js";
 import { toConnection, toLimitCursor, type ConnectionArgs } from "../pagination.js";
 import { JSONScalar, DateTimeScalar, DateScalar } from "../schema/scalars.js";
 import { draftCaseFields, type DraftCaseFieldsArgs } from "./draftFields.js";
+import { searchFanOut, type SearchArgs } from "./search.js";
 import type { ChartDataDTO, ChartDTO } from "../clients/chart.js";
 import type { ChartSourceInputBody } from "../clients/chart.js";
 import { budgetScopeString } from "../clients/usage.js";
@@ -22,7 +23,7 @@ import {
   mapCaseSchema,
   mapCaseForm,
   mapQueueIntelligence,
-  mapChartType, mapChartShapedData,
+  mapChartType, mapChartShapedData, mapChartSearchHit,
   mapProposal, mapAgentRun, mapAgentKillSwitch, mapToolKillSwitch, mapExperiment, mapRun, mapModel,
   mapRegistryModel, mapPromotion, mapInferenceJob,
   // Tier 4b: ml ops (register/notes/artifacts + validate/schedules).
@@ -1130,6 +1131,11 @@ export const resolvers = {
       return mapSiemConfigState(d);
     },
 
+    // BRD 74 D3 — cross-service search. Stateless: no index here, one call per
+    // requested type to the service that owns it, authorization observed from
+    // the downstream rather than decided here. See ./search.ts.
+    search: (_p: unknown, a: SearchArgs, ctx: GraphQLContext) => searchFanOut(ctx, a),
+
     dataset: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.dataset.dataset(a.id).then((d) => mapDataset(ctx, d))),
 
@@ -1343,12 +1349,31 @@ export const resolvers = {
 
     dashboards: async (
       _p: unknown,
-      a: ConnectionArgs & { workspaceId: string },
+      a: ConnectionArgs & { workspaceId: string; q?: string },
       ctx: GraphQLContext,
     ) => {
       const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
-      const page = await ctx.clients.chart.dashboards(a.workspaceId, limit, cursor);
+      const page = await ctx.clients.chart.dashboards(a.workspaceId, limit, cursor, false, a.q);
       return toConnection(page, (d) => mapDashboard(ctx, d));
+    },
+
+    // BRD 74 D2's GET /charts, finally reachable from the UI: one client
+    // method, one resolver, one mapper — no state, no second search path.
+    chartSearch: async (
+      _p: unknown,
+      a: ConnectionArgs & {
+        workspaceId: string; q?: string; module?: string; tag?: string;
+        dashboardId?: string; includeArchived?: boolean;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
+      const page = await ctx.clients.chart.searchCharts({
+        workspaceId: a.workspaceId, q: a.q, module: a.module, tag: a.tag,
+        dashboardId: a.dashboardId, includeArchived: a.includeArchived ?? undefined,
+        limit, cursor,
+      });
+      return toConnection(page, (c) => mapChartSearchHit(ctx, c));
     },
 
     archivedDashboards: async (
@@ -1935,9 +1960,9 @@ export const resolvers = {
     memoryPolicy: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
       ctx.clients.memory.policy().then((d) => mapMemoryPolicy(ctx, d)),
 
-    experiments: async (_p: unknown, a: ConnectionArgs, ctx: GraphQLContext) => {
+    experiments: async (_p: unknown, a: ConnectionArgs & { q?: string }, ctx: GraphQLContext) => {
       const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
-      const page = await ctx.clients.experiment.experiments(limit, cursor);
+      const page = await ctx.clients.experiment.experiments(limit, cursor, a.q);
       return toConnection(page, (d) => mapExperiment(ctx, d));
     },
 
@@ -1960,13 +1985,13 @@ export const resolvers = {
     // ---- ml: model registry (list + detail with versions/stages) -------------
     models: async (
       _p: unknown,
-      a: ConnectionArgs & { stage?: string },
+      a: ConnectionArgs & { stage?: string; q?: string },
       ctx: GraphQLContext,
     ) => {
       const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
       // The list path serves model headers only (no versions) — versions resolve
       // to [] here; the model(id) detail path hydrates them (no per-row N+1).
-      const page = await ctx.clients.experiment.models({ stage: a.stage, limit, cursor });
+      const page = await ctx.clients.experiment.models({ stage: a.stage, q: a.q, limit, cursor });
       return toConnection(page, (d) => mapRegistryModel(ctx, d));
     },
 
@@ -2511,8 +2536,15 @@ export const resolvers = {
     },
 
     // ---- BRD 54 inc2: governed decision tables ------------------------------
-    decisionModels: (_p: unknown, _a: unknown, ctx: GraphQLContext) =>
-      ctx.clients.agent.decisionModels().then((rows) => rows.map(mapDecisionModel)),
+    decisionModels: async (
+      _p: unknown,
+      a: ConnectionArgs & { q?: string },
+      ctx: GraphQLContext,
+    ) => {
+      const { limit, cursor } = toLimitCursor(a, ctx.config.limits);
+      const page = await ctx.clients.agent.decisionModels({ q: a.q, limit, cursor });
+      return toConnection(page, mapDecisionModel);
+    },
 
     decisionModel: (_p: unknown, a: { id: string }, ctx: GraphQLContext) =>
       nullOn404(ctx.clients.agent.decisionModel(a.id).then(mapDecisionModel)),
