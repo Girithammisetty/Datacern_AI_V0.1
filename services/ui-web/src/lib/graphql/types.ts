@@ -891,6 +891,8 @@ export interface SavedQueryInput {
 export interface ChartData {
   rows?: JSONValue;
   columns?: JSONValue;
+  /** `{nodes, edges}` for the network family — its data lives here, not in rows. */
+  graph?: JSONValue;
   /** Resolved artifact blob for the metric/parameter (dataset/run) family
    * (chart-service ShapedResult.artifact) — e.g.
    * {kind:"dataset_summary", metrics:[{label,value}]}. */
@@ -1024,6 +1026,9 @@ export interface ChartShapedData {
   chartType?: string | null;
   columns?: JSONValue;
   rows?: JSONValue;
+  /** `{nodes, edges}` for the network family (chart-service Shape sets `graph`
+   * and leaves `rows` empty for it). */
+  graph?: JSONValue;
   /** Resolved artifact blob for the metric/parameter (dataset/run) family
    * (chart-service ShapedResult.artifact). */
   artifact?: JSONValue;

@@ -40,6 +40,7 @@ export default function EmbeddedDashboardPage({
                   chartType={chart.chartType}
                   columns={chart.data?.columns}
                   rows={chart.data?.rows}
+                  graph={chart.data?.graph}
                   artifact={chart.data?.artifact}
                   title={chart.name ?? undefined}
                 />

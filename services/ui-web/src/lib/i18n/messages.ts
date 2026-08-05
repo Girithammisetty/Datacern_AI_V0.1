@@ -290,6 +290,8 @@ export const en = {
   "pipelines.addStepFirst": "Add at least one step before saving.",
   "pipelines.configureStep": "Configure {name}",
   "pipelines.noParams": "This step has no parameters.",
+  "charts.unsupported.title": "Map rendering not available",
+  "charts.unsupported.detail": "{chartType} needs map basemaps that are not bundled with this deployment. The chart's data resolves normally — only the map visual is unavailable.",
   "pipelines.resources.legend": "Resource parameters",
   "pipelines.resources.cpus": "CPU cores",
   "pipelines.resources.ramGb": "RAM (GB)",

@@ -2896,7 +2896,7 @@ export const DASHBOARD = /* GraphQL */ `
       id urn title module
       charts(filters: $filters) {
         id urn name chartType spec config displayMeta sources provenance
-        data { rows columns artifact meta }
+        data { rows columns graph artifact meta }
       }
     }
   }
@@ -2949,13 +2949,13 @@ export interface SemanticModelResult {
 
 const CHART_FIELDS = /* GraphQL */ `
   id urn name chartType spec config displayMeta sources provenance
-  data { rows columns artifact meta }
+  data { rows columns graph artifact meta }
 `;
 
 export const CHART_PREVIEW = /* GraphQL */ `
   query ChartPreview($input: CreateChartInput!) {
     chartPreview(input: $input) {
-      chartId chartType columns rows artifact rowCount truncated
+      chartId chartType columns rows graph artifact rowCount truncated
     }
   }
 `;

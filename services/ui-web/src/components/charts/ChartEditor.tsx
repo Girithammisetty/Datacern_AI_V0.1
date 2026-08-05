@@ -815,6 +815,7 @@ export function ChartEditor({
                       family={family}
                       columns={preview.columns}
                       rows={preview.rows}
+                      graph={preview.graph}
                       title={name.trim() || t("charts.preview")}
                     />
                     <p className="mt-1 text-center text-xs text-muted-foreground">
@@ -822,7 +823,7 @@ export function ChartEditor({
                     </p>
                   </>
                 ) : preview && (family === "network" || family === "metric") ? (
-                  <ChartView chartType={chartType} family={family} columns={preview.columns} rows={preview.rows} artifact={preview.artifact} />
+                  <ChartView chartType={chartType} family={family} columns={preview.columns} rows={preview.rows} graph={preview.graph} artifact={preview.artifact} />
                 ) : preview ? (
                   <p className="py-8 text-center text-xs text-muted-foreground">{t("charts.previewEmpty")}</p>
                 ) : (

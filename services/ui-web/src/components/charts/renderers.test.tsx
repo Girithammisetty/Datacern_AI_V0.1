@@ -34,20 +34,26 @@ describe("ChartView.resolveKind (dispatch by chartType then family)", () => {
     expect(resolveKind(null, null)).toBe("bar");
   });
 
-  it("maps every remaining axis-family type to the bar renderer (they all reuse BarChart's dataseries-pivot support)", () => {
-    for (const ct of [
-      "vertical_stackedbar_chart",
-      "scatter_plot",
-      "bubble_chart",
-      "whisker_chart",
-      "combination_chart",
-      "geo_map_chart",
-      "histogram_chart",
-      "waterfall_chart",
-      "funnel_chart",
-    ]) {
+  // BRD 72: these four still route through the bar/scatter/funnel path in
+  // buildEChartsOption, which refines them by chartType.
+  it("keeps the axis-family types the bar path genuinely renders on the bar renderer", () => {
+    for (const ct of ["vertical_stackedbar_chart", "scatter_plot", "bubble_chart", "funnel_chart"]) {
       expect(resolveKind(ct)).toBe("bar");
     }
+  });
+
+  // BRD 72: these four USED to draw a bar chart wearing another type's label.
+  it("gives whisker / combination / histogram / waterfall their own renderers", () => {
+    expect(resolveKind("whisker_chart")).toBe("boxplot");
+    expect(resolveKind("combination_chart")).toBe("combination");
+    expect(resolveKind("histogram_chart")).toBe("histogram");
+    expect(resolveKind("waterfall_chart")).toBe("waterfall");
+  });
+
+  it("declares geo_map_chart unsupported rather than drawing it as a bar chart", () => {
+    // Its data resolves fine; only the map visual is unavailable (no bundled
+    // GeoJSON basemaps). Saying so beats presenting a bar chart as a map.
+    expect(resolveKind("geo_map_chart")).toBe("unsupported");
   });
 
   it("maps the new y_only-family bespoke renderers", () => {
@@ -55,21 +61,30 @@ describe("ChartView.resolveKind (dispatch by chartType then family)", () => {
     expect(resolveKind("word_cloud_chart")).toBe("wordcloud");
   });
 
-  it("maps grid_chart + pivot_table_chart, and the heatmap-family tabular fallback types, to the grid renderer", () => {
+  it("maps grid_chart + pivot_table_chart to the grid renderer", () => {
+    expect(resolveKind("grid_chart")).toBe("grid");
     expect(resolveKind("pivot_table_chart")).toBe("grid");
-    for (const ct of ["sunburst_chart", "sankey_chart", "tree_map_chart", "chord_chart"]) {
-      expect(resolveKind(ct)).toBe("grid");
-    }
+  });
+
+  // BRD 72: these four USED to render as a data table. They are [x, y, value]
+  // triples — a weighted edge list — so each is a real projection of that data.
+  it("gives every heatmap-family type its own visual instead of a data table", () => {
+    expect(resolveKind("sunburst_chart")).toBe("sunburst");
+    expect(resolveKind("sankey_chart")).toBe("sankey");
+    expect(resolveKind("tree_map_chart")).toBe("treemap");
+    expect(resolveKind("chord_chart")).toBe("chord");
   });
 
   it("maps heatmap_chart to the bespoke heatmap renderer", () => {
     expect(resolveKind("heatmap_chart")).toBe("heatmap");
   });
 
-  it("maps every network-family type to the network renderer", () => {
-    for (const ct of ["network_chart", "network_graph_chart", "tree_chart", "decision_tree_chart"]) {
-      expect(resolveKind(ct)).toBe("network");
-    }
+  it("splits the network family into force-graph and tree renderers", () => {
+    expect(resolveKind("network_chart")).toBe("network");
+    expect(resolveKind("network_graph_chart")).toBe("network");
+    // BRD 72: hierarchies are trees, not undifferentiated graphs.
+    expect(resolveKind("tree_chart")).toBe("tree");
+    expect(resolveKind("decision_tree_chart")).toBe("tree");
   });
 
   it("maps the metric-family dataset types to the metric renderer", () => {
@@ -78,7 +93,9 @@ describe("ChartView.resolveKind (dispatch by chartType then family)", () => {
   });
 
   it("falls back to family for heatmap/network/metric when chartType is unknown", () => {
-    expect(resolveKind(null, "heatmap")).toBe("grid");
+    // BRD 72: the heatmap FAMILY is [x, y, value], which a heatmap renders
+    // directly — it used to fall back to a data table.
+    expect(resolveKind(null, "heatmap")).toBe("heatmap");
     expect(resolveKind(null, "network")).toBe("network");
     expect(resolveKind(null, "metric")).toBe("metric");
   });
