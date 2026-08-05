@@ -43,6 +43,15 @@ func (p *Pipeline) audit(ctx context.Context, req Request, oc Outcome) {
 	if req.OboSub != "" {
 		payload["obo_sub"] = req.OboSub
 	}
+	// BRD 74 AC-10. Only set when the caller's bearer was actually FORWARDED to
+	// the backend, so its absence means "attribution only" rather than "unknown".
+	// Without it a delegated call and an ordinary one are indistinguishable in the
+	// audit stream — and "a user token left the gateway" is precisely the thing an
+	// auditor needs to be able to find after the fact.
+	if oc.delegated {
+		payload["delegated"] = true
+		payload["delegated_actions"] = oc.delegatedActions
+	}
 	if oc.Code != "" {
 		payload["error_code"] = oc.Code
 	}

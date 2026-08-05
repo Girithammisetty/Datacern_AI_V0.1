@@ -81,9 +81,9 @@ type Request struct {
 
 // Outcome is the enforcement result the MCP layer renders.
 type Outcome struct {
-	Decision    string         // events.Decision*
-	Code        string         // domain.Code* ("" on success/proposal)
-	HTTP        int            // HTTP analog
+	Decision    string // events.Decision*
+	Code        string // domain.Code* ("" on success/proposal)
+	HTTP        int    // HTTP analog
 	Message     string
 	Details     any            // per-field validation details
 	Structured  map[string]any // PROPOSAL_REQUIRED / result structuredContent
@@ -98,6 +98,14 @@ type Outcome struct {
 	crossTenant  bool
 	backendKind  string
 	affectedURNs []string
+
+	// Delegation accounting (BRD 74 AC-10). A call that forwarded the caller's
+	// bearer to the backend is a materially different event from one that carried
+	// attribution only, and ai.tool_invoked.v1 recorded them identically — so from
+	// the audit stream you could not tell whether a user token had left the
+	// gateway. These carry that distinction into the audit payload.
+	delegated        bool
+	delegatedActions []string
 }
 
 // IsError reports whether the outcome maps to an MCP isError=true result.
@@ -248,20 +256,20 @@ func (p *Pipeline) run(ctx context.Context, req Request) Outcome {
 		}
 	}
 	in := authz.Input{
-		Subject:      authz.Subject{Type: "agent", AgentID: req.AgentID, AgentVersion: req.AgentVersion, Principal: req.Principal},
-		OboSub:       req.OboSub,
-		Tenant:       req.TenantStr,
-		Action:       authz.ActionToolExecute,
-		ToolID:       req.ToolID,
-		ResourceURN:  domain.ToolURN(req.TenantStr, req.ToolID, tv.Version),
-		Tier:         tier,
-		MaxTier:      tier,
-		AffectedURNs: oboURNs,
-		Args:         req.Args,
-		Toolset:      req.Toolset,
-		Constraints:  constraints,
-		OboGrants:    grants,
-		ArgsDigest:   argsDigest,
+		Subject:           authz.Subject{Type: "agent", AgentID: req.AgentID, AgentVersion: req.AgentVersion, Principal: req.Principal},
+		OboSub:            req.OboSub,
+		Tenant:            req.TenantStr,
+		Action:            authz.ActionToolExecute,
+		ToolID:            req.ToolID,
+		ResourceURN:       domain.ToolURN(req.TenantStr, req.ToolID, tv.Version),
+		Tier:              tier,
+		MaxTier:           tier,
+		AffectedURNs:      oboURNs,
+		Args:              req.Args,
+		Toolset:           req.Toolset,
+		Constraints:       constraints,
+		OboGrants:         grants,
+		ArgsDigest:        argsDigest,
 		ProposalExecution: verifiedProposal,
 	}
 	dec, err := p.OPA.Check(ctx, in)
@@ -380,6 +388,8 @@ func (p *Pipeline) run(ctx context.Context, req Request) Outcome {
 			return oc
 		}
 		forwardToken = req.RawToken
+		oc.delegated = true
+		oc.delegatedActions = append([]string(nil), tv.DownstreamActions...)
 	}
 
 	// Step 8: invoke backend over real HTTP.

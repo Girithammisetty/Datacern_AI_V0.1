@@ -83,10 +83,16 @@ func (f *fakeBackend) Invoke(_ context.Context, _ mcp.BackendTarget, in mcp.Invo
 	return &mcp.Result{Output: f.out}, nil
 }
 
-type fakeAudit struct{ logs []*domain.InvocationLog }
+type fakeAudit struct {
+	logs []*domain.InvocationLog
+	// The envelope carries the ai.tool_invoked.v1 payload; it used to be
+	// discarded, so nothing could assert what the audit stream actually says.
+	envelopes []events.Envelope
+}
 
-func (f *fakeAudit) RecordInvocation(_ context.Context, l *domain.InvocationLog, _ events.Envelope) error {
+func (f *fakeAudit) RecordInvocation(_ context.Context, l *domain.InvocationLog, e events.Envelope) error {
 	f.logs = append(f.logs, l)
+	f.envelopes = append(f.envelopes, e)
 	return nil
 }
 func (f *fakeAudit) InsertAudit(context.Context, events.Envelope) error { return nil }

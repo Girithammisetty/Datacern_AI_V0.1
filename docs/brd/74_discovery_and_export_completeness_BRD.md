@@ -18,6 +18,15 @@ its downstream authority, see D-3) · part of the
 > that own the data and adds no datastore, at the cost of N calls per search and a
 > latency floor set by the slowest leg.
 
+**Audit (added 2026-08-05).** `ai.tool_invoked.v1` recorded a call that forwarded
+the caller's bearer identically to one that carried attribution only, so from the
+audit stream you could not tell whether a user token had left the gateway — the
+one thing an auditor most needs to find after the fact. A delegated invocation now
+carries `delegated: true` + `delegated_actions`. The key is **absent**, not false,
+on a non-delegating call, so absence means "attribution only" rather than
+"unknown"; and a refused delegation is never marked, so the stream cannot
+over-report token egress either.
+
 **Owner:** platform · **Services:** `dataset-service` · `chart-service` ·
 `experiment-service` · `agent-runtime` · `bff-graphql` · `ui-web` ·
 `tool-plane` · `rbac-service` (tests only)
