@@ -46,7 +46,7 @@ Every row below is checkable in the repository at the cited location. Hand this 
 - **~2,560 test functions in-repo** (static count, 2026-07-26: ~1,650 Python, ~940 Go, ~940 TypeScript). Do not quote a "tests passing" number without the CI caveat below.
 - **CI on the latest `main` commit: 29 of 30 executed jobs green.** The one red job is a known-flaky realtime-hub timing test. The separate security-scan workflow is red on a Trivy container-CVE gate (pre-existing base-image findings, tracked). "All green" is not our claim; "green except two known, tracked items" is.
 - **Full E2E journey test** (`deploy/e2e/driver.py`, 12 steps) runs the entire claims lifecycle against the real stack — real local LLM, real Kafka, real object storage, real MLflow — including negative assertions (forged grant rejected, self-approval rejected).
-- **72 numbered BRDs + master** — capabilities specified before build; docs convention enforced.
+- **78 numbered BRDs + master** — capabilities specified before build; docs convention enforced.
 - **Security controls implemented and cited** in `docs/security/SECURITY_POSTURE.md`, which also lists what we do **not** claim (no SOC 2, no third-party pen test, SCIM stub, no SAML).
 
 ---

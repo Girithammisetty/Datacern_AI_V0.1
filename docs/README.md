@@ -7,11 +7,11 @@ Everything here is Markdown. There are no binary documents in this tree — see
 
 | Dir | Files | Contents |
 |---|---:|---|
-| [`brd/`](brd/) | 72 | Business requirements per service — **the source of truth for scope**. Start at [`00_MASTER_BRD.md`](brd/00_MASTER_BRD.md) |
+| [`brd/`](brd/) | 78 | Business requirements per service — **the source of truth for scope**. Start at [`00_MASTER_BRD.md`](brd/00_MASTER_BRD.md) |
 | [`architecture/`](architecture/) | 2 | Technical and deployment architecture |
 | [`platform/`](platform/) | 8 | Conventions, agent/user guides, capability catalog |
 | [`platform/playbooks/`](platform/playbooks/) | 25 | Per-vertical agent playbooks, one per pack |
-| [`initiatives/`](initiatives/) | 27 | **Full-lifecycle change docs — every substantive change lives here** |
+| [`initiatives/`](initiatives/) | 30 | **Full-lifecycle change docs — every substantive change lives here** |
 | [`design/`](design/) | 9 | Earlier per-feature design notes (problem → phases → status) |
 | [`demo/`](demo/) | 4 | Demo runbooks |
 | [`security/`](security/) | 1 | [Security posture](security/SECURITY_POSTURE.md) — controls **and** explicit non-claims |
@@ -26,7 +26,7 @@ contradicts the repository:
 |---|---:|---|
 | Deployable services | 24 | `deploy/services.yaml` |
 | Capability packs | 28 | `packs/*/pack.yaml` |
-| BRDs | 72 | `docs/brd/*.md` |
+| BRDs | 78 | `docs/brd/*.md` |
 | Packs with a seeded demo scenario | 4 | `deploy/demo/*/cases.yaml` |
 
 For what is **not** built — no customers, no production deployment, no SOC 2 or
