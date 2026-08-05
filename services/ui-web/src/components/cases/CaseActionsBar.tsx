@@ -64,6 +64,12 @@ const SYNC_TEMPLATES: Record<string, { label: string; target: object; payload: o
 /** How long after resolvedAt the backend still accepts a reopen (CASE-FR). */
 const REOPEN_WINDOW_MS = 30 * 86_400_000;
 
+/** Which lifecycle transition just succeeded — lets a host surface (the
+ * cases workbench pane) react, e.g. auto-advance to the next case after a
+ * resolve/close. Optional: the full detail page passes nothing. */
+export type CaseTransitionKind =
+  | "assign" | "unassign" | "start" | "resolve" | "reopen" | "close" | "escalate";
+
 /**
  * Lifecycle actions derived EXACTLY from case-service's state machine
  * (domain/statemachine.go): assign from unassigned/draft/in_progress; unassign
@@ -72,7 +78,13 @@ const REOPEN_WINDOW_MS = 30 * 86_400_000;
  * no status guard but is hidden on the terminal closed state. An illegal
  * transition still 409s server-side — these buttons just never offer one.
  */
-export function CaseActionsBar({ c }: { c: Case }) {
+export function CaseActionsBar({
+  c,
+  onAfterTransition,
+}: {
+  c: Case;
+  onAfterTransition?: (kind: CaseTransitionKind) => void;
+}) {
   const push = useToasts((s) => s.push);
   const [dialog, setDialog] = useState<null | "assign" | "resolve" | "close" | "escalate" | "sync">(null);
   const queryClient = useQueryClient();
@@ -119,7 +131,10 @@ export function CaseActionsBar({ c }: { c: Case }) {
     const g = err instanceof GraphQLRequestError ? err : null;
     push({ title, description: g?.message ?? String(err), traceId: g?.traceId, variant: "error" });
   };
-  const toastOk = (title: string) => () => push({ title, variant: "success" });
+  const toastOk = (title: string, kind?: CaseTransitionKind) => () => {
+    push({ title, variant: "success" });
+    if (kind) onAfterTransition?.(kind);
+  };
 
   const assign = useAssignCase(c.id);
   const unassign = useUnassignCase(c.id);
@@ -217,7 +232,7 @@ export function CaseActionsBar({ c }: { c: Case }) {
             disabled={unassign.isPending}
             onClick={() =>
               unassign.mutate(undefined, {
-                onSuccess: toastOk("Case unassigned"),
+                onSuccess: toastOk("Case unassigned", "unassign"),
                 onError: toastError("Unassign failed"),
               })
             }
@@ -233,7 +248,7 @@ export function CaseActionsBar({ c }: { c: Case }) {
             disabled={start.isPending}
             onClick={() =>
               start.mutate(undefined, {
-                onSuccess: toastOk("Case started"),
+                onSuccess: toastOk("Case started", "start"),
                 onError: toastError("Start failed"),
               })
             }
@@ -262,7 +277,7 @@ export function CaseActionsBar({ c }: { c: Case }) {
             }
             onClick={() =>
               reopen.mutate(undefined, {
-                onSuccess: toastOk("Case reopened"),
+                onSuccess: toastOk("Case reopened", "reopen"),
                 onError: toastError("Reopen failed"),
               })
             }
@@ -318,6 +333,7 @@ export function CaseActionsBar({ c }: { c: Case }) {
               setDialog(null);
               setAssigneeId("");
               push({ title: "Case assigned", variant: "success" });
+              onAfterTransition?.("assign");
             },
             onError: toastError("Assign failed"),
           });
@@ -368,6 +384,7 @@ export function CaseActionsBar({ c }: { c: Case }) {
                 setDispositionId("");
                 setNote("");
                 push({ title: "Case resolved", variant: "success" });
+                onAfterTransition?.("resolve");
               },
               onError: toastError("Resolve failed"),
             },
@@ -431,6 +448,7 @@ export function CaseActionsBar({ c }: { c: Case }) {
             onSuccess: () => {
               setDialog(null);
               push({ title: "Case closed", variant: "success" });
+              onAfterTransition?.("close");
             },
             onError: toastError("Close failed"),
           });
@@ -456,6 +474,7 @@ export function CaseActionsBar({ c }: { c: Case }) {
                 setDialog(null);
                 setReason("");
                 push({ title: "Case escalated", variant: "success" });
+                onAfterTransition?.("escalate");
               },
               onError: toastError("Escalate failed"),
             },

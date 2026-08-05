@@ -2026,10 +2026,11 @@ export function useCaseOperation(
   });
 }
 
-export function useDispositions() {
+export function useDispositions(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: qk.dispositions(),
     queryFn: () => graphqlRequest<ops.DispositionsResult>(ops.DISPOSITIONS).then((r) => r.dispositions),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -2910,7 +2911,11 @@ export function useRestoreDashboard() {
   });
 }
 
-export function useDashboard(id: string, filters?: CrossFilterVar[]) {
+export function useDashboard(
+  id: string,
+  filters?: CrossFilterVar[],
+  opts?: { refetchInterval?: number | false },
+) {
   return useQuery({
     // Cross-filter selections are part of the key so a selection change refetches
     // the batch with the new predicates (CHART-FR-041).
@@ -2920,6 +2925,10 @@ export function useDashboard(id: string, filters?: CrossFilterVar[]) {
     // Keep the board rendered while a cross-filter selection refetches, so the
     // charts update in place instead of flashing the empty/loading state.
     placeholderData: (prev) => prev,
+    // Viewer auto-refresh ("TV mode"): the same react-query refetchInterval
+    // mechanism job polling uses (see useIngestion). Off (false) by default so
+    // the embed/read paths keep their single fetch.
+    refetchInterval: opts?.refetchInterval ?? false,
   });
 }
 

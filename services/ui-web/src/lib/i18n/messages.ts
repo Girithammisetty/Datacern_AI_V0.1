@@ -110,6 +110,18 @@ export const en = {
   "cases.bulk.result": "{succeeded} assigned, {failed} failed",
   "cases.bulk.allFailed": "Bulk assign failed",
 
+  "cases.workbench.shortcutsHint": "Press ? for keyboard shortcuts",
+  "cases.shortcuts.title": "Keyboard shortcuts",
+  "cases.shortcuts.subtitle": "Work the queue without leaving the page.",
+  "cases.shortcuts.jk": "Move selection down / up",
+  "cases.shortcuts.enter": "Focus the selected case pane",
+  "cases.shortcuts.resolve": "Resolve the selected case",
+  "cases.shortcuts.escalate": "Escalate the selected case",
+  "cases.shortcuts.assign": "Assign the selected case",
+  "cases.shortcuts.search": "Focus the search box",
+  "cases.shortcuts.help": "Show this cheatsheet",
+  "cases.shortcuts.close": "Close",
+
   "connections.title": "Data Sources",
   "connections.subtitle": "Database, warehouse, object-store, file and SaaS connections — and direct file uploads.",
   "connections.new": "New data source",
@@ -298,6 +310,55 @@ export const en = {
   "dashboards.archiveConfirm": "Archive dashboard “{name}”? It will be hidden from the list but can be restored.",
   "dashboards.deleteDashboard": "Delete dashboard",
   "dashboards.deleteDashboardConfirm": "Delete dashboard “{name}”? This permanently removes it and its charts.",
+
+  // --- Rich-viewer affordances (client-side, additive over existing data) ---
+  // Time-range picker. The window is baked into each chart's saved query, and
+  // the dashboard data query takes no range param, so this filters the points a
+  // chart already returned — hence "filters loaded data", never a server claim.
+  "dashboards.timeRange": "Time range",
+  "dashboards.timeRange.all": "All time",
+  "dashboards.timeRange.24h": "Last 24 hours",
+  "dashboards.timeRange.7d": "Last 7 days",
+  "dashboards.timeRange.30d": "Last 30 days",
+  "dashboards.timeRange.90d": "Last 90 days",
+  "dashboards.timeRange.custom": "Custom range",
+  "dashboards.timeRange.from": "From",
+  "dashboards.timeRange.to": "To",
+  "dashboards.timeRange.note": "Filters loaded data only — points already returned by each chart, not a new server query.",
+  "dashboards.timeRange.noTimeDimension": "No time column — the range does not apply to this chart.",
+  "dashboards.timeRange.filteredPoints": "Showing {shown} of {total} points in range.",
+  // Auto-refresh + last-updated.
+  "dashboards.autoRefresh": "Auto-refresh",
+  "dashboards.autoRefresh.off": "Off",
+  "dashboards.autoRefresh.30s": "Every 30s",
+  "dashboards.autoRefresh.1m": "Every 1m",
+  "dashboards.autoRefresh.5m": "Every 5m",
+  "dashboards.refreshNow": "Refresh now",
+  "dashboards.updatedAgo": "Updated {ago} ago",
+  "dashboards.updatedJustNow": "Updated just now",
+  "dashboards.updatedNever": "Not yet loaded",
+  // Fullscreen / TV mode.
+  "dashboards.fullscreen": "Fullscreen",
+  "dashboards.exitFullscreen": "Exit fullscreen",
+  // Per-chart maximize.
+  "dashboards.maximize": "Maximize chart",
+  "dashboards.closeMaximized": "Close",
+  // Shareable filtered URL.
+  "dashboards.copyLink": "Copy link",
+  "dashboards.linkCopied": "Link copied",
+  // Index: search / sort / favorites / recently viewed.
+  "dashboards.search": "Search dashboards",
+  "dashboards.searchPlaceholder": "Filter by name…",
+  "dashboards.sort": "Sort",
+  "dashboards.sort.nameAsc": "Name (A–Z)",
+  "dashboards.sort.nameDesc": "Name (Z–A)",
+  "dashboards.sort.recent": "Recently viewed",
+  "dashboards.favorites": "Favorites",
+  "dashboards.addFavorite": "Add to favorites",
+  "dashboards.removeFavorite": "Remove from favorites",
+  "dashboards.recentlyViewed": "Recently viewed",
+  "dashboards.allDashboards": "All dashboards",
+  "dashboards.noSearchMatch": "No dashboards match “{q}”.",
 
   "reports.title": "Team reports",
   "reports.subtitle": "Every report the platform can produce, in one place — run one now, or schedule a dashboard email digest.",
