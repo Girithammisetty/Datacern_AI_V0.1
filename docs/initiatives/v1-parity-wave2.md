@@ -65,14 +65,16 @@ per-version `downstream_actions` declaration.
 *Ask:* is "a read-tier tool may delegate a scope-subset of the caller's own token"
 the delegation model you want? That is the product decision this encodes.
 
-### Risk 3 · A BRD design was rejected mid-flight (BRD 74 D3)
+### Risk 3 · A BRD design was rejected mid-flight (BRD 74 D3) — **PARKED**
 The spec put a `search_entries` **projection inside bff-graphql**. That service has
 CI-enforced bans on DB, event-consumer and cache access and makes no authz decision
 in any resolver. Building it there would have meant deleting those bans.
 
 Shipped instead: a **stateless fan-out** to the eight owning services, after adding
 real text search to the three that had none. AC-6/AC-7 are dropped-as-redesigned.
-*Ask:* confirm the redesign is the direction you want recorded.
+**Parked 2026-08-05.** The fan-out is shipped and is what runs today; whether it
+is the right long-term direction is an open question nobody is working on. Left
+here so the shipped code is not mistaken for a ratified decision.
 
 ### Risk 4 · Deliberate nullability (BRD 73 inc3b)
 `BatchJobRun.ingestions` is **nullable** in the SDL because

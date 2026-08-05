@@ -7,6 +7,17 @@ applicable; **AC-10 met in inc4** — the governed MCP `search.query` tool, whic
 required tool-plane to forward the verified caller token to a tool that declares
 its downstream authority, see D-3) · part of the
 [V1 parity wave-2 index](71_v1_parity_wave2_index.md)
+
+> **The D3 architecture decision is PARKED (2026-08-05).** The fan-out is built,
+> tested and shipped, and it is what runs today. What is *not* settled is whether
+> replacing the specced `search_entries` projection with a stateless fan-out is
+> the direction the platform wants long term. Nothing further is being built on
+> that question until it is answered — this note exists so the shipped code is not
+> mistaken for a ratified architectural choice. The trade-off is recorded in C4
+> and the inc3 log: the fan-out keeps freshness and authorization in the services
+> that own the data and adds no datastore, at the cost of N calls per search and a
+> latency floor set by the slowest leg.
+
 **Owner:** platform · **Services:** `dataset-service` · `chart-service` ·
 `experiment-service` · `agent-runtime` · `bff-graphql` · `ui-web` ·
 `tool-plane` · `rbac-service` (tests only)
