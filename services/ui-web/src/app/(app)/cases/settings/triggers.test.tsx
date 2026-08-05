@@ -18,7 +18,7 @@ vi.mock("@/lib/graphql/client", async (importActual) => {
 });
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/cases/settings" }));
 
 // Replace the virtualizer with a full-render stand-in so DataTable rows exist
 // in jsdom (same idiom as InferenceSchedulesPanel.test.tsx).

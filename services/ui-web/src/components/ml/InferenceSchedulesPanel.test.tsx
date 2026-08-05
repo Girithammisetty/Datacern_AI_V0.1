@@ -18,7 +18,7 @@ vi.mock("@/lib/graphql/client", async (importActual) => {
   };
 });
 vi.mock("@/lib/realtime/useHubTopics", () => ({ useHubTopics: () => {} }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/ml/inference" }));
 // jsdom has no layout, so the windowed DataTable would render zero rows —
 // replace the virtualizer with a full-render stand-in so row ACTIONS (pause/
 // trigger/edit/delete) are reachable. The grid semantics stay real.

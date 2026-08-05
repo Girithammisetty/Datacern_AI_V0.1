@@ -19,7 +19,7 @@ vi.mock("@/lib/graphql/client", async (importActual) => {
   };
 });
 vi.mock("@/lib/realtime/useHubTopics", () => ({ useHubTopics: () => {} }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/ml/runs/run-1" }));
 
 import RunDetailPage from "./page";
 

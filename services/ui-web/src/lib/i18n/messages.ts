@@ -41,6 +41,25 @@ export const en = {
   "nav.group.ml": "Machine Learning",
   "nav.group.insights": "Insights",
 
+  // Breadcrumb trail (backward navigation on nested routes). Labels here cover
+  // path segments that are real routes but NOT nav items, so the trail can name
+  // them properly instead of falling back to a humanized raw segment.
+  "breadcrumb.ariaLabel": "Breadcrumb",
+  "breadcrumb.backTo": "Back to {label}",
+  "breadcrumb.aiGateway": "AI Gateway",
+  "breadcrumb.audit": "Audit",
+  "breadcrumb.datasets": "Datasets",
+  "breadcrumb.edit": "Edit",
+  "breadcrumb.events": "Events",
+  "breadcrumb.experiments": "Experiments",
+  "breadcrumb.export": "Export",
+  "breadcrumb.inference": "Inference",
+  "breadcrumb.models": "Models",
+  "breadcrumb.new": "New",
+  "breadcrumb.runs": "Runs",
+  "breadcrumb.schedules": "Schedules",
+  "breadcrumb.settings": "Settings",
+
   "action.signIn": "Sign in",
   "action.signOut": "Sign out",
   "action.retry": "Retry",

@@ -26,7 +26,7 @@ vi.mock("@/lib/graphql/client", async (importActual) => {
 });
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/data/semantic-models" }));
 
 import SemanticModelsPage from "./page";
 
