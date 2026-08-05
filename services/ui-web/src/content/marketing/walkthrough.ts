@@ -17,11 +17,6 @@ export const WALKTHROUGH_CONTENT = {
       "Follow one governed decision through Datacern AI, end to end: worklist, Jessie triage, four-eyes approval, learning loop, audit trail.",
   },
 
-  header: {
-    back: "Overview",
-    cta: { label: "Start the live demo", href: "/live-demo" },
-  },
-
   hero: {
     eyebrow: "The demo walkthrough",
     /* rendered as: lead <gradient>accent</gradient> */

@@ -4,13 +4,13 @@
  * /welcome/walkthrough — public demo-walkthrough marketing subpage.
  *
  * Pure renderer: every sentence comes from
- * src/content/marketing/walkthrough.ts. This file owns structure, the icon
- * lookup and the illustrative step mocks (labeled as mocks where rendered).
+ * src/content/marketing/walkthrough.ts, chrome from MarketingShell — the same
+ * design system as /welcome, /solutions and /security. This file owns
+ * structure, the icon lookup and the illustrative step mocks (labeled as
+ * mocks where rendered).
  */
 
-import { useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft,
   ArrowRight,
   Bot,
   Check,
@@ -28,52 +28,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { DatacernLogo } from "@/components/brand/DatacernLogo";
+import { MarketingShell } from "@/components/marketing/MarketingShell";
+import { Reveal } from "@/components/marketing/Reveal";
 import { Button } from "@/components/ui/button";
-import { MARKETING_SHELL } from "@/content/marketing/shell";
 import { WALKTHROUGH_CONTENT as C } from "@/content/marketing/walkthrough";
-
-/* scroll-reveal (same pattern as welcome-content) */
-function Reveal({
-  children,
-  className = "",
-  delay = 0,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  delay?: number;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    // no IntersectionObserver (older browsers, jsdom): show content, skip the effect
-    if (typeof IntersectionObserver === "undefined") {
-      setShown(true);
-      return;
-    }
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) {
-          setShown(true);
-          io.disconnect();
-        }
-      },
-      { threshold: 0.12 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-  return (
-    <div
-      ref={ref}
-      style={{ transitionDelay: `${delay}ms` }}
-      className={`wt-reveal ${shown ? "wt-in" : ""} ${className}`}
-    >
-      {children}
-    </div>
-  );
-}
 
 /* the small "this is a mock" caption every illustration carries (Rule #1) */
 function MockLabel() {
@@ -99,9 +57,9 @@ function Fact({ children }: { children: React.ReactNode }) {
 /* ------------------------------------------------------------------ */
 
 const RISK_CLASS: Record<string, string> = {
-  hi: "bg-red-500/12 text-red-700",
-  md: "bg-amber-500/15 text-amber-700",
-  lo: "bg-emerald-500/15 text-emerald-700",
+  hi: "bg-red-500/12 text-red-700 dark:text-red-400",
+  md: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  lo: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
 };
 
 function MockRow({ id, desc, tag, label }: { id: string; desc: string; tag: string; label: string }) {
@@ -174,7 +132,7 @@ function ApprovalMock() {
             </span>
           </div>
         </div>
-        <div className="mt-2 flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700">
+        <div className="mt-2 flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-400">
           <Lock className="size-3 shrink-0" />
           Approving your own proposal is rejected by the server — a different person must sign.
         </div>
@@ -249,46 +207,18 @@ const STEP_VISUALS: Record<string, { Icon: React.ElementType; Mock: React.Compon
 /* ------------------------------------------------------------------ */
 export default function WalkthroughContent() {
   return (
-    <main id="main" className="relative isolate min-h-screen bg-background text-foreground">
-      <style>{WT_CSS}</style>
-
-      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(80rem_50rem_at_50%_-10%,hsl(var(--primary)/0.12),transparent_60%)]" />
-        <div className="wt-grid absolute inset-0" />
-      </div>
-
-      {/* header */}
-      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link href="/welcome" className="flex items-center gap-2.5">
-            <DatacernLogo className="size-8" />
-            <span className="text-lg font-bold tracking-tight">{MARKETING_SHELL.product}</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/welcome"
-              className="hidden items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-flex"
-            >
-              <ArrowLeft className="size-3.5" /> {C.header.back}
-            </Link>
-            <Button asChild>
-              <Link href={C.header.cta.href}>{C.header.cta.label}</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
-
+    <MarketingShell active="/welcome">
       {/* hero */}
-      <section className="relative overflow-hidden">
-        <div aria-hidden className="wt-mesh pointer-events-none absolute inset-0 -z-10" />
-        <div className="mx-auto max-w-3xl px-6 pb-16 pt-14 text-center md:pt-20">
+      <section className="relative overflow-hidden border-b border-border/60">
+        <div aria-hidden className="mk-mesh pointer-events-none absolute inset-0 -z-10" />
+        <div className="mx-auto max-w-3xl px-6 py-16 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
             <Sparkles className="size-3.5" />
             {C.hero.eyebrow}
           </span>
           <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.05] tracking-tight md:text-5xl">
             {C.hero.headline.lead}
-            <span className="wt-grad bg-clip-text text-transparent">{C.hero.headline.accent}</span>
+            <span className="mk-grad">{C.hero.headline.accent}</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg leading-relaxed text-muted-foreground">
             {C.hero.sub}
@@ -307,20 +237,20 @@ export default function WalkthroughContent() {
       </section>
 
       {/* the refusal — the honesty beat, deliberately first */}
-      <section className="border-t border-border/60 bg-card/50">
-        <div className="mx-auto max-w-6xl px-6 py-16">
+      <section className="border-b border-border/60 bg-card/40">
+        <div className="mx-auto max-w-6xl px-6 py-14">
           <Reveal>
-            <div className="wt-glass wt-ring mx-auto max-w-3xl rounded-2xl p-6">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                <ShieldCheck className="size-4" />
-                {C.refusal.eyebrow}
-              </div>
-              <p className="mt-3 text-pretty leading-relaxed text-muted-foreground">
-                {C.refusal.pre}
-                <span className="font-semibold text-foreground">{C.refusal.emphasis}</span>
-                {C.refusal.post}
-              </p>
+          <div className="mk-glass mk-ring mx-auto max-w-3xl rounded-2xl p-6">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+              <ShieldCheck className="size-4" />
+              {C.refusal.eyebrow}
             </div>
+            <p className="mt-3 text-pretty leading-relaxed text-muted-foreground">
+              {C.refusal.pre}
+              <span className="font-semibold text-foreground">{C.refusal.emphasis}</span>
+              {C.refusal.post}
+            </p>
+          </div>
           </Reveal>
         </div>
       </section>
@@ -332,30 +262,30 @@ export default function WalkthroughContent() {
             const { Icon, Mock } = STEP_VISUALS[s.icon];
             return (
               <Reveal key={s.title}>
-                <div className="grid items-start gap-8 md:grid-cols-2">
-                  <div className={i % 2 === 1 ? "md:order-2" : ""}>
-                    <div className="flex items-center gap-3">
-                      <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                        <Icon className="size-5" />
-                      </span>
-                      <div>
-                        <div className="text-xs font-semibold uppercase tracking-widest text-primary">
-                          {C.stepLabel.replace("{n}", String(i + 1)).replace("{total}", String(C.steps.length))}
-                        </div>
-                        <h2 className="text-2xl font-bold tracking-tight">{s.title}</h2>
+              <div className="grid items-start gap-8 md:grid-cols-2">
+                <div className={i % 2 === 1 ? "md:order-2" : ""}>
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Icon className="size-5" />
+                    </span>
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-widest text-primary">
+                        {C.stepLabel.replace("{n}", String(i + 1)).replace("{total}", String(C.steps.length))}
                       </div>
+                      <h2 className="text-2xl font-bold tracking-tight">{s.title}</h2>
                     </div>
-                    <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">{s.body}</p>
-                    <ul className="mt-4 space-y-2">
-                      {s.facts.map((f) => (
-                        <Fact key={f}>{f}</Fact>
-                      ))}
-                    </ul>
                   </div>
-                  <div className={`wt-glass wt-ring rounded-2xl p-5 ${i % 2 === 1 ? "md:order-1" : ""}`}>
-                    <Mock />
-                  </div>
+                  <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">{s.body}</p>
+                  <ul className="mt-4 space-y-2">
+                    {s.facts.map((f) => (
+                      <Fact key={f}>{f}</Fact>
+                    ))}
+                  </ul>
                 </div>
+                <div className={`mk-glass mk-ring rounded-2xl p-5 ${i % 2 === 1 ? "md:order-1" : ""}`}>
+                  <Mock />
+                </div>
+              </div>
               </Reveal>
             );
           })}
@@ -363,48 +293,42 @@ export default function WalkthroughContent() {
       </section>
 
       {/* the sandbox, honestly */}
-      <section className="border-t border-border/60 bg-card/50">
+      <section className="border-t border-border/60 bg-card/40">
         <div className="mx-auto max-w-6xl px-6 py-16">
-          <Reveal>
-            <h2 className="text-balance text-center text-3xl font-bold tracking-tight">
-              {C.sandbox.title}
-            </h2>
-            <p className="mx-auto mt-3 max-w-2xl text-center text-muted-foreground">
-              {C.sandbox.sub}
-            </p>
-          </Reveal>
+          <h2 className="text-balance text-center text-3xl font-bold tracking-tight">
+            {C.sandbox.title}
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-muted-foreground">
+            {C.sandbox.sub}
+          </p>
           <div className="mt-10 grid gap-5 md:grid-cols-2">
-            <Reveal>
-              <div className="wt-glass wt-ring h-full rounded-2xl p-6">
-                <h3 className="flex items-center gap-2 text-lg font-bold tracking-tight">
-                  <Check className="size-5 text-primary" /> {C.sandbox.isTitle}
-                </h3>
-                <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
-                  {C.sandbox.is.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            </Reveal>
-            <Reveal delay={80}>
-              <div className="wt-glass wt-ring h-full rounded-2xl p-6">
-                <h3 className="flex items-center gap-2 text-lg font-bold tracking-tight">
-                  <X className="size-5 text-muted-foreground" /> {C.sandbox.isntTitle}
-                </h3>
-                <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
-                  {C.sandbox.isnt.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            </Reveal>
+            <div className="mk-glass mk-ring h-full rounded-2xl p-6">
+              <h3 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+                <Check className="size-5 text-primary" /> {C.sandbox.isTitle}
+              </h3>
+              <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
+                {C.sandbox.is.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="mk-glass mk-ring h-full rounded-2xl p-6">
+              <h3 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+                <X className="size-5 text-muted-foreground" /> {C.sandbox.isntTitle}
+              </h3>
+              <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
+                {C.sandbox.isnt.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </section>
 
       {/* closing CTA */}
       <section className="relative overflow-hidden border-t border-border/60">
-        <div aria-hidden className="wt-mesh pointer-events-none absolute inset-0 -z-10 opacity-80" />
+        <div aria-hidden className="mk-mesh pointer-events-none absolute inset-0 -z-10 opacity-80" />
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-6 py-20 text-center">
           <DatacernLogo className="size-12 drop-shadow-[0_0_28px_hsl(var(--primary)/0.6)]" />
           <h2 className="text-balance text-3xl font-bold tracking-tight md:text-4xl">
@@ -423,53 +347,6 @@ export default function WalkthroughContent() {
           </div>
         </div>
       </section>
-
-      <footer className="border-t border-border/60">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-6 py-6 text-xs text-muted-foreground sm:flex-row">
-          <span>{MARKETING_SHELL.footer.left}</span>
-          <span>{MARKETING_SHELL.footer.right}</span>
-        </div>
-      </footer>
-    </main>
+    </MarketingShell>
   );
 }
-
-/* trimmed copy of the welcome page's marketing CSS (wt- prefix to avoid any
- * cross-page collision); the #main token override keeps the light indigo /
- * lavender marketing palette scoped to this page. */
-const WT_CSS = `
-.wt-reveal{opacity:0;transform:translateY(16px);transition:opacity .6s ease,transform .6s ease;}
-.wt-in{opacity:1;transform:none;}
-#main{
-  --background:227 69% 97%;
-  --foreground:232 31% 15%;
-  --card:0 0% 100%;
-  --card-foreground:232 31% 15%;
-  --primary:235 60% 56%;
-  --primary-foreground:0 0% 100%;
-  --border:243 47% 93%;
-  --muted:231 62% 96%;
-  --muted-foreground:229 13% 41%;
-}
-.wt-mesh{background:
-  radial-gradient(55rem 42rem at 10% -12%, hsl(var(--primary) / 0.22), transparent 60%),
-  radial-gradient(46rem 40rem at 92% -8%, hsl(255 92% 76% / 0.22), transparent 58%),
-  radial-gradient(50rem 44rem at 58% 6%, hsl(218 100% 77% / 0.16), transparent 62%);}
-.wt-grid{background-image:
-  linear-gradient(hsl(var(--primary) / 0.06) 1px, transparent 1px),
-  linear-gradient(90deg, hsl(var(--primary) / 0.06) 1px, transparent 1px);
-  background-size:54px 54px;
-  -webkit-mask-image:radial-gradient(120% 90% at 50% -5%, #000, transparent 72%);
-  mask-image:radial-gradient(120% 90% at 50% -5%, #000, transparent 72%);}
-.wt-glass{background:hsl(var(--card));
-  border:1px solid hsl(var(--primary) / 0.14);}
-.wt-ring{position:relative;}
-.wt-ring::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
-  background:linear-gradient(140deg, hsl(var(--primary) / 0.35), transparent 45%, hsl(255 92% 66% / 0.35));
-  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;}
-.wt-grad{background-image:linear-gradient(100deg, hsl(var(--primary)), hsl(218 100% 72%), hsl(255 92% 76%));}
-@media (prefers-reduced-motion: reduce){
-  .wt-reveal{opacity:1!important;transform:none!important;}
-}
-`;
