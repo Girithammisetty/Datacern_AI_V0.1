@@ -18,6 +18,7 @@ import { makeJwks } from "./auth/jwt.js";
 import { loadManifest } from "./plugins/persistedQueries.js";
 import { initTracing, withServerSpan } from "./tracing.js";
 import { isExternalEdgePath, handleExternalEdge } from "./external/edge.js";
+import { isInternalFacadePath, handleInternalFacade } from "./internal/mcpFacade.js";
 import { GraphQLError } from "graphql";
 
 /** Max accepted request body. This BFF only ingests GraphQL operations and
@@ -131,6 +132,30 @@ export async function main(): Promise<http.Server> {
         }
       }
       return handleExternalEdge(req, res, path, edgeBody, { cfg, jwks });
+    }
+
+    // BRD 74 AC-10: the search.query MCP backend facade tool-plane federates to.
+    // Like the external edge it needs the raw body but not the Apollo path; it
+    // builds its own GraphQL context from the FORWARDED caller token and runs
+    // the same fan-out the search() resolver runs. Disabled unless
+    // BFF_FACADE_ALLOWED_SPIFFE names its permitted mesh peers.
+    if (isInternalFacadePath(path)) {
+      let facadeBody = "";
+      if (req.method === "POST") {
+        const declaredLen = Number(headerVal(req.headers["content-length"]) ?? "0");
+        if (declaredLen > MAX_BODY_BYTES) {
+          return json(res, 413, { error: { code: "PAYLOAD_TOO_LARGE", message: "Request body too large" } });
+        }
+        try {
+          facadeBody = await readBody(req);
+        } catch (e) {
+          if (e instanceof PayloadTooLargeError) {
+            return json(res, 413, { error: { code: "PAYLOAD_TOO_LARGE", message: "Request body too large" } });
+          }
+          throw e;
+        }
+      }
+      return handleInternalFacade(req, res, facadeBody, { cfg, jwks });
     }
 
     if (path !== "/graphql") {

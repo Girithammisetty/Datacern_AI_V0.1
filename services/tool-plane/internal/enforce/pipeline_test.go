@@ -70,9 +70,13 @@ func (f *fakeGrants) GrantsFor(context.Context, string, string, []string) ([]str
 type fakeBackend struct {
 	out map[string]any
 	err error
+	// got records the invocations the pipeline dispatched, so a test can assert
+	// what (if anything) was delegated to the facade.
+	got []mcp.Invocation
 }
 
-func (f *fakeBackend) Invoke(context.Context, mcp.BackendTarget, mcp.Invocation, bool) (*mcp.Result, error) {
+func (f *fakeBackend) Invoke(_ context.Context, _ mcp.BackendTarget, in mcp.Invocation, _ bool) (*mcp.Result, error) {
+	f.got = append(f.got, in)
 	if f.err != nil {
 		return nil, f.err
 	}

@@ -3,10 +3,13 @@
 **Status:** DONE — 2026-08-05 · **D2 + D1 + D3 DONE** (D3 built as the stateless
 fan-out redesign the earlier deferral recommended, NOT the projection the Design
 below specced — see C4 and the inc3 log; AC-6/AC-7 dropped as no longer
-applicable, AC-10 scoped out with a cited architectural reason) · part of the
+applicable; **AC-10 met in inc4** — the governed MCP `search.query` tool, which
+required tool-plane to forward the verified caller token to a tool that declares
+its downstream authority, see D-3) · part of the
 [V1 parity wave-2 index](71_v1_parity_wave2_index.md)
 **Owner:** platform · **Services:** `dataset-service` · `chart-service` ·
-`experiment-service` · `agent-runtime` · `bff-graphql` · `ui-web`
+`experiment-service` · `agent-runtime` · `bff-graphql` · `ui-web` ·
+`tool-plane` · `rbac-service` (tests only)
 **Gaps closed:** D1 (dataset export), D2 (cross-dashboard chart search), D3 (cross-service search index)
 
 ---
@@ -469,50 +472,255 @@ index. No migration was added because `CREATE EXTENSION pg_trgm` requires privil
 the migration owner may not hold in production. Chart counts per workspace are small
 enough that this is not yet a problem; it is a known scaling item, not a defect.
 
-**D-3 — the search MCP tool (AC-10). SCOPED OUT, with a specific reason.**
+**D-3 — the search MCP tool (AC-10). NO LONGER DEFERRED — built (inc4).**
 
-AC-10 asks for the search to be exposed as an MCP read tool returning the same
-results as the GraphQL query for the same principal. Checked against the code,
-that cannot be built honestly today, and the blocker is one line of tool-plane:
+An earlier increment scoped AC-10 out because tool-plane forwarded no
+`Authorization` header to a backend facade, so a facade had to re-authorize
+`obo_sub` itself and read its own store — and `search` has no store. That
+deferral named two unblocks, in tool-plane and rbac. Both were re-checked
+against the code before anything was written; one was right, one was wrong.
 
-- **tool-plane is the only MCP surface**, and `tools/call` federates to the
-  `mcp_backends.internal_url` resolved from the tool's `owner_service`
-  (`tool-plane/internal/api/gateway.go:344`).
-- The federated request body is `{tool_id, version, args, tenant, obo_sub,
-  agent_id}` plus `X-Trace-Id` and the SPIFFE headers. **No `Authorization`
-  header is forwarded** (`tool-plane/internal/mcp/backend.go:125-148`). That is
-  why every existing backend facade re-authorizes the effective human against
-  its OWN OPA sidecar and then reads its OWN database — e.g. fhir-bridge's
-  `handlers_facade.go:89-100` evaluating `Subject{ID: obo_sub, Typ: "user"}`.
-- `search` has no own database to read. Its only capability is calling eight
-  other services, and the only way bff-graphql can call them is by forwarding
-  the caller's JWT — which the facade contract does not give it. Serving the
-  facade would mean either minting a token in the BFF (a new signing authority
-  in a service that holds no keys) or making its own OPA decision (needs
-  `ioredis`, which `eslint.config.js` bans, and inverts BFF-FR-003).
-- No other service can host it either: the fan-out spans eight domains, and no
-  service other than the BFF has clients for more than its own.
+**Blocker 1 was right.** `tools/call` federates to `mcp_backends.internal_url`
+with `{tool_id, version, args, tenant, obo_sub, agent_id}` plus `X-Trace-Id` and
+the SPIFFE headers, and nothing else. Every existing facade therefore
+re-authorizes the effective human against its own OPA sidecar and reads its own
+database (fhir-bridge `handlers_facade.go:89-100`, case-service
+`handlers_facade.go:125-131`).
 
-A partial tool — one MCP read tool per owning service — would be real code but
-would **not** satisfy AC-10 as written: it would return one entity kind, not the
-same results as `search()`. Shipping it under this AC would be mislabeling, so
-it was not shipped.
+**Blocker 2 was wrong, and wrong in the more dangerous direction.** It said a
+token scoped `search.query` would be denied for `dataset.dataset.list` because
+OPA's `user_path` for `typ=agent_obo` demands an exact `scopes` match. The rule
+is real, but the conclusion — that the scope model needed *widening* — is not.
+`scopes` was always an arbitrary action list, and the run-level OBO token
+already carries `scopes=["*"]`
+(`agent-runtime/app/runtime/orchestrator.py:130-133`); `scopes=[tool_id]` is
+only the *proposal-execution* path (`proposals/service.py:412`), which is a
+write path and irrelevant to a read tool. So no rbac rule needed to change at
+all. The actual problem was the opposite one: **the token an agent holds is too
+BROAD to forward.** Handing a facade a `*`-scoped bearer would give it, and
+everything it calls, the human's entire authority — a textbook confused deputy.
+What was missing was not permission to widen but a way to NARROW, and a rule for
+who decides how narrow.
 
-**What would unblock it**, concretely and in tool-plane rather than here: have
-the gateway forward the verified caller token to the backend (`backend.go`
-`once()`), and widen the agent_obo scope model so a read tool's token carries
-the downstream actions the tool needs — today `mint_agent_obo` issues
-`scopes=[tool_id]` on the proposal-execution path
-(`agent-runtime/app/proposals/service.py:412-415`) and OPA's `user_path` for
-`typ=agent_obo` requires an exact `scopes` match on the action being checked
-(`rbac-service/policy/datacern_authz_input.rego:55-58,96-99`), so a token scoped
-`search.query` would be denied for `dataset.dataset.list` even if it were
-forwarded. Both are tool-plane/rbac decisions with their own blast radius; they
-do not belong at the tail of a discovery BRD.
+### What was built
 
-Meanwhile `search()` is a normal authenticated GraphQL field, so an agent
-holding a user JWT can already call it — it is only the governed **MCP**
-tool-plane path that is missing.
+**1 · tool-plane: a tool DECLARES its downstream authority.**
+`tool_versions.downstream_actions TEXT[]` (migration `000006`), surfaced on the
+registration API and on `tools/list` as `_meta.downstream_actions` +
+`_meta.required_scopes`. Validation at registration
+(`internal/domain/delegation.go`): only a **read-tier** tool may declare any,
+every entry must be a canonical `<service>.<resource>.<verb>` (MASTER-FR-016)
+whose verb is **read/list/export**, no wildcard, no duplicates, at most 32. A
+tool therefore cannot declare itself the authority to write, and cannot declare
+"everything".
+
+**2 · tool-plane: the gateway forwards the verified caller token — narrowly.**
+`mcp.Invocation` gained `AuthToken`; `backend.go once()` sets
+`Authorization: Bearer …` when it is set. It is set only in one place
+(`enforce/pipeline.go` step 7b) and only when **all** of these hold: the
+resolved version declares downstream actions; the effective tier is `read`; and
+`domain.TokenDelegable` passes — the caller's VERIFIED scopes must be exactly
+the tool id plus a subset of the declaration, with no `*` and nothing
+undeclared. Anything else is denied `SCOPE_NOT_DELEGABLE` (403) carrying
+`details.required_scopes`.
+
+The denial is deliberate and loud. The gateway holds no signing key, so it
+cannot narrow a token itself; the two alternatives to refusing were forwarding a
+broader token (giving the facade authority the tool never declared) or forwarding
+none (leaving the facade unauthenticated downstream, so it would answer "no
+results" — a failure rendered as an empty search). Neither is acceptable, so a
+mis-scoped call gets an error that names the scopes it must present.
+
+**3 · agent-runtime: one sanctioned constructor for a tool-call token.**
+`TokenMinter.mint_tool_obo(tool_id, downstream_actions)` builds
+`scopes=[tool_id] + declared` and refuses a wildcard, a non-canonical name, a
+duplicate, or any non-read verb — the same rules tool-plane enforces, so an
+invalid delegation fails at the mint rather than at the call. The
+proposal-execution path now mints through it with `downstream_actions=None`,
+which is byte-identical to what it minted before (`scopes=[tool_id]`): a write
+tool declares nothing, so it delegates nothing.
+
+**4 · rbac-service: no rule changed.** Only tests were added. That is the point:
+`agent_obo` is still `intersection(token scopes, the obo user's grants)`, in
+`decide.go`, in `datacern_authz.rego` and in the `datacern_authz_input.rego`
+variant every service's opaclient actually POSTs.
+
+**5 · bff-graphql: the facade, with no DB, no consumer and no cache.**
+`src/internal/mcpFacade.ts` serves `POST /internal/v1/mcp/invoke` for
+`search.query` only. It calls `buildContext()` on the **forwarded** caller token
+— the same builder `/graphql` uses — and then the **same** `searchFanOut(ctx,
+args)` the `search()` resolver calls. It mints nothing, stores nothing, decides
+nothing; the three `no-restricted-imports` bans (`pg`, `kafkajs`, `ioredis`) and
+`db: ~` / `migrate: false` are untouched, and no SDL changed, so no snapshot was
+regenerated.
+
+The earlier deferral's two rejected alternatives are still rejected: the BFF
+does not mint a token (it has no key) and does not make an OPA decision (that
+would need `ioredis` and would invert BFF-FR-003). It does neither because it no
+longer has to — it receives the caller's own token, which is precisely what
+BFF-FR-010 already says the BFF does with `/graphql`.
+
+Two gates guard the route, both fail-closed: a SPIFFE peer allowlist
+(`BFF_FACADE_ALLOWED_SPIFFE`; **unset ⇒ 403**, mirroring case-service and
+fhir-bridge), and the caller's own token — which must be present, must verify,
+and must MATCH the request's `tenant` (mismatch ⇒ **404**, never 403, so a 403
+cannot confirm another tenant exists) and `obo_sub` (mismatch ⇒ 403).
+
+**The tool is registered, not just codeable.** `deploy/e2e/lib/seed.py
+register_search_tool` registers + publishes `search.query` v1.0.0 (read tier,
+`owner_service: bff-graphql`) with its eight declared actions and upserts the
+`mcp_backends` row; `deploy/local/up.sh` seeds it after the BFF boots and passes
+`BFF_FACADE_ALLOWED_SPIFFE`; the Helm chart ships the same value.
+
+### The declared eight, and why they are what they are
+
+Each is the action the owning **handler** actually authorizes against — read out
+of the handlers, not guessed. Note that every one is the `.read` verb: the
+`.list` actions exist in the catalog and in `roles_actions.yaml`, but no list
+route in any of these services guards against one.
+
+| leg | owning call | declared action |
+|---|---|---|
+| `DATASET` | dataset-service `GET /datasets` | `dataset.dataset.read` |
+| `DASHBOARD` | chart-service `GET /dashboards` | `chart.dashboard.read` |
+| `CHART` | chart-service `GET /charts` | `chart.chart.read` |
+| `PIPELINE` | pipeline-orchestrator `GET /pipelines` | `pipeline.template.read` |
+| `EXPERIMENT` | experiment-service `GET /experiments` | `experiment.experiment.read` |
+| `MODEL` | experiment-service `GET /models` | `experiment.model.read` |
+| `CASE` | case-service `GET /cases` | `case.case.read` |
+| `DECISION_MODEL` | agent-runtime `GET /decision-models` | `case.disposition.read` |
+
+### Why nothing else became permitted
+
+This is an authorization change, so the bar was: **no request denied today may
+become allowed, except a `search.query` call by a caller who already holds these
+reads.** Five independent reasons it holds.
+
+1. **Delegation is opt-in per registered version, and nothing else opted in.**
+   `downstream_actions` defaults to `'{}'`; every pre-existing row has it empty.
+   `len(tv.DownstreamActions) > 0` is the only door to the forwarding branch, so
+   every other tool's facade call is byte-for-byte what it was — no
+   `Authorization` header at all. Pinned by
+   `TestPipeline_NoTokenForToolsThatDeclareNothing` (four token shapes,
+   including `*`) and `TestBackendSendsNoAuthorizationWithoutDelegation`.
+2. **A forwarded token can never carry a write.** Registration refuses a
+   declaration on a non-read tier or with a non-read verb; the pipeline
+   re-checks the tier before forwarding; and `mint_tool_obo` refuses to mint one.
+   Three independent refusals, so a write still requires the signed,
+   human-approved proposal grant (TPL-FR-035) exactly as before.
+3. **A forwarded token can never exceed the human.** No rbac rule changed:
+   `typ=agent_obo` still requires `scope_ok` AND the obo user's own projection
+   to allow the action. A token naming `chart.dashboard.delete` for a user who
+   holds editor on that dashboard is still denied delete, and an action the
+   TOOL did not declare is denied `scope_excluded`. Pinned in all three engines
+   — `internal/authz/delegated_scope_test.go` and
+   `policy/delegated_scope_test.go` (canonical bundle **and** the
+   input-projection bundle).
+4. **The facade grants nothing `/graphql` did not already grant.** It runs the
+   same `searchFanOut` over a context built from the same token by the same
+   builder, so for a given principal its output IS `search()`'s output — pinned
+   by deep-comparing the two surfaces against one downstream double. This is
+   what makes bff-graphql being the platform's only `ingress: public` pod
+   acceptable: it cannot be pinned by the facade NetworkPolicy (and is
+   deliberately not in `networkPolicies.facades`), so the SPIFFE allowlist there
+   is an off-by-default kill switch rather than the boundary. The boundary is
+   the caller's JWT, and a spoofed `X-Spiffe-Id` from the internet buys an
+   attacker nothing that `POST /graphql { search(...) }` on the same public pod
+   does not already give the same bearer.
+5. **Cross-tenant is unchanged and re-tested.** The gateway's URN guard still
+   404s before dispatch (so nothing is delegated —
+   `TestPipeline_NoDelegationCrossTenant`), the facade 404s a `tenant` that is
+   not the token's, and each downstream still evaluates its own tenant scope.
+
+One residual to state rather than hide: a delegation-narrowed token's scopes are
+also what `tokenToolset` derives the pinned toolset from, so such a token names
+its declared actions as toolset entries. If a tool were ever registered whose id
+were literally one of those action strings, the token would also satisfy the
+toolset gate for it. That is not an escalation — the toolset only ever narrows,
+every other gate (tenant enablement, OPA, tier, proposal grant) still runs, and
+whoever can mint this token can already mint `scopes=["*"]`, which imposes no
+toolset restriction whatsoever. It is noted because it is the one place where
+"scopes" carries two meanings at once.
+
+### Test (inc4)
+
+Every one of these fails if the isolation breaks — two were verified by
+mutation, not by assertion alone: stubbing `TokenDelegable` to `return true`
+fails 16 cases across `internal/domain` and `internal/enforce`, and dropping
+`scope_ok` from the input-projection bundle's `agent_obo` `user_path` fails
+`TestPolicyInput_DelegatedMultiActionScopes`.
+
+- `tool-plane` `internal/domain/delegation_test.go` — the registration gate
+  (write/delete/admin/execute verbs, non-read tiers, wildcards, non-canonical
+  names, duplicates, the 32 cap — 17 cases) and the call-time gate (11 scope
+  shapes),
+  including that a tool declaring nothing can never delegate whatever its token
+  says, and that every refusal carries a reason.
+- `tool-plane` `internal/enforce/delegation_test.go` — the verified token
+  reaches a declaring tool's facade; a subset-scoped token still does; **a tool
+  that declares nothing gets NO `Authorization` under four token shapes
+  including `*`**; seven broader-token shapes are `SCOPE_NOT_DELEGABLE`/403 with
+  `required_scopes` and the backend is never reached; no verified token,
+  non-read tier, OPA denial, cross-tenant URN and an active kill each delegate
+  nothing.
+- `tool-plane` `internal/mcp/backend_test.go` — the REAL `net/http` client
+  against a stood-up server: the bearer is on the wire when delegated and
+  **absent when not**, the SPIFFE/trace/attribution contract is unchanged, and a
+  facade 403 stays a `backend_rejected` error rather than an empty success.
+- `tool-plane` `internal/api/gateway_delegation_test.go` — gateway→pipeline→
+  backend: the facade receives exactly the bearer the gateway verified; a
+  missing, malformed or foreign-signed token is `TOKEN_INVALID` and never
+  reaches the facade; a `*` token is refused at the gateway; `tools/list`
+  publishes `required_scopes` only for a declaring tool.
+- `rbac-service` `internal/authz/delegated_scope_test.go` +
+  `policy/delegated_scope_test.go` — the same delegation-shaped token in all
+  three engines (Go `Decide`, `datacern.authz`, `datacern.authz_input`): in
+  scopes and held ⇒ allow; in scopes and NOT held ⇒ deny; held but not declared
+  ⇒ `scope_excluded`; the tool id alone ⇒ `unknown_action`; cross-tenant ⇒ deny;
+  and an editor-level resource grant still refuses delete/admin however the
+  token is scoped.
+- `agent-runtime` `tests/unit/test_tool_obo_scopes.py` — `mint_tool_obo` places
+  declared reads after the tool id, refuses five write-ish verbs and six
+  wildcard/non-canonical forms, and refuses duplicates; the run token still
+  carries `*` untouched. Plus the first assertions anyone has made about the
+  claims of the token the WRITE path presents: `scopes == [tool_id]`, and
+  `obo_sub` is the approver on a human-approved proposal but the trigger user on
+  an auto-executed one — the rule a live 403 regression was traced to.
+- `bff-graphql` `tests/unit/mcp-facade.test.ts` — **AC-10 directly**: the facade
+  and the GraphQL `search()` are driven against the same downstream double with
+  the same token and deep-compared, clean and with two legs denied; all eight
+  kinds, not one; `types`/`first` behave identically; the caller's token is
+  forwarded verbatim on all eight legs. Isolation: unset allowlist ⇒ 403 and
+  zero downstream calls; wrong peer ⇒ 403; no token ⇒ 403 (**and not a 200 with
+  an empty hit list**); unreadable token ⇒ 403; another tenant ⇒ **404**;
+  another `obo_sub` ⇒ 403; any other `tool_id` ⇒ 404; non-POST ⇒ 405; six bad
+  argument shapes ⇒ 422 with a reason.
+
+Measured on this branch: tool-plane `make test-unit` **96 passed** (was 40) +
+`make lint` **0 issues** (it was 1 on `main` — a pre-existing `QF1002` in the
+`backend_rejected` switch, fixed here since the change lands in that function);
+rbac-service `make test-unit` **134 passed** (was 130); agent-runtime
+`make test-unit` **437 passed** (was 419) + `ruff check` clean; bff-graphql
+`tsc --noEmit` clean, `vitest run` **486 passed in 62 files** (was 468 in 61),
+`eslint src` and `eslint .` clean, SDL snapshot unchanged (no schema change, and
+`schema-snapshot.test.ts` still passes). rbac-service `make lint` reports **4
+issues, all pre-existing on `main`** and all in files this change does not touch
+(`internal/api/jwt.go`, `internal/store/{grants,groups,store}.go`); two of them
+are De Morgan rewrites of `superAdmin` guards, and refactoring an authorization
+guard for a style nit inside an authorization change is not a trade worth
+making.
+
+### What is still not built
+
+An MCP client path in **agent-runtime** for read tools. Checked against the
+code: `ProposalService._execute` is the *only* place in `app/` that calls
+tool-plane, and it is a write path — graphs never call `ToolPlaneClient` at all,
+they read via ~20 direct REST adapters carrying the run's OBO token. So there is
+no read-tool call site to wire `search.query` into, and inventing one would be
+building a mechanism nothing uses. The tool's real clients are external agents
+via the governed edge (`bff-graphql /external/v1/mcp` → mcp-gateway, BRD 60 WS3)
+and any MCP client holding an identity-service token scoped to
+`_meta.required_scopes`.
 
 ### AC status
 
@@ -527,4 +735,4 @@ tool-plane path that is missing.
 | AC-7 | **Dropped — no longer applicable.** Same reason: with no projection there is no entry to remove on a delete event. A deleted entity stops matching because the owning service stops returning it, which is the guarantee AC-7 was a proxy for. |
 | AC-8 | **Met** — `search()` reaches only the requested types, and a type whose owning service answers 403 comes back `denied: true` with zero hits while the rest of the query still succeeds. The BFF makes no authorization decision (BFF-FR-003) — it reports the downstream's. Covered in `bff-graphql/tests/unit/search.test.ts` (per-leg denial, all-denied, workspace-required) and in the palette test, where a viewer holding two capabilities requests exactly two types. |
 | AC-9 | **Met** — the ⌘K palette issues **one** `search()` query. `ui-web/src/components/shell/CommandPalette.test.tsx` drives a server double holding 51 dashboards where only the last matches: the palette finds it, makes exactly one request for that term, and never emits the three legacy documents. Proven again at the BFF tier and, against real Postgres, at the chart-service tier. |
-| AC-10 | **Scoped out** — the MCP read tool. tool-plane forwards **no** `Authorization` header to a backend facade (`internal/mcp/backend.go:125-148`), so a facade must re-authorize `obo_sub` itself and read its own store; `search` has no store and can only call other services with a forwarded JWT it would not receive. Full reasoning, and the two tool-plane/rbac changes that would unblock it, in D-3 above. Not faked, and not shipped as a per-service partial that would not satisfy the AC as written. |
+| AC-10 | **Met** — `search.query` is a registered read-tier MCP tool whose backend facade is bff-graphql's `POST /internal/v1/mcp/invoke`. It runs the SAME `searchFanOut` over a context built from the SAME forwarded caller token as the `search()` resolver, so for a given principal its result is that resolver's result — asserted by deep-comparing both surfaces against one downstream double, including a denied-leg case (`bff-graphql/tests/unit/mcp-facade.test.ts`). All eight entity kinds, not a per-service partial. Unblocked by tool-plane forwarding the verified caller token to a tool that DECLARES its downstream actions and presents a token narrowed to them (`downstream_actions`, `SCOPE_NOT_DELEGABLE`); no rbac rule changed. Full security reasoning in D-3 above. |

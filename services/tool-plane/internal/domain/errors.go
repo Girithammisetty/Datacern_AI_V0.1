@@ -25,6 +25,13 @@ const (
 	// CodeTrialExpired is the commercial gate (BRD 66 CPL-FR-022, AC-2): a
 	// suspended_commercial tenant is refused an immediate write-direct tool call.
 	CodeTrialExpired = "TRIAL_EXPIRED"
+	// CodeScopeNotDelegable (BRD 74 AC-10): the tool declares downstream actions
+	// — so the gateway must delegate the caller's token to its facade — but the
+	// caller's token is not narrowed to that declaration (wildcard, an
+	// undeclared action, or not scoped to this tool). The denial carries
+	// details.required_scopes so the caller can mint the right token; it is NOT
+	// downgraded to a tokenless call that would silently return nothing.
+	CodeScopeNotDelegable = "SCOPE_NOT_DELEGABLE"
 )
 
 // Error is a coded error carrying an HTTP analog and optional per-field details.

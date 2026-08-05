@@ -98,6 +98,10 @@ type addVersionReq struct {
 	DeclaredSLA         domain.DeclaredSLA `json:"declared_sla"`
 	SideEffects         string          `json:"side_effects"`
 	Examples            []domain.Example `json:"examples"`
+	// DownstreamActions declares the rbac actions this tool's facade exercises
+	// on other services with the caller's forwarded token (BRD 74 AC-10). Only a
+	// read-tier tool may declare any, and only read verbs (domain/delegation.go).
+	DownstreamActions   []string        `json:"downstream_actions"`
 }
 
 // handleAddVersion creates a draft version, validating schema + description
@@ -138,6 +142,15 @@ func (s *RegistryServer) handleAddVersion(w http.ResponseWriter, r *http.Request
 		writeErr(w, r, domain.EValidation("cost_weight must be 1..10", nil))
 		return
 	}
+	// Declared downstream authority (BRD 74 AC-10). Rejecting a bad declaration
+	// HERE is what stops a tool granting itself authority it should not have:
+	// a write-tier tool can never declare any, and no tool can ever declare a
+	// write verb or a wildcard. The gateway then refuses to forward a token
+	// broader than this declaration.
+	if ferrs := domain.ValidateDownstreamActions(req.PermissionTier, req.DownstreamActions); len(ferrs) > 0 {
+		writeErr(w, r, domain.EValidation("invalid downstream_actions", ferrs))
+		return
+	}
 	// Schema validity (AC-7 draft can hold an invalid schema; publish rejects it,
 	// but we reject obviously malformed input schemas here too for fast feedback
 	// on the required object/additionalProperties shape only when present).
@@ -145,6 +158,7 @@ func (s *RegistryServer) handleAddVersion(w http.ResponseWriter, r *http.Request
 		ToolID: toolID, Version: req.Version, SemanticDescription: req.SemanticDescription,
 		InputSchema: req.InputSchema, OutputSchema: req.OutputSchema, PermissionTier: req.PermissionTier,
 		CostWeight: req.CostWeight, DeclaredSLA: req.DeclaredSLA, SideEffects: req.SideEffects, Examples: req.Examples,
+		DownstreamActions: req.DownstreamActions,
 	}
 	env := events.NewEnvelope(events.TopicToolEvents, events.EvToolRegistered, domain.PlatformTenant,
 		actorFromClaims(r), nil, domain.ToolURN("platform", toolID, req.Version), TraceID(r.Context()),

@@ -308,10 +308,17 @@ start_bff() {
     AGENT_RUNTIME_URL="$AGENT_RUNTIME_URL" RBAC_URL="$RBAC_URL" REALTIME_HUB_URL="$REALTIME_URL" \
     INGESTION_URL="$INGESTION_URL" PIPELINE_URL="$PIPELINE_URL" AUDIT_URL="$AUDIT_URL" \
     PACK_URL="$PACK_URL" \
+    BFF_FACADE_ALLOWED_SPIFFE="spiffe://datacern/ns/tools/sa/mcp-gateway" \
     bash -c "cd '$REPO_DIR/services/bff-graphql' && exec pnpm start"
   wait_ready bff "$BFF_URL" || { warn "bff-graphql not ready"; SKIPPED+=("bff-graphql"); return 1; }
 }
 start_bff
+
+# search.query (BRD 74 AC-10) — the one MCP tool whose backend facade is
+# bff-graphql, seeded after the BFF is up because the facade URL is the BFF's.
+# It is the only tool that declares downstream_actions, so it is the only tool
+# whose facade receives the caller's forwarded token.
+( cd "$E2E" && "$PY" lib/seed.py search_tool "$TENANT_ID" ) 2>&1 | tee "$LOG_DIR/seed_search_tool.log"
 
 # ---- seed (before ui so personas.json + tenant data exist) ----
 # Platform layer (tenant + four RBAC-gated personas, no vertical data) always

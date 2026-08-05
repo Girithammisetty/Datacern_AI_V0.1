@@ -50,6 +50,14 @@ type Invocation struct {
 	OboSub   string
 	AgentID  string
 	TraceID  string
+	// AuthToken is the raw caller bearer the gateway VERIFIED, forwarded to the
+	// facade as `Authorization: Bearer …` (BRD 74 AC-10). It is set ONLY for a
+	// tool whose registered version declares downstream actions AND whose caller
+	// token the pipeline has checked is narrowed to that declaration
+	// (domain.TokenDelegable). Every other tool — i.e. every tool that existed
+	// before this field — leaves it empty and gets no Authorization header at
+	// all, which is exactly the pre-existing contract.
+	AuthToken string
 }
 
 // Result is the backend's tool output.
@@ -134,6 +142,14 @@ func (b *HTTPBackend) once(ctx context.Context, target BackendTarget, in Invocat
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Trace-Id", in.TraceID)
+	// Delegated caller token (BRD 74 AC-10). Present only for a tool that
+	// DECLARED downstream actions and a caller token the pipeline checked is
+	// narrowed to them; the facade re-verifies it against the platform JWKS and
+	// forwards it to the services it reads, each of which authorizes the
+	// effective human itself (MASTER-FR-015). Never logged.
+	if in.AuthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+in.AuthToken)
+	}
 	// SPIFFE identity would ride mTLS client cert in production; the header
 	// documents the intended peer identity for the facade. Sent under BOTH
 	// names: X-Spiffe-Id (case-service's Go facade, the original convention)

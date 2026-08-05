@@ -52,6 +52,14 @@ components:
         output_schema: {type: object}
         declared_sla: {type: object}
         side_effects: {type: string}
+        # BRD 74 AC-10. The rbac actions this tool's backend facade exercises on
+        # OTHER services with the caller's forwarded token. Only a read-tier tool
+        # may declare any, and only read verbs (read/list/export) — validated at
+        # registration. Empty (the default) means the gateway forwards no
+        # Authorization header to the facade at all.
+        downstream_actions:
+          type: array
+          items: {type: string, example: dataset.dataset.list}
 paths:
   /healthz: {get: {security: [], summary: Liveness, responses: {"200": {description: ok}}}}
   /readyz: {get: {security: [], summary: Readiness, responses: {"200": {description: ready}, "503": {description: not ready}}}}
