@@ -90,6 +90,23 @@ func parseDatasetURN(urn string) (uuid.UUID, string, bool) {
 	return tenant, rid, true
 }
 
+// rowLookupSQL composes the single-row lookup statement.
+//
+// CONTRACT — both arguments must already be server-derived identifiers, never
+// request text:
+//   - datasetRef is a `{{dataset(...)}}` macro the planner resolves; the name
+//     inside it comes from dataset-service and is rejected if it contains
+//     quote/brace characters.
+//   - pkIdent is a column name taken from the dataset's own metadata and passed
+//     through datasets.QuoteIdent.
+//
+// The only caller-supplied value in the statement is the row key, and it is
+// bound as :row_pk rather than interpolated. Callers that cannot honour the
+// contract must not use this function.
+func rowLookupSQL(datasetRef, pkIdent string) string {
+	return fmt.Sprintf("SELECT * FROM %s WHERE %s = :row_pk LIMIT 1", datasetRef, pkIdent)
+}
+
 // handleGetRow implements GET /api/v1/rows?dataset_urn=&version=&row_pk=
 // (CASE-FR-001 live row fetch): it resolves the URN to a dataset name with the
 // caller's token, then runs `SELECT * ... WHERE <pk> = :row_pk LIMIT 1`
@@ -148,18 +165,24 @@ func (s *Server) handleGetRow(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, domain.EDatasetNotFound("dataset has no column metadata"))
 		return
 	}
-	pkCol := q.Get("pk_column")
-	if pkCol == "" {
+	// pkCol is only ever assigned FROM meta.Columns — never from the request.
+	// The caller's `pk_column` is used solely as a lookup key to select one of
+	// the dataset's real column names. Keeping the request value in its own
+	// variable makes that whitelist property structural rather than a matter of
+	// reading the loop carefully, and it is what stops request data from
+	// reaching the statement built below.
+	requestedPK := q.Get("pk_column")
+	var pkCol string
+	if requestedPK == "" {
 		pkCol = meta.Columns[0].Name
 	} else {
-		found := false
 		for _, c := range meta.Columns {
-			if strings.EqualFold(c.Name, pkCol) {
-				pkCol, found = c.Name, true
+			if strings.EqualFold(c.Name, requestedPK) {
+				pkCol = c.Name
 				break
 			}
 		}
-		if !found {
+		if pkCol == "" {
 			writeErr(w, r, domain.EValidation("pk_column is not a column of the dataset"))
 			return
 		}
@@ -169,10 +192,7 @@ func (s *Server) handleGetRow(w http.ResponseWriter, r *http.Request) {
 	if version > 0 {
 		ref = fmt.Sprintf("{{dataset('%s', version=%d)}}", name, version)
 	}
-	// pkCol is validated against the dataset's real columns and QuoteIdent-quoted;
-	// `ref` is a {{dataset()}} macro the planner resolves (not raw SQL); the row value
-	// is bound as :row_pk. No user data reaches raw SQL.
-	sql := fmt.Sprintf("SELECT * FROM %s WHERE %s = :row_pk LIMIT 1", ref, datasets.QuoteIdent(pkCol)) // nosemgrep
+	sql := rowLookupSQL(ref, datasets.QuoteIdent(pkCol))
 	pkJSON, _ := json.Marshal(rowPK)
 	rr := exec.RunRequest{
 		PlanRequest: exec.PlanRequest{

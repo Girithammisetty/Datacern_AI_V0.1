@@ -14,15 +14,23 @@ from __future__ import annotations
 import csv
 import json
 import tempfile
-
-# DOCTYPE/entity-expansion is rejected by _guard below (NFR XML hardening), so the
-# stdlib parsers are safe here despite semgrep's use-defused-xml recommendation.
-import xml.etree.ElementTree as ET  # nosemgrep
-import xml.parsers.expat as expat  # nosemgrep
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+# XML is parsed through defusedxml, the parser the Python docs recommend for
+# untrusted input. NOTE the non-obvious default: defusedxml's parse/iterparse
+# take `forbid_dtd=False`, so a DOCTYPE is ALLOWED unless it is passed
+# explicitly. Every call site below passes forbid_dtd=True — dropping it would
+# silently re-open the billion-laughs vector this module exists to close.
+# (forbid_entities / forbid_external do default to True.)
+import defusedxml.ElementTree as DET
+from defusedxml.common import (
+    DTDForbidden,
+    EntitiesForbidden,
+    ExternalReferenceForbidden,
+)
 
 from app.domain.errors import ErrorCategory, PermanentJobError
 from app.domain.tablewriter import RowBatch
@@ -47,6 +55,12 @@ FILE_FORMATS: tuple[str, ...] = (
 )
 MAX_SAMPLES = 20
 SAMPLE_VALUE_TRUNC = 256
+
+# defusedxml deliberately re-exports only the parsing entry points, not the
+# element type, and spelling the stdlib import to borrow it is the very thing
+# the XXE rule forbids. Parsed nodes are ordinary xml.etree Elements at runtime;
+# this alias names that fact where it is used instead of pretending otherwise.
+XmlElement = Any
 
 
 @dataclass(slots=True)
@@ -317,7 +331,7 @@ def _xml_localname(tag: str) -> str:
     return tag
 
 
-def _flatten_xml_record(elem: ET.Element) -> dict[str, str]:
+def _flatten_xml_record(elem: XmlElement) -> dict[str, str]:
     """Flatten one record element into a flat {column: text} map.
 
     Attributes become columns under their (namespace-stripped) name; nested child
@@ -326,7 +340,7 @@ def _flatten_xml_record(elem: ET.Element) -> dict[str, str]:
     """
     out: dict[str, str] = {}
 
-    def walk(node: ET.Element, path: str) -> None:
+    def walk(node: XmlElement, path: str) -> None:
         for ak, av in node.attrib.items():
             col = f"{path}_{_xml_localname(ak)}" if path else _xml_localname(ak)
             out.setdefault(col, av)
@@ -354,38 +368,29 @@ class _PrologDone(Exception):
 
 def _reject_dtd(path: Path) -> None:
     """Reject an uploaded XML document that declares a DTD/DOCTYPE, defeating the
-    internal entity-expansion ("billion laughs") DoS without adding a dependency.
+    internal entity-expansion ("billion laughs") DoS.
 
     Internal entities (the expansion vector) can only be defined inside a
     DOCTYPE, and a DOCTYPE is only legal in the prolog, before the root element.
-    So a single expat pass that bails at the first DOCTYPE (reject) or the first
-    element start (clean) is sufficient — it never parses document content, and
-    stdlib expat never resolves EXTERNAL entities."""
-    p = expat.ParserCreate()
+    So iterating only until the FIRST start event is sufficient: either
+    defusedxml refuses the DOCTYPE first (reject), or the root element arrives
+    with a clean prolog. Document content is never parsed by this guard.
 
-    def _on_doctype(*_a):
-        raise _DtdRejected()
-
-    def _on_start(*_a):
-        raise _PrologDone()
-
-    p.StartDoctypeDeclHandler = _on_doctype
-    p.StartElementHandler = _on_start
-    with open(path, "rb") as fh:
-        while True:
-            chunk = fh.read(65536)
-            final = not chunk
-            try:
-                p.Parse(chunk, final)
-            except _DtdRejected:
-                raise PermanentJobError(
-                    ErrorCategory.DECODE_ERROR,
-                    "XML DTDs/entity declarations are not allowed",
-                ) from None
-            except _PrologDone:
-                return  # reached the root element, prolog is clean
-            if final:
-                return
+    This runs ahead of the real decode even though every decode call also passes
+    forbid_dtd=True — the guard is what the error message and the unit tests are
+    written against, and the redundancy is one prolog read."""
+    try:
+        for _event, _elem in DET.iterparse(str(path), events=("start",), forbid_dtd=True):
+            return  # reached the root element, prolog is clean
+    except (DTDForbidden, EntitiesForbidden, ExternalReferenceForbidden):
+        raise PermanentJobError(
+            ErrorCategory.DECODE_ERROR,
+            "XML DTDs/entity declarations are not allowed",
+        ) from None
+    except DET.ParseError:
+        # Malformed markup is the content decoder's error to report, with its
+        # own message and line/column. The guard only answers "is there a DTD".
+        return
 
 
 async def _decode_xml(
@@ -407,9 +412,11 @@ async def _decode_xml(
         pending: list[list[Any]] = []
         row_number = 0
         depth = 0
-        root: ET.Element | None = None
+        root: XmlElement | None = None
         try:
-            for event, elem in ET.iterparse(str(path), events=("start", "end")):
+            for event, elem in DET.iterparse(
+                str(path), events=("start", "end"), forbid_dtd=True
+            ):
                 if event == "start":
                     if root is None:
                         root = elem
@@ -437,7 +444,7 @@ async def _decode_xml(
                 if len(pending) >= opts.batch_size:
                     yield RowBatch(columns=columns, rows=pending)
                     pending = []
-        except ET.ParseError as exc:
+        except DET.ParseError as exc:
             raise PermanentJobError(
                 ErrorCategory.DECODE_ERROR, f"invalid xml document: {exc}"
             ) from exc
