@@ -452,9 +452,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
       - name: Install test deps
         # packctl's client.py imports requests at module load (installer -> client),
-        # so the test collection needs it even for offline unit tests.
+        # so the test collection needs it even for offline unit tests; manifest.py,
+        # demo_lint.py and demo_manifest.py need pyyaml. These are packctl's deps
+        # ONLY — the tools/ checkers below declare their own in tools/pyproject.toml
+        # and run through uv, so trimming this line cannot silently break them.
         run: pip install -q pytest pyyaml requests
       - name: Pytest (packctl)
         run: python -m pytest packs/packctl/tests -q
@@ -476,14 +480,18 @@ jobs:
       # them fixed that day; this keeps them correct, deriving each figure from
       # deploy/services.yaml, packs/, docs/brd/ and deploy/demo/ on every run.
       - name: Doc facts match the repository
-        run: python3 tools/docs/check_doc_facts.py
+        # Runs from tools/pyproject.toml's dev group, not from the packctl pip
+        # install above. It used to piggyback on that step's pyyaml, so removing a
+        # dep justified for packctl would have broken an unrelated check two steps
+        # later — with nothing in either place saying so.
+        run: uv run --project tools python tools/docs/check_doc_facts.py
 
       # SOC 2 control register: every evidence citation must resolve to a real
       # file, every gap must name what to collect. A control-to-evidence map
       # rots the moment a cited file moves; this keeps the readiness scaffold
       # honest instead of pointing an auditor at a dead path.
       - name: SOC 2 evidence citations resolve
-        run: python3 tools/compliance/check_soc2_evidence.py
+        run: uv run --project tools python tools/compliance/check_soc2_evidence.py
 
 
   # ---------------------------------------------------------------------------
