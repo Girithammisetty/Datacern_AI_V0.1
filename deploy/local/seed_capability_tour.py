@@ -364,36 +364,102 @@ def _dashboard_id(tok) -> str | None:
     return str(rows[0].get("id")) if rows else None
 
 
-def _ensure_detail_query(tok, dataset_name: str | None) -> str | None:
-    """Idempotently create the saved query the DETAIL grid reads.
+def _dataset_columns(tok, dataset_urn: str | None) -> list[tuple[str, str]]:
+    """The dataset's REAL columns, as (name, type), newest version first.
+
+    The detail grid and its saved query must both name columns that actually
+    exist. The first version of this seeder hardcoded `claim_id, provider,
+    amount, service_date, status` — a plausible-looking claims schema that the
+    ingested dataset does not have (it carries vendor / claim_type /
+    incident_date). The saved query was created fine, because query-service
+    does not bind SQL until it runs; the failure only surfaced at render time
+    as `duckdb prepare: Binder Error: Referenced column "provider" not found`,
+    which chart-service reports to the UI as the far less obvious
+    `saved query results status 409` (results are unavailable because the
+    execution failed).
+
+    So: ask the dataset what its columns are. Guessing a schema is how a seeder
+    stays green while producing a dashboard that cannot render.
+    """
+    if not dataset_urn:
+        return []
+    ds_id = dataset_urn.rsplit("/", 1)[-1]
+    r = d.req("GET", f"{c.DATASET}/api/v1/datasets/{ds_id}/versions", tok)
+    if r.status_code != 200:
+        warn(f"dataset versions {r.status_code} — cannot derive detail columns")
+        return []
+    rows = r.json().get("data") or []
+    if not rows:
+        return []
+    newest = sorted(rows, key=lambda x: int(x.get("version_no") or 0))[-1]
+    # schema is an OBJECT keyed by column name ({"amount": {"type": "double"}}),
+    # not a list of field records. JSON object order is preserved by json.loads,
+    # so this keeps the dataset's own column order.
+    return [(n, str((f or {}).get("type") or "")) for n, f in (newest.get("schema") or {}).items()]
+
+
+def _detail_sql(dataset_name: str, cols: list[tuple[str, str]]) -> str:
+    """Row-level SELECT over the dataset's own columns, newest rows first."""
+    names = ", ".join(n for n, _ in cols)
+    sql = f"SELECT {names} FROM {{{{dataset('{dataset_name}')}}}}"
+    # Order by a real date/timestamp column when the dataset has one; a detail
+    # grid with no time column is still a valid detail grid, so this is optional
+    # rather than a reason to skip the chart.
+    order = next((n for n, t in cols if t in ("date", "timestamp", "timestamptz")), None)
+    if order:
+        sql += f" ORDER BY {order} DESC"
+    return sql
+
+
+def _ensure_detail_query(tok, dataset_urn: str | None,
+                         dataset_name: str | None) -> tuple[str | None, list[str]]:
+    """Idempotently create (or REPAIR) the saved query the DETAIL grid reads.
 
     Mirrors seed_claims_demo.py's network-query helper, which already records the
     rule this seeder missed: a chart with no measures for the compiler resolves
     only through source_type=saved_query.
+
+    Repairs as well as creates, because an earlier run of this seeder wrote a
+    query whose SQL named columns the dataset does not have. A create-only
+    helper would find that query by name, return it, and leave the dashboard
+    broken on every rerun.
     """
     if not dataset_name:
-        return None
+        return None, []
+    cols = _dataset_columns(tok, dataset_urn)
+    if not cols:
+        return None, []
+    names = [n for n, _ in cols]
+    sql = _detail_sql(dataset_name, cols)
     name = "Claims: detail rows"
     r = d.req("GET", f"{QUERY_URL}/api/v1/queries?workspace_id={d.WORKSPACE}", tok)
     if r.status_code == 200:
         for q in r.json().get("data", []):
-            if q.get("name") == name:
-                return str(q.get("id"))
-    sql = ("SELECT claim_id, provider, amount, service_date, status "
-           f"FROM {{{{dataset('{dataset_name}')}}}} ORDER BY service_date DESC")
+            if q.get("name") != name:
+                continue
+            qid = str(q.get("id"))
+            if str(q.get("sql_text") or "") != sql:
+                p = d.req("PATCH", f"{QUERY_URL}/api/v1/queries/{qid}", tok,
+                          headers=d.J(), json={"sql_text": sql})
+                if p.status_code == 200:
+                    ok(f"{name!r} saved query SQL repaired to the dataset's real columns")
+                else:
+                    warn(f"detail saved query repair failed: {p.status_code} {p.text[:160]}")
+                    return None, []
+            return qid, names
     r = d.req("POST", f"{QUERY_URL}/api/v1/queries", tok, headers=d.J(), json={
         "name": name, "description": "Row-level claim detail — source for the detail grid",
         "module_names": ["insights"], "workspace_id": d.WORKSPACE,
         "sql_text": sql, "tags": ["claims", "demo"]})
     if r.status_code != 201:
         warn(f"detail saved query create failed: {r.status_code} {r.text[:160]}")
-        return None
+        return None, []
     qid = str(r.json()["data"]["id"])
     ok(f"{name!r} saved query created (id={qid})")
-    return qid
+    return qid, names
 
 
-def seed_grid_and_report(dataset_name: str | None) -> None:
+def seed_grid_and_report(dataset_urn: str | None, dataset_name: str | None) -> None:
     """A GRID chart (the analyst's table, not a time-series) and the scheduled
     report that mails the dashboard. Both are shipped capabilities that a fresh
     boot never surfaced, so the demo could only assert them."""
@@ -406,11 +472,29 @@ def seed_grid_and_report(dataset_name: str | None) -> None:
 
     # -- grid --------------------------------------------------------------
     have = d.req("GET", f"{CHART_URL}/api/v1/charts?workspace_id={d.WORKSPACE}", tok)
-    names = {str(x.get("name")) for x in (have.json().get("data") or [])} \
-        if have.status_code == 200 else set()
+    existing = {str(x.get("name")): x for x in (have.json().get("data") or [])} \
+        if have.status_code == 200 else {}
     grid_name = "Claims detail (grid)"
-    if grid_name in names:
-        ok("grid chart already present")
+    if grid_name in existing:
+        # Present, but possibly from the run that wrote invented column names.
+        # Re-derive and PATCH when they differ, so a rerun repairs the dashboard
+        # instead of reporting "already present" over a chart that 409s.
+        query_id, cols = _ensure_detail_query(tok, dataset_urn, dataset_name)
+        cur = existing[grid_name]
+        cur_cols = list((cur.get("config") or {}).get("columns") or [])
+        if query_id and cols and cur_cols != cols:
+            p = d.req("PATCH", f"{CHART_URL}/api/v1/charts/{cur.get('id')}", tok,
+                      headers=d.J(), json={
+                          "config": {"columns": cols, "page_size": 25},
+                          "sources": [{"position": 0, "source_type": "saved_query",
+                                       "source_urn": f"wr:{TENANT}:query:saved_query/{query_id}"}],
+                      })
+            if p.status_code == 200:
+                ok("grid chart columns repaired to the dataset's real columns")
+            else:
+                warn(f"grid chart repair: {p.status_code} {p.text[:160]}")
+        else:
+            ok("grid chart already present")
     else:
         # POST /dashboards/{id}/charts — a chart is created UNDER its dashboard
         # (server.go:141). POST /charts does not exist and answered a bare
@@ -426,7 +510,7 @@ def seed_grid_and_report(dataset_name: str | None) -> None:
         # and compiles normally, which is what every pack dashboard and
         # seed_claims_demo.py's "Claims grid" do. This one is deliberately
         # row-level, so the saved query is the right source, not measures.)
-        query_id = _ensure_detail_query(tok, dataset_name)
+        query_id, cols = _ensure_detail_query(tok, dataset_urn, dataset_name)
         if not query_id:
             warn("no saved query for the detail grid — skipping "
                  "(a columns-only grid with no saved_query source cannot render)")
@@ -440,9 +524,7 @@ def seed_grid_and_report(dataset_name: str | None) -> None:
                       # (charttypes.go:132) — omitting it 422s with
                       # config.columns/REQUIRED. A grid without columns is not a
                       # grid, so this is the schema being right, not fussy.
-                      "config": {"columns": ["claim_id", "provider", "amount",
-                                             "service_date", "status"],
-                                 "page_size": 25},
+                      "config": {"columns": cols, "page_size": 25},
                       "sources": [{"position": 0, "source_type": "saved_query",
                                    "source_urn": f"wr:{TENANT}:query:saved_query/{query_id}"}],
                   })
@@ -542,7 +624,7 @@ def main() -> int:
         ("ontology", lambda: seed_ontology()),
         ("pipeline", lambda: seed_pipeline_template(dataset_urn)),
         ("evaluation", lambda: seed_eval_suite()),
-        ("grid + report", lambda: seed_grid_and_report(dataset_name)),
+        ("grid + report", lambda: seed_grid_and_report(dataset_urn, dataset_name)),
         ("Jessie", lambda: seed_jessie()),
     ]
     failed = []
