@@ -1,10 +1,13 @@
 "use client";
 import { X } from "lucide-react";
+import { useMemo } from "react";
 import { useCanvasStore, resolveInputDatasetId } from "@/lib/pipelines/canvas";
 import { collect } from "@/lib/pipelines/form";
+import { propagateSchema } from "@/lib/pipelines/schema-propagation";
 import { SchemaField } from "@/components/forms/SchemaField";
+import { ResourceFields } from "@/components/pipelines/ResourceFields";
 import { Button } from "@/components/ui/button";
-import { useDatasetSchema } from "@/lib/graphql/hooks";
+import { useDatasetSchema, usePipelineResourcePolicy } from "@/lib/graphql/hooks";
 import { t } from "@/lib/i18n/messages";
 
 /**
@@ -16,16 +19,31 @@ export function NodeConfigPanel() {
   const selectedId = useCanvasStore((s) => s.selectedId);
   const node = useCanvasStore((s) => s.nodes.find((n) => n.id === s.selectedId));
   const nodes = useCanvasStore((s) => s.nodes);
+  const edges = useCanvasStore((s) => s.edges);
   const issues = useCanvasStore((s) => (s.selectedId ? s.issues[s.selectedId] : undefined));
+  const effectiveResources = useCanvasStore((s) => s.effectiveResources);
+  const aliasOf = useCanvasStore((s) => s.aliasOf);
   const setValue = useCanvasStore((s) => s.setValue);
+  const setResource = useCanvasStore((s) => s.setResource);
   const selectNode = useCanvasStore((s) => s.selectNode);
 
   // Data-binding: the columns of the dataset feeding the pipeline (its read
-  // node's chosen dataset), so `column`/`columns` params bind to real columns.
-  // Degrades to [] when no dataset is chosen yet (the widgets fall back then).
+  // node's chosen dataset). Degrades to [] when no dataset is chosen yet (the
+  // widgets fall back then).
   const datasetId = resolveInputDatasetId(nodes);
   const { data: schema } = useDatasetSchema(datasetId, undefined, { enabled: !!datasetId });
-  const availableColumns = (schema ?? []).map((c) => c.name);
+  const sourceColumns = useMemo(() => (schema ?? []).map((c) => c.name), [schema]);
+
+  // BRD 71 (U2): bind to the columns THIS node will see, not the source dataset's.
+  // After a select-columns / rename-columns / join-data the two differ, and offering
+  // the source list produces choices that fail later at validate or run time.
+  const propagated = useMemo(
+    () => propagateSchema(nodes, edges, sourceColumns),
+    [nodes, edges, sourceColumns],
+  );
+  const availableColumns = (selectedId ? propagated.get(selectedId) : undefined) ?? [];
+
+  const { data: policy } = usePipelineResourcePolicy();
 
   if (!selectedId || !node) return null;
 
@@ -70,6 +88,13 @@ export function NodeConfigPanel() {
             />
           ))
         )}
+
+        <ResourceFields
+          node={node}
+          policy={policy}
+          effective={effectiveResources?.[aliasOf(node.id)]}
+          onChange={(key, value) => setResource(node.id, key, value)}
+        />
       </div>
 
       <div className="border-t p-3 text-xs text-muted-foreground">

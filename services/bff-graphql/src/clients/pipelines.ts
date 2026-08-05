@@ -138,7 +138,17 @@ export interface ValidationIssueDTO {
 export interface ValidationReportDTO {
   status: string; // "valid" | "draft"
   items: ValidationIssueDTO[];
+  /** BRD 71 (U1): alias -> {cpus, ram_gb, timeout_minutes}. Absent on an invalid
+   * definition, where resolution short-circuits. */
+  effective_resources?: Record<string, Record<string, number>>;
   [k: string]: unknown;
+}
+
+/** GET /resource-policy (BRD 71 U1). */
+export interface ResourcePolicyDTO {
+  defaults: Record<string, number>;
+  floor: Record<string, number>;
+  ceiling: Record<string, number>;
 }
 
 export interface PipelineListParams {
@@ -233,6 +243,12 @@ export class PipelinesClient {
   async algorithmTemplates(): Promise<AlgorithmDTO[]> {
     const r = await this.http.get<{ data: AlgorithmDTO[] }>("/api/v1/algorithm-templates");
     return r.data ?? [];
+  }
+
+  /** GET /resource-policy — defaults / floor / tenant-effective ceiling (BRD 71 U1). */
+  async resourcePolicy(): Promise<ResourcePolicyDTO> {
+    const r = await this.http.get<{ data: ResourcePolicyDTO }>("/api/v1/resource-policy");
+    return r.data;
   }
 
   pipelines(p: PipelineListParams): Promise<Page<TemplateDTO>> {

@@ -55,12 +55,23 @@ def _dataset_urn(inputs: dict, tenant_id: str) -> str:
     return f"wr:{tenant_id}:dataset:dataset/{slug or 'claims'}"
 
 
-def _build_definition(operators: list[dict], dataset_urn: str) -> dict:
+def _build_definition(operators: list[dict], dataset_urn: str,
+                      resources: dict | None = None) -> dict:
     """Wire the chosen operators into a validated LINEAR DAG: read → ops → write.
     Deterministic aliasing + edge chaining, so the emitted definition is always a
-    well-formed DAG the orchestrator validator accepts."""
-    nodes: list[dict] = [{"alias": "read_1", "component": _READ,
-                          "parameters": {"dataset": dataset_urn}}]
+    well-formed DAG the orchestrator validator accepts.
+
+    BRD 71 (U1): a proposed resource envelope is written onto the READ node only. In
+    a linear DAG every downstream node inherits it through the orchestrator's
+    predecessor `max`, so one declaration sizes the whole pipeline — the same
+    "pipeline-global" affordance V1 exposed via `global_attribute`, with no second
+    concept to model.
+    """
+    read_node: dict = {"alias": "read_1", "component": _READ,
+                       "parameters": {"dataset": dataset_urn}}
+    if resources:
+        read_node["resources"] = resources
+    nodes: list[dict] = [read_node]
     edges: list[dict] = []
     prev = "read_1"
     for i, op in enumerate(operators, start=1):
@@ -89,6 +100,15 @@ def build_data_pipeline_builder_graph(deps: GraphDeps):
                     if isinstance(c, dict) and c.get("component_type") == _DATA_PREP
                     and c.get("name")]
         state["operator_catalog"] = op_names
+
+        # BRD 71 (U1): ground the resource proposal on the TENANT ceiling, so the
+        # model can never propose an envelope the compiler would clamp.
+        policy: dict = {}
+        if deps.pipeline_reader is not None and hasattr(deps.pipeline_reader, "resource_policy"):
+            policy = await deps.pipeline_reader.resource_policy(
+                tenant_id=tenant_id, auth_token=token) or {}
+        state["resource_policy"] = policy
+
         if not op_names:
             state.setdefault("trace", []).append(
                 {"event": "grounding_degraded", "source": "pipeline-orchestrator",
@@ -119,6 +139,8 @@ def build_data_pipeline_builder_graph(deps: GraphDeps):
             f"Data-prep request: {state.get('query', '')}\n"
             f"Operator catalog (choose ONLY from these): {json.dumps(catalog)}\n"
             f"Similar prior prep decisions: {json.dumps(mems, default=str)[:800]}\n"
+            f"Resource policy (floor/ceiling for any resources you propose): "
+            f"{json.dumps(state.get('resource_policy') or {})}\n"
             "Choose the ordered operators + parameters now."
         )
         result = await deps.llm.chat(
@@ -131,7 +153,8 @@ def build_data_pipeline_builder_graph(deps: GraphDeps):
         state["usage"] = {"input_tokens": result.input_tokens,
                           "output_tokens": result.output_tokens,
                           "model": result.model, "deployment": result.deployment}
-        state["plan"] = _normalise_plan(_extract_json(result.content), catalog, state)
+        state["plan"] = _normalise_plan(_extract_json(result.content), catalog, state,
+                                        state.get("resource_policy") or {})
         state.setdefault("trace", []).append(
             {"event": "reflection", "iteration": 0, "model": result.model})
         return state
@@ -140,7 +163,7 @@ def build_data_pipeline_builder_graph(deps: GraphDeps):
         p = state["plan"]
         tenant_id = state["tenant_id"]
         dataset_urn = _dataset_urn(state, tenant_id)
-        definition = _build_definition(p["operators"], dataset_urn)
+        definition = _build_definition(p["operators"], dataset_urn, p.get("resources"))
         args = {
             "name": p["name"],
             "pipeline_type": "data_prep",
@@ -157,7 +180,9 @@ def build_data_pipeline_builder_graph(deps: GraphDeps):
             required_action="pipeline.template.create",
             predicted_effect={
                 "summary": (f"Create a data-prep pipeline '{p['name']}' on {dataset_urn}: "
-                            f"{_READ} → {op_summary} → {_WRITE}."),
+                            f"{_READ} → {op_summary} → {_WRITE}."
+                            + (f" Resources: {json.dumps(p['resources'])}."
+                               if p.get("resources") else "")),
                 "reversibility": "reversible", "blast_radius": 1})
         state.setdefault("trace", []).append(
             {"event": "proposal_created", "tool_id": CREATE_TOOL_ID})
@@ -174,7 +199,38 @@ def build_data_pipeline_builder_graph(deps: GraphDeps):
     return g.compile()
 
 
-def _normalise_plan(parsed: dict, catalog: list[str], state: dict) -> dict:
+def _clamp_resources(parsed: dict, policy: dict) -> dict | None:
+    """BRD 71 (U1). Keep only the three known keys, coerce to int, and clamp to the
+    served floor/ceiling.
+
+    Clamping rather than rejecting is deliberate: a model that asks for 64 GB on a
+    24 GB tenant meant "this step is memory-hungry", and the useful outcome is a
+    proposal at the tenant maximum that a reviewer can see and approve — not a
+    dropped field that silently reverts to 2 GB. Nothing is proposed at all when the
+    policy is unavailable, because an unbounded guess is worse than inheriting.
+    """
+    raw = parsed.get("resources")
+    if not isinstance(raw, dict) or not policy:
+        return None
+    floor = policy.get("floor") or {}
+    ceiling = policy.get("ceiling") or {}
+    out: dict[str, int] = {}
+    for key in ("cpus", "ram_gb", "timeout_minutes"):
+        val = raw.get(key)
+        if isinstance(val, bool) or not isinstance(val, (int, float)):
+            continue
+        lo, hi = floor.get(key), ceiling.get(key)
+        n = int(val)
+        if isinstance(lo, (int, float)):
+            n = max(int(lo), n)
+        if isinstance(hi, (int, float)):
+            n = min(int(hi), n)
+        out[key] = n
+    return out or None
+
+
+def _normalise_plan(parsed: dict, catalog: list[str], state: dict,
+                    policy: dict | None = None) -> dict:
     """Keep ONLY operators whose component is in the catalog (fail safe: an unknown
     operator is dropped, never emitted), coerce params to objects, and always return
     a valid, non-empty name + rationale."""
@@ -196,7 +252,11 @@ def _normalise_plan(parsed: dict, catalog: list[str], state: dict) -> dict:
     if not isinstance(rationale, str) or not rationale.strip():
         rationale = (f"Composed a {len(operators)}-operator data-prep pipeline from the "
                      f"operator catalog for the request.")
-    return {"name": name, "operators": operators, "rationale": rationale.strip()[:4000]}
+    plan = {"name": name, "operators": operators, "rationale": rationale.strip()[:4000]}
+    resources = _clamp_resources(parsed, policy or {})
+    if resources:
+        plan["resources"] = resources
+    return plan
 
 
 @register("data_pipeline_builder.v1")

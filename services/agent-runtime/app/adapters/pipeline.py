@@ -42,6 +42,13 @@ class PipelineOrchestratorClient:
         data = await self._get("/api/v1/components", auth_token)
         return data if isinstance(data, list) else []
 
+    async def resource_policy(self, *, tenant_id: str, auth_token: str) -> dict:
+        """Defaults / floor / TENANT-effective ceiling for node resources (BRD 71 U1),
+        ``GET /api/v1/resource-policy``. The agent grounds on this so a proposal is
+        bounded by what the tenant may actually request; {} degrades to no proposal."""
+        data = await self._get("/api/v1/resource-policy", auth_token)
+        return data if isinstance(data, dict) else {}
+
     async def get_run(self, *, tenant_id: str, run_id: str, auth_token: str) -> dict:
         """One pipeline run's status/metrics/model refs (``GET /api/v1/runs/{id}``)
         — the ml-engineer agent's poll surface. {} on failure (degrades, never

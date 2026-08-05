@@ -21,6 +21,7 @@ _PARAMS: dict[str, dict] = {
     "add-guid-column": {"column": "gid"},
     "cast-data": {"casts": {"x": "float"}},
     "correlation-filter": {"threshold": 0.9},
+    "drop-columns": {"columns": ["x"]},
     "filter-data": {"expression": "x > 0"},
     "group-by": {"by": ["cat"], "aggregations": {"x": "sum"}},
     "handle-missing-values": {"strategy": "mean", "columns": ["x"]},

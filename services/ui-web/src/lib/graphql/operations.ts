@@ -1486,6 +1486,20 @@ export interface AlgorithmTemplatesResult {
   algorithmTemplates: AlgorithmTemplate[];
 }
 
+/** BRD 71 (U1): defaults / floor / tenant-effective ceiling for node resources. */
+export const PIPELINE_RESOURCE_POLICY = /* GraphQL */ `
+  query PipelineResourcePolicy {
+    pipelineResourcePolicy { defaults floor ceiling }
+  }
+`;
+export interface PipelineResourcePolicyResult {
+  pipelineResourcePolicy: {
+    defaults: Record<string, number>;
+    floor: Record<string, number>;
+    ceiling: Record<string, number>;
+  };
+}
+
 const PIPELINE_TEMPLATE_FIELDS = /* GraphQL */ `
   id urn name pipelineType activeVersionId definition
   validationStatus isSystem archived createdBy createdAt updatedAt
@@ -1549,6 +1563,7 @@ export const VALIDATE_PIPELINE = /* GraphQL */ `
     validatePipeline(definition: $definition, pipelineType: $pipelineType) {
       valid
       issues { code message node }
+      effectiveResources
     }
   }
 `;

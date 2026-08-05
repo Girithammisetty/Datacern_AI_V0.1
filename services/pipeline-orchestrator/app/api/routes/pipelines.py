@@ -27,6 +27,15 @@ def _c(request: Request):
     return request.app.state.container
 
 
+@router.get("/resource-policy")
+async def resource_policy(request: Request,
+                          principal: Principal = Depends(require("pipeline.component.read"))):
+    """BRD 71 (U1): defaults / floor / tenant-effective ceiling for node resources."""
+    c = _c(request)
+    return {"data": await c.template_service.resource_policy(
+        principal.ctx(request.state.trace_id))}
+
+
 @router.post("/pipelines/validate")
 async def validate(request: Request, body: ValidateRequest,
                    mode: str = Query(default="structure_only"),

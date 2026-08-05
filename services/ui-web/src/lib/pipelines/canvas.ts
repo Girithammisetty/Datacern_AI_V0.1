@@ -31,6 +31,22 @@ export const DEFAULT_INPUT_TYPE = "dataframe";
 /** Hard cap on how many input slots we render for a step (min/max still apply). */
 const MAX_INPUT_SLOTS = 8;
 
+/**
+ * BRD 71 (U1). Per-node compute envelope, mirroring the orchestrator's
+ * `resolve_resources` contract: every field is optional, and **absent means
+ * "inherit from my predecessors"**. That is why this is a sparse object rather than
+ * three numbers with defaults — writing a default would silently convert an
+ * inheriting node into a pinned one.
+ */
+export interface NodeResources {
+  cpus?: number;
+  ram_gb?: number;
+  timeout_minutes?: number;
+}
+
+export const RESOURCE_KEYS = ["cpus", "ram_gb", "timeout_minutes"] as const;
+export type ResourceKey = (typeof RESOURCE_KEYS)[number];
+
 export interface CanvasNode {
   id: string;
   component: string; // real catalog component name (e.g. "xgboost-train")
@@ -45,6 +61,8 @@ export interface CanvasNode {
   maxOutputs: number;
   params: PipelineStepParam[]; // parameter schema
   values: ParamValues; // current form values (raw)
+  /** Explicit resource overrides. Undefined/empty = inherit (BRD 71 U1). */
+  resources?: NodeResources;
 }
 
 export interface CanvasEdge {
@@ -171,6 +189,20 @@ export interface SerializeResult {
   ok: boolean;
 }
 
+/**
+ * Drop empty/NaN entries; return undefined when nothing survives. The distinction
+ * between `undefined` and `{}` matters — see {@link NodeResources}.
+ */
+export function pruneResources(r: NodeResources | undefined): NodeResources | undefined {
+  if (!r) return undefined;
+  const out: NodeResources = {};
+  for (const k of RESOURCE_KEYS) {
+    const v = r[k];
+    if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Serialize the canvas to the bff `{nodes,edges}` definition + collect param errors. */
 export function serializeDefinition(nodes: CanvasNode[], edges: CanvasEdge[]): SerializeResult {
   const aliases = aliasMap(nodes);
@@ -179,12 +211,17 @@ export function serializeDefinition(nodes: CanvasNode[], edges: CanvasEdge[]): S
   const defNodes = nodes.map((n) => {
     const { parameters, errors } = collect(n.params, n.values);
     if (Object.keys(errors).length) paramErrors[n.id] = errors;
-    return {
+    const base = {
       alias: aliases.get(n.id)!,
       component: n.component,
       parameters,
       outputs: n.outputs,
     };
+    // BRD 71 (U1): emit `resources` ONLY when something is actually set. An
+    // untouched node must serialize exactly as it did before this feature existed,
+    // so existing pipelines keep inheriting instead of silently pinning to defaults.
+    const resources = pruneResources(n.resources);
+    return resources ? { ...base, resources } : base;
   });
 
   const defEdges = edges.map((e) => ({
@@ -271,6 +308,9 @@ export function hydrateFromDefinition(
         params: [], values: {},
       };
     }
+    // BRD 71 (U1): explicit resources survive the round trip; absent stays absent.
+    const saved = pruneResources((dn as { resources?: NodeResources }).resources);
+    if (saved) node.resources = saved;
     aliasToId.set(dn.alias, node.id);
     return node;
   });
@@ -347,12 +387,20 @@ interface CanvasStore {
   pending: PendingConnection | null;
   /** Validation issue messages keyed by node id (from validatePipeline). */
   issues: Record<string, string[]>;
+  /**
+   * BRD 71 (U1): last validate's resolved envelope, keyed by ALIAS (the backend has
+   * no notion of our node ids). Null until a validate has run, or when the definition
+   * was invalid — "not computed" must stay distinguishable from "all defaults".
+   */
+  effectiveResources: Record<string, Record<string, number>> | null;
 
   addNode: (node: CanvasNode) => void;
   moveNode: (id: string, x: number, y: number) => void;
   removeNode: (id: string) => void;
   selectNode: (id: string | null) => void;
   setValue: (id: string, name: string, value: string | boolean) => void;
+  /** Set (number) or clear (undefined = inherit) one resource field. BRD 71 U1. */
+  setResource: (id: string, key: ResourceKey, value: number | undefined) => void;
   /** Click an output port: begin (or cancel) a pending connection. */
   beginConnect: (nodeId: string, port: string, type: string) => void;
   /** Click an input port: complete a pending connection if legal. */
@@ -361,6 +409,9 @@ interface CanvasStore {
   removeEdge: (id: string) => void;
   setIssues: (issues: Record<string, string[]>) => void;
   clearIssues: () => void;
+  setEffectiveResources: (r: Record<string, Record<string, number>> | null) => void;
+  /** The serialization alias of a node id — how the backend keys everything back. */
+  aliasOf: (id: string) => string;
   /** Replace the whole canvas (edit mode: rehydrate from a saved definition). */
   load: (nodes: CanvasNode[], edges: CanvasEdge[]) => void;
   reset: () => void;
@@ -372,6 +423,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   selectedId: null,
   pending: null,
   issues: {},
+  effectiveResources: null,
 
   addNode: (node) => set((s) => ({ nodes: [...s.nodes, node], selectedId: node.id })),
   moveNode: (id, x, y) => set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)) })),
@@ -385,6 +437,16 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   setValue: (id, name, value) =>
     set((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, values: { ...n.values, [name]: value } } : n)),
+    })),
+  setResource: (id, key, value) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== id) return n;
+        const next: NodeResources = { ...(n.resources ?? {}) };
+        if (value === undefined || !Number.isFinite(value)) delete next[key];
+        else next[key] = value;
+        return { ...n, resources: pruneResources(next) };
+      }),
     })),
   beginConnect: (nodeId, port, type) =>
     set((s) =>
@@ -408,6 +470,10 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   removeEdge: (id) => set((s) => ({ edges: s.edges.filter((e) => e.id !== id) })),
   setIssues: (issues) => set({ issues }),
   clearIssues: () => set({ issues: {} }),
-  load: (nodes, edges) => set({ nodes, edges, selectedId: null, pending: null, issues: {} }),
-  reset: () => set({ nodes: [], edges: [], selectedId: null, pending: null, issues: {} }),
+  setEffectiveResources: (effectiveResources) => set({ effectiveResources }),
+  aliasOf: (id) => aliasMap(get().nodes).get(id) ?? id,
+  load: (nodes, edges) =>
+    set({ nodes, edges, selectedId: null, pending: null, issues: {}, effectiveResources: null }),
+  reset: () =>
+    set({ nodes: [], edges: [], selectedId: null, pending: null, issues: {}, effectiveResources: null }),
 }));

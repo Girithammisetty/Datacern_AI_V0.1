@@ -2106,6 +2106,10 @@ export function mapValidationReport(d: ValidationReportDTO) {
       message: it.problem ?? "",
       node: it.alias ?? null,
     })),
+    // BRD 71 (U1). Passed through as-is (alias -> {cpus, ram_gb, timeout_minutes});
+    // null rather than {} when absent so the builder can tell "not computed" (an
+    // invalid definition short-circuits resolution) from "every node at defaults".
+    effectiveResources: d.effective_resources ?? null,
   };
 }
 

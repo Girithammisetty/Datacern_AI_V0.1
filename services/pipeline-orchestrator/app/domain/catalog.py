@@ -22,7 +22,8 @@ CATALOG_VERSION = "datacern-catalog/1.0.0"
 
 # The full data-prep component set (PIPE-FR-051), kept from the V1 catalog.
 _DATA_PREP_NAMES = [
-    "add-guid-column", "cast-data", "correlation-filter", "filter-data", "group-by",
+    "add-guid-column", "cast-data", "correlation-filter", "drop-columns",
+    "filter-data", "group-by",
     "handle-missing-values", "join-data", "linear-combination", "long-to-wide-converter",
     "merge-data", "minmax-scale", "one-hot-encoder", "ordinal-encoder", "pca",
     "python-expression", "quantization", "quasi-constant-filter", "remove-duplicate-rows",
@@ -66,9 +67,23 @@ _OVERRIDES: dict[str, dict] = {
                                       "required": True}},
     },
     "select-columns": {
-        "parameters": {"columns": {"type": "array", "format": "columns",
-                                   "item_format": "column", "min_items": 1,
-                                   "required": True, "item_description": "column name"}},
+        "parameters": {
+            "columns": {"type": "array", "format": "columns",
+                        "item_format": "column", "min_items": 1,
+                        "required": True, "item_description": "column name"},
+            # BRD 71 (P6): invert the projection. Without this the only way to express
+            # "drop these two" on a 200-column frame is to enumerate the other 198.
+            "exclude": {"type": "boolean", "required": False, "default": False},
+        },
+    },
+    # BRD 71 (P6): the one V1 data-prep component with no Datacern equivalent.
+    "drop-columns": {
+        "parameters": {
+            "columns": {"type": "array", "format": "columns",
+                        "item_format": "column", "min_items": 1,
+                        "required": True,
+                        "item_description": "column to drop from the dataframe"},
+        },
     },
     "handle-missing-values": {
         "parameters": {
