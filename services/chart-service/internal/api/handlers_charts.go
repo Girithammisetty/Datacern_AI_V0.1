@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 	"github.com/datacern-ai/chart-service/internal/events"
 	"github.com/datacern-ai/chart-service/internal/resolve"
 	"github.com/datacern-ai/go-common/event"
+	"github.com/datacern-ai/go-common/httpx"
 )
 
 type chartWrite struct {
@@ -138,6 +140,83 @@ func (s *Server) handleUpdateChart(w http.ResponseWriter, r *http.Request) {
 	// Evict cache for this chart on any change (CHART-FR-031 own update).
 	_ = s.Cache.InvalidateChart(r.Context(), tenant.String(), c.ID.String())
 	writeData(w, http.StatusOK, chartView(c))
+}
+
+// handleSearchCharts serves GET /charts — the cross-dashboard chart search
+// (BRD 74 D2), replacing "open every dashboard until you find the denial-rate
+// chart".
+//
+// workspace_id is REQUIRED: `chart.chart.read` is a workspace-scoped grant, so
+// one authorization decision can only cover one workspace. `module` and `tag`
+// filter on the parent dashboard (charts have no such columns); `q` matches the
+// chart's name, description and chart-scoped documentation body. Cursor-paged
+// on chart id like every other list here. Archived dashboards are excluded
+// unless include_archived=true.
+func (s *Server) handleSearchCharts(w http.ResponseWriter, r *http.Request) {
+	_, tenant, ok := s.claims(w, r)
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	wsID, err := uuid.Parse(q.Get("workspace_id"))
+	if err != nil {
+		writeErr(w, r, domain.EValidation("workspace_id query param is required"))
+		return
+	}
+	if !s.authorize(w, r, authz.ActionChartRead, "", wsID.String()) {
+		return
+	}
+	page, err := httpx.ParsePage(q.Get("limit"), q.Get("cursor"))
+	if err != nil {
+		writeErr(w, r, domain.EValidation(err.Error()))
+		return
+	}
+	after, err := decodeCursor(q.Get("cursor"))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	f := domain.ChartSearchFilter{
+		WorkspaceID:     wsID,
+		Q:               strings.TrimSpace(q.Get("q")),
+		Module:          q.Get("module"),
+		Tag:             q.Get("tag"),
+		IncludeArchived: q.Get("include_archived") == "true",
+		Limit:           page.Limit + 1,
+		After:           after,
+	}
+	switch f.Module {
+	case "", domain.ModuleInsights, domain.ModuleCaseManagement, domain.ModuleInspector:
+	default:
+		writeErr(w, r, domain.EValidation("module must be insights|case_management|inspector"))
+		return
+	}
+	if v := q.Get("dashboard_id"); v != "" {
+		id, err := uuid.Parse(v)
+		if err != nil {
+			writeErr(w, r, domain.EValidation("dashboard_id must be a uuid"))
+			return
+		}
+		f.DashboardID = &id
+	}
+	hits, err := s.Store.SearchCharts(r.Context(), tenant, f)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	var next *string
+	hasMore := false
+	if len(hits) > page.Limit {
+		hasMore = true
+		hits = hits[:page.Limit]
+		cur := encodeCursor(hits[len(hits)-1].ID)
+		next = &cur
+	}
+	views := make([]any, len(hits))
+	for i := range hits {
+		views[i] = chartSearchView(&hits[i])
+	}
+	writePage(w, views, next, hasMore)
 }
 
 func (s *Server) handleDeleteChart(w http.ResponseWriter, r *http.Request) {
@@ -273,6 +352,16 @@ func sourceURNs(sources []domain.ChartSource) []string {
 		out[i] = s.SourceURN
 	}
 	return out
+}
+
+// chartSearchView is chartView plus the parent-dashboard context a search hit
+// needs to be actionable.
+func chartSearchView(h *domain.ChartSearchHit) map[string]any {
+	v := chartView(&h.Chart)
+	v["dashboard_name"] = h.DashboardName
+	v["dashboard_module"] = h.DashboardModule
+	v["dashboard_tags"] = orEmpty(h.DashboardTags)
+	return v
 }
 
 func chartView(c *domain.Chart) map[string]any {

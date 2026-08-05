@@ -55,6 +55,28 @@ paths:
       summary: Create a chart in a dashboard (CHART-FR-010)
       parameters: [{ name: Idempotency-Key, in: header, schema: { type: string } }]
       responses: { '201': { description: created }, '409': { description: name conflict }, '422': { description: schema/agg } }
+  /charts:
+    get:
+      summary: >
+        Cross-dashboard chart search (BRD 74 D2). `q` matches the chart name,
+        description and chart-scoped documentation body; `module` and `tag`
+        filter on the PARENT DASHBOARD (charts carry neither column). Guarded by
+        chart.chart.read, cursor-paged on chart id. Archived dashboards are
+        excluded unless include_archived=true. Each hit carries dashboard_id,
+        dashboard_name, dashboard_module and dashboard_tags.
+      parameters:
+        - { name: workspace_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: module, in: query, schema: { type: string, enum: [insights, case_management, inspector] } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: dashboard_id, in: query, schema: { type: string, format: uuid } }
+        - { name: include_archived, in: query, schema: { type: boolean, default: false } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        '200': { description: page of chart hits }
+        '403': { description: PERMISSION_DENIED }
+        '422': { description: missing/invalid workspace_id, module, dashboard_id or cursor }
   /charts/{id}:
     get: { summary: Get chart, responses: { '200': { description: ok }, '404': { description: not found } } }
     patch:

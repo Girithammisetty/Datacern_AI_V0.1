@@ -9,6 +9,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -32,11 +35,16 @@ type memStore struct {
 	chart map[uuid.UUID]*domain.Chart
 	ops   map[uuid.UUID]*domain.Operation
 	idem  map[string][]byte
+	// chartDocs models the `documentations` rows a chart search reads
+	// (documentable_type='chart'). chart-service has no write path for them
+	// today — see the D2 note in BRD 74 — so tests set them directly.
+	chartDocs map[uuid.UUID]string
 }
 
 func newMemStore() *memStore {
 	return &memStore{dash: map[uuid.UUID]*domain.Dashboard{}, chart: map[uuid.UUID]*domain.Chart{},
-		ops: map[uuid.UUID]*domain.Operation{}, idem: map[string][]byte{}}
+		ops: map[uuid.UUID]*domain.Operation{}, idem: map[string][]byte{},
+		chartDocs: map[uuid.UUID]string{}}
 }
 
 func (m *memStore) CreateDashboard(_ context.Context, d *domain.Dashboard, _ []event.Envelope) error {
@@ -141,6 +149,54 @@ func (m *memStore) ListCharts(_ context.Context, tenant, dashboardID uuid.UUID) 
 	}
 	return out, nil
 }
+
+// SearchCharts models store.PG.SearchCharts (BRD 74 D2) closely enough to
+// exercise the handler contract: dashboard-scoped module/tag/archived filters,
+// q over chart name + description + chart-scoped documentation, keyset order by
+// id. The authoritative test of the SQL itself lives in the integration tier.
+func (m *memStore) SearchCharts(_ context.Context, tenant uuid.UUID, f domain.ChartSearchFilter) ([]domain.ChartSearchHit, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []domain.ChartSearchHit
+	needle := strings.ToLower(f.Q)
+	for _, c := range m.chart {
+		if c.TenantID != tenant {
+			continue
+		}
+		d, ok := m.dash[c.DashboardID]
+		if !ok || d.TenantID != tenant || d.WorkspaceID != f.WorkspaceID {
+			continue
+		}
+		if d.Archived && !f.IncludeArchived {
+			continue
+		}
+		if f.Module != "" && d.Module != f.Module {
+			continue
+		}
+		if f.Tag != "" && !slices.Contains(d.Tags, f.Tag) {
+			continue
+		}
+		if f.DashboardID != nil && c.DashboardID != *f.DashboardID {
+			continue
+		}
+		if needle != "" && !strings.Contains(strings.ToLower(c.Name), needle) &&
+			!strings.Contains(strings.ToLower(c.Description), needle) &&
+			!strings.Contains(strings.ToLower(m.chartDocs[c.ID]), needle) {
+			continue
+		}
+		if f.After != nil && c.ID.String() <= f.After.String() {
+			continue
+		}
+		out = append(out, domain.ChartSearchHit{Chart: *c, DashboardName: d.Name,
+			DashboardModule: d.Module, DashboardTags: d.Tags})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID.String() < out[j].ID.String() })
+	if f.Limit > 0 && len(out) > f.Limit {
+		out = out[:f.Limit]
+	}
+	return out, nil
+}
+
 func (m *memStore) UpdateChart(_ context.Context, c *domain.Chart, versionBump bool, expectVersion int, _ []event.Envelope) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -387,6 +443,33 @@ func errCode(r resp) string {
 		return c
 	}
 	return ""
+}
+
+// seedDashboard creates a dashboard in an explicit workspace/module with tags
+// (chart search filters on all three).
+func (h *harness) seedDashboard(t *testing.T, tenant, ws uuid.UUID, name, module string, tags []string) uuid.UUID {
+	t.Helper()
+	r := h.do(t, "POST", "/api/v1/dashboards", h.token(t, tenant), map[string]any{
+		"name": name, "module": module, "workspace_id": ws.String(), "tags": tags,
+	}, nil)
+	if r.status != http.StatusCreated {
+		t.Fatalf("create dashboard: %d %v", r.status, r.body)
+	}
+	return uuid.MustParse(dataMap(r)["id"].(string))
+}
+
+// seedNamedChart creates a chart with an explicit name + description.
+func (h *harness) seedNamedChart(t *testing.T, tenant, dashID uuid.UUID, name, description string) uuid.UUID {
+	t.Helper()
+	r := h.do(t, "POST", "/api/v1/dashboards/"+dashID.String()+"/charts", h.token(t, tenant), map[string]any{
+		"name": name, "chart_type": "vertical_bar_chart", "description": description,
+		"sources": []map[string]any{{"source_type": "semantic_measure", "source_urn": "wr:t:semantic:measure/revenue"}},
+		"config":  map[string]any{"x": map[string]any{"dimension": "region"}, "y": []map[string]any{{"measure": "revenue", "agg_fn": "sum"}}},
+	}, nil)
+	if r.status != http.StatusCreated {
+		t.Fatalf("create chart %q: %d %v", name, r.status, r.body)
+	}
+	return uuid.MustParse(dataMap(r)["id"].(string))
 }
 
 // seed creates a dashboard + chart and returns their ids.

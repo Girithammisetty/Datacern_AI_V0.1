@@ -1,6 +1,7 @@
 # BRD 71–75 — V1 → Datacern Parity Wave 2 (initiative index)
 
-**Status:** IN PROGRESS — 2026-08-05 · 3/11 gaps closed (BRD 71 landed; 72–75 open)
+**Status:** IN PROGRESS — 2026-08-05 · 5/11 gaps closed (BRD 71 landed; 74 partial —
+D1+D2 landed, D3 deferred; 72, 73, 75 open)
 **Owner:** platform · **Driver:** a second cross-verification of the legacy V1 platform
 (Rails/Flask services + Argo + pandas component containers) against Datacern's rebuilt
 services. The [wave-1 index](62_pipeline_ml_parity_index.md) audited **pipeline + ML
@@ -142,5 +143,5 @@ over-engineer.
 | **71** pipeline builder completeness | U1, U2, P6 | **inc1–inc4 DONE** — backend (`drop-columns`, exclude mode, `GET /resource-policy`, `effective_resources`), BFF (`pipelineResourcePolicy`, `effectiveResources`), UI (resource round trip + "Resource Parameters" group + DAG schema propagation), agent (clamped envelope proposal). 74 new tests; orchestrator 220 / bff 450 / ui-web 876 / agent-runtime 409 all green. Live-verify pending. |
 | **72** chart renderer completeness | V1c, V2c | OPEN |
 | **73** batch job orchestration | B1, B2 | OPEN |
-| **74** discovery & export completeness | D1, D2, D3 | OPEN |
+| **74** discovery & export completeness | D1, D2, D3 | **PARTIAL — D2 + D1 DONE, D3 DEFERRED.** chart-service `GET /charts?q=` (cross-dashboard, RLS, cursor-paged); dataset-service `POST /datasets/{id}/exports` + `GET /exports/{id}`, version-pinned and delegated to query-service's export path (migration 0007, new action `dataset.dataset.export`). 58 new tests; chart-service unit+integration and dataset-service 301 unit / 22 integration all green. **D3 not built**: bff-graphql has no DB/consumer/cache *by CI-enforced policy*, so the specced projection would invert its architecture — the BRD records a fan-out redesign instead. Parquet export deferred (query-service returns 501). |
 | **75** profiling depth parity | F1 | OPEN |

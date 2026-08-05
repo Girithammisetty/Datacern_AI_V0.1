@@ -8,7 +8,13 @@ from typing import Any, Protocol
 
 import pandas as pd
 
-from app.domain.entities import Dataset, DatasetVersion, LineageEdge, Profile
+from app.domain.entities import (
+    Dataset,
+    DatasetExport,
+    DatasetVersion,
+    LineageEdge,
+    Profile,
+)
 
 # ---------------------------------------------------------------------------
 # Repositories
@@ -77,6 +83,17 @@ class ProfileRepo(Protocol):
     async def running_started_before(self, cutoff: datetime) -> list[Profile]: ...
 
 
+class ExportRepo(Protocol):
+    """Dataset export operations (BRD 74 D1)."""
+
+    async def add(self, export: DatasetExport) -> None: ...
+    async def get(self, export_id: str) -> DatasetExport | None: ...
+    async def update(self, export: DatasetExport) -> None: ...
+    async def count_active(self, dataset_id: str) -> int:
+        """In-flight (pending/running) exports for a dataset — the concurrency cap."""
+        ...
+
+
 class LineageRepo(Protocol):
     async def upsert(self, edge: LineageEdge) -> tuple[LineageEdge, bool]:
         """Idempotent on (tenant, from, to, activity, run_urn); returns (edge, created)."""
@@ -105,6 +122,7 @@ class UnitOfWork(Protocol):
     datasets: DatasetRepo
     versions: VersionRepo
     profiles: ProfileRepo
+    exports: ExportRepo
     lineage: LineageRepo
     outbox: OutboxRepo
     idempotency: IdempotencyRepo
@@ -178,6 +196,33 @@ class ProfilerRunner(Protocol):
 
     async def launch(self, spec: ProfileJobSpec) -> None: ...
     async def kill(self, profile_id: str) -> None: ...
+
+
+@dataclass(slots=True)
+class DatasetExportJobSpec:
+    """Everything the export runner needs to drive query-service (BRD 74 D1).
+
+    ``bearer_token`` is the CALLER's token, forwarded verbatim: query-service
+    re-authorizes the run/export under the end user (``query.execution.execute``
+    / ``query.execution.export``), so a dataset export can never be a privilege
+    escalation over what the user could already do with a saved query.
+    """
+
+    tenant_id: str
+    export_id: str
+    dataset_id: str
+    dataset_name: str
+    version_no: int
+    format: str
+    bearer_token: str
+    actor: dict
+    trace_id: str | None = None
+
+
+class ExportRunner(Protocol):
+    """Drives one dataset export through query-service and reports the outcome."""
+
+    async def launch(self, spec: DatasetExportJobSpec) -> None: ...
 
 
 class SearchIndex(Protocol):

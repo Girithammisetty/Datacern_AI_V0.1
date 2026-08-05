@@ -112,6 +112,45 @@ class Profile:
     finished_at: datetime | None = None
 
 
+class ExportStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+@dataclass(slots=True)
+class DatasetExport:
+    """An async dataset export (BRD 74 D1).
+
+    Version-pinned by construction: the row records the exact ``version_no`` and
+    version URN whose rows the artifact contains, so a download is never
+    ambiguous about which snapshot it came from.
+
+    The artifact itself is produced and retained by **query-service** — this row
+    holds the execution id and the signed download URL it minted, never a second
+    copy of the bytes and never a second retention path (AC-3).
+    """
+
+    id: str
+    tenant_id: str
+    dataset_id: str
+    version_id: str
+    version_no: int
+    version_urn: str
+    format: str
+    created_by: str
+    created_at: datetime
+    status: str = ExportStatus.PENDING
+    query_execution_id: str | None = None
+    download_url: str | None = None
+    expires_at: datetime | None = None
+    row_count: int | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
 @dataclass(slots=True)
 class LineageEdge:
     id: str

@@ -78,6 +78,36 @@ type Chart struct {
 	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
+// ChartSearchFilter is the parameter set for a cross-dashboard chart search
+// (BRD 74 D2). WorkspaceID is mandatory: `chart.chart.read` is a
+// workspace-scoped grant, so a search that spanned workspaces could not be
+// authorized with a single decision.
+//
+// Q matches the chart's own name/description and any chart-scoped
+// documentation body. Module and Tag filter on the PARENT DASHBOARD — charts
+// themselves carry neither column (see the D2 note in the BRD): `module` and
+// `tags` live on `dashboards`.
+type ChartSearchFilter struct {
+	WorkspaceID     uuid.UUID
+	Q               string
+	Module          string
+	Tag             string
+	DashboardID     *uuid.UUID
+	IncludeArchived bool
+	Limit           int
+	After           *uuid.UUID
+}
+
+// ChartSearchHit is a chart plus the dashboard context that makes a
+// cross-dashboard result actionable ("which dashboard has the denial-rate
+// chart") — BRD 74 D2.
+type ChartSearchHit struct {
+	Chart
+	DashboardName   string   `json:"dashboard_name"`
+	DashboardModule string   `json:"dashboard_module"`
+	DashboardTags   []string `json:"dashboard_tags"`
+}
+
 // ChartSource is one typed source reference (CHART-FR-013).
 type ChartSource struct {
 	Position   int    `json:"position"`

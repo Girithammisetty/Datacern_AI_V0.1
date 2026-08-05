@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.domain.entities import (
     Dataset,
+    DatasetExport,
     DatasetVersion,
     EntityMergeCandidate,
     EntityResolutionConfig,
@@ -30,6 +31,7 @@ from app.domain.entities import (
 )
 from app.domain.ports import DatasetFilters, Page
 from app.store.orm import (
+    DatasetExportRow,
     DatasetRow,
     DatasetVersionRow,
     IdempotencyKeyRow,
@@ -50,6 +52,7 @@ from app.utils import decode_cursor, encode_cursor, utcnow, uuid7
 _DATASET_FIELDS = [f.name for f in dataclasses.fields(Dataset)]
 _VERSION_FIELDS = [f.name for f in dataclasses.fields(DatasetVersion)]
 _PROFILE_FIELDS = [f.name for f in dataclasses.fields(Profile)]
+_EXPORT_FIELDS = [f.name for f in dataclasses.fields(DatasetExport)]
 _EDGE_FIELDS = [f.name for f in dataclasses.fields(LineageEdge)]
 
 
@@ -389,6 +392,39 @@ class SqlProfileRepo:
         return [_to_entity(r, _PROFILE_FIELDS, Profile) for r in rows]
 
 
+class SqlExportRepo:
+    """BRD 74 D1. RLS scopes every statement to the UoW's tenant, so a
+    cross-tenant export id simply returns None → 404."""
+
+    def __init__(self, session: AsyncSession):
+        self.s = session
+
+    async def add(self, export: DatasetExport) -> None:
+        row = DatasetExportRow()
+        _apply(row, export, _EXPORT_FIELDS)
+        self.s.add(row)
+        await self.s.flush()
+
+    async def get(self, export_id: str) -> DatasetExport | None:
+        row = await self.s.get(DatasetExportRow, export_id)
+        return _to_entity(row, _EXPORT_FIELDS, DatasetExport) if row else None
+
+    async def update(self, export: DatasetExport) -> None:
+        row = await self.s.get(DatasetExportRow, export.id)
+        if row is not None:
+            _apply(row, export, _EXPORT_FIELDS)
+            await self.s.flush()
+
+    async def count_active(self, dataset_id: str) -> int:
+        result = await self.s.execute(
+            select(func.count()).select_from(DatasetExportRow).where(
+                DatasetExportRow.dataset_id == dataset_id,
+                DatasetExportRow.status.in_(["pending", "running"]),
+            )
+        )
+        return int(result.scalar_one())
+
+
 class SqlLineageRepo:
     def __init__(self, session: AsyncSession, tenant_id: str):
         self.s = session
@@ -629,6 +665,7 @@ class SqlUnitOfWork:
         self.datasets = SqlDatasetRepo(self._session)
         self.versions = SqlVersionRepo(self._session)
         self.profiles = SqlProfileRepo(self._session)
+        self.exports = SqlExportRepo(self._session)
         self.lineage = SqlLineageRepo(self._session, self.tenant_id)
         self.outbox = SqlOutboxRepo(self._session, self.tenant_id)
         self.idempotency = SqlIdempotencyRepo(self._session, self.tenant_id)

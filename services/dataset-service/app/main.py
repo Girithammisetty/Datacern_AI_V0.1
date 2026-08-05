@@ -118,6 +118,14 @@ async def _lifespan(app: FastAPI):
     try:
         yield
     finally:
+        # BRD 74 D1: let in-flight dataset exports report their outcome before
+        # the loop goes away, so none is left stranded in `pending`.
+        drain = getattr(container.export_runner, "drain", None)
+        if drain is not None:
+            try:
+                await asyncio.wait_for(drain(), timeout=10)
+            except Exception:  # noqa: BLE001
+                logger.exception("dataset export drain failed")
         for t in tasks:
             t.cancel()
         for t in tasks:

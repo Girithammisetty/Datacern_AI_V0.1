@@ -9,12 +9,15 @@ from typing import Any
 import httpx
 
 from app.adapters.profiler_runner import InProcessProfilerRunner, sign_callback
+from app.adapters.query_export import QueryServiceExportRunner
 from app.adapters.search_index import InMemorySearchIndex, PostgresFTSSearchIndex
 from app.api.auth import LocalScopeAuthz, OpaAuthzClient, TokenVerifier
 from app.config import Settings
 from app.domain.ports import ProfileJobSpec
 from app.domain.services import (
+    CallCtx,
     DatasetService,
+    ExportService,
     LineageService,
     OntologyService,
     ProfileService,
@@ -75,9 +78,11 @@ class Container:
     reporter: HttpCallbackReporter
     token_verifier: TokenVerifier
     authz: Any
+    export_runner: Any
     dataset_service: DatasetService
     version_service: VersionService
     profile_service: ProfileService
+    export_service: ExportService
     lineage_service: LineageService
     retention_service: RetentionService
     ontology_service: OntologyService
@@ -94,6 +99,7 @@ def build_container(
     session_factory=None,
     clock: Clock | None = None,
     runner=None,
+    export_runner=None,
 ) -> Container:
     settings = settings or Settings()
     clock = clock or Clock()
@@ -167,9 +173,28 @@ def build_container(
     dataset_service = DatasetService(deps)
     version_service = VersionService(deps)
     profile_service = ProfileService(deps)
+    export_service = ExportService(deps)
     lineage_service = LineageService(deps)
     ontology_service = OntologyService(deps)
     retention_service = RetentionService(deps)
+
+    # BRD 74 D1: the real export runner speaks HTTP to query-service (there is
+    # no local export machine to fall back to — see app/adapters/query_export.py).
+    async def _report_export(spec, body: dict) -> None:
+        await export_service.complete(
+            CallCtx(tenant_id=spec.tenant_id, actor=spec.actor, trace_id=spec.trace_id),
+            spec.export_id,
+            body,
+        )
+
+    if export_runner is None:
+        export_runner = QueryServiceExportRunner(
+            settings.query_service_url,
+            _report_export,
+            poll_interval_seconds=settings.export_poll_interval_seconds,
+            timeout_seconds=settings.export_timeout_seconds,
+        )
+    deps.export_runner_provider = lambda: export_runner
 
     reporter = HttpCallbackReporter()
     if runner is None:
@@ -207,9 +232,11 @@ def build_container(
         reporter=reporter,
         token_verifier=TokenVerifier(settings),
         authz=authz,
+        export_runner=export_runner,
         dataset_service=dataset_service,
         version_service=version_service,
         profile_service=profile_service,
+        export_service=export_service,
         lineage_service=lineage_service,
         retention_service=retention_service,
         ontology_service=ontology_service,

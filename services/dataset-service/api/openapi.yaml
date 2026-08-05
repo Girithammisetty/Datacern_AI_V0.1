@@ -76,6 +76,52 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Dataset" }
         "410": { $ref: "#/components/responses/Error" }
+  /datasets/{dataset_id}/exports:
+    post:
+      summary: >
+        Export a dataset VERSION as a downloadable artifact (BRD 74 D1).
+        Delegated to query-service — this runs
+        `SELECT * FROM {{dataset(name, version=n)}}` there and returns the signed
+        download link query-service minted, so there is one export machine, one
+        signing secret and one retention GC on the platform. Guarded by
+        `dataset.dataset.export`; the caller's bearer token is forwarded and
+        re-authorized by query-service (`query.execution.execute` /
+        `query.execution.export`).
+      parameters:
+        - { $ref: "#/components/parameters/DatasetId" }
+        - { name: Idempotency-Key, in: header, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:
+                  type: string
+                  default: csv
+                  description: >
+                    csv only. `parquet` returns 422: query-service, which owns
+                    the export path, answers parquet with NOT_IMPLEMENTED, and
+                    writing one here would be a second export machine.
+                version:
+                  type: integer
+                  minimum: 1
+                  description: defaults to the dataset's current version
+      responses:
+        "202": { description: "export operation {id, status, version_no, version_urn}" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /exports/{export_id}:
+    get:
+      summary: >
+        Export status + query-service's signed download_url and its expiry
+        (BRD 74 D1). RLS-scoped — another tenant's export id is a 404.
+      parameters:
+        - { name: export_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: export operation }
+        "404": { $ref: "#/components/responses/Error" }
   /datasets/{dataset_id}/consumers:
     get:
       summary: Downstream impact summary (DST-FR-063)

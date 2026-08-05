@@ -47,6 +47,7 @@ type Store interface {
 	CreateChart(ctx context.Context, c *domain.Chart, envs []event.Envelope) error
 	GetChart(ctx context.Context, tenant, id uuid.UUID) (*domain.Chart, error)
 	ListCharts(ctx context.Context, tenant, dashboardID uuid.UUID) ([]domain.Chart, error)
+	SearchCharts(ctx context.Context, tenant uuid.UUID, f domain.ChartSearchFilter) ([]domain.ChartSearchHit, error)
 	UpdateChart(ctx context.Context, c *domain.Chart, versionBump bool, expectVersion int, envs []event.Envelope) error
 	DeleteChart(ctx context.Context, tenant, id uuid.UUID, envs []event.Envelope) error
 	ChartAllowsCases(ctx context.Context, tenant, id uuid.UUID) (bool, error)
@@ -139,6 +140,8 @@ func (s *Server) Router() http.Handler {
 
 			// Charts.
 			r.Post("/dashboards/{id}/charts", s.handleCreateChart)
+			// Cross-dashboard chart search (BRD 74 D2).
+			r.Get("/charts", s.handleSearchCharts)
 			r.Get("/charts/{id}", s.handleGetChart)
 			r.Patch("/charts/{id}", s.handleUpdateChart)
 			r.Delete("/charts/{id}", s.handleDeleteChart)

@@ -94,6 +94,35 @@ class ProfileRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class DatasetExportRow(Base):
+    """BRD 74 D1 — async dataset export operations.
+
+    No artifact bytes and no expiry sweeper live here: the CSV is produced,
+    signed and retention-GC'd by query-service. This table only records which
+    dataset VERSION was exported and the signed URL query-service minted.
+    """
+
+    __tablename__ = "dataset_exports"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False, index=True)
+    dataset_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    version_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    version_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    version_urn: Mapped[str] = mapped_column(Text, nullable=False)
+    format: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    query_execution_id: Mapped[str | None] = mapped_column(Text)
+    download_url: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    row_count: Mapped[int | None] = mapped_column(BigInteger)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class LineageEdgeRow(Base):
     __tablename__ = "lineage_edges"
     __table_args__ = (
