@@ -65,7 +65,7 @@ def table_row(label: str) -> re.Pattern[str]:
     appears mid-row, and the label must fill its cell (no trailing text before the
     pipe) so "Services requiring migration" does not match "services".
     """
-    return re.compile(rf"^\s*\|\s*(?:{label})\s*\|\s*(\d{{1,3}})\s*\|", re.I)
+    return re.compile(rf"^\s*\|\s*(?:{label})\s*\|\s*(\d{{1,3}})\s*\|", re.IGNORECASE)
 
 
 def rules() -> list[tuple[str, int, re.Pattern[str], bool]]:
