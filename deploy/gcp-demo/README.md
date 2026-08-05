@@ -211,15 +211,35 @@ Keycloak, Temporal, MLflow, Ollama, Trino — the same components as `docker-com
 kubectl apply -k deploy/k8s/data-tier
 ```
 
+The `commonLabels is deprecated` warning from kustomize is expected and harmless.
+
+Pulling the model needs the Ollama pod actually running, so wait for it first — `exec` against
+a pod that is still `ContainerCreating` fails in a way that reads like the workload is missing:
+
 ```bash
-kubectl -n datacern exec deploy/ollama -- ollama pull llama3.2:3b
+kubectl -n datacern rollout status statefulset/ollama --timeout=300s
 ```
 
-Wait for it to settle before continuing — the app services will crashloop against a Postgres
-that isn't up yet.
+```bash
+kubectl -n datacern exec statefulset/ollama -- ollama pull llama3.2:3b
+```
+
+Note `statefulset/ollama`, **not** `deploy/ollama` — Ollama is a StatefulSet (it carries a
+PVC for the model weights), and `kubectl exec deploy/ollama` fails with
+`deployments.apps "ollama" not found`. The same goes for Postgres, Redpanda, MinIO,
+OpenSearch, ClickHouse and Iceberg REST; only Keycloak, MLflow, OPA, Redis, Temporal and
+Trino are Deployments. `kubectl apply -k` prints the kind for each, which is the quickest way
+to check.
+
+Then let the rest settle — the app services in step 9 will crashloop against a Postgres that
+is not up yet. This waits on Deployments only, so pair it with a look at the StatefulSets:
 
 ```bash
 kubectl -n datacern wait --for=condition=available --timeout=900s deploy --all
+```
+
+```bash
+kubectl -n datacern get statefulset,pod
 ```
 
 ## Step 8 — Secrets

@@ -72,6 +72,23 @@ if ! kubectl -n "$NS" get deploy >/dev/null 2>&1; then
   die "namespace '$NS' has no deployments — has the chart been installed? See README step 9"
 fi
 
+# StatefulSets FIRST, and separately. Half the data tier — Postgres, Redpanda,
+# MinIO, OpenSearch, ClickHouse, Iceberg REST, Ollama — is StatefulSets, and
+# `wait --for=condition=available` silently ignores them: that condition only
+# exists on Deployments, so `wait ... deploy --all` returns success while
+# Postgres is still starting. The app tier then crashloops against a database
+# that is not listening, which looks like an app bug and is not one.
+# StatefulSets have no Available condition at all, hence rollout status.
+say "waiting for the data tier (StatefulSets)"
+sts_ok=1
+while read -r sts; do
+  [[ -n "$sts" ]] || continue
+  if ! kubectl -n "$NS" rollout status "$sts" --timeout="${WORKLOAD_TIMEOUT}s" >/dev/null 2>&1; then
+    warn "not ready: $sts"; sts_ok=0
+  fi
+done < <(kubectl -n "$NS" get statefulset -o name 2>/dev/null)
+(( sts_ok )) && ok "data tier ready" || warn "data tier incomplete — app services may crashloop"
+
 say "waiting for workloads (timeout ${WORKLOAD_TIMEOUT}s)"
 if kubectl -n "$NS" wait --for=condition=available --timeout="${WORKLOAD_TIMEOUT}s" deploy --all >/dev/null 2>&1; then
   ok "all deployments available"
