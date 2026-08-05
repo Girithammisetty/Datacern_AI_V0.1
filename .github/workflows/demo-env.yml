@@ -44,9 +44,13 @@ on:
         default: status
         options: [status, up, down]
   schedule:
-    # 02:00 UTC daily. GitHub cron is always UTC — adjust for your timezone so
-    # this does not fire in the middle of someone's afternoon demo.
-    - cron: "0 2 * * *"
+    # 07:00 UTC daily = 02:00 EST / 03:00 EDT. GitHub cron is always UTC and has
+    # no timezone setting, so a fixed expression drifts an hour across DST.
+    # Picked a slot with margin on both sides of that shift rather than one that
+    # is correct only half the year: the failure this guards against is a demo
+    # environment left running for days, so being an hour off is harmless, and
+    # firing during someone's evening demo is not.
+    - cron: "0 7 * * *"
 
 concurrency:
   group: demo-env
