@@ -18,6 +18,15 @@ its downstream authority, see D-3) · part of the
 > that own the data and adds no datastore, at the cost of N calls per search and a
 > latency floor set by the slowest leg.
 
+**Delegation model ACCEPTED (2026-08-05).** "A read-tier tool may carry a
+scope-subset of the caller's own token to services it declared in advance" is the
+trust model this platform runs. It was flagged as an open decision at merge and
+has been accepted. The operational condition stands: do NOT run the seed
+registration in production until an internal caller exists — the tool is dormant
+today (run-level OBO tokens carry `*`, which delegation refuses, and agent-runtime
+has no MCP read-tool call site), so enablement should be a deliberate act rather
+than a default.
+
 **Audit (added 2026-08-05).** `ai.tool_invoked.v1` recorded a call that forwarded
 the caller's bearer identically to one that carried attribution only, so from the
 audit stream you could not tell whether a user token had left the gateway — the

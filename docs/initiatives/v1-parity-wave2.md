@@ -62,8 +62,13 @@ per-version `downstream_actions` declaration.
 - **Proved by mutation:** replacing the guard with `if true` fails
   `internal/enforce`. The tests are load-bearing, not merely passing.
 
-*Ask:* is "a read-tier tool may delegate a scope-subset of the caller's own token"
-the delegation model you want? That is the product decision this encodes.
+**ACCEPTED 2026-08-05.** "A read-tier tool may carry a scope-subset of the
+caller's own token to services it declared in advance" is the trust model this
+platform runs. The audit gap that was attached as a condition is closed — a
+delegated invocation now carries `delegated: true` + `delegated_actions`.
+*Operational condition:* the seed registration should not run in production until
+an internal caller exists; the tool is dormant today, so enablement should be
+deliberate rather than a default.
 
 ### Risk 3 · A BRD design was rejected mid-flight (BRD 74 D3) — **PARKED**
 The spec put a `search_entries` **projection inside bff-graphql**. That service has
