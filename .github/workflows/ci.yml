@@ -798,7 +798,16 @@ jobs:
       # tenant's derived projections (rbac in Redis, case index in OpenSearch) are
       # present. Fails fast with a clear signal instead of a cryptic e2e failure.
       - name: Health gate (make doctor)
+        id: doctor
         run: make doctor
+
+      # DECOUPLED journeys + suite (2026-08-05, second stage after the soaks):
+      # each journey asserts an INDEPENDENT slice of the product, so one
+      # journey's flake should cost exactly one red step — not skip the other
+      # journeys and the whole Playwright suite, which is what sequential
+      # default `if:` semantics did (a single timeout hid five checks per run).
+      # Every step below runs when the stack booted and passed the health gate,
+      # regardless of sibling outcomes; any failure still fails the job.
 
       # The flagship assertion, and the reason this job exists. Everything above
       # proves the stack BOOTS; this proves an approved AI decision actually
@@ -810,6 +819,7 @@ jobs:
       # that loop was completely dead while every other check in this file was
       # green, because they all check components and none checked the journey.
       - name: Governed write loop (make journey)
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' }}
         run: make journey
 
       # Realtime-case-streams add-on (slice 6): the priced add-on's full arc —
@@ -820,6 +830,7 @@ jobs:
       # state, cheap (~3min) relative to the Playwright suite, and if the
       # add-on's chain is broken the UI assertions add nothing.
       - name: Realtime case streams journey (make journey-streams)
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' }}
         run: make journey-streams
 
       # Learn flywheel (learning-loop slice 7): the compounding claim — signed
@@ -830,6 +841,7 @@ jobs:
       # than the Playwright suite, and if the flywheel is broken the UI
       # assertions add nothing.
       - name: Learn flywheel journey (make journey-learn)
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' }}
         run: make journey-learn
 
       # Schema-driven forms (slice 5): the customization claim — a customer
@@ -842,6 +854,7 @@ jobs:
       # journeys above: state-asserted, cheap, and a broken chain here makes the
       # UI assertions meaningless.
       - name: Schema-driven forms journey (make journey-forms)
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' }}
         run: make journey-forms
 
       # Governed FHIR bridge journey (fhir-bridge slice): the tenant's clinical
@@ -856,6 +869,7 @@ jobs:
       # relative to the Playwright suite, and a broken chain here makes the UI
       # assertions meaningless. Needs seed.py fhir_tools, which up.sh seeds.
       - name: Governed FHIR journey (make journey-fhir)
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' }}
         run: make journey-fhir
 
       # Pack conformance: the "28 production packs" claim, checked by INSTALLING
@@ -866,9 +880,11 @@ jobs:
       # roles, drift goes red for a human edit, and uninstall deletes what Core
       # can delete while honestly retaining what it cannot.
       - name: Pack conformance journey (make journey-packs)
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' }}
         run: make journey-packs
 
       - name: Run live-stack E2E suite (pnpm e2e:live)
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' }}
         working-directory: services/ui-web
         env:
           CI: "true"

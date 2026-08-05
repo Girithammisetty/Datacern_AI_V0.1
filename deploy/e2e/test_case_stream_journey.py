@@ -132,7 +132,7 @@ def main() -> int:  # noqa: PLR0911, PLR0915
     default_ws = psql("SELECT id FROM workspaces WHERE tenant_id = "
                       f"'{tenant}' ORDER BY created_at LIMIT 1", db="rbac")
     authz_live = False
-    for _ in range(30):
+    for _ in range(60):
         lr = api("GET", f"{c.INGESTION}/api/v1/case-streams", tok("u-dept-a", default_ws))
         if lr.status_code == 200:
             authz_live = True
@@ -164,7 +164,7 @@ def main() -> int:  # noqa: PLR0911, PLR0915
     # "entitled, and that stream id does not exist" — the gate opened without
     # us creating anything.
     opened = False
-    for _ in range(30):
+    for _ in range(60):
         pr = api("POST", f"{c.INGESTION}/api/v1/case-streams/{uuid.uuid4()}/resume",
                  tok("u-dept-a", default_ws))
         if pr.status_code == 404:
@@ -201,7 +201,7 @@ def main() -> int:  # noqa: PLR0911, PLR0915
     r = api("POST", f"{c.RBAC}/api/v1/admin/projection/rebuild?tenant={tenant}", su, {})
     check(r.status_code in (200, 202), "workspace owner grants + projection rebuild")
     granted = False
-    for _ in range(30):
+    for _ in range(60):
         pr = api("GET", f"{c.CASE}/api/v1/case-triggers", tok_a)
         if pr.status_code == 200:
             granted = True
@@ -279,7 +279,7 @@ def main() -> int:  # noqa: PLR0911, PLR0915
         return bail("run_now accepted", str(e))
 
     ids: list[str] = []
-    for _ in range(36):  # ingestion + kafka + trigger apply: allow ~3 min
+    for _ in range(60):  # ingestion + kafka + trigger apply: allow ~5 min (CI-load headroom)
         ids = dept_case_ids()
         if ids:
             break
@@ -319,7 +319,7 @@ def main() -> int:  # noqa: PLR0911, PLR0915
     # CAN see the case", which is a security-shaped alarm for an infrastructure
     # hiccup. Search readiness is now its own check, so the two cannot be confused.
     lb = api("GET", f"{c.CASE}/api/v1/cases?limit=50", tok_b)
-    for _ in range(30):
+    for _ in range(60):
         if lb.status_code != 503:
             break
         time.sleep(2)
@@ -344,7 +344,7 @@ def main() -> int:  # noqa: PLR0911, PLR0915
     except RuntimeError as e:
         return bail("second run_now accepted", str(e))
     grew = False
-    for _ in range(36):
+    for _ in range(60):
         ids = dept_case_ids()
         if len(ids) >= 2:
             grew = True
@@ -366,7 +366,7 @@ def main() -> int:  # noqa: PLR0911, PLR0915
             su)
     check(r.status_code in (200, 204), "override removed (simulated lapse)", r.text[:120])
     lapsed = False
-    for _ in range(30):
+    for _ in range(60):
         pr = api("POST", f"{c.INGESTION}/api/v1/case-streams/{stream['id']}/resume", tok_a)
         if pr.status_code in (403, 503):
             lapsed = True
