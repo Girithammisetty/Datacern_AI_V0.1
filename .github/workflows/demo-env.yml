@@ -1,0 +1,171 @@
+# Datacern — start/stop the GCP demo environment from the Actions tab.
+#
+# The demo VM (deploy/gcp-demo/) costs nothing while stopped and ~$0.27/hour while
+# running. The failure mode that matters is therefore not a bad deploy — it is
+# someone starting it for a customer call on Tuesday and noticing on Friday. So
+# this workflow does two things:
+#
+#   workflow_dispatch  a Start / Stop / Status button, so nobody needs gcloud
+#                      installed or a project role to run a demo.
+#   schedule           an unconditional nightly stop. It is not a cleanup for the
+#                      Start action; it is the backstop for every path that
+#                      forgets, including a laptop that ran demo-up.sh directly.
+#
+# Reuses the keyless auth cd-gcp.yml already established — no cloud keys stored.
+#
+# Required GitHub secrets (same as cd-gcp.yml):
+#   GCP_WIF_PROVIDER   projects/NNN/locations/global/workloadIdentityPools/POOL/providers/PROVIDER
+#   GCP_DEPLOY_SA      service account email
+# Required variables:
+#   GCP_PROJECT_ID     target project id
+# Optional variables:
+#   GCP_DEMO_ZONE      default: us-central1-a
+#   GCP_DEMO_VM        default: datacern-demo
+#
+# IAM: the service account needs compute.instances.{start,stop,get} on this
+# instance. roles/compute.instanceAdmin.v1 covers it; scope it to the single
+# instance rather than the project — this identity should not be able to touch
+# anything else, and a demo-env workflow is a soft target.
+#
+# NOTE: GitHub disables scheduled workflows on repositories with no activity for
+# 60 days. On a quiet repo the nightly stop is exactly what goes silently away,
+# so treat the schedule as a safety net, not a guarantee — check the billing
+# dashboard occasionally regardless.
+
+name: demo-env
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "What to do with the demo environment"
+        required: true
+        type: choice
+        default: status
+        options: [status, up, down]
+  schedule:
+    # 02:00 UTC daily. GitHub cron is always UTC — adjust for your timezone so
+    # this does not fire in the middle of someone's afternoon demo.
+    - cron: "0 2 * * *"
+
+concurrency:
+  group: demo-env
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # WIF
+
+jobs:
+  control:
+    runs-on: ubuntu-latest
+    env:
+      ZONE: ${{ vars.GCP_DEMO_ZONE || 'us-central1-a' }}
+      VM: ${{ vars.GCP_DEMO_VM || 'datacern-demo' }}
+      # A scheduled run has no inputs, so it resolves to the empty string and
+      # falls through to 'down'. Written as an explicit fallback rather than
+      # `if: github.event_name == 'schedule'` branching so there is exactly one
+      # code path and the scheduled behaviour is readable in one line.
+      ACTION: ${{ github.event.inputs.action || 'down' }}
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Resolve current state
+        id: state
+        run: |
+          set -euo pipefail
+          status="$(gcloud compute instances describe "$VM" --zone "$ZONE" \
+                     --format='value(status)' 2>/dev/null || echo MISSING)"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "Instance '$VM' in $ZONE is: $status"
+
+      - name: Start
+        if: env.ACTION == 'up'
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.state.outputs.status }}" = "MISSING" ]; then
+            echo "::error::Instance '$VM' does not exist. Create it first — see deploy/gcp-demo/README.md step 2."
+            exit 1
+          fi
+          if [ "${{ steps.state.outputs.status }}" = "RUNNING" ]; then
+            echo "Already running — nothing to do."
+          else
+            gcloud compute instances start "$VM" --zone "$ZONE" --quiet
+          fi
+          ip="$(gcloud compute instances describe "$VM" --zone "$ZONE" \
+                 --format='value(networkInterfaces[0].accessConfigs[0].natIP)')"
+          # The VM being RUNNING is not the platform being up: k3s still has to
+          # start, then the data tier, then the app services. That is another few
+          # minutes, and this job cannot observe it without cluster credentials.
+          # Say so rather than implying the environment is ready.
+          {
+            echo "### Demo environment starting :rocket:"
+            echo ""
+            echo "VM \`$VM\` is RUNNING at \`$ip\`."
+            echo ""
+            echo "The platform needs a further **2–4 minutes** for k3s and the data tier."
+            echo "Run \`deploy/gcp-demo/demo-up.sh\` locally to block until workloads are Ready,"
+            echo "or just wait and load the UI."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop
+        if: env.ACTION == 'down'
+        run: |
+          set -euo pipefail
+          case "${{ steps.state.outputs.status }}" in
+            MISSING)
+              echo "Instance does not exist — nothing to stop."
+              echo "Instance \`$VM\` does not exist — nothing to stop." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            TERMINATED)
+              echo "Already stopped."
+              echo "Demo environment was already stopped." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              # No graceful app-tier scale-down here: that needs cluster access
+              # this job deliberately does not have. demo-down.sh does it when run
+              # locally. For a nightly backstop, stopping the instance outright is
+              # the correct trade — an ungraceful stop is recoverable, a month of
+              # forgotten uptime is just a bill.
+              gcloud compute instances stop "$VM" --zone "$ZONE" --quiet
+              echo "Stopped."
+              {
+                echo "### Demo environment stopped :moon:"
+                echo ""
+                echo "Compute billing has ceased. Disk and seeded state are preserved."
+                if [ "${{ github.event_name }}" = "schedule" ]; then
+                  echo ""
+                  echo "_Stopped by the nightly backstop._"
+                fi
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
+
+      - name: Status
+        if: env.ACTION == 'status'
+        run: |
+          set -euo pipefail
+          s="${{ steps.state.outputs.status }}"
+          {
+            echo "### Demo environment: \`$s\`"
+            echo ""
+            case "$s" in
+              RUNNING)
+                ip="$(gcloud compute instances describe "$VM" --zone "$ZONE" \
+                       --format='value(networkInterfaces[0].accessConfigs[0].natIP)')"
+                echo ":green_circle: Running at \`$ip\` — **billing at roughly \$0.27/hour.**"
+                echo ""
+                echo "Run this workflow with \`down\` when you are finished."
+                ;;
+              TERMINATED) echo ":white_circle: Stopped. Disk only — a few dollars a month." ;;
+              MISSING)    echo ":x: Instance \`$VM\` does not exist in \`$ZONE\`. See \`deploy/gcp-demo/README.md\`." ;;
+              *)          echo ":yellow_circle: Transitional state \`$s\` — re-run in a moment." ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
