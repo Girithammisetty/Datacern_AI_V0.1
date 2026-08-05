@@ -572,6 +572,13 @@ jobs:
         with: { python-version: "3.12" }
       - name: UI -> BFF -> downstream wiring audit
         run: python3 tools/wiring/audit_ui_wiring.py
+      # The /solutions catalog is GENERATED from packs/*/pack.yaml — a stale or
+      # hand-edited copy means the marketing page claims something the shipped
+      # manifests don't. Same single-source-of-truth rule as the setup matrix.
+      - name: Marketing pack catalog in sync with pack manifests
+        run: |
+          pip install -q pyyaml
+          python3 tools/marketing/gen_pack_catalog.py --check
 
   no-stub-gate:
     needs: setup
