@@ -10,6 +10,25 @@ import time
 import uuid
 from datetime import UTC, datetime
 
+#: LIKE escape character, paired with ``escape=LIKE_ESCAPE`` at every call site.
+LIKE_ESCAPE = "\\"
+
+
+def like_contains(term: str) -> str:
+    """Turn a user search term into a contains-style ILIKE pattern, escaping the
+    LIKE metacharacters so a term containing ``%`` or ``_`` matches LITERALLY.
+
+    Without this, ``filter[name]=100%`` matched every template and ``a_b`` matched
+    ``axb`` — the search silently returned wrong results rather than failing, which
+    is the harder kind of bug to notice. Mirrors experiment-service's identical
+    helper (BRD 74 D3); kept per-service because there is no shared Python lib for
+    store-layer helpers.
+    """
+    escaped = (term.replace(LIKE_ESCAPE, LIKE_ESCAPE * 2)
+               .replace("%", LIKE_ESCAPE + "%")
+               .replace("_", LIKE_ESCAPE + "_"))
+    return f"%{escaped}%"
+
 
 def uuid7() -> uuid.UUID:
     """RFC 9562 UUIDv7 (time-ordered)."""

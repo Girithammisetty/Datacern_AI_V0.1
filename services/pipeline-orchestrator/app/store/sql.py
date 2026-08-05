@@ -46,7 +46,7 @@ from app.store.orm import (
     TemplateRow,
     VersionRow,
 )
-from app.utils import decode_cursor, encode_cursor, new_id, utcnow
+from app.utils import LIKE_ESCAPE, decode_cursor, encode_cursor, like_contains, new_id, utcnow
 
 _T_FIELDS = [f.name for f in dataclasses.fields(PipelineTemplate)]
 _V_FIELDS = [f.name for f in dataclasses.fields(TemplateVersion)]
@@ -126,7 +126,8 @@ class SqlTemplateRepo:
         if not filters.include_archived:
             stmt = stmt.where(TemplateRow.deleted_at.is_(None))
         if filters.name:
-            stmt = stmt.where(TemplateRow.name.ilike(f"%{filters.name}%"))
+            stmt = stmt.where(
+                TemplateRow.name.ilike(like_contains(filters.name), escape=LIKE_ESCAPE))
         if filters.pipeline_type:
             from app.domain.enums import pipeline_type_from_str
             stmt = stmt.where(
