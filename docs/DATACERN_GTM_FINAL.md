@@ -95,4 +95,29 @@ Unchanged, and enforced by the honesty strip on `/security`:
 4. No win-rate / cost-saving benchmarks until a design partner's data
    produces them, attributed as such.
 
+## 6 · Refinements adopted 2026-08-05 (evening)
+
+A single-vertical "Datacern Disputes" wedge was drafted and explicitly
+rejected by the founder ("lets not restrict as it can solve many similar
+problems") — multi-vertical stands. From that draft, these refinements WERE
+adopted:
+
+1. **Category: "AI adjudication."** Not BI, not case management, not
+   "decision intelligence." We sell a cleared queue. The word "platform"
+   never appears in rendered marketing copy (generated pack text that uses
+   "platforms" to mean marketplace businesses is exempt).
+2. **Engine named in the footer.** Every marketing page footer reads
+   "Powered by the Datacern adjudication engine."
+3. **Entry offer, code-backed:** "Connect your queue's data — we'll score
+   your last 90 days free." Fulfilled by the shipped ingestion + scoring
+   path; disputes named as the *fastest start* (processor data), never the
+   identity.
+4. **Pricing: performance-first where the queue recovers revenue** (share of
+   recovered revenue, flat per-cleared-case option, enterprise floor),
+   governed-decision metering elsewhere, hard budget cap on everything.
+   No percentages or rates printed — agreed per portfolio; the free scan is
+   the shared baseline.
+5. **Launch gates unchanged** (§5): no number on the site the evidence
+   ledger can't back.
+
 *If this document and the code disagree, the code is right.*

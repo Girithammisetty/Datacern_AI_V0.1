@@ -38,7 +38,7 @@ export const SOLUTIONS_CONTENT = {
       ["Roles & guardrails", "Who may see, draft, approve — with four-eyes where your policy demands it."],
     ],
     note:
-      "Datasets in a pack are binding contracts resolved to YOUR real data at install. Cases come from your rows, never from seeds — and anything the platform can't yet materialize is recorded honestly in the install ledger, not faked.",
+      "Datasets in a pack are binding contracts resolved to YOUR real data at install. Cases come from your rows, never from seeds — and anything the engine can't yet materialize is recorded honestly in the install ledger, not faked.",
   },
 
   catalog: {

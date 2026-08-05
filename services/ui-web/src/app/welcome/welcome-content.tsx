@@ -22,6 +22,7 @@ import {
   Users,
   Workflow,
   X,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { DatacernLogo } from "@/components/brand/DatacernLogo";
@@ -470,6 +471,29 @@ export default function WelcomeContent() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* the entry offer — your own numbers, free */}
+      <section className="mx-auto max-w-6xl px-6 py-14">
+        <Reveal>
+          <div className="mk-glass mk-ring mk-glow flex flex-col items-start justify-between gap-6 rounded-2xl p-8 sm:flex-row sm:items-center">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
+                <Zap className="size-3.5" />
+                {C.offer.eyebrow}
+              </span>
+              <h2 className="mt-4 text-balance text-2xl font-bold tracking-tight md:text-3xl">
+                {C.offer.title}
+              </h2>
+              <p className="mt-3 max-w-2xl text-pretty leading-relaxed text-muted-foreground">{C.offer.body}</p>
+              <p className="mt-3 text-sm font-medium text-foreground">{C.offer.fastest}</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">{C.offer.note}</p>
+            </div>
+            <Button size="lg" className="shrink-0" onClick={() => setDemoOpen(true)}>
+              {C.offer.action} <ArrowRight className="size-4" />
+            </Button>
+          </div>
+        </Reveal>
       </section>
 
       {/* industries — the primary way in */}
