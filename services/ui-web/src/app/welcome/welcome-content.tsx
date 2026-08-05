@@ -27,9 +27,10 @@ import Link from "next/link";
 import { DatacernLogo } from "@/components/brand/DatacernLogo";
 import { ArchitectureDiagrams } from "@/components/marketing/ArchitectureDiagrams";
 import { DecisionLoopDiagram } from "@/components/marketing/DecisionLoopDiagram";
+import { MarketingShell } from "@/components/marketing/MarketingShell";
+import { Reveal } from "@/components/marketing/Reveal";
 import { Button } from "@/components/ui/button";
 import { SOLUTION_PACK_COUNT } from "@/content/marketing/packs.gen";
-import { MARKETING_SHELL } from "@/content/marketing/shell";
 import {
   WELCOME_CONTENT as C,
   type WelcomeIndustry,
@@ -37,9 +38,10 @@ import {
 } from "@/content/marketing/welcome";
 
 /* Pure renderer: every sentence comes from src/content/marketing/welcome.ts.
- * This file owns only structure, icons (looked up by config keys) and the
- * illustrative product mocks — which are diagram components, labeled as mocks
- * where rendered. */
+ * Same design system as /solutions and /security — MarketingShell chrome, app
+ * theme tokens (light/dark aware), plain bordered cards. This file owns only
+ * structure, icons (looked up by config keys) and the illustrative product
+ * mocks, which are labeled as mocks where rendered. */
 
 type IconType = React.ComponentType<{ className?: string }>;
 
@@ -63,57 +65,13 @@ const INDUSTRY_ICONS: Record<string, IconType> = {
 };
 
 /* ------------------------------------------------------------------ */
-/* scroll-reveal (dependency-free)                                     */
-/* ------------------------------------------------------------------ */
-function Reveal({
-  children,
-  className = "",
-  delay = 0,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  delay?: number;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) {
-          setShown(true);
-          io.disconnect();
-        }
-      },
-      { threshold: 0.12 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-  return (
-    <div
-      ref={ref}
-      style={{ transitionDelay: `${delay}ms` }}
-      className={`wr-reveal ${shown ? "wr-in" : ""} ${className}`}
-    >
-      {children}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /* small illustrative product mocks (divs, not screenshots)            */
 /* ------------------------------------------------------------------ */
-function Dot({ className = "" }: { className?: string }) {
-  return <span className={`inline-block size-1.5 rounded-full ${className}`} />;
-}
-
 function HeroMock() {
   return (
-    <div className="wr-float relative w-full max-w-md">
-      <div className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/30 via-[#a78bfa]/25 to-[#8ab4ff]/20 blur-3xl" />
-      <div className="wr-glass wr-ring wr-glow rounded-2xl p-5">
+    <div className="mk-float relative w-full max-w-md">
+      <div className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-[radial-gradient(closest-side,hsl(var(--primary)/0.25),transparent)] blur-3xl" />
+      <div className="mk-glass mk-ring mk-glow rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <Bot className="size-4 text-primary" />
@@ -133,7 +91,7 @@ function HeroMock() {
             <span className="font-medium text-foreground">High</span>
           </div>
           <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div className="wr-grow h-full rounded-full bg-primary" />
+            <div className="mk-grow h-full rounded-full bg-primary" />
           </div>
         </div>
         <div className="mt-4 space-y-1.5">
@@ -165,13 +123,13 @@ function CapVisual({ k }: { k: string }) {
   if (k === "agents")
     return (
       <div className="grid grid-cols-2 gap-2">
-        {["Triage", "Analytics", "ML Engineer", "Governance"].map((a, i) => (
+        {["Triage", "Analytics", "ML Engineer", "Governance"].map((a) => (
           <div key={a} className="flex items-center gap-2 rounded-lg border border-border/70 bg-background/70 p-3 text-xs">
             <span className="flex size-6 items-center justify-center rounded-md bg-primary/10 text-primary">
               <Bot className="size-3.5" />
             </span>
             <span className="font-medium">{a}</span>
-            <Dot className={`ml-auto ${i % 2 ? "bg-primary" : "bg-[#a78bfa]"} wr-pulse`} />
+            <span className="mk-pulse ml-auto inline-block size-1.5 rounded-full bg-primary" />
           </div>
         ))}
       </div>
@@ -232,7 +190,11 @@ function CapVisual({ k }: { k: string }) {
       <div>
         <div className="flex items-end gap-1.5">
           {[45, 70, 40, 90, 60, 80].map((h, i) => (
-            <div key={i} className="flex-1 rounded-t bg-primary/70" style={{ height: `${h}px` }} />
+            <div
+              key={i}
+              className="mk-rise flex-1 rounded-t bg-primary/70"
+              style={{ height: `${h}px`, animationDelay: `${i * 90}ms` }}
+            />
           ))}
         </div>
         <div className="mt-2 grid grid-cols-3 gap-2">
@@ -291,7 +253,7 @@ const TAG_CLASS: Record<WelcomeWfRow[2], string> = {
 function WfRowItem({ row }: { row: WelcomeWfRow }) {
   const [id, desc, tag, initials] = row;
   return (
-    <div className="flex items-center gap-2.5 rounded-lg border border-border/70 bg-background/60 px-2.5 py-2 transition-transform hover:translate-x-0.5">
+    <div className="flex items-center gap-2.5 rounded-lg border border-border/70 bg-background/60 px-2.5 py-2">
       <span className="w-[4.75rem] shrink-0 font-mono text-[11px] font-semibold text-foreground">{id}</span>
       <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{desc}</span>
       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${TAG_CLASS[tag]}`}>{TAG_LABEL[tag]}</span>
@@ -328,7 +290,7 @@ function IndustryShipsCard({ ind }: { ind: WelcomeIndustry }) {
   const seg = ind.segments[segIdx];
 
   return (
-    <div className="wr-glass wr-ring rounded-2xl p-6 shadow-[0_24px_70px_-40px_hsl(var(--primary)/0.5)]">
+    <div className="mk-glass mk-ring rounded-2xl p-6 shadow-[0_24px_70px_-40px_hsl(var(--primary)/0.4)]">
       {ind.segments.length > 1 && (
         <div role="tablist" aria-label={`${ind.name} sub-verticals`} className="flex flex-wrap gap-1.5">
           {ind.segments.map((s, i) => (
@@ -377,7 +339,7 @@ function IndustryShipsCard({ ind }: { ind: WelcomeIndustry }) {
       </div>
 
       {view === "solutions" ? (
-        <ul key={seg.id} className="wr-swap mt-5 space-y-4">
+        <ul key={seg.id} className="mk-swap mt-5 space-y-4">
           {seg.useCases.map(([name, body]) => (
             <li key={name} className="flex gap-3">
               <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -391,21 +353,13 @@ function IndustryShipsCard({ ind }: { ind: WelcomeIndustry }) {
           ))}
         </ul>
       ) : (
-        <div key={seg.id} className="wr-swap mt-5">
-          {/* Rule #1: the stat tiles below are a product mock, and the rendered
-           * page must say so — not just this comment. */}
+        <div key={seg.id} className="mk-swap mt-5">
+          {/* Rule #1: the rows below are a product mock, and the rendered page
+           * must say so — not just this comment. No invented stats, ever. */}
           <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
             {C.spotlights.mockLabel}
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {seg.workflow.kpis.map(([label, value]) => (
-              <div key={label} className="rounded-lg border border-border/70 bg-background/60 px-2 py-2 text-center">
-                <div className="text-sm font-bold text-foreground">{value}</div>
-                <div className="mt-0.5 text-[10px] uppercase leading-tight tracking-wide text-muted-foreground">{label}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 space-y-2">
+          <div className="space-y-2">
             {seg.workflow.rows.map((r) => (
               <WfRowItem key={r[0]} row={r} />
             ))}
@@ -439,67 +393,26 @@ export default function WelcomeContent() {
   const Cap = C.caps[tab];
 
   return (
-    <main id="main" className="relative isolate min-h-screen bg-background text-foreground">
-      <style>{WR_CSS}</style>
-
-      {/* page-wide next-gen backdrop: deep gradient wash + subtle grid + drifting aurora */}
-      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(80rem_50rem_at_50%_-10%,hsl(var(--primary)/0.12),transparent_60%)]" />
-        <div className="wr-grid absolute inset-0" />
-        <div className="wr-aurora absolute -top-40 left-1/2 h-[38rem] w-[70rem] -translate-x-1/2 rounded-full opacity-60" />
-      </div>
-
-      {/* header */}
-      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2.5">
-            <DatacernLogo className="size-8" />
-            <span className="text-lg font-bold tracking-tight">{MARKETING_SHELL.product}</span>
-          </div>
-          <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
-            {C.header.anchors.map((n) =>
-              n.href.startsWith("#") ? (
-                <a key={n.href} href={n.href} className="transition-colors hover:text-foreground">
-                  {n.label}
-                </a>
-              ) : (
-                <Link key={n.href} href={n.href} className="transition-colors hover:text-foreground">
-                  {n.label}
-                </Link>
-              ),
-            )}
-          </nav>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/login"
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {C.header.signIn}
-            </Link>
-            <Button onClick={() => setDemoOpen(true)}>{C.header.demoCta}</Button>
-          </div>
-        </div>
-      </header>
-
+    <MarketingShell active="/welcome">
       {/* hero */}
-      <section className="relative overflow-hidden">
-        <div aria-hidden className="wr-mesh pointer-events-none absolute inset-0 -z-10" />
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 pb-20 pt-14 md:grid-cols-2 md:pt-20">
+      <section className="relative overflow-hidden border-b border-border/60">
+        <div aria-hidden className="mk-mesh pointer-events-none absolute inset-0 -z-10" />
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 pb-16 pt-12 md:grid-cols-2 md:pt-16">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
               <Sparkles className="size-3.5" />
               {C.hero.eyebrow}
             </span>
-            <h1 className="wr-glowtext mt-6 text-balance text-4xl font-bold leading-[1.03] tracking-tight md:text-6xl">
+            <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.05] tracking-tight md:text-5xl">
               {C.hero.headline.line1}
               <br />
               {C.hero.headline.line2Lead}
-              <span className="wr-grad bg-clip-text text-transparent">{C.hero.headline.line2Accent}</span>
+              <span className="mk-grad">{C.hero.headline.line2Accent}</span>
             </h1>
             <p className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
               {C.hero.sub}
             </p>
-            <div className="mt-9 flex flex-wrap items-center gap-3">
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button size="lg" onClick={() => setDemoOpen(true)}>
                 {C.header.demoCta} <ArrowRight className="size-4" />
               </Button>
@@ -532,16 +445,16 @@ export default function WelcomeContent() {
           </div>
         </div>
 
-        {/* moving agent roster — the agentic workforce */}
-        <div className="border-y border-border/60 bg-card/40 py-4">
-          <div className="mx-auto max-w-6xl overflow-hidden px-6">
+        {/* agent roster — the agentic workforce */}
+        <div className="border-t border-border/60 bg-card/40 py-4">
+          <div className="mx-auto max-w-6xl px-6">
             <div className="flex items-center gap-3">
               <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-primary">
                 <Sparkles className="size-3.5" />
                 {C.agentsMarquee.eyebrow}
               </span>
-              <div className="wr-marquee-wrap flex-1">
-                <div className="wr-marquee flex gap-2">
+              <div className="mk-marquee-wrap flex-1">
+                <div className="mk-marquee flex gap-2">
                   {[...C.agentsMarquee.agents, ...C.agentsMarquee.agents].map(([name, role], i) => (
                     <span
                       key={i}
@@ -560,49 +473,48 @@ export default function WelcomeContent() {
       </section>
 
       {/* industries — the primary way in */}
-      <section id="industries" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
+      <section id="industries" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-16">
         <Reveal>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
-            <Sparkles className="size-3.5" />
-            {C.industriesIntro.eyebrow}
-          </span>
-          <h2 className="mt-5 text-balance text-3xl font-bold tracking-tight md:text-4xl">
-            {C.industriesIntro.title}
-          </h2>
-          <p className="mt-3 max-w-2xl text-muted-foreground">{C.industriesIntro.sub}</p>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
+          <Sparkles className="size-3.5" />
+          {C.industriesIntro.eyebrow}
+        </span>
+        <h2 className="mt-5 text-balance text-3xl font-bold tracking-tight md:text-4xl">
+          {C.industriesIntro.title}
+        </h2>
+        <p className="mt-3 max-w-2xl text-muted-foreground">{C.industriesIntro.sub}</p>
         </Reveal>
 
         <div className="mt-9 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           {C.industriesIntro.flagshipLabel}
         </div>
         <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          {C.industries.map((ind, i) => {
+          {C.industries.map((ind) => {
             const Icon = INDUSTRY_ICONS[ind.id] ?? Building2;
             return (
-              <Reveal key={ind.id} delay={(i % 2) * 80}>
-                <a
-                  href={`#ind-${ind.id}`}
-                  className="group relative flex h-full flex-col rounded-2xl wr-glass wr-ring p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_28px_80px_-30px_hsl(var(--primary)/0.6)]"
-                >
-                  <div className="flex items-start justify-between">
-                    <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                      <Icon className="size-6" />
+              <a
+                key={ind.id}
+                href={`#ind-${ind.id}`}
+                className="group relative flex h-full flex-col rounded-2xl mk-glass mk-ring p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_28px_80px_-30px_hsl(var(--primary)/0.5)]"
+              >
+                <div className="flex items-start justify-between">
+                  <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                    <Icon className="size-6" />
+                  </span>
+                  <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                </div>
+                <h3 className="mt-4 text-lg font-bold tracking-tight">{ind.name}</h3>
+                <div className="text-xs font-medium uppercase tracking-wide text-primary">{ind.who}</div>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{ind.tag}</p>
+                {/* sub-vertical preview — the real navigation inside this industry */}
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {ind.segments.map((s) => (
+                    <span key={s.id} className="rounded-full border border-border/70 bg-background/60 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      {s.name}
                     </span>
-                    <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-                  </div>
-                  <h3 className="mt-4 text-lg font-bold tracking-tight">{ind.name}</h3>
-                  <div className="text-xs font-medium uppercase tracking-wide text-primary">{ind.who}</div>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{ind.tag}</p>
-                  {/* sub-vertical preview — the real navigation inside this industry */}
-                  <div className="mt-4 flex flex-wrap gap-1.5">
-                    {ind.segments.map((s) => (
-                      <span key={s.id} className="rounded-full border border-border/70 bg-background/60 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        {s.name}
-                      </span>
-                    ))}
-                  </div>
-                </a>
-              </Reveal>
+                  ))}
+                </div>
+              </a>
             );
           })}
         </div>
@@ -639,8 +551,8 @@ export default function WelcomeContent() {
       </section>
 
       {/* capabilities showcase (interactive tabs) */}
-      <section id="capabilities" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
-        <Reveal>
+      <section id="capabilities" className="border-t border-border/60 bg-card/40">
+        <div className="mx-auto max-w-6xl scroll-mt-20 px-6 py-16">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
             <Cpu className="size-3.5" />
             {C.capabilitiesIntro.eyebrow}
@@ -649,171 +561,162 @@ export default function WelcomeContent() {
             {C.capabilitiesIntro.title}
           </h2>
           <p className="mt-3 max-w-2xl text-muted-foreground">{C.capabilitiesIntro.sub}</p>
-        </Reveal>
 
-        <div className="mt-10 grid gap-8 lg:grid-cols-[1.1fr_1fr]">
-          {/* tab list */}
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            {C.caps.map((c, i) => {
-              const Icon = CAP_ICONS[c.key];
-              const active = i === tab;
-              return (
-                <button
-                  key={c.key}
-                  onMouseEnter={() => {
-                    setAuto(false);
-                    setTab(i);
-                  }}
-                  onClick={() => {
-                    setAuto(false);
-                    setTab(i);
-                  }}
-                  className={`group rounded-xl border p-4 text-left transition-all ${
-                    active
-                      ? "border-primary/50 bg-primary/5 shadow-sm"
-                      : "border-border/70 bg-card hover:border-primary/30"
-                  }`}
-                >
-                  <span
-                    className={`flex size-9 items-center justify-center rounded-lg transition-colors ${
-                      active ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+          <div className="mt-10 grid gap-8 lg:grid-cols-[1.1fr_1fr]">
+            {/* tab list */}
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {C.caps.map((c, i) => {
+                const Icon = CAP_ICONS[c.key];
+                const active = i === tab;
+                return (
+                  <button
+                    key={c.key}
+                    onMouseEnter={() => {
+                      setAuto(false);
+                      setTab(i);
+                    }}
+                    onClick={() => {
+                      setAuto(false);
+                      setTab(i);
+                    }}
+                    className={`group rounded-xl border p-4 text-left transition-colors ${
+                      active
+                        ? "border-primary/50 bg-primary/5 shadow-sm"
+                        : "border-border/70 bg-card hover:border-primary/30"
                     }`}
                   >
-                    <Icon className="size-5" />
-                  </span>
-                  <div className="mt-3 text-sm font-semibold">{c.title}</div>
-                  <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{c.eyebrow}</div>
-                </button>
-              );
-            })}
-          </div>
+                    <span
+                      className={`flex size-9 items-center justify-center rounded-lg transition-colors ${
+                        active ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+                      }`}
+                    >
+                      <Icon className="size-5" />
+                    </span>
+                    <div className="mt-3 text-sm font-semibold">{c.title}</div>
+                    <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{c.eyebrow}</div>
+                  </button>
+                );
+              })}
+            </div>
 
-          {/* active panel */}
-          <div className="wr-glass wr-ring wr-glow relative overflow-hidden rounded-2xl p-7">
-            <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-primary/20 blur-2xl" />
-            <div aria-hidden className="pointer-events-none absolute -bottom-16 -left-16 size-48 rounded-full bg-[#a78bfa]/20 blur-2xl" />
-            <div key={Cap.key} className="wr-swap relative">
-              <div className="text-xs font-semibold uppercase tracking-widest text-primary">{Cap.eyebrow}</div>
-              <h3 className="mt-2 text-xl font-bold tracking-tight">{Cap.title}</h3>
-              <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">{Cap.body}</p>
-              <ul className="mt-4 space-y-1.5">
-                {Cap.points.map((p) => (
-                  <li key={p} className="flex items-start gap-2 text-sm">
-                    <Check className="mt-0.5 size-4 shrink-0 text-primary" />
-                    <span className="text-muted-foreground">{p}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-6 rounded-xl border border-border/60 bg-background/60 p-4">
-                <CapVisual k={Cap.key} />
+            {/* active panel */}
+            <div className="mk-glass mk-ring mk-glow relative overflow-hidden rounded-2xl p-7">
+              <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-primary/15 blur-2xl" />
+              <div key={Cap.key} className="mk-swap relative">
+                <div className="text-xs font-semibold uppercase tracking-widest text-primary">{Cap.eyebrow}</div>
+                <h3 className="mt-2 text-xl font-bold tracking-tight">{Cap.title}</h3>
+                <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">{Cap.body}</p>
+                <ul className="mt-4 space-y-1.5">
+                  {Cap.points.map((p) => (
+                    <li key={p} className="flex items-start gap-2 text-sm">
+                      <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                      <span className="text-muted-foreground">{p}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-6 rounded-xl border border-border/60 bg-background/60 p-4">
+                  <CapVisual k={Cap.key} />
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* progress dots */}
-        <div className="mt-6 flex items-center justify-center gap-1.5">
-          {C.caps.map((c, i) => (
-            <button
-              key={c.key}
-              aria-label={c.title}
-              onClick={() => {
-                setAuto(false);
-                setTab(i);
-              }}
-              className={`h-1.5 rounded-full transition-all ${i === tab ? "w-6 bg-primary" : "w-1.5 bg-border"}`}
-            />
-          ))}
+          {/* progress dots */}
+          <div className="mt-6 flex items-center justify-center gap-1.5">
+            {C.caps.map((c, i) => (
+              <button
+                key={c.key}
+                aria-label={c.title}
+                onClick={() => {
+                  setAuto(false);
+                  setTab(i);
+                }}
+                className={`h-1.5 rounded-full transition-all ${i === tab ? "w-6 bg-primary" : "w-1.5 bg-border"}`}
+              />
+            ))}
+          </div>
         </div>
       </section>
 
       {/* the category boundary — BI reports, models predict, this one acts + is answerable */}
       <section id="difference" className="scroll-mt-16 border-t border-border/60">
-        <div className="mx-auto max-w-6xl px-6 py-20">
-          <Reveal>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
-              <Sparkles className="size-3.5" />
-              {C.compare.eyebrow}
-            </span>
-            <h2 className="mt-5 text-balance text-3xl font-bold tracking-tight md:text-4xl">
-              {C.compare.title}
-            </h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">{C.compare.sub}</p>
-          </Reveal>
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
+            <Sparkles className="size-3.5" />
+            {C.compare.eyebrow}
+          </span>
+          <h2 className="mt-5 text-balance text-3xl font-bold tracking-tight md:text-4xl">
+            {C.compare.title}
+          </h2>
+          <p className="mt-3 max-w-2xl text-muted-foreground">{C.compare.sub}</p>
 
-          <Reveal delay={80}>
-            <div className="mt-10 overflow-x-auto">
-              <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left align-top text-sm">
-                <thead>
-                  <tr>
-                    <th className="w-[22%] px-4 pb-4 align-bottom text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                      {C.compare.dimensionLabel}
-                    </th>
-                    {C.compare.cols.map((c, i) => {
-                      const di = i === C.compare.cols.length - 1;
-                      return (
-                        <th
-                          key={c}
-                          className={`px-4 pb-4 pt-3 align-bottom text-base font-bold ${
-                            di ? "rounded-t-xl bg-primary/10 text-primary" : "text-foreground/70"
-                          }`}
-                        >
-                          <span className="flex items-center gap-2">
-                            {di && <DatacernLogo className="size-4" />}
-                            {di ? "Datacern" : c}
-                          </span>
-                          {di && (
-                            <span className="mt-0.5 block text-xs font-medium normal-case tracking-normal text-primary/80">
-                              {C.compare.datacernSubtitle}
-                            </span>
-                          )}
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {C.compare.rows.map(([dim, bi, ai, di], r) => {
-                    const last = r === C.compare.rows.length - 1;
+          <div className="mt-10 overflow-x-auto">
+            <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left align-top text-sm">
+              <thead>
+                <tr>
+                  <th className="w-[22%] px-4 pb-4 align-bottom text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    {C.compare.dimensionLabel}
+                  </th>
+                  {C.compare.cols.map((c, i) => {
+                    const di = i === C.compare.cols.length - 1;
                     return (
-                      <tr key={dim}>
-                        <td className="border-t border-border/60 px-4 py-4 font-semibold text-foreground">{dim}</td>
-                        <td className="border-t border-border/60 px-4 py-4 text-muted-foreground">{bi}</td>
-                        <td className="border-t border-border/60 px-4 py-4 text-muted-foreground">{ai}</td>
-                        <td
-                          className={`border-t border-primary/20 bg-primary/[0.06] px-4 py-4 font-medium text-foreground ${
-                            last ? "rounded-b-xl" : ""
-                          }`}
-                        >
-                          <span className="flex items-start gap-2">
-                            <Check className="mt-0.5 size-4 shrink-0 text-primary" />
-                            {di}
+                      <th
+                        key={c}
+                        className={`px-4 pb-4 pt-3 align-bottom text-base font-bold ${
+                          di ? "rounded-t-xl bg-primary/10 text-primary" : "text-foreground/70"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          {di && <DatacernLogo className="size-4" />}
+                          {di ? "Datacern" : c}
+                        </span>
+                        {di && (
+                          <span className="mt-0.5 block text-xs font-medium normal-case tracking-normal text-primary/80">
+                            {C.compare.datacernSubtitle}
                           </span>
-                        </td>
-                      </tr>
+                        )}
+                      </th>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          </Reveal>
+                </tr>
+              </thead>
+              <tbody>
+                {C.compare.rows.map(([dim, bi, ai, di], r) => {
+                  const last = r === C.compare.rows.length - 1;
+                  return (
+                    <tr key={dim}>
+                      <td className="border-t border-border/60 px-4 py-4 font-semibold text-foreground">{dim}</td>
+                      <td className="border-t border-border/60 px-4 py-4 text-muted-foreground">{bi}</td>
+                      <td className="border-t border-border/60 px-4 py-4 text-muted-foreground">{ai}</td>
+                      <td
+                        className={`border-t border-primary/20 bg-primary/[0.06] px-4 py-4 font-medium text-foreground ${
+                          last ? "rounded-b-xl" : ""
+                        }`}
+                      >
+                        <span className="flex items-start gap-2">
+                          <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                          {di}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
           <p className="mt-5 max-w-2xl text-sm text-muted-foreground">{C.compare.note}</p>
         </div>
       </section>
 
       {/* how it works */}
-      <section id="how" className="border-t border-border/60 bg-card/50">
-        <div className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
-          <Reveal>
-            <h2 className="text-3xl font-bold tracking-tight">{C.how.title}</h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">{C.how.sub}</p>
-          </Reveal>
-          <Reveal delay={90}>
-            <div className="mt-10">
-              <DecisionLoopDiagram />
-            </div>
-          </Reveal>
+      <section id="how" className="border-t border-border/60 bg-card/40">
+        <div className="mx-auto max-w-6xl scroll-mt-20 px-6 py-16">
+          <h2 className="text-3xl font-bold tracking-tight">{C.how.title}</h2>
+          <p className="mt-3 max-w-2xl text-muted-foreground">{C.how.sub}</p>
+          <div className="mt-10">
+            <DecisionLoopDiagram />
+          </div>
           <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="text-sm font-medium text-foreground">{C.how.outcomesLabel}</span>
             {C.how.outcomes.map((o) => (
@@ -827,16 +730,12 @@ export default function WelcomeContent() {
 
       {/* layered + per-cloud architecture (assets copied from docs/architecture/diagrams) */}
       <section id="architecture" className="border-t border-border/60">
-        <div className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
-          <Reveal>
-            <h2 className="text-3xl font-bold tracking-tight">{C.architecture.title}</h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">{C.architecture.sub}</p>
-          </Reveal>
-          <Reveal delay={90}>
-            <div className="mt-10">
-              <ArchitectureDiagrams />
-            </div>
-          </Reveal>
+        <div className="mx-auto max-w-6xl scroll-mt-20 px-6 py-16">
+          <h2 className="text-3xl font-bold tracking-tight">{C.architecture.title}</h2>
+          <p className="mt-3 max-w-2xl text-muted-foreground">{C.architecture.sub}</p>
+          <div className="mt-10">
+            <ArchitectureDiagrams />
+          </div>
         </div>
       </section>
 
@@ -849,11 +748,11 @@ export default function WelcomeContent() {
             <section
               key={ind.id}
               id={`ind-${ind.id}`}
-              className={`scroll-mt-16 border-t border-border/60 ${alt ? "bg-card/50" : ""}`}
+              className={`scroll-mt-16 border-t border-border/60 ${alt ? "bg-card/40" : ""}`}
             >
-              <div className="mx-auto grid max-w-6xl items-start gap-10 px-6 py-20 lg:grid-cols-2">
+              <div className="mx-auto grid max-w-6xl items-start gap-10 px-6 py-16 lg:grid-cols-2">
                 {/* narrative */}
-                <Reveal>
+                <div>
                   <div className="flex items-center gap-3">
                     <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                       <Icon className="size-6" />
@@ -881,12 +780,10 @@ export default function WelcomeContent() {
                   <Button variant="outline" className="mt-7" onClick={() => setDemoOpen(true)}>
                     {C.header.demoCta} <ArrowRight className="size-4" />
                   </Button>
-                </Reveal>
+                </div>
 
                 {/* solutions that ship / in your workflow */}
-                <Reveal delay={90}>
-                  <IndustryShipsCard ind={ind} />
-                </Reveal>
+                <IndustryShipsCard ind={ind} />
               </div>
             </section>
           );
@@ -900,24 +797,20 @@ export default function WelcomeContent() {
       </div>
 
       {/* trust */}
-      <section className="border-t border-border/60 bg-card/50">
-        <div className="mx-auto max-w-6xl px-6 py-20">
-          <Reveal>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
-              <ShieldCheck className="size-3.5" />
-              {C.trust.eyebrow}
-            </span>
-            <h2 className="mt-5 text-3xl font-bold tracking-tight">{C.trust.title}</h2>
-            <p className="mt-3 max-w-2xl text-muted-foreground">{C.trust.sub}</p>
-          </Reveal>
+      <section className="border-t border-border/60 bg-card/40">
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
+            <ShieldCheck className="size-3.5" />
+            {C.trust.eyebrow}
+          </span>
+          <h2 className="mt-5 text-3xl font-bold tracking-tight">{C.trust.title}</h2>
+          <p className="mt-3 max-w-2xl text-muted-foreground">{C.trust.sub}</p>
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {C.trust.items.map(([title, body], i) => (
-              <Reveal key={title} delay={i * 70}>
-                <div>
-                  <h3 className="text-sm font-semibold">{title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
-                </div>
-              </Reveal>
+            {C.trust.items.map(([title, body]) => (
+              <div key={title}>
+                <h3 className="text-sm font-semibold">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
+              </div>
             ))}
           </div>
           {/* the mechanisms live on /security — link, don't repeat them here */}
@@ -933,9 +826,9 @@ export default function WelcomeContent() {
       </section>
 
       {/* faq */}
-      <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-6 py-20">
+      <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-6 py-16">
         <h2 className="text-center text-3xl font-bold tracking-tight">{C.faq.title}</h2>
-        <div className="wr-glass wr-ring mt-8 divide-y divide-border/60 rounded-2xl">
+        <div className="mk-glass mk-ring mt-8 divide-y divide-border/60 rounded-2xl">
           {C.faq.items.map(([q, a], i) => {
             const open = faq === i;
             return (
@@ -960,9 +853,8 @@ export default function WelcomeContent() {
 
       {/* closing CTA */}
       <section className="relative overflow-hidden border-t border-border/60">
-        <div aria-hidden className="wr-mesh pointer-events-none absolute inset-0 -z-10 opacity-80" />
-        <div aria-hidden className="wr-aurora pointer-events-none absolute left-1/2 top-0 -z-10 h-72 w-[48rem] -translate-x-1/2 rounded-full opacity-50" />
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-6 py-24 text-center">
+        <div aria-hidden className="mk-mesh pointer-events-none absolute inset-0 -z-10 opacity-80" />
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-6 py-20 text-center">
           <DatacernLogo className="size-12 drop-shadow-[0_0_28px_hsl(var(--primary)/0.6)]" />
           <h2 className="text-balance text-3xl font-bold tracking-tight md:text-4xl">
             {C.closingCta.title}
@@ -974,15 +866,8 @@ export default function WelcomeContent() {
         </div>
       </section>
 
-      <footer className="border-t border-border/60">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-6 py-6 text-xs text-muted-foreground sm:flex-row">
-          <span>{MARKETING_SHELL.footer.left}</span>
-          <span>{MARKETING_SHELL.footer.right}</span>
-        </div>
-      </footer>
-
       {demoOpen && <DemoDialog onClose={() => setDemoOpen(false)} />}
-    </main>
+    </MarketingShell>
   );
 }
 
@@ -1072,7 +957,7 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
       aria-label={D.title}
     >
       <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="wr-swap relative w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+      <div className="mk-swap relative w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
         <button
           onClick={onClose}
           aria-label="Close"
@@ -1148,66 +1033,3 @@ function DemoDialog({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
-
-/* keyframes + reveal, injected globally (unique wr- prefixes avoid collisions) */
-const WR_CSS = `
-.wr-reveal{opacity:0;transform:translateY(16px);transition:opacity .6s ease,transform .6s ease;}
-.wr-in{opacity:1;transform:none;}
-.wr-float{animation:wr-float 6s ease-in-out infinite;}
-@keyframes wr-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-.wr-pulse{animation:wr-pulse 1.8s ease-in-out infinite;}
-@keyframes wr-pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.wr-grow{width:0;animation:wr-grow 1.4s .3s cubic-bezier(.2,.8,.2,1) forwards;}
-@keyframes wr-grow{to{width:82%}}
-.wr-swap{animation:wr-swap .5s ease;}
-@keyframes wr-swap{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.wr-marquee-wrap{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);}
-.wr-marquee{width:max-content;animation:wr-marquee 26s linear infinite;}
-@keyframes wr-marquee{to{transform:translateX(-50%)}}
-/* Light blue / lavender / white palette — matches the standalone marketing
- * site (deploy/marketing site index.html). #main (id) scopes the override so
- * the rest of the (light-mode-default) app is unaffected. */
-#main{
-  --background:227 69% 97%;
-  --foreground:232 31% 15%;
-  --card:0 0% 100%;
-  --card-foreground:232 31% 15%;
-  --primary:235 60% 56%;
-  --primary-foreground:0 0% 100%;
-  --border:243 47% 93%;
-  --muted:231 62% 96%;
-  --muted-foreground:229 13% 41%;
-}
-/* accent hues: primary indigo (235) → lavender (255) → sky blue (218) */
-.wr-mesh{background:
-  radial-gradient(55rem 42rem at 10% -12%, hsl(var(--primary) / 0.22), transparent 60%),
-  radial-gradient(46rem 40rem at 92% -8%, hsl(255 92% 76% / 0.22), transparent 58%),
-  radial-gradient(50rem 44rem at 58% 6%, hsl(218 100% 77% / 0.16), transparent 62%);}
-.wr-grid{background-image:
-  linear-gradient(hsl(var(--primary) / 0.06) 1px, transparent 1px),
-  linear-gradient(90deg, hsl(var(--primary) / 0.06) 1px, transparent 1px);
-  background-size:54px 54px;
-  -webkit-mask-image:radial-gradient(120% 90% at 50% -5%, #000, transparent 72%);
-  mask-image:radial-gradient(120% 90% at 50% -5%, #000, transparent 72%);}
-.wr-aurora{background:linear-gradient(115deg,
-  hsl(var(--primary) / 0.5), hsl(255 92% 76% / 0.45), hsl(218 100% 77% / 0.38), hsl(var(--primary) / 0.5));
-  background-size:300% 300%;filter:blur(64px);animation:wr-aurora 20s ease infinite;}
-@keyframes wr-aurora{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-.wr-glass{background:hsl(var(--card));
-  border:1px solid hsl(var(--primary) / 0.14);}
-.wr-glow{box-shadow:0 1px 2px hsl(232 31% 15% / 0.04), 0 24px 70px -28px hsl(var(--primary) / 0.32);}
-.wr-glow-soft{box-shadow:0 20px 60px -30px hsl(255 92% 66% / 0.5);}
-/* gradient border ring drawn with a masked pseudo-element */
-.wr-ring{position:relative;}
-.wr-ring::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
-  background:linear-gradient(140deg, hsl(var(--primary) / 0.35), transparent 45%, hsl(255 92% 66% / 0.35));
-  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;}
-.wr-grad{background-image:linear-gradient(100deg, hsl(var(--primary)), hsl(218 100% 72%), hsl(255 92% 76%));}
-.wr-glowtext{text-shadow:none;}
-@media (prefers-reduced-motion: reduce){
-  .wr-float,.wr-pulse,.wr-grow,.wr-marquee,.wr-swap,.wr-aurora{animation:none!important;}
-  .wr-reveal{opacity:1!important;transform:none!important;}
-  .wr-grow{width:82%;}
-}
-`;

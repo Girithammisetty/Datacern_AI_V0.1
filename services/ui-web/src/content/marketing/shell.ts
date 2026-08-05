@@ -13,6 +13,8 @@ export const MARKETING_SHELL = {
     { label: "Pricing", href: "/pricing" },
   ],
 
+  signIn: { label: "Sign in", href: "/login" },
+
   liveDemoCta: { label: "Live demo", href: "/live-demo" },
 
   footer: {

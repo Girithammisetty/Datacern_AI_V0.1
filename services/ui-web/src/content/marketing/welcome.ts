@@ -22,21 +22,9 @@ export const WELCOME_CONTENT = {
       "Datacern works your regulated back-office queues — card disputes, health claims, financial-crime alerts, insurance losses, supplier invoices. Agents read the file, apply your rules and draft the recommendation. Nothing takes effect until a named person approves it, no one can approve their own work, and every action leaves a receipt an examiner can follow.",
   },
 
-  /* in-page anchor nav (the cross-page links come from MARKETING_SHELL) */
+  /* page chrome comes from MARKETING_SHELL; only page-specific labels here */
   header: {
-    signIn: "Sign in",
     demoCta: "Request a demo",
-    anchors: [
-      { label: "Solutions", href: "/solutions" },
-      { label: "Industries", href: "#industries" },
-      { label: "Platform", href: "#capabilities" },
-      { label: "Why not BI", href: "#difference" },
-      { label: "How it works", href: "#how" },
-      { label: "Architecture", href: "#architecture" },
-      { label: "FAQ", href: "#faq" },
-      { label: "Security", href: "/security" },
-      { label: "Pricing", href: "/pricing" },
-    ],
   },
 
   hero: {
@@ -181,7 +169,6 @@ export const WELCOME_CONTENT = {
             ["Care Management", "Enroll, track and bill chronic-care and remote-monitoring programs."],
           ],
           workflow: {
-            kpis: [["Open cases", "482"], ["Clean-claim rate", "94%"], ["Auto-drafted", "76%"]],
             rows: [
               ["PA-48213", "Prior authorization · duplicate flag", "hi", "VP"],
               ["FWA-1187", "Payment integrity · suspect billing", "md", "AC"],
@@ -197,7 +184,6 @@ export const WELCOME_CONTENT = {
             ["Post-Acute Care", "Run episodes and assessments cleanly and stay ahead of readmissions."],
           ],
           workflow: {
-            kpis: [["Open cases", "318"], ["Clean-claim rate", "91%"], ["Recovered revenue", "$640K"]],
             rows: [
               ["RCM-77021", "Denial · timely filing appeal", "hi", "DL"],
               ["RCM-77088", "Underpayment · recovery review", "md", "NT"],
@@ -214,7 +200,6 @@ export const WELCOME_CONTENT = {
             ["Device Complaints", "Route and assess medical-device complaints toward an MDR call."],
           ],
           workflow: {
-            kpis: [["Open cases", "203"], ["PA turnaround", "−31%"], ["Safety signals triaged", "58"]],
             rows: [
               ["PBM-5510", "Prior auth · specialty drug", "hi", "SW"],
               ["ICSR-9042", "Adverse event · causality review", "md", "RB"],
@@ -241,7 +226,6 @@ export const WELCOME_CONTENT = {
             ["Financial Crime & AML", "Monitor transactions, screen sanctions and reach defensible filing decisions."],
           ],
           workflow: {
-            kpis: [["Open alerts", "318"], ["False positives", "−42%"], ["Filing SLA", "On track"]],
             rows: [
               ["AML-90142", "Structuring pattern · escalate", "hi", "MK"],
               ["SAR-2207", "Suspicious activity · filing review", "md", "JB"],
@@ -257,7 +241,6 @@ export const WELCOME_CONTENT = {
             ["Credit Bureau Disputes", "Investigate and resolve consumer disputes inside the regulatory clock."],
           ],
           workflow: {
-            kpis: [["Open disputes", "540"], ["Reg E SLA", "98%"], ["Recovery rate", "61%"]],
             rows: [
               ["DSP-33871", "Card dispute · evidence attached", "hi", "LT"],
               ["CBK-1290", "Chargeback · representment drafted", "md", "FS"],
@@ -273,7 +256,6 @@ export const WELCOME_CONTENT = {
             ["Underwriting Intake", "Turn messy application packages into a clean, ranked decision."],
           ],
           workflow: {
-            kpis: [["Open applications", "276"], ["Time to decision", "−38%"], ["Loss mit. on track", "89%"]],
             rows: [
               ["UW-6621", "Underwriting · income verification", "hi", "TC"],
               ["LM-3390", "Loss mitigation · options review", "md", "PV"],
@@ -301,7 +283,6 @@ export const WELCOME_CONTENT = {
             ["Construction & Property", "Handle defect and property claims with the evidence in one place."],
           ],
           workflow: {
-            kpis: [["Open claims", "647"], ["Leakage caught", "$1.2M"], ["Right-desk routing", "98%"]],
             rows: [
               ["CLM-55210", "Auto claim · high severity", "hi", "DW"],
               ["PROP-9021", "Construction claim · defect review", "md", "IK"],
@@ -316,7 +297,6 @@ export const WELCOME_CONTENT = {
             ["Workers' Compensation", "Manage claims and reserves with the reasoning captured end to end."],
           ],
           workflow: {
-            kpis: [["Open claims", "214"], ["Reserve accuracy", "92%"], ["Return-to-work", "+18%"]],
             rows: [
               ["WC-19042", "Workers' comp · reserve review", "hi", "NB"],
               ["WC-19088", "Workers' comp · medical review", "md", "OL"],
@@ -329,7 +309,6 @@ export const WELCOME_CONTENT = {
           name: "Warranty",
           useCases: [["Warranty Claims", "Validate coverage and settle warranty claims at scale."]],
           workflow: {
-            kpis: [["Open claims", "389"], ["Validation rate", "96%"], ["Cycle time", "−27%"]],
             rows: [
               ["WAR-8821", "Warranty · coverage validated", "hi", "EK"],
               ["WAR-8855", "Warranty · parts dispute", "md", "GC"],
@@ -357,7 +336,6 @@ export const WELCOME_CONTENT = {
             ["Background & Seller Vetting", "Adjudicate screening and marketplace-vetting cases against policy."],
           ],
           workflow: {
-            kpis: [["Open cases", "890"], ["Duplicate billing caught", "$310K"], ["Backlog", "−58%"]],
             rows: [
               ["INV-40213", "Invoice audit · duplicate billing", "hi", "TS"],
               ["SCR-9042", "Seller vetting · flagged pattern", "md", "GH"],
@@ -370,7 +348,6 @@ export const WELCOME_CONTENT = {
           name: "Trust & Safety",
           useCases: [["Trust & Safety Appeals", "Review enforcement appeals quickly and consistently."]],
           workflow: {
-            kpis: [["Open appeals", "412"], ["Review SLA", "94%"], ["Consistency score", "99%"]],
             rows: [
               ["APP-2201", "Enforcement appeal · standard review", "hi", "CP"],
               ["APP-2244", "Enforcement appeal · escalated", "md", "YB"],
@@ -383,7 +360,6 @@ export const WELCOME_CONTENT = {
           name: "Tax & Compliance",
           useCases: [["Tax Notice Resolution", "Classify notices, draft the response and track each to closure."]],
           workflow: {
-            kpis: [["Open notices", "1,204"], ["Response SLA", "100%"], ["Auto-classified", "82%"]],
             rows: [
               ["TAX-7710", "Notice · deadline this week", "hi", "JL"],
               ["TAX-7744", "Notice · response drafted", "md", "VK"],
