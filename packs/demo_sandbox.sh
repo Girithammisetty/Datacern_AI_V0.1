@@ -67,6 +67,11 @@ bundles_with_cases(){
   done
 }
 
+psql_tenant_id(){ # psql_tenant_id <name> -> uuid, best-effort
+  PGPASSWORD=datacern_dev psql -h localhost -U datacern -d identity -tA \
+    -c "SELECT id FROM tenants WHERE name = '$1' LIMIT 1" 2>/dev/null | tr -d '[:space:]'
+}
+
 api(){ # api METHOD PATH [JSON-BODY]
   local m="$1" p="$2" b="${3:-}"
   if [ -n "$b" ]; then
@@ -120,7 +125,24 @@ case "$CMD" in
     TOK="$(su_token)"
     RESP="$(api POST /api/v1/demo-tenants "$BODY")"
     TID="$(printf '%s' "$RESP" | "$PY" -c 'import json,sys; d=json.load(sys.stdin); print((d.get("tenant") or {}).get("id",""))' 2>/dev/null || true)"
-    [ -n "$TID" ] || die "demo tenant not created: $(printf '%s' "$RESP" | head -c 400)"
+    if [ -z "$TID" ]; then
+      # The default tenant name is derived from the pack, so ANY retry after a
+      # failed attempt collides — the tenant row is created before seeding runs,
+      # and `make down` (without ARGS=--infra) leaves Postgres intact. Say what
+      # to do instead of just echoing the 422.
+      if printf '%s' "$RESP" | grep -q "already exists\|already in use"; then
+        EXISTING="$(psql_tenant_id "$NAME")"
+        say ""
+        say "${YEL}A tenant named '$NAME' already exists${NC} (likely a previous attempt)."
+        [ -n "$EXISTING" ] && say "  its id: ${BLD}$EXISTING${NC}"
+        say "  Either re-seed it in place:"
+        [ -n "$EXISTING" ] && say "    ${BLD}packs/demo_sandbox.sh reset $EXISTING${NC}"
+        say "  or load under a different name:"
+        say "    ${BLD}packs/demo_sandbox.sh load $PACK ${NAME}-2${NC}"
+        exit 2
+      fi
+      die "demo tenant not created: $(printf '%s' "$RESP" | head -c 400)"
+    fi
     ok "tenant $TID created (profile=demo, TTL-reaped)"
 
     # Seeding runs as the SeedDemoContent provisioning step, not inline in the

@@ -1,5 +1,6 @@
 "use client";
 import { toLabel } from "@/lib/charts/geometry";
+import { toGraphShape } from "@/lib/charts/relational";
 import { t } from "@/lib/i18n/messages";
 
 /**
@@ -18,13 +19,24 @@ import { t } from "@/lib/i18n/messages";
  */
 export function NetworkChart({
   rows,
+  graph,
   title,
 }: {
   columns?: unknown;
   rows: unknown;
+  /** `{nodes, edges}` — the shape chart-service actually emits for this family. */
+  graph?: unknown;
   title?: string;
 }) {
-  const rws = Array.isArray(rows) ? (rows as unknown[][]) : [];
+  // BRD 72: `graph` IS this family's data (Shape() leaves `rows` empty for it),
+  // so render its edges here. This component is now the pre-hydration fallback
+  // behind the real ECharts graph/tree renderer, not the primary surface.
+  const g = toGraphShape(graph);
+  const rws = g
+    ? g.edges.map((e) => [e.from, e.to, e.value] as unknown[])
+    : Array.isArray(rows)
+      ? (rows as unknown[][])
+      : [];
   if (rws.length === 0) {
     return (
       <div className="py-6 text-center text-xs text-muted-foreground" role="status">

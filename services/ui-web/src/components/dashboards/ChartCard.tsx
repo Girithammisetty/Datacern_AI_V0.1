@@ -60,6 +60,7 @@ export function ChartCard({
       chartType={chart.chartType}
       columns={filtered.columns}
       rows={filtered.rows}
+      graph={chart.data?.graph}
       artifact={chart.data?.artifact}
       title={chart.name ?? undefined}
       onSelect={onSelect}

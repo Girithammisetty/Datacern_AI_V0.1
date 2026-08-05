@@ -140,6 +140,14 @@ export function buildEChartsOption(
     };
   }
 
+  // ---- BRD 72: axis-family types that were degrading to a plain bar ---------
+  // Each of these is FamilyAxis in chart-service, so the data is already the
+  // right shape — only the option was wrong.
+  if (ct === "whisker_chart") return buildBoxplotOption(model, theme, base);
+  if (ct === "waterfall_chart") return buildWaterfallOption(model, theme, base);
+  if (ct === "combination_chart") return buildCombinationOption(model, theme, base);
+  if (ct === "histogram_chart") return buildHistogramOption(model, theme, base);
+
   // ---- heatmap (from a ChartModel is not ideal; use buildHeatmapOption) ------
   // ---- bar / line / scatter / area / stacked --------------------------------
   const isScatter = ct.includes("scatter") || ct.includes("bubble");
@@ -147,12 +155,23 @@ export function buildEChartsOption(
   const isStacked = ct.includes("stack");
   const rotate = categories.length > 8 ? 32 : 0;
 
+  // A bubble chart is a scatter with a SIZE channel. When a second measure is
+  // present it drives the radius (that is what distinguishes bubble from
+  // scatter); with only one measure it degrades to a fixed-size scatter rather
+  // than inventing a dimension.
+  const sizeSeries = ct.includes("bubble") && series.length > 1 ? series[1] : null;
+  const sizeMax = sizeSeries ? Math.max(...sizeSeries.values.map(Math.abs), 1) : 1;
+
   const echSeries = series.map((s, si) => {
     if (isScatter) {
+      if (sizeSeries && s === sizeSeries) return null; // consumed as the radius
       return {
         name: s.name,
         type: "scatter",
-        symbolSize: 10,
+        symbolSize: sizeSeries
+          ? (_v: unknown, p: { dataIndex: number }) =>
+              8 + (Math.abs(sizeSeries.values[p.dataIndex] ?? 0) / sizeMax) * 30
+          : 10,
         data: s.values.map((v, i) => [categories[i], v]),
         itemStyle: { color: palette[si % palette.length], opacity: 0.85 },
         emphasis: { focus: "series" },
@@ -189,7 +208,7 @@ export function buildEChartsOption(
       emphasis: { focus: "series" },
       cursor: opts.selectable ? "pointer" : "default",
     };
-  });
+  }).filter(Boolean);
 
   const manyCats = categories.length > 14;
   return {
@@ -215,6 +234,211 @@ export function buildEChartsOption(
       ? [{ type: "inside", filterMode: "none" }, { type: "slider", height: 14, bottom: 24, borderColor: theme.split, fillerColor: "transparent", handleStyle: { color: palette[0] }, textStyle: { color: theme.subtext, fontSize: 9 } }]
       : undefined,
     series: echSeries,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// BRD 72 — axis-family builders (all FamilyAxis; only the option was wrong)
+// ---------------------------------------------------------------------------
+
+type Base = Record<string, unknown>;
+
+/** Shared cartesian scaffolding so the new builders look like the bar/line path. */
+function cartesian(theme: ChartTheme, categories: string[], opts: { legend?: boolean } = {}) {
+  return {
+    grid: { left: 8, right: 12, top: opts.legend ? 30 : 12, bottom: 30, containLabel: true },
+    xAxis: {
+      type: "category",
+      data: categories,
+      axisLine: { lineStyle: { color: theme.axis } },
+      axisTick: { show: false },
+      axisLabel: { ...AXIS_LABEL(theme), rotate: categories.length > 8 ? 32 : 0 },
+    },
+    yAxis: {
+      type: "value",
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: theme.split, type: "dashed" } },
+      axisLabel: { ...AXIS_LABEL(theme), formatter: (v: number) => fmtNum(v) },
+    },
+  };
+}
+
+/** Tukey five-number summary in ECharts' boxplot order [min, Q1, med, Q3, max]. */
+export function fiveNumberSummary(values: number[]): [number, number, number, number, number] {
+  const s = [...values].sort((a, b) => a - b);
+  if (s.length === 0) return [0, 0, 0, 0, 0];
+  const q = (p: number) => {
+    const idx = (s.length - 1) * p;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (idx - lo);
+  };
+  return [s[0], q(0.25), q(0.5), q(0.75), s[s.length - 1]];
+}
+
+/**
+ * Box plot. The distribution per category is the set of SERIES values at that
+ * category — which is exactly the shape a whisker chart configured with a
+ * `dataseries` split produces (chart-service pivots [x, series, value] into one
+ * series per split value). With a single series there is no distribution to
+ * summarise, so each box degenerates to a point; that is the honest rendering of
+ * a whisker chart configured without a split, not a defect to paper over.
+ */
+export function buildBoxplotOption(model: ChartModel, theme: ChartTheme, base: Base): EChartsOption {
+  const { categories, series } = model;
+  const data = categories.map((_c, i) => fiveNumberSummary(series.map((s) => s.values[i] ?? 0)));
+  return {
+    ...base,
+    tooltip: {
+      ...tooltip(theme, "item"),
+      formatter: (p: { name?: string; value?: number[] }) => {
+        // ECharts prepends the category index to a boxplot tuple.
+        const [, min, q1, med, q3, max] = p.value ?? [];
+        return `${p.name ?? ""}<br/>max ${fmtNum(max ?? 0)}<br/>Q3 ${fmtNum(q3 ?? 0)}<br/>median ${fmtNum(med ?? 0)}<br/>Q1 ${fmtNum(q1 ?? 0)}<br/>min ${fmtNum(min ?? 0)}`;
+      },
+    },
+    legend: legend(theme, false),
+    ...cartesian(theme, categories),
+    series: [
+      {
+        type: "boxplot",
+        data,
+        itemStyle: { color: theme.surface, borderColor: CHART_PALETTE[0], borderWidth: 1.5 },
+        emphasis: { itemStyle: { borderWidth: 2.5 } },
+      },
+    ],
+  };
+}
+
+/**
+ * Waterfall: each category is a DELTA and the bars stack onto a running total.
+ * Implemented with ECharts' standard invisible-base idiom — a transparent
+ * support series carrying the running total below each visible bar. Rising and
+ * falling steps get different colors, which is the entire point of the type.
+ */
+export function buildWaterfallOption(model: ChartModel, theme: ChartTheme, base: Base): EChartsOption {
+  const { categories, series } = model;
+  const deltas = (series[0]?.values ?? []).map((v) => v ?? 0);
+  const support: number[] = [];
+  const rise: (number | string)[] = [];
+  const fall: (number | string)[] = [];
+  let total = 0;
+  for (const d of deltas) {
+    // The base sits at the lower of the two ends, so the bar spans the delta.
+    support.push(d >= 0 ? total : total + d);
+    rise.push(d >= 0 ? d : "-");
+    fall.push(d < 0 ? -d : "-");
+    total += d;
+  }
+  return {
+    ...base,
+    tooltip: {
+      ...tooltip(theme, "axis"),
+      formatter: (ps: { name?: string; dataIndex?: number }[]) => {
+        const i = ps?.[0]?.dataIndex ?? 0;
+        const running = deltas.slice(0, i + 1).reduce((a, b) => a + b, 0);
+        const d = deltas[i] ?? 0;
+        return `${ps?.[0]?.name ?? ""}<br/>change <b>${d >= 0 ? "+" : ""}${fmtNum(d)}</b><br/>total ${fmtNum(running)}`;
+      },
+    },
+    legend: legend(theme, false),
+    ...cartesian(theme, categories),
+    series: [
+      {
+        name: "base",
+        type: "bar",
+        stack: "wf",
+        silent: true,
+        itemStyle: { color: "transparent" },
+        emphasis: { itemStyle: { color: "transparent" } },
+        data: support,
+      },
+      { name: "increase", type: "bar", stack: "wf", barMaxWidth: 34, itemStyle: { color: CHART_PALETTE[0] }, data: rise },
+      { name: "decrease", type: "bar", stack: "wf", barMaxWidth: 34, itemStyle: { color: CHART_PALETTE[3] ?? CHART_PALETTE[1] }, data: fall },
+    ],
+  };
+}
+
+/**
+ * Combination: the first measure renders as bars on the left axis, every further
+ * measure as a line on a SECOND axis. The dual axis is what makes the type
+ * useful — a count and a rate on one shared scale is unreadable, which is
+ * precisely why the bar fallback was wrong here.
+ */
+export function buildCombinationOption(model: ChartModel, theme: ChartTheme, base: Base): EChartsOption {
+  const { categories, series } = model;
+  const dual = series.length > 1;
+  const axisLabel = { ...AXIS_LABEL(theme), formatter: (v: number) => fmtNum(v) };
+  const valueAxis = (split: boolean) => ({
+    type: "value",
+    axisLine: { show: false },
+    axisTick: { show: false },
+    splitLine: split ? { lineStyle: { color: theme.split, type: "dashed" } } : { show: false },
+    axisLabel,
+  });
+  return {
+    ...base,
+    tooltip: tooltip(theme, "axis"),
+    legend: { ...legend(theme, true), top: 0 },
+    grid: { left: 8, right: 12, top: 30, bottom: 30, containLabel: true },
+    xAxis: {
+      type: "category",
+      data: categories,
+      axisLine: { lineStyle: { color: theme.axis } },
+      axisTick: { show: false },
+      axisLabel: { ...AXIS_LABEL(theme), rotate: categories.length > 8 ? 32 : 0 },
+    },
+    yAxis: dual ? [valueAxis(true), valueAxis(false)] : valueAxis(true),
+    series: series.map((s, si) =>
+      si === 0
+        ? {
+            name: s.name,
+            type: "bar",
+            yAxisIndex: 0,
+            barMaxWidth: 34,
+            itemStyle: { color: CHART_PALETTE[0], borderRadius: [3, 3, 0, 0] },
+            data: s.values,
+          }
+        : {
+            name: s.name,
+            type: "line",
+            yAxisIndex: dual ? 1 : 0,
+            smooth: true,
+            symbolSize: 6,
+            lineStyle: { width: 2.5 },
+            itemStyle: { color: CHART_PALETTE[si % CHART_PALETTE.length] },
+            data: s.values,
+          },
+    ),
+  };
+}
+
+/**
+ * Histogram: bars over CONTIGUOUS bins, so unlike a bar chart there is no gap
+ * between them. The binning is done upstream (the chart's query groups into
+ * buckets); this renders those buckets as a histogram rather than as a
+ * categorical bar chart.
+ */
+export function buildHistogramOption(model: ChartModel, theme: ChartTheme, base: Base): EChartsOption {
+  const { categories, series } = model;
+  return {
+    ...base,
+    tooltip: tooltip(theme, "axis"),
+    legend: { ...legend(theme, series.length > 1), top: 0 },
+    ...cartesian(theme, categories, { legend: series.length > 1 }),
+    series: series.map((s, si) => ({
+      name: s.name,
+      type: "bar",
+      barCategoryGap: "0%",
+      barGap: "0%",
+      itemStyle: {
+        color: CHART_PALETTE[si % CHART_PALETTE.length],
+        borderColor: theme.surface,
+        borderWidth: 1,
+      },
+      data: s.values,
+    })),
   };
 }
 
