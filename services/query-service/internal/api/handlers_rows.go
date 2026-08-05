@@ -172,7 +172,7 @@ func (s *Server) handleGetRow(w http.ResponseWriter, r *http.Request) {
 	// pkCol is validated against the dataset's real columns and QuoteIdent-quoted;
 	// `ref` is a {{dataset()}} macro the planner resolves (not raw SQL); the row value
 	// is bound as :row_pk. No user data reaches raw SQL.
-	sql := fmt.Sprintf("SELECT * FROM %s WHERE %s = :row_pk LIMIT 1", ref, datasets.QuoteIdent(pkCol)) // nosemgrep: go.lang.security.injection.tainted-sql-string.tainted-sql-string
+	sql := fmt.Sprintf("SELECT * FROM %s WHERE %s = :row_pk LIMIT 1", ref, datasets.QuoteIdent(pkCol)) // nosemgrep
 	pkJSON, _ := json.Marshal(rowPK)
 	rr := exec.RunRequest{
 		PlanRequest: exec.PlanRequest{

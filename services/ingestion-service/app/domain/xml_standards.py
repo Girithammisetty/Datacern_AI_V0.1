@@ -19,7 +19,7 @@ refused by name (Rule 2) rather than flattened into meaningless rows.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml  # noqa: E501  (DTD rejected below)
+import xml.etree.ElementTree as ET  # nosemgrep
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -154,7 +154,7 @@ async def _decode(
             # Safe post-guard: _reject_dtd bails on any DOCTYPE (the only place
             # internal entities can be defined) and stdlib expat never resolves
             # external entities — same reviewed posture as decode.py.
-            tree = ET.parse(str(path))  # nosemgrep: python.lang.security.use-defused-xml-parse.use-defused-xml-parse  # noqa: E501
+            tree = ET.parse(str(path))  # nosemgrep
         except ET.ParseError as e:
             raise _fail(f"{kind}: not well-formed XML ({e})") from e
         root = tree.getroot()

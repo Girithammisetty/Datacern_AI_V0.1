@@ -34,6 +34,16 @@ test("login → case → copilot → inbox approve, with AI label + provenance",
   await expect(page.getByRole("grid", { name: "Cases" })).toBeVisible();
   await expect(page.getByText(/Suspicious auto claim #4471/)).toBeVisible();
   await page.getByText(/Suspicious auto claim #4471/).click();
+  // The worklist is a WORKBENCH: a row click opens the case in the right-hand
+  // pane in place (?c=<id> via replaceState) instead of navigating, so the
+  // adjuster never leaves the queue. Assert that contract explicitly.
+  await page.waitForURL("**/cases?*c=case-1*");
+  await expect(page.getByTestId("case-work-pane")).toBeVisible();
+  await expect(page.getByTestId("case-work-pane").getByText(/Ann Adjuster/)).toBeVisible();
+
+  // The full detail route remains a supported deep link (shareable, and what
+  // "Open full page" targets) — the rest of the journey drives it there.
+  await page.goto("/cases/case-1");
   await page.waitForURL("**/cases/case-1");
   // Composed cross-service data: assignee (identity) + source dataset (dataset).
   await expect(page.getByText(/Ann Adjuster/)).toBeVisible();
