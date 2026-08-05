@@ -115,6 +115,8 @@ const PUBLIC_ROUTES = [
   { path: "/welcome/walkthrough", service: "demo walkthrough" },
   { path: "/pricing", service: "pricing + cost calculator" },
   { path: "/live-demo", service: "live-demo signup" },
+  { path: "/solutions", service: "solutions catalog (generated from pack manifests)" },
+  { path: "/security", service: "security & governance" },
 ];
 
 test.describe("smoke: live stack renders across all modules", () => {

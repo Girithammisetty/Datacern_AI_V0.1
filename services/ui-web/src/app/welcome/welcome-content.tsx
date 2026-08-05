@@ -43,6 +43,7 @@ import { DatacernLogo } from "@/components/brand/DatacernLogo";
 import { ArchitectureDiagrams } from "@/components/marketing/ArchitectureDiagrams";
 import { DecisionLoopDiagram } from "@/components/marketing/DecisionLoopDiagram";
 import { Button } from "@/components/ui/button";
+import { SOLUTION_PACK_COUNT } from "@/content/marketing/packs.gen";
 
 /* ------------------------------------------------------------------ */
 /* scroll-reveal (dependency-free)                                     */
@@ -858,12 +859,15 @@ export default function WelcomeContent() {
             <span className="text-lg font-bold tracking-tight">Datacern AI</span>
           </div>
           <nav className="hidden items-center gap-7 text-sm text-muted-foreground md:flex">
+            <Link href="/solutions" className="transition-colors hover:text-foreground">Solutions</Link>
             <a href="#industries" className="transition-colors hover:text-foreground">Industries</a>
             <a href="#capabilities" className="transition-colors hover:text-foreground">Platform</a>
             <a href="#difference" className="transition-colors hover:text-foreground">Why not BI</a>
             <a href="#how" className="transition-colors hover:text-foreground">How it works</a>
             <a href="#architecture" className="transition-colors hover:text-foreground">Architecture</a>
             <a href="#faq" className="transition-colors hover:text-foreground">FAQ</a>
+            <Link href="/security" className="transition-colors hover:text-foreground">Security</Link>
+            <Link href="/pricing" className="transition-colors hover:text-foreground">Pricing</Link>
           </nav>
           <div className="flex items-center gap-4">
             <Link
@@ -1042,6 +1046,24 @@ export default function WelcomeContent() {
             built around an industry — it&apos;s built around the decision. New verticals install as
             capability packs onto the same core, so any judgment-heavy queue is a fit.
           </p>
+          {/* the pack catalog CTA — the count is generated from the shipped
+           * pack manifests (packs.gen.ts), so this headline cannot drift. */}
+          <div className="mt-8 flex flex-col items-start justify-between gap-4 rounded-2xl border border-primary/25 bg-primary/[0.04] p-6 sm:flex-row sm:items-center">
+            <div>
+              <div className="text-lg font-bold tracking-tight">
+                {SOLUTION_PACK_COUNT} installable solution packs — and counting
+              </div>
+              <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                Every queue above ships as a pack: intake rules, dispositions, regulatory
+                grounding, dashboards and roles — installed onto the same governed engine.
+              </p>
+            </div>
+            <Button asChild size="lg" className="shrink-0">
+              <Link href="/solutions">
+                Browse the catalog <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </section>
 

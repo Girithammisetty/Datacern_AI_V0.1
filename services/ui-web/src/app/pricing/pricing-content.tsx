@@ -115,6 +115,12 @@ export default function PricingContent() {
             <Link href="/welcome" className="text-sm text-muted-foreground hover:text-foreground">
               Overview
             </Link>
+            <Link href="/solutions" className="text-sm text-muted-foreground hover:text-foreground">
+              Solutions
+            </Link>
+            <Link href="/security" className="text-sm text-muted-foreground hover:text-foreground">
+              Security
+            </Link>
             <Button asChild size="sm">
               <Link href="/welcome">Request a demo <ArrowRight className="size-4" /></Link>
             </Button>
