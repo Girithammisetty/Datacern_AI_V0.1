@@ -20,11 +20,17 @@ Everything here is Markdown. There are no binary documents in this tree — see
 
 Counts drift, so they are verified rather than asserted.
 `tools/docs/check_doc_facts.py` runs in CI and fails when a documented count
-contradicts the repository:
+contradicts the repository. Run it locally the same way CI does — the repo-level
+checkers declare their dependencies in `tools/pyproject.toml`:
+
+```bash
+uv run --project tools python tools/docs/check_doc_facts.py
+```
+
 
 | Fact | Value | Derived from |
 |---|---:|---|
-| Deployable services | 24 | `deploy/services.yaml` |
+| Deployable services | 25 | `deploy/services.yaml` |
 | Capability packs | 28 | `packs/*/pack.yaml` |
 | BRDs | 78 | `docs/brd/*.md` |
 | Packs with a seeded demo scenario | 4 | `deploy/demo/*/cases.yaml` |

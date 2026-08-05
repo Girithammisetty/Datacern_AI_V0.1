@@ -1,0 +1,33 @@
+# Dependency declaration for the repo-level checkers in tools/.
+#
+# These are not a service and not a package — they are scripts CI runs against
+# the repository (doc facts, action-verb grammar, SOC 2 evidence). Two of them
+# import PyYAML, which was never declared anywhere: CI happened to work because
+# an earlier step in the same job runs `pip install -q pytest pyyaml requests`
+# for packctl, and GitHub's runner image ships PyYAML besides. Locally the
+# checkers simply failed with ModuleNotFoundError, which is how a documented
+# count stayed wrong for six commits without anyone being able to check it.
+#
+# Declaring the group here follows the same PEP 735 shape every service uses,
+# so the tools can be run reproducibly:
+#
+#     uv run --project tools python tools/docs/check_doc_facts.py
+#     uv run --project tools python tools/compliance/check_soc2_evidence.py
+#
+# `package = false` because there is nothing to build or install — this file
+# exists to name the dependencies, not to make tools/ importable.
+[project]
+name = "datacern-tools"
+version = "0"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    # tools/docs/check_doc_facts.py (deploy/services.yaml) and
+    # tools/compliance/check_soc2_evidence.py (the control register).
+    "pyyaml>=6",
+]
+
+[tool.uv]
+package = false
