@@ -14,11 +14,21 @@ record* differs between dev (self) and prod (identity-service).
 
 from __future__ import annotations
 
+import re
 import time
 
 import jwt as pyjwt
 
 from app.signing.keys import SigningKey
+
+# Canonical action name (MASTER-FR-016): <service>.<resource>.<verb>.
+_ACTION_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
+
+# The only verbs a tool may delegate downstream (BRD 74 AC-10). Mirrors
+# tool-plane's DelegableVerbs (internal/domain/delegation.go) — the gateway
+# refuses a token carrying anything else, and refusing it HERE means an invalid
+# delegation fails at the mint instead of at the call.
+DELEGABLE_VERBS = frozenset({"read", "list", "export"})
 
 
 class TokenMinter:
@@ -69,6 +79,58 @@ class TokenMinter:
             claims["workspace_id"] = workspace_id
         return pyjwt.encode(claims, self._key.private_pem, algorithm="RS256",
                             headers={"kid": self._key.kid})
+
+    def mint_tool_obo(
+        self,
+        *,
+        tenant_id: str,
+        obo_sub: str,
+        agent_key: str,
+        agent_version: int,
+        tool_id: str,
+        downstream_actions: list[str] | None = None,
+        workspace_id: str | None = None,
+    ) -> str:
+        """The sanctioned OBO token for ONE tool call (BRD 74 AC-10).
+
+        Scopes are ``[tool_id] + downstream_actions``. The tool id pins
+        tool-plane's toolset gate to this one tool; the downstream actions are
+        what the tool's REGISTERED version declares its facade will exercise on
+        other services with this token — the caller passes the declaration
+        (tool-plane publishes it on ``tools/list`` as ``_meta.required_scopes``),
+        it is never invented here.
+
+        Two rules make the wider scope safe, and both are enforced:
+
+        * Only READ actions may be delegated, so a delegated token can never
+          carry authority to mutate anything. A write still needs the signed,
+          human-approved proposal grant.
+        * No wildcard. ``scopes=["*"]`` (what a RUN token carries) is exactly
+          the token tool-plane refuses to delegate, because it would hand a
+          facade the human's entire authority rather than the tool's declared
+          slice.
+
+        The token never widens the human: rbac evaluates ``agent_obo`` as
+        intersection(agent scopes, the obo user's grants) — MASTER-FR-015 /
+        RBC BR-6 — so an action in ``scopes`` that the human does not hold is
+        still denied.
+        """
+        scopes = [tool_id]
+        for action in downstream_actions or []:
+            if action == "*" or not _ACTION_RE.match(action):
+                raise ValueError(
+                    f"downstream action {action!r} is not a canonical "
+                    "<service>.<resource>.<verb> action name")
+            if action.rsplit(".", 1)[-1] not in DELEGABLE_VERBS:
+                raise ValueError(
+                    f"downstream action {action!r} is not a read action; only "
+                    f"{'/'.join(sorted(DELEGABLE_VERBS))} verbs may be delegated")
+            if action in scopes:
+                raise ValueError(f"downstream action {action!r} is declared more than once")
+            scopes.append(action)
+        return self.mint_agent_obo(
+            tenant_id=tenant_id, obo_sub=obo_sub, agent_key=agent_key,
+            agent_version=agent_version, workspace_id=workspace_id, scopes=scopes)
 
     def mint_agent_autonomous(
         self,

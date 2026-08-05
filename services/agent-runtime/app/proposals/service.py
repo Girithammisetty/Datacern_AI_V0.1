@@ -409,10 +409,15 @@ class ProposalService:
         # Auto-executed proposals have no human decider ("policy:auto") so those
         # still ride the original trigger user's authority.
         obo_sub = obo_user if decided_by == "policy:auto" else decided_by
-        token = self._tokens.mint_agent_obo(
+        # mint_tool_obo is the one sanctioned constructor for a tool-call OBO
+        # token (BRD 74 AC-10). A WRITE tool delegates nothing — tool-plane
+        # refuses a non-read declaration at registration — so this stays exactly
+        # scopes=[tool_id], and the tool-plane gateway forwards no Authorization
+        # header to its facade, unchanged.
+        token = self._tokens.mint_tool_obo(
             tenant_id=prop.tenant_id, obo_sub=obo_sub or decided_by,
             agent_key=prop.agent_key, agent_version=prop.agent_version,
-            workspace_id=None, scopes=[prop.tool_id])
+            tool_id=prop.tool_id, downstream_actions=None, workspace_id=None)
         result = await self._tools.call(
             tool_id=prop.tool_id, arguments=args, tenant_id=prop.tenant_id,
             auth_token=token, version=prop.tool_version, proposal_grant=grant)

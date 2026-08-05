@@ -424,6 +424,145 @@ def register_case_apply_tool(tenant_id: str) -> str:
     return tid
 
 
+# The rbac action each search leg's owning endpoint actually authorizes against.
+# Verified against the handlers, not guessed — every one of them is the `.read`
+# verb (the `.list` actions exist in the catalog but no list route guards them):
+#
+#   DATASET         dataset-service      GET /datasets          dataset.dataset.read
+#   DASHBOARD       chart-service        GET /dashboards        chart.dashboard.read
+#   CHART           chart-service        GET /charts            chart.chart.read
+#   PIPELINE        pipeline-orch.       GET /pipelines         pipeline.template.read
+#   EXPERIMENT      experiment-service   GET /experiments       experiment.experiment.read
+#   MODEL           experiment-service   GET /models            experiment.model.read
+#   CASE            case-service         GET /cases             case.case.read
+#   DECISION_MODEL  agent-runtime        GET /decision-models   case.disposition.read
+#
+# This list IS the tool's declared downstream authority (BRD 74 AC-10). tool-plane
+# validates it at registration (read tier + read verbs only) and, at call time,
+# refuses to forward any caller token that is not narrowed to exactly
+# [search.query] + this set. Adding an entry here widens what a search token may
+# carry; it can never widen what the HUMAN behind the token may see, because each
+# owning service still evaluates intersection(token scopes, that user's grants).
+SEARCH_DOWNSTREAM_ACTIONS = [
+    "dataset.dataset.read",
+    "chart.dashboard.read",
+    "chart.chart.read",
+    "pipeline.template.read",
+    "experiment.experiment.read",
+    "experiment.model.read",
+    "case.case.read",
+    "case.disposition.read",
+]
+
+
+def register_search_tool(tenant_id: str) -> str:
+    """Idempotently register the ``search.query`` READ tool (BRD 74 AC-10) and
+    point it at bff-graphql's MCP backend facade.
+
+    This is the platform's only tool whose facade owns no store: it answers by
+    fanning out to the eight services that own the data, with the CALLER's token,
+    which is exactly what the `search()` GraphQL field does. That is why it is the
+    only tool that declares `downstream_actions` — tool-plane forwards the
+    verified caller token ONLY to a tool that declared them, and only when the
+    token is already narrowed to that declaration.
+
+    Mirrors register_case_apply_tool() and is safe on every boot (registry POSTs
+    are idempotent, tenant-enable is an upsert, mcp_backends carries ON CONFLICT
+    DO UPDATE)."""
+    import psycopg
+
+    su = c.superadmin_token()
+    tid = "search.query"
+    ver = "1.0.0"
+    bff_url = os.environ.get("BFF_URL", getattr(c, "BFF", "http://localhost:4000"))
+
+    def _post(url, token, body):
+        return requests.post(url, json=body,
+                             headers={"Authorization": f"Bearer {token}",
+                                      "Content-Type": "application/json"}, timeout=15)
+
+    r = _post(f"{c.TOOL_REGISTRY}/api/v1/tools", su,
+              {"tool_id": tid, "display_name": "Search across every entity kind",
+               "owner_service": "bff-graphql", "owner_team": "platform",
+               "enabled_by_default": True, "side_effects": "none",
+               "tags": ["search", "discovery"]})
+    if r.status_code not in (200, 201) and "already exists" not in r.text.lower():
+        print(f"register search.query tool: {r.status_code} {r.text[:150]}", file=sys.stderr)
+
+    r = _post(f"{c.TOOL_REGISTRY}/api/v1/tools/{tid}/versions", su,
+              {"version": ver,
+               "semantic_description":
+                   "Search datasets, dashboards, charts, pipelines, experiments, models, "
+                   "cases and decision tables by name or description in one call, scoped "
+                   "to what the requesting human may read. Use when you need to find an "
+                   "object by what it is called rather than by its id.",
+               "input_schema": {"type": "object", "additionalProperties": False,
+                                "properties": {
+                                    "q": {"type": "string", "maxLength": 200},
+                                    # Entity kinds to search; omitted = all of them.
+                                    "types": {"type": "array", "maxItems": 8},
+                                    # Required for DASHBOARD/CHART: chart.* grants are
+                                    # workspace-scoped, so those two legs report
+                                    # WORKSPACE_REQUIRED without it.
+                                    "workspace_id": {"type": "string"},
+                                    "first": {"type": "integer", "minimum": 1,
+                                              "maximum": 50}},
+                                "required": ["q"]},
+               # The fan-out shape: `types` carries each leg's denied/error state, so
+               # a caller can tell "no matches" from "you may not read this" from
+               # "that service is down". All three are load-bearing, hence required.
+               "output_schema": {"type": "object", "additionalProperties": True,
+                                 "properties": {"q": {"type": "string"},
+                                                "types": {"type": "array"},
+                                                "hits": {"type": "array"}},
+                                 "required": ["q", "types", "hits"]},
+               "permission_tier": "read", "cost_weight": 3,
+               "declared_sla": {"p95_ms": 3000}, "side_effects": "none", "examples": [],
+               "downstream_actions": SEARCH_DOWNSTREAM_ACTIONS})
+    if r.status_code not in (200, 201) and "already exists" not in r.text.lower():
+        print(f"register search.query version: {r.status_code} {r.text[:150]}", file=sys.stderr)
+
+    # A single published version resolves; deprecate any other (the tool_plane DB
+    # persists across boots).
+    try:
+        with psycopg.connect(
+                "postgresql://datacern:datacern_dev@localhost:5432/tool_plane") as cn:
+            pubs = [row[0] for row in cn.execute(
+                "SELECT version FROM tool_versions WHERE tool_id=%s AND status='published' "
+                "AND version<>%s", (tid, ver)).fetchall()]
+        for vv in pubs:
+            requests.post(f"{c.TOOL_REGISTRY}/api/v1/tools/{tid}/versions/{vv}/deprecate",
+                          headers={"Authorization": f"Bearer {su}"}, timeout=15)
+    except Exception as e:
+        print(f"deprecate prior published search.query versions: {e}", file=sys.stderr)
+
+    pubr = requests.post(f"{c.TOOL_REGISTRY}/api/v1/tools/{tid}/versions/{ver}/publish",
+                         headers={"Authorization": f"Bearer {su}"}, timeout=20)
+    if pubr.status_code not in (200, 201) and "only draft" not in pubr.text:
+        print(f"publish search.query {ver}: {pubr.status_code} {pubr.text[:150]}",
+              file=sys.stderr)
+
+    tenant_tok = c.service_token("svc:seed", tenant_id, ["*"])
+    requests.put(f"{c.TOOL_REGISTRY}/api/v1/tenants/self/tools/{tid}",
+                 headers={"Authorization": f"Bearer {tenant_tok}",
+                          "Content-Type": "application/json"},
+                 json={"enabled": True}, timeout=15)
+
+    facade_url = f"{bff_url}/internal/v1/mcp/invoke"
+    with psycopg.connect("postgresql://datacern:datacern_dev@localhost:5432/tool_plane",
+                         autocommit=True) as cn:
+        cn.execute("SELECT set_config('app.role','platform', false)")
+        cn.execute(
+            """INSERT INTO mcp_backends (name, tenant_id, internal_url, spiffe_id, kind, status)
+               VALUES ('bff-graphql','00000000-0000-0000-0000-000000000000',%s,
+                       'spiffe://datacern/ns/tools/sa/mcp-gateway','internal','active')
+               ON CONFLICT (name) DO UPDATE SET internal_url=EXCLUDED.internal_url,
+                   spiffe_id=EXCLUDED.spiffe_id, status='active'""",
+            (facade_url,))
+    print(f"search.query registered + enabled; mcp_backends -> {facade_url}", file=sys.stderr)
+    return tid
+
+
 def register_fhir_tools(tenant_id: str) -> list[str]:
     """Idempotently register the four fhir-bridge tools and point them at the
     bridge's MCP backend facade. Reads (``fhir.read_resource``,
@@ -1137,11 +1276,14 @@ if __name__ == "__main__":
         register_ml_lifecycle_tools(sys.argv[2])
     elif cmd == "fhir_tools":
         register_fhir_tools(sys.argv[2])
+    elif cmd == "search_tool":
+        register_search_tool(sys.argv[2])
     else:
         print("usage: seed.py {tenant|aigw <tenant_id>|evalkey <tenant_id>|bffkey <tenant_id>|"
              "inference_tool <tenant_id>|case_apply_tool <tenant_id>|"
              "ingestion_tool <tenant_id>|"
              "chart_dashboard_tool <tenant_id>|entity_merge_tool <tenant_id>|"
-             "ml_lifecycle_tools <tenant_id>|fhir_tools <tenant_id>}",
+             "ml_lifecycle_tools <tenant_id>|fhir_tools <tenant_id>|"
+             "search_tool <tenant_id>}",
              file=sys.stderr)
         sys.exit(2)

@@ -69,7 +69,14 @@ type Request struct {
 	// true (commercial_state=suspended_commercial), an immediate write-direct
 	// tool call is refused. Derived by the gateway from the VERIFIED token claim.
 	WritesSuspended bool
-	TraceID         string
+	// RawToken is the caller's bearer AS VERIFIED by the gateway (never the raw
+	// header of an unverified request). It is forwarded to the backend facade
+	// only for a tool that declares downstream actions and only after
+	// domain.TokenDelegable passes — see step 7b (BRD 74 AC-10).
+	RawToken string
+	// Scopes are the VERIFIED token's scopes, used for the delegation check.
+	Scopes  []string
+	TraceID string
 }
 
 // Outcome is the enforcement result the MCP layer renders.
@@ -338,6 +345,43 @@ func (p *Pipeline) run(ctx context.Context, req Request) Outcome {
 		return oc
 	}
 
+	// Step 7b: delegation gate (BRD 74 AC-10). A tool that DECLARED downstream
+	// actions has a facade with no store of its own — it can only answer by
+	// calling other services as the caller — so the gateway forwards the
+	// verified caller token. Delegation is only safe if the token is already
+	// narrowed to what the tool declared, and the gateway holds no signing key
+	// with which to narrow it, so a broader token is REFUSED here.
+	//
+	// Refusing loudly matters: forwarding nothing would leave the facade
+	// unauthenticated downstream and it would answer "no results", which is
+	// indistinguishable from a genuinely empty search. A caller that presents
+	// the wrong token gets a denial that names the scopes it must present.
+	forwardToken := ""
+	if len(tv.DownstreamActions) > 0 {
+		if tier != domain.TierRead {
+			// Belt and braces: registration already refuses a non-read declaration
+			// (domain.ValidateDownstreamActions), and a tenant max_tier_override
+			// can only lower a tier. A stored row that violates it anyway must not
+			// delegate.
+			oc.Decision, oc.Code, oc.HTTP = events.DecisionDeniedPolicy, domain.CodeScopeNotDelegable, 403
+			oc.Message = "permission denied: only a read-tier tool may delegate the caller token"
+			return oc
+		}
+		ok, why := domain.TokenDelegable(req.ToolID, tv.DownstreamActions, req.Scopes)
+		if !ok {
+			oc.Decision, oc.Code, oc.HTTP = events.DecisionDeniedPolicy, domain.CodeScopeNotDelegable, 403
+			oc.Message = "permission denied: " + why
+			oc.Details = map[string]any{"required_scopes": domain.DelegableScopes(req.ToolID, tv.DownstreamActions)}
+			return oc
+		}
+		if req.RawToken == "" {
+			oc.Decision, oc.Code, oc.HTTP = events.DecisionDeniedPolicy, domain.CodeScopeNotDelegable, 403
+			oc.Message = "permission denied: no verified caller token to delegate"
+			return oc
+		}
+		forwardToken = req.RawToken
+	}
+
 	// Step 8: invoke backend over real HTTP.
 	target, err := p.Catalog.BackendFor(ctx, req.ToolID)
 	if err != nil {
@@ -349,6 +393,7 @@ func (p *Pipeline) run(ctx context.Context, req Request) Outcome {
 	res, err := p.Backend.Invoke(ctx, target, mcp.Invocation{
 		ToolID: req.ToolID, Version: tv.Version, Args: req.Args, Tenant: req.TenantStr,
 		OboSub: req.OboSub, AgentID: req.AgentID, TraceID: req.TraceID,
+		AuthToken: forwardToken,
 	}, tier == domain.TierRead)
 	backendMS := int(time.Since(backendStart).Milliseconds())
 	if err != nil {
@@ -369,12 +414,12 @@ func (p *Pipeline) run(ctx context.Context, req Request) Outcome {
 				// this is never mistaken for a successful execution.
 				httpCode = be.StatusCode
 				message = be.Error()
-				switch {
-				case be.StatusCode == 403:
+				switch be.StatusCode {
+				case 403:
 					code = domain.CodePermission
-				case be.StatusCode == 404:
+				case 404:
 					code = domain.CodeNotFound
-				case be.StatusCode == 400 || be.StatusCode == 422:
+				case 400, 422:
 					code = domain.CodeValidation
 				}
 			}

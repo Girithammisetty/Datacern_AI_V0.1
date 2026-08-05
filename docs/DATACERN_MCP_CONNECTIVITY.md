@@ -38,7 +38,9 @@ body, _ := json.Marshal(map[string]any{
 })
 ```
 
-Backends implement `POST /internal/v1/mcp/invoke`. Six services do today: **case, ingestion, inference, chart, experiment, dataset**.
+Backends implement `POST /internal/v1/mcp/invoke`. Seven services do today: **case, ingestion, inference, chart, experiment, dataset, bff-graphql**.
+
+`bff-graphql` is the exception that proves the rule. Every other facade answers out of its OWN store, so the body above (attribution, no credential) is all it needs — it re-authorizes `obo_sub` against its own OPA sidecar. `bff-graphql` hosts exactly one tool, `search.query`, which owns no store and can only answer by reading eight other services AS THE CALLER. For that case, and only that case, the gateway ALSO forwards `Authorization: Bearer <the verified caller token>` — gated on the tool's registered version declaring the downstream actions it will exercise, and on the caller's token being narrowed to exactly that declaration (`tool-plane/internal/domain/delegation.go`, BRD 74 AC-10). A tool that declares nothing receives no `Authorization` header, exactly as before.
 
 **Consequence, stated plainly:** the platform is an MCP *server*, not an MCP *client*. It cannot point at an off-the-shelf third-party MCP server (a Snowflake / Salesforce / EHR MCP server, say) and consume its tools. Closing that means adding an MCP client adapter alongside `HTTPBackend`.
 

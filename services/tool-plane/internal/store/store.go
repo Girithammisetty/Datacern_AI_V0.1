@@ -67,6 +67,15 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
+// nonNilStrings renders a nil slice as an empty TEXT[] rather than SQL NULL —
+// the downstream_actions column is NOT NULL DEFAULT '{}'.
+func nonNilStrings(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
+}
+
 func mustJSON(v any) []byte {
 	b, err := json.Marshal(v)
 	if err != nil {

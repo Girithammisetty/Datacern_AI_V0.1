@@ -78,6 +78,22 @@ config:
   # the allowlist here is the identity gate, the NetworkPolicy the L4 minimum.
   CASE_FACADE_ALLOWED_SPIFFE: spiffe://datacern/ns/tools/sa/mcp-gateway
   CHART_FACADE_ALLOWED_SPIFFE: spiffe://datacern/ns/tools/sa/mcp-gateway
+  # bff-graphql hosts the facade for the ONE cross-service tool (`search.query`,
+  # BRD 74 AC-10): it owns no store, so it answers by reading the eight owning
+  # services with the CALLER's forwarded token — exactly what the `search()`
+  # GraphQL field does.
+  #
+  # This one is different from the two above in a way that matters. bff-graphql
+  # is the platform's only `ingress: public` pod, so it CANNOT be pinned by the
+  # `networkPolicies.facades` default-deny below, and it is deliberately not
+  # listed there. The SPIFFE allowlist is therefore NOT the security boundary
+  # here — it is an off-by-default kill switch. The boundary is the caller's own
+  # JWT: the facade refuses without one, verifies it against the same JWKS
+  # /graphql uses, refuses a `tenant`/`obo_sub` that does not match it, and then
+  # returns precisely what `POST /graphql { search(...) }` returns to that same
+  # token. A spoofed `X-Spiffe-Id` from the internet buys nothing that the
+  # public /graphql endpoint does not already give the same bearer.
+  BFF_FACADE_ALLOWED_SPIFFE: spiffe://datacern/ns/tools/sa/mcp-gateway
 
   # In-cluster service DNS (name:port from deploy/services.yaml). Callers resolve
   # peers via these, never hard-coded hosts.

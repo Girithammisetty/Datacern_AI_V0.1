@@ -112,6 +112,13 @@ type ToolVersion struct {
 	DeclaredSLA         DeclaredSLA    `json:"declared_sla"`
 	SideEffects         string         `json:"side_effects"`
 	Examples            []Example      `json:"examples"`
+	// DownstreamActions is the tool's DECLARED downstream authority: the rbac
+	// actions its backend facade legitimately exercises on other services with
+	// the caller's forwarded token (BRD 74 AC-10). Empty (the default, and every
+	// version registered before the field existed) means the gateway forwards no
+	// Authorization header at all. See delegation.go for the registration-time
+	// and call-time rules.
+	DownstreamActions   []string       `json:"downstream_actions"`
 	Embedding           []float32      `json:"-"`
 	EmbeddingModelVer   string         `json:"embedding_model_ver"`
 	DeprecationEndsAt   *time.Time     `json:"deprecation_ends_at,omitempty"`

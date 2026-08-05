@@ -113,14 +113,15 @@ func (s *PG) ListTools(ctx context.Context, f ToolFilter) ([]*domain.Tool, strin
 // ---- Tool versions ----------------------------------------------------------
 
 const versionCols = `tool_id, version, status, input_schema, output_schema, semantic_description,
-	permission_tier, cost_weight, declared_sla, side_effects, examples, embedding_model_ver,
-	deprecation_ends_at, published_at, created_at, updated_at`
+	permission_tier, cost_weight, declared_sla, side_effects, examples, downstream_actions,
+	embedding_model_ver, deprecation_ends_at, published_at, created_at, updated_at`
 
 func scanVersion(row pgx.Row) (*domain.ToolVersion, error) {
 	var v domain.ToolVersion
 	var inSchema, outSchema, sla, examples []byte
 	err := row.Scan(&v.ToolID, &v.Version, &v.Status, &inSchema, &outSchema, &v.SemanticDescription,
-		&v.PermissionTier, &v.CostWeight, &sla, &v.SideEffects, &examples, &v.EmbeddingModelVer,
+		&v.PermissionTier, &v.CostWeight, &sla, &v.SideEffects, &examples, &v.DownstreamActions,
+		&v.EmbeddingModelVer,
 		&v.DeprecationEndsAt, &v.PublishedAt, &v.CreatedAt, &v.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -145,11 +146,12 @@ func (s *PG) CreateVersion(ctx context.Context, v *domain.ToolVersion, envs []ev
 	err := s.withPlatform(ctx, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO tool_versions (tool_id, tenant_id, version, status, input_schema, output_schema,
-				semantic_description, permission_tier, cost_weight, declared_sla, side_effects, examples)
-			VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,$9,$10,$11)`,
+				semantic_description, permission_tier, cost_weight, declared_sla, side_effects, examples,
+				downstream_actions)
+			VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
 			v.ToolID, domain.PlatformTenant, v.Version, mustJSON(v.InputSchema), mustJSON(v.OutputSchema),
 			v.SemanticDescription, v.PermissionTier, v.CostWeight, mustJSON(v.DeclaredSLA),
-			v.SideEffects, mustJSON(v.Examples))
+			v.SideEffects, mustJSON(v.Examples), nonNilStrings(v.DownstreamActions))
 		if err != nil {
 			return err
 		}
@@ -316,7 +318,8 @@ func (s *PG) SearchByEmbedding(ctx context.Context, tenant uuid.UUID, query []fl
 			var inSchema, outSchema, sla, examples []byte
 			var score float64
 			if err := rows.Scan(&v.ToolID, &v.Version, &v.Status, &inSchema, &outSchema, &v.SemanticDescription,
-				&v.PermissionTier, &v.CostWeight, &sla, &v.SideEffects, &examples, &v.EmbeddingModelVer,
+				&v.PermissionTier, &v.CostWeight, &sla, &v.SideEffects, &examples, &v.DownstreamActions,
+				&v.EmbeddingModelVer,
 				&v.DeprecationEndsAt, &v.PublishedAt, &v.CreatedAt, &v.UpdatedAt, &score); err != nil {
 				return err
 			}
@@ -333,8 +336,8 @@ func (s *PG) SearchByEmbedding(ctx context.Context, tenant uuid.UUID, query []fl
 
 func prefixCols(p string) string {
 	cols := []string{"tool_id", "version", "status", "input_schema", "output_schema", "semantic_description",
-		"permission_tier", "cost_weight", "declared_sla", "side_effects", "examples", "embedding_model_ver",
-		"deprecation_ends_at", "published_at", "created_at", "updated_at"}
+		"permission_tier", "cost_weight", "declared_sla", "side_effects", "examples", "downstream_actions",
+		"embedding_model_ver", "deprecation_ends_at", "published_at", "created_at", "updated_at"}
 	out := ""
 	for i, c := range cols {
 		if i > 0 {

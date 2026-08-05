@@ -95,6 +95,8 @@ func (g *GatewayServer) handleMCP(w http.ResponseWriter, r *http.Request) {
 		c, err := g.Verifier.Verify(r.Context(), tok)
 		if err == nil {
 			cl = c
+		} else {
+			tok = "" // never carry an UNVERIFIED bearer past this point
 		}
 	}
 	if cl == nil {
@@ -117,7 +119,9 @@ func (g *GatewayServer) handleMCP(w http.ResponseWriter, r *http.Request) {
 	case "tools/list":
 		g.handleToolsList(w, r, req, cl)
 	case "tools/call":
-		g.handleToolsCall(w, r, req, cl)
+		// tok is the token this handler VERIFIED above (an unverified bearer was
+		// cleared), so it is safe to delegate to a declaring facade (BRD 74 AC-10).
+		g.handleToolsCall(w, r, req, cl, tok)
 	default:
 		g.writeRPC(w, req.ID, nil, &rpcError{Code: -32601, Message: "method not found"})
 	}
@@ -158,23 +162,36 @@ func (g *GatewayServer) handleToolsList(w http.ResponseWriter, r *http.Request, 
 		if killed, _ := g.Kill.IsKilled(tenant, c.Version.ToolID, c.Version.Version); killed {
 			continue
 		}
-		entry := map[string]any{
-			"name":        c.Version.ToolID,
-			"description": c.Version.SemanticDescription,
-			"inputSchema": c.Version.InputSchema,
-			"_meta":       map[string]any{"version": c.Version.Version, "tier": c.Version.PermissionTier},
-		}
-		if c.Version.Status == domain.StatusDeprecated && c.Version.DeprecationEndsAt != nil {
-			entry["_meta"].(map[string]any)["deprecation"] = map[string]any{"ends_at": c.Version.DeprecationEndsAt}
-		}
-		tools = append(tools, entry)
+		tools = append(tools, toolListEntry(c.Version))
 	}
 	g.writeRPC(w, req.ID, map[string]any{"tools": tools}, nil)
 }
 
+// toolListEntry renders one tools/list entry. A tool that delegates the caller
+// token also publishes WHAT it delegates and the exact scope set a caller must
+// present (BRD 74 AC-10): the caller cannot guess it, and tools/call refuses a
+// token that is not narrowed to it. Both come straight off the registered
+// version — never inferred from the request.
+func toolListEntry(v *domain.ToolVersion) map[string]any {
+	meta := map[string]any{"version": v.Version, "tier": v.PermissionTier}
+	if len(v.DownstreamActions) > 0 {
+		meta["downstream_actions"] = v.DownstreamActions
+		meta["required_scopes"] = domain.DelegableScopes(v.ToolID, v.DownstreamActions)
+	}
+	if v.Status == domain.StatusDeprecated && v.DeprecationEndsAt != nil {
+		meta["deprecation"] = map[string]any{"ends_at": v.DeprecationEndsAt}
+	}
+	return map[string]any{
+		"name":        v.ToolID,
+		"description": v.SemanticDescription,
+		"inputSchema": v.InputSchema,
+		"_meta":       meta,
+	}
+}
+
 // handleToolsCall runs the enforcement pipeline and maps the outcome to the MCP
 // result / JSON-RPC error per the BRD §3 error table.
-func (g *GatewayServer) handleToolsCall(w http.ResponseWriter, r *http.Request, req rpcRequest, cl *authjwt.Claims) {
+func (g *GatewayServer) handleToolsCall(w http.ResponseWriter, r *http.Request, req rpcRequest, cl *authjwt.Claims, verifiedToken string) {
 	tenant, err := cl.Tenant()
 	if err != nil {
 		g.writeRPC(w, req.ID, nil, &rpcError{Code: -32001, Message: "invalid tenant"})
@@ -211,6 +228,12 @@ func (g *GatewayServer) handleToolsCall(w http.ResponseWriter, r *http.Request, 
 		Eval:            evalAuthorized(cl, r),
 		WritesSuspended: cl.WritesSuspended(),
 		ProposalGrant:   params.Meta.ProposalGrant,
+		// Delegation inputs (BRD 74 AC-10): the VERIFIED bearer and its VERIFIED
+		// scopes. The pipeline forwards the token only to a tool that declared
+		// downstream actions and only after checking these scopes are narrowed
+		// to that declaration. Never sourced from the request body.
+		RawToken:        verifiedToken,
+		Scopes:          cl.Scopes,
 		TraceID:         TraceID(r.Context()),
 	}
 	oc := g.Pipeline.Run(r.Context(), er)
