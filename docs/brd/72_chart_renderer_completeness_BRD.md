@@ -1,6 +1,6 @@
 # BRD 72 — Chart renderer completeness
 
-**Status:** inc1–inc2 DONE (unit-verified) — 2026-08-05 · part of the [V1 parity wave-2 index](71_v1_parity_wave2_index.md)
+**Status:** inc1–inc3a DONE (unit-verified) — 2026-08-05 · part of the [V1 parity wave-2 index](71_v1_parity_wave2_index.md)
 **Owner:** platform · **Services:** `ui-web` (+ `pipeline-orchestrator` / `experiment-service` for inc3)
 **Gaps closed:** V1c (distinct renderers for the catalogued types) · V2c (run charts) — **inc3 open, see below**
 
@@ -149,8 +149,8 @@ fetched at render time under the deployment's CSP. `UnsupportedChart` names the 
 | AC-8 | `toForest` terminates on a cycle and preserves every root of a multi-root forest. | ✅ |
 | AC-9 | `bubble_chart` uses the second measure as the radius and does not plot it as its own series. | ✅ |
 | AC-10 | Option builders are pure and unit-tested without a DOM; `ChartView` keeps its SSR-safe fallback. | ✅ |
-| AC-11 | `roc_curve` renders the curve, the y=x reference and the AUC from the run artifact. | ⛔ inc3 |
-| AC-12 | `confusion_matrix` renders an N×N labelled matrix whose cells sum to the run's sample count. | ⛔ inc3 |
+| AC-11 | `roc_curve` renders the curve, the y=x reference and the AUC from the run artifact. | ◐ AUC real; **curve points need inc3b** |
+| AC-12 | `confusion_matrix` renders an N×N labelled matrix whose cells sum to the run's sample count. | ✅ |
 | AC-13 | The chart-proposal agent can propose any renderable type, grounded in the shaped family. | ⛔ inc4 |
 
 ## Implement & Test log
@@ -196,4 +196,70 @@ contract.
 `relational.ts` as **binary** — no diff, no review, no blame. Replaced with
 `JSON.stringify([source, target])`: equally unambiguous, stays text.
 
-_inc3 (run charts, backend-first) and inc4 (agent) remain — see the inc3 plan above._
+### inc3a — the run-chart data path — DONE
+
+The gap was never a missing renderer. Three things had to be true before one could
+draw anything, and none of them were:
+
+**1. `pipeline-orchestrator` now produces the evaluation data.** `_fit_and_score`
+takes an optional `artifacts` dict (the 2-tuple return is unchanged, so every
+existing caller is unaffected) and fills it with:
+
+- `roc_curve` — real `sklearn.metrics.roc_curve` points, downsampled to
+  `MAX_ROC_POINTS=200` with the (0,0)/(1,1) endpoints always retained. sklearn's
+  first threshold is `+inf`; JSON has no infinity, so it is dropped rather than
+  serialized as a value a reader would trust.
+- `confusion_matrix` — labelled, with `labels=classes_` **pinned** on the
+  `confusion_matrix` call. Without that pin sklearn orders by sorted-unique of
+  (y_true ∪ pred), which differs from `classes_` whenever a class is absent from
+  the test split — and the flattened `cm_{i}_{j}` indices would then disagree with
+  the label list.
+- `tree` — a real nested export from `tree_`, depth-bounded (`MAX_TREE_DEPTH=8`)
+  with truncation marked on the payload. Only **single-tree** estimators export: a
+  random forest has hundreds of trees and no one of them explains the model, so
+  exporting tree 0 would be a misleading answer dressed as an authoritative one.
+
+Written to MLflow as `evaluation.json` (`EVAL_ARTIFACT_PATH`), plus a
+`datacern.class_labels` **tag** — tags are mirrored into experiment-service's
+Postgres, artifact blobs are not.
+
+**2. `experiment-service` now has the endpoint that was 404ing.**
+`GET /api/v1/artifacts?urn=<run urn>` — mirroring dataset-service's identical
+route — returns `{kind:"run_summary", metrics, confusion_matrix?, roc_auc?}` built
+**entirely from the Postgres mirror**, so the service's "never read MLflow in the
+request path" invariant holds. The matrix reconstructs from the flattened
+`cm_{i}_{j}` metrics; labels come from the tag, falling back to positional
+`Class 0..n-1` (an unlabelled real matrix beats no matrix), and a labels tag of the
+wrong length is ignored rather than used to mislabel.
+
+**3. `ui-web` renders it.** `RunChart` draws the confusion matrix for real —
+row-normalized blue scale, per-cell `actual → predicted` titles, and a refusal to
+render when the label count disagrees with the row count. `roc_curve` shows the
+real mirrored AUC and says the curve needs the artifact; `decision_tree` says the
+same. Neither draws an invented curve or tree.
+
+**Test:** `pipeline-orchestrator/tests/unit/test_run_eval_artifacts.py` (21) — ROC
+monotonic and spanning the unit square, positive label recorded, downsampling
+bounded, infinite threshold dropped, no curve for multiclass; matrix labelled,
+square, summing to `test_rows`, agreeing cell-for-cell with the flattened metrics,
+and surviving a class absent from the split; tree split conditions real, samples
+splitting between children, depth-bounded with truncation visible, regressor leaves
+numeric, and no tree exported for a forest.
+`experiment-service/tests/unit/test_run_metric_artifact.py` (15) — reconstruction,
+labelling and its three fallbacks, 3×3 sizing, no matrix claimed for a regression
+run, non-`cm_` metrics never leaking in, dataset URNs rejected, unknown run 404,
+HTTP reachability, cross-tenant 404.
+`ui-web/src/components/charts/RunChart.test.tsx` (11).
+Suites: orchestrator **241**, experiment-service **80**, ui-web **932** — all green;
+ruff + `tsc` clean.
+
+### inc3b — remaining (ROC curve + decision tree visuals)
+
+The curve points and tree structure exist in the run's `evaluation.json` but the
+mirror does not carry artifact blobs, so the two renderers have nothing to draw
+yet. Closing it means fetching that blob — either into the reconciliation sweep
+(keeping reads local, consistent with the service's invariant) or through an
+object-store read leg on the artifact endpoint. Deliberately **not** guessed at
+here: the alternative was a renderer drawing a curve nobody computed.
+
+_inc4 (agent proposal over the full type set) also remains._
