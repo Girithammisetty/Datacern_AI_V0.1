@@ -188,6 +188,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---- identity-service ----
+  // GET /tenants/self — the BFF's viewerTenant. Its resolver CATCHES the failure
+  // and returns nulls, so the missing route never broke a page; it just logged
+  // "identity tenantSelf failed" on every single load, which is the kind of
+  // permanent noise that trains people to ignore the console.
+  if (p === "/api/v1/tenants/self") {
+    return send(res, 200, { id: "t-acme", name: "acme", display_name: "Acme Insurance",
+                            status: "active" });
+  }
   if (p === "/api/v1/users") {
     const ids = q.get("filter[id]");
     const list = ids ? ids.split(",").map((id) => users[id]).filter(Boolean) : Object.values(users);
@@ -297,6 +305,18 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/v1/dashboards") return send(res, 200, page(Object.values(dashboards)));
   const dashDataM = p.match(/^\/api\/v1\/dashboards\/(.+)\/data$/);
   if (dashDataM && req.method === "POST") return send(res, 200, { data: Object.values(chartData) });
+  // GET /dashboards/{id}/charts — the list the BFF's Dashboard.charts resolver
+  // calls (GET /dashboards/{id} does NOT embed children). This MUST precede the
+  // /dashboards/(.+) catch-all: that pattern is greedy, so without this it
+  // captured "dash-1/charts" as an id, 404'd, and every dashboard rendered with
+  // zero charts — which looked like an empty dashboard rather than a missing
+  // route.
+  const dashChartsM = p.match(/^\/api\/v1\/dashboards\/(.+)\/charts$/);
+  if (dashChartsM) {
+    const d = dashboards[dashChartsM[1]];
+    if (!d) return send(res, 404, { error: { code: "NOT_FOUND", message: "x", trace_id: "t" } });
+    return send(res, 200, { data: (d.chart_ids ?? []).map((id) => charts[id]).filter(Boolean) });
+  }
   const dashM = p.match(/^\/api\/v1\/dashboards\/(.+)$/);
   if (dashM) {
     const d = dashboards[dashM[1]];

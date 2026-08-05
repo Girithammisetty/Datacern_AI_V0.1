@@ -27,34 +27,13 @@ const ROWS = [["a", 1], ["b", 2]];
 beforeEach(() => init.mockReset());
 
 describe("chart engine failure is loud", () => {
-  // NOT COVERED BY A TEST — and here is exactly why, so the next person does not
-  // repeat the three attempts this took.
-  //
-  // The branch: ECharts fails in a browser that DOES support canvas. The code is
-  // there (`EChartsChart.tsx` wraps both `echarts.init` and `setOption`, logs the
-  // real error, and sets `initError`); what is missing is a way to execute it.
-  //
-  //  1. jsdom has no canvas at all, so it always takes the OTHER branch — the
-  //     expected, silent one asserted below. It can never reach this one.
-  //  2. Mocking `echarts/core`'s `init` to throw does make it throw, but the
-  //     exception surfaces as an unhandled test error rather than reaching the
-  //     component's catch (a vitest/React-19 effect-boundary interaction, not a
-  //     defect in the code under test).
-  //  3. Playwright is the right tool — a real Chromium with a real canvas, with
-  //     `getContext("2d")` patched to return a context missing the methods
-  //     ECharts needs, which is how this fails in the wild (locked-down
-  //     enterprise builds, GPU blocklists, fingerprinting blockers). It was
-  //     written and run. It fails at a HARNESS limitation, not at the assertion:
-  //     neither `/dashboards/[id]` nor `/embed/dashboard/[id]` renders a chart
-  //     under `tests-e2e/`. The contract server serves chart data but is missing
-  //     routes the app shell needs (`/api/v1/tenants/self` errors on every load),
-  //     and the embed route requires a short-lived embed token from middleware.
-  //     Covering this needs contract-server work first — a bigger change than the
-  //     test, and not one to smuggle in here.
-  //
-  // Recorded rather than deleted quietly, and rather than left as a red test:
-  // an unverified branch that everyone knows about is fine; one that looks
-  // covered is not.
+  // The OTHER branch — ECharts failing in a browser that DOES support canvas —
+  // is covered in `tests-e2e/chart-engine-failure.spec.ts`, not here. jsdom has
+  // no canvas at all, so this tier can only ever reach the expected-and-silent
+  // path asserted below; and mocking `echarts/core`'s `init` to throw surfaces
+  // as an unhandled test error rather than reaching the component's catch. The
+  // e2e spec runs a real Chromium with `getContext("2d")` patched to return a
+  // context missing the methods ECharts needs — how this fails in the wild.
   it("stays silent when the environment genuinely lacks canvas", () => {
     // Default jsdom: the feature gate returns before init, and the fallback
     // renders the same real data. Nothing failed, so nothing is reported.
