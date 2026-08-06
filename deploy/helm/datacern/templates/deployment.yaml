@@ -60,7 +60,14 @@ spec:
           imagePullPolicy: {{ default "IfNotPresent" $root.Values.global.imagePullPolicy }}
           ports:
             - name: http
-              containerPort: {{ $svc.port }}
+              {{- /* listenPort: what the CONTAINER actually binds, when the
+                 image bakes a port that differs from the service's published
+                 port (8 Python images hardcode --port in their ENTRYPOINT;
+                 found on the first real GCP rollout: uvicorn on 8084 while the
+                 probe checked 8304). Probes and the Service targetPort follow
+                 this named port automatically; $svc.port stays the cluster-
+                 facing port on the Service. */}}
+              containerPort: {{ $svc.listenPort | default $svc.port }}
           envFrom:
             - configMapRef:
                 name: datacern-config
@@ -83,7 +90,7 @@ spec:
                  env wins over envFrom, so each service gets its own DB DSN. */}}
           env:
             - name: LISTEN_ADDR
-              value: ":{{ $svc.port }}"
+              value: ":{{ $svc.listenPort | default $svc.port }}"
             {{- with $svc.env }}
             {{- toYaml . | nindent 12 }}
             {{- /* B9 HA ClickHouse: audit-service only, opt-in, additive to the
