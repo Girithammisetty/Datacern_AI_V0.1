@@ -261,7 +261,7 @@ kubectl -n datacern get statefulset,pod
 ## Step 8 — Secrets
 
 ```bash
-cd deploy/k8s/data-tier && ./create-secrets.sh
+(cd deploy/k8s/data-tier && ./create-secrets.sh)
 ```
 
 ```bash
@@ -282,7 +282,16 @@ fails:
   in `ci.yml`). Point it at your own namespace.
 - **`global.imageTag`** — CI publishes `${{ github.sha }}`, and **only on pushes to `main` or
   tags**, never on pull requests. So use the SHA of a `main` commit whose CI run went green,
-  not your working branch's HEAD.
+  not your working branch's HEAD. Do not assume the newest `main` commit qualifies: the
+  build-push matrix can partially fail, leaving a SHA with images for some services and not
+  others, which installs cleanly and then `ImagePullBackOff`s on whichever service is
+  missing. Verify a complete set first — this asks GHCR directly, using the pull secret
+  already in the cluster, and prints the newest `main` commits whose images cover every
+  service in the chart:
+
+  ```bash
+  deploy/gcp-demo/find-image-tag.sh
+  ```
 - **`storageClass`** — `local-path`, per step 6.
 
 ```bash
