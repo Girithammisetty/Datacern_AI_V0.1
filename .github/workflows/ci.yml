@@ -698,7 +698,13 @@ jobs:
     # killed the job before the soaks could run EVEN WITH everything passing.
     # 90 = measured setup+journeys (~19m) + suite headroom (~35m) + both soaks
     # (~25m allowance, unmeasured until they complete once) + teardown margin.
-    timeout-minutes: 90
+    # 120 (was 90, 2026-08-06): with all seven journeys decoupled and
+    # guaranteed to run, the first full execution measured setup+boot ~17m,
+    # journeys ~16m, and the Playwright suite still running at the 90m
+    # ceiling (69m in) — the job died mid-suite and starved the soaks. The
+    # suite also carries its own 60m step bound so a slow suite can never
+    # eat the soaks' slot again: worst case ~17+16+60+soaks+teardown < 120.
+    timeout-minutes: 120
     # Same per-commit rule as the workflow-level group above, and for the same
     # reason. Making the WORKFLOW group per-commit was not enough: this job
     # carries its own group, so a per-ref group here kept doing exactly what
@@ -885,6 +891,7 @@ jobs:
 
       - name: Run live-stack E2E suite (pnpm e2e:live)
         if: ${{ !cancelled() && steps.doctor.outcome == 'success' }}
+        timeout-minutes: 60
         working-directory: services/ui-web
         env:
           CI: "true"
