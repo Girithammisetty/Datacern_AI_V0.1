@@ -900,6 +900,15 @@ services:
     # Reads DATABASE_URL, MIGRATE_DATABASE_URL, REDIS_ADDR, KAFKA_BROKERS,
     # S3_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY.
     env:
+      # Object store (MinIO Go SDK wants host:port, no scheme — the same
+      # contract as identity/case/audit; found missing on the first real GCP
+      # rollout: the service defaulted to localhost:9000 and crashlooped).
+      - name: MINIO_ENDPOINT
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_HOSTPORT } }
+      - name: MINIO_ACCESS_KEY
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_ACCESS_KEY } }
+      - name: MINIO_SECRET_KEY
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_SECRET_KEY } }
       - name: DATABASE_URL
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: QUERY_DATABASE_URL } }
       - name: MIGRATE_DATABASE_URL
@@ -949,6 +958,15 @@ services:
     # Reads DATABASE_URL, MIGRATE_DATABASE_URL, REDIS_ADDR, KAFKA_BROKERS.
     # (Exports to local FS EXPORT_ROOT — no object store.)
     env:
+      # Object store (MinIO Go SDK wants host:port, no scheme — the same
+      # contract as identity/case/audit; found missing on the first real GCP
+      # rollout: the service defaulted to localhost:9000 and crashlooped).
+      - name: MINIO_ENDPOINT
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_HOSTPORT } }
+      - name: MINIO_ACCESS_KEY
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_ACCESS_KEY } }
+      - name: MINIO_SECRET_KEY
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_SECRET_KEY } }
       - name: DATABASE_URL
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: CHART_DATABASE_URL } }
       - name: MIGRATE_DATABASE_URL
@@ -968,6 +986,15 @@ services:
     # Reads DATABASE_URL, MIGRATE_DATABASE_URL, REDIS_ADDR, KAFKA_BROKERS.
     # (Does NOT read ClickHouse — only audit-service does.)
     env:
+      # Object store (MinIO Go SDK wants host:port, no scheme — the same
+      # contract as identity/case/audit; found missing on the first real GCP
+      # rollout: the service defaulted to localhost:9000 and crashlooped).
+      - name: MINIO_ENDPOINT
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_HOSTPORT } }
+      - name: MINIO_ACCESS_KEY
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_ACCESS_KEY } }
+      - name: MINIO_SECRET_KEY
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_SECRET_KEY } }
       - name: DATABASE_URL
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: USAGE_DATABASE_URL } }
       - name: MIGRATE_DATABASE_URL
