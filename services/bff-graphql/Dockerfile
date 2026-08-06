@@ -27,4 +27,11 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["pnpm", "start"]
+# Exec tsx via node directly — NOT `pnpm start`. pnpm resolves through
+# corepack at container runtime, and corepack wants a writable
+# $HOME/.cache/node/corepack (and, on a cache miss, the network) before it
+# will run anything. Under uid 1000 with the chart's pod security context
+# that mkdir fails and the container dies before src/index.ts ever loads —
+# observed on the first real GCP rollout as a CrashLoopBackOff with a
+# corepack ENOENT stack. The runtime dependency is tsx, not pnpm; call it.
+CMD ["node", "node_modules/tsx/dist/cli.mjs", "src/index.ts"]
