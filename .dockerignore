@@ -1,0 +1,43 @@
+# Keep the build context clean — and, more importantly, keep a LOCAL docker build
+# producing the same image CI does.
+#
+# Every Python service Dockerfile ends with a broad source copy, e.g.
+#   COPY services/agent-runtime/ ./
+# which lands AFTER `uv sync` has built /app/.venv. On a developer machine that
+# copy overwrites the freshly built venv with the host's services/<svc>/.venv, and
+# the container ends up with a venv whose interpreter symlink points at the
+# developer's laptop:
+#
+#   /app/.venv/bin/python ->
+#     /Users/<someone>/.local/share/uv/python/cpython-3.12-macos-aarch64-none/bin/python3.12
+#
+# The symlink is unresolvable in the container, so a bare `python` silently falls
+# through PATH to the system interpreter, which has none of the service's
+# dependencies — every import of datacern_common fails. It went unnoticed because
+# the images ran `uv run ...`, and uv quietly rebuilds a broken venv on each
+# start; that repair is impossible once the pod is non-root on a read-only root
+# filesystem, which is when it finally surfaced.
+#
+# CI never hit this: .venv is gitignored, so actions/checkout produces a tree
+# without one. That divergence is the real hazard — a local build could not
+# reproduce a CI image, and a local build was quietly broken in a way no test
+# covered.
+.venv/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+
+# Git metadata and local tooling: large, and nothing in a runtime image needs it.
+.git/
+.github/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/node_modules/
+**/.next/
+
+# Local state that must never reach an image.
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
