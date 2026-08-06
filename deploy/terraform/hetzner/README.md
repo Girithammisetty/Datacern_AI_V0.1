@@ -73,7 +73,7 @@ immediately and you can skip the CSI step above.
    ```bash
    # one manual pre-step (OPA policy bundle), then:
    kubectl apply -k deploy/k8s/data-tier
-   kubectl -n datacern exec deploy/ollama -- ollama pull llama3.2:3b
+   kubectl -n datacern exec statefulset/ollama -- ollama pull llama3.2:3b
    ```
    **Optional add-ons** (kept out of the kustomization so `apply -k` stays lean):
    Vault (dev-mode BYO-secrets backend) and Mailpit (SMTP capture, UI on `:8025`):

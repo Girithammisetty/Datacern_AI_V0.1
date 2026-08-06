@@ -79,24 +79,11 @@ brew install kubectl helm
 You also need a **GitHub PAT with `read:packages`** — the Datacern images are private on
 GHCR. Create one at github.com/settings/tokens.
 
-### Two things that bite new accounts
-
-**CPU quota.** A fresh project often ships with a low per-region CPU quota. The
-`e2-standard-8` below needs 8 vCPUs, which typically fits — but if you later resize to
-`e2-standard-16` you may hit the ceiling. Check before you need it:
-
-```bash
-gcloud compute regions describe us-central1 --format="value(quotas.filter(metric:CPUS).limit)"
-```
-
-If it's too low, request an increase under *IAM & Admin → Quotas* in the console. Approval is
-usually quick but is not instant, so do it before demo day, not during.
-
-**Trial accounts have restrictions** beyond quota — notably around GPUs. That doesn't affect
-this runbook (there's no GPU here), but it will if you later try
+**Trial accounts have restrictions** — notably around GPUs. That doesn't affect this runbook
+(there's no GPU here), but it will if you later try
 `deploy/terraform/gcp/gpu_training_pool.tf`.
 
-## Step 0b — Authenticate and set your shell
+## Step 0b — Authenticate and enable the Compute API
 
 ```bash
 gcloud auth login
@@ -113,11 +100,44 @@ export PROJECT=your-gcp-project-id; export ZONE=us-central1-a; export VM=datacer
 gcloud config set project "$PROJECT"
 ```
 
-Enabling the Compute API takes a minute or two on a new project:
+**Enable the Compute API before anything else touches compute.** On a brand-new project
+nothing compute-related works until this lands, including read-only calls like the quota
+check below — they fail with `API [compute.googleapis.com] not enabled on project`. It takes
+a minute or two:
 
 ```bash
 gcloud services enable compute.googleapis.com
 ```
+
+## Step 0c — Check your CPU quota
+
+A fresh project often ships with a low per-region CPU quota. The `e2-standard-8` below needs
+8 vCPUs, which typically fits — but if you later resize to `e2-standard-16` you may hit the
+ceiling. Check before you need it:
+
+The number that matters is **`E2_CPUS`**, not the overall `CPUS` — machine families have
+their own quotas, and it is the family one that stops an `e2-standard-8` from booting.
+
+```bash
+gcloud compute regions describe us-east1 --format="yaml(quotas)" | grep -B1 "metric: E2_CPUS"
+```
+
+`-B1` because `limit` prints on the line *above* `metric` in that output.
+
+Two dead ends worth naming, since both look plausible and neither works:
+`gcloud compute regions describe` does not accept `--filter` (that is a `list`-only flag, and
+it errors with `unrecognized arguments`), and a `.filter()` call inside a `--format`
+projection fails with `Transform function expected`. Dumping the quota block and grepping it
+is the reliable form.
+
+Anything **8 or above** is enough for this runbook. Quotas are per-region, so re-check if you
+change region. If it is too low, request an increase under *IAM & Admin → Quotas* in the
+console — usually quick, but not instant, so do it before demo day rather than during.
+
+While you have the list open, two other entries are worth noting. `PREEMPTIBLE_CPUS` is
+commonly **0** on a new project, which settles the Spot question for you. And `SSD_TOTAL_GB`
+(often 500) constrains `pd-balanced` and `pd-ssd` only — this runbook uses `pd-standard`,
+which counts against `DISKS_TOTAL_GB` instead.
 
 ## Step 1 — Reserve a static IP
 
@@ -187,25 +207,61 @@ On Linux drop the `''` after `-i`. Do this on a branch — it edits tracked file
 Self-hosted Postgres, Redpanda, MinIO, Iceberg REST, OpenSearch, ClickHouse, Redis, OPA,
 Keycloak, Temporal, MLflow, Ollama, Trino — the same components as `docker-compose.dev.yml`.
 
+**First, the OPA policy bundle.** This is a required manual pre-step — the Rego lives in
+rbac-service and is loaded from files rather than inlined, so it is created imperatively to
+avoid drift. Skip it and the `opa` pod sits in `ContainerCreating` forever with
+`MountVolume.SetUp failed for volume "policy" : configmap "opa-policy" not found`, and authz
+fails downstream:
+
+```bash
+kubectl create namespace datacern --dry-run=client -o yaml | kubectl apply -f -
+```
+
+```bash
+kubectl -n datacern create configmap opa-policy --from-file=services/rbac-service/policy/datacern_authz.rego --from-file=services/rbac-service/policy/datacern_authz_input.rego
+```
+
+Then the data tier itself:
+
 ```bash
 kubectl apply -k deploy/k8s/data-tier
 ```
 
+The `commonLabels is deprecated` warning from kustomize is expected and harmless.
+
+Pulling the model needs the Ollama pod actually running, so wait for it first — `exec` against
+a pod that is still `ContainerCreating` fails in a way that reads like the workload is missing:
+
 ```bash
-kubectl -n datacern exec deploy/ollama -- ollama pull llama3.2:3b
+kubectl -n datacern rollout status statefulset/ollama --timeout=300s
 ```
 
-Wait for it to settle before continuing — the app services will crashloop against a Postgres
-that isn't up yet.
+```bash
+kubectl -n datacern exec statefulset/ollama -- ollama pull llama3.2:3b
+```
+
+Note `statefulset/ollama`, **not** `deploy/ollama` — Ollama is a StatefulSet (it carries a
+PVC for the model weights), and `kubectl exec deploy/ollama` fails with
+`deployments.apps "ollama" not found`. The same goes for Postgres, Redpanda, MinIO,
+OpenSearch, ClickHouse and Iceberg REST; only Keycloak, MLflow, OPA, Redis, Temporal and
+Trino are Deployments. `kubectl apply -k` prints the kind for each, which is the quickest way
+to check.
+
+Then let the rest settle — the app services in step 9 will crashloop against a Postgres that
+is not up yet. This waits on Deployments only, so pair it with a look at the StatefulSets:
 
 ```bash
 kubectl -n datacern wait --for=condition=available --timeout=900s deploy --all
 ```
 
+```bash
+kubectl -n datacern get statefulset,pod
+```
+
 ## Step 8 — Secrets
 
 ```bash
-cd deploy/k8s/data-tier && ./create-secrets.sh
+(cd deploy/k8s/data-tier && ./create-secrets.sh)
 ```
 
 ```bash
@@ -226,16 +282,39 @@ fails:
   in `ci.yml`). Point it at your own namespace.
 - **`global.imageTag`** — CI publishes `${{ github.sha }}`, and **only on pushes to `main` or
   tags**, never on pull requests. So use the SHA of a `main` commit whose CI run went green,
-  not your working branch's HEAD.
+  not your working branch's HEAD. Do not assume the newest `main` commit qualifies: the
+  build-push matrix can partially fail, leaving a SHA with images for some services and not
+  others, which installs cleanly and then `ImagePullBackOff`s on whichever service is
+  missing. Verify a complete set first — this asks GHCR directly, using the pull secret
+  already in the cluster, and prints the newest `main` commits whose images cover every
+  service in the chart:
+
+  ```bash
+  deploy/gcp-demo/find-image-tag.sh
+  ```
 - **`storageClass`** — `local-path`, per step 6.
 
+Run this **from the repository root**, and note `-n datacern`:
+
 ```bash
-helm upgrade --install datacern deploy/helm/datacern -f deploy/helm/datacern/values-hetzner.yaml --set storageClass=local-path --set global.registry=ghcr.io/girithammisetty --set global.imageTag=<main-commit-sha>
+helm upgrade --install datacern deploy/helm/datacern -n datacern --create-namespace -f deploy/helm/datacern/values-hetzner.yaml --set storageClass=local-path --set global.registry=ghcr.io/girithammisetty --set global.imageTag=<main-commit-sha> --timeout 20m
 ```
 
+Two flags that are not optional:
+
+**`-n datacern`.** Helm does not read the namespace from the chart; without it everything
+lands in `default`, where the data tier's ClusterIP names (`postgres`, `redis`, `redpanda`)
+do not resolve and the `ghcr-pull` secret does not exist. The failure appears several minutes
+later as a stuck migrate Job, with nothing pointing at the namespace.
+
+**`--timeout 20m`.** Helm's default is 5 minutes for the whole pre-install phase, which has to
+cover a database bootstrap plus a migration Job for every service, on first-pull images. The
+default expires mid-way and reports `context deadline exceeded`, which reads like a hang
+rather than a deadline.
+
 Note the key is `global.registry`, not `global.image.registry` — the chart reads
-`$g.registry` in `_helpers.tpl`. (`cd-aws.yml` and `cd-azure.yml` set the latter, which the
-chart ignores; that's a bug in those workflows, not a pattern to copy.)
+`$g.registry` in `_helpers.tpl`. (`cd-aws.yml` and `cd-azure.yml` used to set the latter,
+which the chart ignored; both now set `global.registry`.)
 
 Database creation and migrations are Helm hooks (`bootstrap-job.yaml` at weight -10,
 `migrate-job.yaml` at -5), so schema setup happens automatically in the right order. Watch

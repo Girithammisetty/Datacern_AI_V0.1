@@ -61,7 +61,7 @@ kubectl apply -k deploy/k8s/data-tier
 kubectl -n datacern get pods -w
 
 # 4) Pull a small model for CPU Ollama.
-kubectl -n datacern exec deploy/ollama -- ollama pull llama3.2:3b
+kubectl -n datacern exec statefulset/ollama -- ollama pull llama3.2:3b
 
 # 5) Create datacern-secrets (compose dev defaults, pointed at this data tier).
 #    Idempotent; override any value via env (PG_PASSWORD=... OBJ_SECRET=... etc.).
@@ -81,8 +81,8 @@ production, don't run this script: sync `datacern-secrets` from your cloud secre
 manager via External Secrets with real, rotated values.
 
 ## Notes
-- **StorageClass** is `hcloud-volumes` throughout — change it (`sed -i
-  's/hcloud-volumes/<your-sc>/'`) for a different CSI.
+- **StorageClass** is `local-path` throughout — change it (`sed -i
+  's/local-path/<your-sc>/'`) for a different CSI.
 - **OpenSearch** runs a privileged init container to set `vm.max_map_count`, and
   `bootstrap.memory_lock=false` (avoids the unbounded-memlock ulimit requirement
   in k8s).

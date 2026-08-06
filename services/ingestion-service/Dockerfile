@@ -17,8 +17,14 @@ FROM python:3.12-slim-bookworm AS runtime
 RUN useradd --uid 10001 --no-create-home datacern
 WORKDIR /srv
 COPY --from=build /srv /srv
+# py-common is an EDITABLE path dependency, so the venv contains only a .pth
+# pointing at /libs/py-common. Copying /srv alone shipped a dangling pointer and
+# the service died on `import datacern_common` — the same defect the other Python
+# images had, just via a venv instead of system site-packages.
+COPY --from=build /libs/py-common /libs/py-common
 ENV PATH="/srv/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 USER 10001
 EXPOSE 8083
 HEALTHCHECK CMD ["python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8083/healthz')"]
