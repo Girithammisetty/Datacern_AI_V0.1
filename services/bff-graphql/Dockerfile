@@ -15,7 +15,12 @@ COPY services/bff-graphql/package.json services/bff-graphql/tsconfig.json ./
 COPY services/bff-graphql/src ./src
 
 # Drop privileges.
-USER node
+# 1000 numerically, not the `node` NAME the official Node image defines — the
+# kubelet cannot resolve a username and refuses the pod under runAsNonRoot:
+#   container has runAsNonRoot and image has non-numeric user (node),
+#   cannot verify user is non-root
+# 1000 is the uid `node` already maps to in node:*-slim/alpine images.
+USER 1000
 EXPOSE 4000
 
 # Liveness probe target: GET /healthz (no downstream deps).

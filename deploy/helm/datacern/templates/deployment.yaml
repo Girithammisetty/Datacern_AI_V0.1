@@ -10,7 +10,18 @@ metadata:
     {{- include "datacern.labels" $root | nindent 4 }}
     {{- include "datacern.selectorLabels" (dict "svc" $svc "root" $root) | nindent 4 }}
 spec:
-  replicas: {{ default 1 $svc.replicas }}
+  {{- /*
+  global.replicaOverride collapses every service to the same replica count,
+  for single-node targets where the per-service defaults do not fit. Most
+  services default to 2, which on one 8-vCPU node sums to cpu 8 (100%) of
+  requests once the data tier is also resident — and that produces a deadlock
+  rather than a slowdown: new pods cannot schedule ("Insufficient cpu"), old
+  pods are not removed because the new ones never become Ready, and the
+  pre-upgrade migrate hook cannot schedule either, so helm blocks until its
+  timeout with no progress possible.
+  Unset on every hyperscaler profile, so their per-service replicas stand.
+  */}}
+  replicas: {{ $root.Values.global.replicaOverride | default $svc.replicas | default 1 }}
   selector:
     matchLabels:
       {{- include "datacern.selectorLabels" (dict "svc" $svc "root" $root) | nindent 6 }}

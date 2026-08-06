@@ -28,7 +28,12 @@ COPY --from=build /app/.next ./.next
 COPY --from=build /app/public ./public
 COPY --from=build /app/next.config.* ./
 COPY --from=build /app/package.json ./package.json
-USER node
+# 1000 numerically, not the `node` NAME the official Node image defines — the
+# kubelet cannot resolve a username and refuses the pod under runAsNonRoot:
+#   container has runAsNonRoot and image has non-numeric user (node),
+#   cannot verify user is non-root
+# 1000 is the uid `node` already maps to in node:*-slim/alpine images.
+USER 1000
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

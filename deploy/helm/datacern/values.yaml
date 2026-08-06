@@ -478,7 +478,8 @@ services:
     ingress: internal
     replicas: 2
     resources: *res-medium
-    # Reads: DATABASE_URL, MIGRATE_DATABASE_URL, REDIS_ADDR, KAFKA_BROKERS.
+    # Reads: DATABASE_URL, MIGRATE_DATABASE_URL, REDIS_ADDR, KAFKA_BROKERS, and
+    # MINIO_* for the tenant-branding logo store.
     # OPA_URL/RBAC_URL/KEYCLOAK_URL/KEYCLOAK_ADMIN_* arrive via envFrom.
     env:
       - name: DATABASE_URL
@@ -489,6 +490,30 @@ services:
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: REDIS_ADDR } }
       - name: KAFKA_BROKERS
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: KAFKA_BOOTSTRAP } }
+      # The tenant-branding logo store is NOT optional in a real deployment.
+      # cmd/server/main.go:249 enters the MinIO branch whenever requireReal is
+      # set, defaults the endpoint to localhost:9000 when MINIO_ENDPOINT is
+      # empty, and then os.Exit(1)s on the connection failure:
+      #   tenant branding logo store init failed: ... dial tcp [::1]:9000:
+      #   connect: connection refused
+      # so identity-service crashlooped on every start. audit-service already
+      # wires these three from the same keys; identity-service was simply
+      # missing them.
+      - name: MINIO_ENDPOINT
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_HOSTPORT } }
+      - name: MINIO_ACCESS_KEY
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_ACCESS_KEY } }
+      - name: MINIO_SECRET_KEY
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_SECRET_KEY } }
+      # identity-service reads USAGE_SERVICE_URL (cmd/server/main.go:360); the
+      # shared config publishes the same endpoint as USAGE_URL, which is what
+      # bff-graphql reads. Under REQUIRE_REAL_ADAPTERS=true the mismatch is fatal
+      # rather than a degradation:
+      #   REQUIRE_REAL_ADAPTERS=true but USAGE_SERVICE_URL is unset — refusing to
+      #   boot on the poc progress/export disabled fallback
+      # Mapped from the existing config entry so there is one endpoint value.
+      - name: USAGE_SERVICE_URL
+        valueFrom: { configMapKeyRef: { name: datacern-config, key: USAGE_URL } }
 
   - name: rbac-service
     language: go
@@ -497,7 +522,8 @@ services:
     ingress: internal
     replicas: 2
     resources: *res-medium
-    # Reads: DATABASE_URL, MIGRATE_DATABASE_URL, REDIS_ADDR, KAFKA_BROKERS.
+    # Reads: DATABASE_URL, MIGRATE_DATABASE_URL, REDIS_ADDR, KAFKA_BROKERS,
+    # AUTH_JWKS_URL.
     env:
       - name: DATABASE_URL
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: RBAC_DATABASE_URL } }
@@ -507,6 +533,15 @@ services:
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: REDIS_ADDR } }
       - name: KAFKA_BROKERS
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: KAFKA_BOOTSTRAP } }
+      # rbac-service is the ONLY service that names this variable AUTH_JWKS_URL
+      # (cmd/server/main.go:243); case-service, usage-service,
+      # notification-service and fhir-bridge all read plain JWKS_URL, which is
+      # what the shared config supplies. Without it rbac-service exits at start:
+      #   {"level":"ERROR","msg":"fatal","err":"set AUTH_JWKS_URL or AUTH_PUBLIC_KEY_PEM"}
+      # Mapped from the existing JWKS_URL entry rather than duplicating the URL,
+      # so there is one value and no chance of the two drifting apart.
+      - name: AUTH_JWKS_URL
+        valueFrom: { configMapKeyRef: { name: datacern-config, key: JWKS_URL } }
 
   - name: ingestion-service
     language: python
@@ -676,7 +711,7 @@ services:
       - name: KAFKA_BROKERS
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: KAFKA_BOOTSTRAP } }
       - name: MINIO_ENDPOINT
-        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_ENDPOINT } }
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_HOSTPORT } }
       - name: MINIO_ACCESS_KEY
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_ACCESS_KEY } }
       - name: MINIO_SECRET_KEY
@@ -961,7 +996,7 @@ services:
       - name: KAFKA_BROKERS
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: KAFKA_BOOTSTRAP } }
       - name: MINIO_ENDPOINT
-        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_ENDPOINT } }
+        valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_HOSTPORT } }
       - name: MINIO_ACCESS_KEY
         valueFrom: { secretKeyRef: { name: datacern-secrets, key: OBJECTSTORE_ACCESS_KEY } }
       - name: MINIO_SECRET_KEY

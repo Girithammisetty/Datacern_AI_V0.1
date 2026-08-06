@@ -11,5 +11,12 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tool-registry ./cm
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/tool-registry /usr/bin/tool-registry
-USER nonroot
+# 65532 numerically, not the `nonroot` NAME distroless defines. Kubernetes only
+# sees the image config string and cannot resolve a username to a uid, so under
+# podSecurityContext.runAsNonRoot: true the kubelet refuses to start a container
+# it cannot verify:
+#   container has runAsNonRoot and image has non-numeric user (nonroot),
+#   cannot verify user is non-root
+# Same uid, same process owner — only now the kubelet can confirm it.
+USER 65532
 ENTRYPOINT ["/usr/bin/tool-registry"]

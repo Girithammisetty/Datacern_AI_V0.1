@@ -9,6 +9,13 @@
 # (see deploy/terraform/hetzner/README.md), then this chart on top.
 
 global:
+  # One replica per service. This profile targets a SINGLE node (k3s on one VM),
+  # and the per-service defaults — mostly 2 — sum to 100% of an 8-vCPU node's
+  # allocatable CPU once the in-cluster data tier is resident. That does not
+  # degrade gracefully: it deadlocks, because the pre-upgrade migrate hook cannot
+  # be scheduled either, so helm waits out its timeout having applied nothing.
+  # A demo does not need HA; remove this on any multi-node target.
+  replicaOverride: 1
   # GHCR images (values.yaml default). Override global.imageTag at deploy time.
   registry: ghcr.io/datacern-ai
   # Private GHCR packages: no cloud workload identity on Hetzner, so pods pull

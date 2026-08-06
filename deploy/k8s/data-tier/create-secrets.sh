@@ -41,6 +41,23 @@ OBJ_ACCESS="${OBJ_ACCESS:-datacern}"
 OBJ_SECRET="${OBJ_SECRET:-datacern_dev}"
 OBJ_REGION="${OBJ_REGION:-us-east-1}"
 
+# The object store needs TWO spellings, because its consumers disagree and
+# neither is wrong:
+#
+#   OBJECTSTORE_ENDPOINT  http://minio:9000   boto3/S3_ENDPOINT_URL wants a URL
+#   OBJECTSTORE_HOSTPORT  minio:9000          the MinIO Go SDK rejects a scheme
+#                                             outright, with
+#                                             "Endpoint url cannot have fully
+#                                             qualified paths."
+#
+# A single key served both for a while only because nothing had run: every Go
+# consumer of MINIO_ENDPOINT (identity-service, case-service, audit-service)
+# crashlooped on the first real deployment. Derived rather than configured, so
+# the two cannot drift and an operator overriding OBJ_ENDPOINT still gets a
+# consistent pair.
+OBJ_HOSTPORT="${OBJ_ENDPOINT#*://}"
+OBJ_HOSTPORT="${OBJ_HOSTPORT%%/*}"
+
 KEYCLOAK_URL="${KEYCLOAK_URL:-http://keycloak:8080}"  # in-cluster Keycloak Service
 KEYCLOAK_USER="${KEYCLOAK_USER:-admin}"
 KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-admin}"
@@ -121,6 +138,7 @@ kubectl create secret generic datacern-secrets -n "$NS" \
   --from-literal=KAFKA_BOOTSTRAP="$KAFKA_BOOTSTRAP" \
   --from-literal=KAFKA_BROKERS="$KAFKA_BOOTSTRAP" \
   --from-literal=OBJECTSTORE_ENDPOINT="$OBJ_ENDPOINT" \
+  --from-literal=OBJECTSTORE_HOSTPORT="$OBJ_HOSTPORT" \
   --from-literal=OBJECTSTORE_ACCESS_KEY="$OBJ_ACCESS" \
   --from-literal=OBJECTSTORE_SECRET_KEY="$OBJ_SECRET" \
   --from-literal=OBJECTSTORE_REGION="$OBJ_REGION" \
