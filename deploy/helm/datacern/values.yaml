@@ -546,6 +546,8 @@ services:
   - name: ingestion-service
     language: python
     port: 8303
+    # the image's ENTRYPOINT bakes --port 8083; see deployment.yaml's listenPort note
+    listenPort: 8083
     migrate: true
     ingress: internal
     # NOT bumped: app/main.py's _outbox_relay_loop ticks a bespoke
@@ -581,6 +583,8 @@ services:
   - name: dataset-service
     language: python
     port: 8304
+    # the image's ENTRYPOINT bakes --port 8084; see deployment.yaml's listenPort note
+    listenPort: 8084
     migrate: true
     ingress: internal
     # Bumped to 2: pure request/response API, no in-process singleton loop.
@@ -636,6 +640,8 @@ services:
   - name: agent-runtime
     language: python
     port: 8306
+    # the image's ENTRYPOINT bakes --port 8086; see deployment.yaml's listenPort note
+    listenPort: 8086
     migrate: true
     ingress: internal
     # NOT bumped: app/runtime/retrain_scheduler.py's RetrainScheduler.run()
@@ -667,6 +673,8 @@ services:
   - name: memory-service
     language: python
     port: 8307
+    # the image's ENTRYPOINT bakes --port 8087; see deployment.yaml's listenPort note
+    listenPort: 8087
     migrate: true
     ingress: internal
     # Bumped to 2: relay/retention/consume loops are a Kafka consumer group
@@ -758,6 +766,8 @@ services:
   - name: ai-gateway
     language: python
     port: 8312
+    # the image's ENTRYPOINT bakes --port 8092; see deployment.yaml's listenPort note
+    listenPort: 8092
     migrate: true
     ingress: internal
     replicas: 2
@@ -787,6 +797,8 @@ services:
   - name: pipeline-orchestrator
     language: python
     port: 8313
+    # the image's ENTRYPOINT bakes --port 8087; see deployment.yaml's listenPort note
+    listenPort: 8087
     migrate: true
     ingress: internal
     # NOT bumped: app/main.py's scheduler_loop polls
@@ -863,6 +875,8 @@ services:
   - name: inference-service
     language: python
     port: 8316
+    # the image's ENTRYPOINT bakes --port 8085; see deployment.yaml's listenPort note
+    listenPort: 8085
     migrate: true
     ingress: internal
     replicas: 2
@@ -1057,6 +1071,8 @@ services:
   - name: eval-service
     language: python
     port: 8324
+    # the image's ENTRYPOINT bakes --port 8313; see deployment.yaml's listenPort note
+    listenPort: 8313
     migrate: true
     ingress: internal
     # Bumped to 2: only background loop is _relay_loop (FOR UPDATE SKIP
