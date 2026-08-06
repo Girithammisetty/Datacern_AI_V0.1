@@ -294,9 +294,23 @@ fails:
   ```
 - **`storageClass`** — `local-path`, per step 6.
 
+Run this **from the repository root**, and note `-n datacern`:
+
 ```bash
-helm upgrade --install datacern deploy/helm/datacern -f deploy/helm/datacern/values-hetzner.yaml --set storageClass=local-path --set global.registry=ghcr.io/girithammisetty --set global.imageTag=<main-commit-sha>
+helm upgrade --install datacern deploy/helm/datacern -n datacern --create-namespace -f deploy/helm/datacern/values-hetzner.yaml --set storageClass=local-path --set global.registry=ghcr.io/girithammisetty --set global.imageTag=<main-commit-sha> --timeout 20m
 ```
+
+Two flags that are not optional:
+
+**`-n datacern`.** Helm does not read the namespace from the chart; without it everything
+lands in `default`, where the data tier's ClusterIP names (`postgres`, `redis`, `redpanda`)
+do not resolve and the `ghcr-pull` secret does not exist. The failure appears several minutes
+later as a stuck migrate Job, with nothing pointing at the namespace.
+
+**`--timeout 20m`.** Helm's default is 5 minutes for the whole pre-install phase, which has to
+cover a database bootstrap plus a migration Job for every service, on first-pull images. The
+default expires mid-way and reports `context deadline exceeded`, which reads like a hang
+rather than a deadline.
 
 Note the key is `global.registry`, not `global.image.registry` — the chart reads
 `$g.registry` in `_helpers.tpl`. (`cd-aws.yml` and `cd-azure.yml` used to set the latter,
