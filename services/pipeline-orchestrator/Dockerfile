@@ -33,4 +33,10 @@ COPY services/pipeline-orchestrator/alembic.ini ./
 ENV PYTHONDONTWRITEBYTECODE=1
 USER 10001
 EXPOSE 8087
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8087"]
+# `python -m uvicorn`, not the bare `uvicorn` script. This stage copies
+# site-packages but not /usr/local/bin, where `uv pip install --system` puts the
+# console-script wrappers, so the executable does not exist here:
+#   exec: "uvicorn": executable file not found in $PATH
+# Running it as a module needs only the package, which IS present, and matches
+# every other system-site-packages service in this repo.
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8087"]
