@@ -9,9 +9,14 @@ RUN go work init ./libs/go-common ./services/query-service
 WORKDIR /src/services/query-service
 RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/query-service ./cmd/server
 
-# distroless/base carries glibc (required by the cgo DuckDB driver);
-# static-debian would not.
-FROM gcr.io/distroless/base-debian12:nonroot
+# distroless/cc carries glibc AND libstdc++/libgcc — DuckDB's C++ core is
+# dynamically linked against libstdc++, which base-debian12 does not ship:
+# the container died at exec with
+#   error while loading shared libraries: libstdc++.so.6: cannot open shared
+#   object file (found on the first real GCP rollout; local compose never hit
+# it because the dev image is debian-based). static-debian would lack even
+# glibc; base lacks libstdc++; cc is the minimal correct base for cgo + C++.
+FROM gcr.io/distroless/cc-debian12:nonroot
 COPY --from=build /out/query-service /usr/bin/query-service
 ENV RESULTS_ROOT=/var/lib/query-service
 # 65532 numerically, not the `nonroot` NAME the distroless base defines.
