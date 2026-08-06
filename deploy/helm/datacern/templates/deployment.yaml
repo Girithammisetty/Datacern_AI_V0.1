@@ -22,6 +22,19 @@ spec:
   Unset on every hyperscaler profile, so their per-service replicas stand.
   */}}
   replicas: {{ $root.Values.global.replicaOverride | default $svc.replicas | default 1 }}
+  {{- if eq (int ($root.Values.global.replicaOverride | default 0)) 1 }}
+  {{- /*
+  Single-node profiles also need Recreate. The default RollingUpdate surges a
+  second pod per service during any upgrade or config roll, which doubles the
+  footprint on a node sized for exactly one of everything: the surge pod sits
+  Pending on "Insufficient cpu" (or starves the node into probe failures)
+  while the old pod stays — observed on the GCP demo VM as "duplicate pods"
+  and a wedged rollout. Recreate swaps in place; a brief per-service gap is
+  the right trade on a demo node. Cloud profiles keep rolling updates.
+  */}}
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "datacern.selectorLabels" (dict "svc" $svc "root" $root) | nindent 6 }}

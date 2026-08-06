@@ -89,6 +89,44 @@ while read -r sts; do
 done < <(kubectl -n "$NS" get statefulset -o name 2>/dev/null)
 (( sts_ok )) && ok "data tier ready" || warn "data tier incomplete — app services may crashloop"
 
+# ------------------------------------------------- staged app-tier start
+# On boot every app pod cold-starts at once, competing with the data tier for
+# 8 vCPUs — probes time out, pods crashloop, and the loop itself burns the CPU
+# it is waiting for. If the app tier is not already healthy once the data tier
+# IS, restart it deliberately: identity + rbac first (every other service
+# validates JWTs against them), then the rest a few seconds apart. Chart app
+# services all carry app.kubernetes.io/component=service; the support tier
+# (keycloak, redis, mlflow, ...) does not, and is left alone. Replicas restore
+# to 1 because this profile is global.replicaOverride: 1 by definition.
+APP_SEL='app.kubernetes.io/component=service'
+not_ready="$(kubectl -n "$NS" get deploy -l "$APP_SEL" \
+  -o custom-columns='NAME:.metadata.name,READY:.status.readyReplicas,WANT:.spec.replicas' \
+  --no-headers 2>/dev/null | awk '$2 != $3 || $2 == "<none>"' | wc -l)"
+if (( sts_ok )) && (( not_ready > 0 )); then
+  say "staged app start: $not_ready service(s) not ready — restarting the app tier in dependency order"
+  kubectl -n "$NS" scale deploy -l "$APP_SEL" --replicas=0 >/dev/null
+  for _ in $(seq 1 60); do
+    n="$(kubectl -n "$NS" get pods -l "$APP_SEL" --no-headers 2>/dev/null | wc -l)"
+    (( n == 0 )) && break
+    sleep 5
+  done
+  for d in identity-service rbac-service; do
+    kubectl -n "$NS" scale "deploy/$d" --replicas=1 >/dev/null 2>&1 || true
+  done
+  if kubectl -n "$NS" wait --for=condition=available --timeout=300s \
+       deploy/identity-service deploy/rbac-service >/dev/null 2>&1; then
+    ok "identity + rbac ready"
+  else
+    warn "identity/rbac still coming up — continuing; the workload wait below is the real gate"
+  fi
+  while read -r d; do
+    [[ -n "$d" ]] || continue
+    kubectl -n "$NS" scale "$d" --replicas=1 >/dev/null 2>&1 || true
+    sleep 3
+  done < <(kubectl -n "$NS" get deploy -l "$APP_SEL" -o name | grep -Ev '/(identity-service|rbac-service)$')
+  ok "app tier restarted in order"
+fi
+
 say "waiting for workloads (timeout ${WORKLOAD_TIMEOUT}s)"
 if kubectl -n "$NS" wait --for=condition=available --timeout="${WORKLOAD_TIMEOUT}s" deploy --all >/dev/null 2>&1; then
   ok "all deployments available"
