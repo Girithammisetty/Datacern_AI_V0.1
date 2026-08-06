@@ -66,12 +66,25 @@ spec:
                 name: datacern-config
             - secretRef:
                 name: {{ $root.Values.secrets.name }}
+          {{- /*
+          The Go services read LISTEN_ADDR and default to :8080, while the
+          probes and Service target $svc.port — so without this line all nine
+          of them bind the wrong port and can never pass readiness (found on
+          the first real GCP rollout: identity/rbac probe-killed forever on
+          8301/8302 while listening on 8080). Set unconditionally: services
+          that don't read it ignore it, and one line here beats nine env
+          entries in values.yaml that the next service would forget to copy.
+          env below wins over envFrom, and $svc.env entries win over nothing —
+          this sits in the always-rendered env list so every service gets it.
+          */}}
           {{- /* Per-service env: maps the exact var names THIS service reads
                  (Go = unprefixed DATABASE_URL/REDIS_ADDR/KAFKA_BROKERS; Python =
                  <PREFIX>_ names) to the shared/per-service secret + config keys.
                  env wins over envFrom, so each service gets its own DB DSN. */}}
-          {{- with $svc.env }}
           env:
+            - name: LISTEN_ADDR
+              value: ":{{ $svc.port }}"
+            {{- with $svc.env }}
             {{- toYaml . | nindent 12 }}
             {{- /* B9 HA ClickHouse: audit-service only, opt-in, additive to the
                    CLICKHOUSE_ADDR/USER/PASSWORD env above. Both .Values.clickhouse
