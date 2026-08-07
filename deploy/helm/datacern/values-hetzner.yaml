@@ -59,7 +59,19 @@ config:
   # Auth: verifiers fetch JWKS live from identity-service (its dev LocalSigner
   # self-generates the keypair each boot). No static JWT secret — see
   # deploy/k8s/data-tier/create-secrets.sh.
-  JWKS_URL: http://identity-service:8301/api/v1/.well-known/jwks.json
+  # Root path, NOT /api/v1/...: identity serves JWKS as a public ops endpoint
+  # OUTSIDE its /api/v1 route group (server.go). The prefixed URL 404'd, every
+  # verifier's key fetch failed, and the first real login on the GCP rollout
+  # died in the BFF with "Expected 200 OK from the JSON Web Key Set HTTP
+  # response".
+  JWKS_URL: http://identity-service:8301/.well-known/jwks.json
+
+  # The production identity image is distroless: no python3, no deploy/demo
+  # bundles, so the SeedDemoContent provisioning step structurally cannot run
+  # in-cluster. Provision self-serve demo tenants EMPTY (explicit opt-out,
+  # warn-logged by identity at boot) instead of failing every signup at the
+  # final step. Remove once demo seeding runs as an in-cluster Job.
+  DEMO_SEED_MODE: skip
 
   # Object store = in-cluster MinIO (S3-compatible). The warehouse bucket lives
   # in MinIO; services reach it via the S3 endpoint below.

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -132,7 +133,17 @@ func (c *Client) Search(ctx context.Context, tenant uuid.UUID, p Params) (*Resul
 	}
 	defer drain(resp)
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("search: status %d: %s", resp.StatusCode, body(resp))
+		msg := body(resp)
+		// A tenant that has never indexed a case has no alias yet — the
+		// projector creates it on the first indexed event, and nothing
+		// guarantees one exists before the first list/search (a fresh
+		// self-serve demo tenant hits this on its first page load). That is
+		// an EMPTY tenant, not an outage; only real OpenSearch failures may
+		// surface as ESearchUnavailable's 503.
+		if resp.StatusCode == http.StatusNotFound && strings.Contains(msg, "index_not_found_exception") {
+			return &Result{Facets: map[string]map[string]int64{}}, nil
+		}
+		return nil, fmt.Errorf("search: status %d: %s", resp.StatusCode, msg)
 	}
 
 	var raw struct {
