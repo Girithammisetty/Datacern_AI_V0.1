@@ -912,8 +912,15 @@ services:
     replicas: 2
     resources: *res-medium
     # Reads DATABASE_URL, MIGRATE_DATABASE_URL, REDIS_ADDR, KAFKA_BROKERS,
-    # S3_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY.
+    # S3_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DATASET_SERVICE_URL.
     env:
+      # This service names its dataset-service peer DATASET_SERVICE_URL, not
+      # the DATASET_URL every other consumer reads from datacern-config, so the
+      # shared map never reaches it under the name it checks. With
+      # REQUIRE_REAL_ADAPTERS=true the boot guard refuses the static-resolver
+      # fallback and the pod crashloops (found on the first real GCP rollout).
+      - name: DATASET_SERVICE_URL
+        valueFrom: { configMapKeyRef: { name: datacern-config, key: DATASET_URL } }
       # Object store (MinIO Go SDK wants host:port, no scheme — the same
       # contract as identity/case/audit; found missing on the first real GCP
       # rollout: the service defaulted to localhost:9000 and crashlooped).
