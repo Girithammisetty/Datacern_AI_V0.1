@@ -185,6 +185,18 @@ func main() {
 		os.Exit(1)
 	}
 	issuer := keys.NewIssuer(km, clock)
+	// Honor the chart's issuer/audience so the minted `iss` and every
+	// verifier's expectation come from ONE source. NewIssuer's baked-in
+	// values stayed while values.yaml declared a different JWT_ISSUER, so on
+	// the first GCP rollout identity signed ".ai" tokens the BFF (verifying
+	// against the configmap's ".internal") could never accept. Env wins when
+	// set; the defaults keep laptop/dev byte-identical.
+	if v := os.Getenv("JWT_ISSUER"); v != "" {
+		issuer.Iss = v
+	}
+	if v := os.Getenv("JWT_AUDIENCE"); v != "" {
+		issuer.Aud = v
+	}
 
 	// Adapters. Real Keycloak admin is used when KEYCLOAK_URL is set;
 	// otherwise the fake keeps dev mode self-contained. With
@@ -291,9 +303,20 @@ func main() {
 		Timeout:    8 * time.Minute,
 		Issuer:     issuer,
 	}
+	// DEMO_SEED_MODE=skip (values-hetzner.yaml sets it): demo tenants
+	// provision EMPTY instead of the signup dying at SeedDemoContent. The
+	// production distroless image carries neither python nor deploy/demo,
+	// so the SubprocessRunner above structurally cannot run there — found
+	// when every /public/demo-signup on the first GCP rollout failed at the
+	// last provisioning step. Explicit opt-out, warned loudly here; any
+	// other value keeps the fail-loud seeding path.
+	skipDemoSeed := os.Getenv("DEMO_SEED_MODE") == "skip"
+	if skipDemoSeed {
+		log.Warn("DEMO_SEED_MODE=skip — demo tenants will provision EMPTY (no bundle content, no walkthrough data)")
+	}
 	deps := domain.StepDeps{
 		Store: store, Keycloak: kc, Terraform: tf, DB: db, Prober: prober, Clock: clock,
-		DemoBundles: demoBundles, DemoSeed: demoSeed,
+		DemoBundles: demoBundles, DemoSeed: demoSeed, SkipDemoSeed: skipDemoSeed,
 	}
 	notify := func(ctx context.Context, t *domain.Tenant, st *domain.ProvisioningStep) {
 		// IDN-FR-010: provisioning progress events -> realtime-hub via outbox.

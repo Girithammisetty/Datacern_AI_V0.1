@@ -23,6 +23,14 @@ type StepDeps struct {
 	// seeding -- see SeedDemoContent's Run below.
 	DemoBundles DemoBundleLoader
 	DemoSeed    DemoSeedRunner
+	// SkipDemoSeed is the explicit operator opt-out (DEMO_SEED_MODE=skip):
+	// SeedDemoContent succeeds without seeding, so demo tenants provision
+	// EMPTY but usable. This exists for deployments whose identity image
+	// cannot run the seed pipeline (the distroless production image carries
+	// neither python nor the deploy/demo bundles, found on the first GCP
+	// rollout). It is an explicit config choice logged loudly at boot — NOT
+	// a silent fallback; the nil-adapter case below still fails loud.
+	SkipDemoSeed bool
 }
 
 func (d StepDeps) now() time.Time {
@@ -177,6 +185,12 @@ func (d StepDeps) ProvisionSteps(t *Tenant) []Step {
 			Name: "SeedDemoContent",
 			Run: func(ctx context.Context, t *Tenant) error {
 				if t.Profile != ProfileDemo {
+					return nil
+				}
+				if d.SkipDemoSeed {
+					// Operator opted out (DEMO_SEED_MODE=skip, warned at
+					// boot): the tenant provisions empty rather than the
+					// whole signup dying at the last step.
 					return nil
 				}
 				if d.DemoBundles == nil || d.DemoSeed == nil {

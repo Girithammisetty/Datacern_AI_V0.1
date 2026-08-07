@@ -1145,6 +1145,15 @@ services:
     liveness: /login
     replicas: 2
     resources: *res-medium
+    env:
+      # The same-origin GraphQL proxy (src/app/api/graphql/route.ts) POSTs to
+      # BFF_URL VERBATIM — its dev default is http://localhost:4000/graphql,
+      # path included. The shared datacern-config BFF_URL is the bare service
+      # address (right for every other consumer), so ui-web alone needs the
+      # /graphql path appended; without it the proxy hit the BFF's root and
+      # every app data call 404'd (first GCP rollout).
+      - name: BFF_URL
+        value: http://bff-graphql:4000/graphql
     # Full override — Next.js writes its cache under /app/.next at runtime, so the
     # root FS can't be read-only. Other hardening is kept.
     securityContext:
