@@ -1,0 +1,25 @@
+# Saved queries (query-service) — includes the network-chart edge source
+# (criteria source -> line of business flow) for network-family charts.
+- identity: criteria_lob_edges
+  name: "UM: criteria source to line of business"
+  description: >-
+    Review counts by (criteria source -> LOB) — edge list for network-family
+    charts and ad-hoc analysis of which criteria sets carry which coverage.
+  sql: >-
+    SELECT criteria_source AS parent, lob AS child, count(*) AS n
+    FROM {{dataset('um-review-cases')}}
+    GROUP BY criteria_source, lob
+  tags: [utilization-management, criteria, network, pack]
+- identity: md_referral_backlog
+  name: "UM: physician-review backlog by elapsed clock"
+  description: >-
+    Pending reviews that require physician-level review, ranked by elapsed
+    hours on the regulatory clock — the medical director's worklist order.
+  sql: >-
+    SELECT case_id, lob, urgency, requested_service, cpt_code, policy_id,
+           round(cast(turnaround_hours AS double), 1) AS hours_elapsed,
+           round(cast(window_hours AS double), 1) AS window_hours
+    FROM {{dataset('um-review-cases')}}
+    WHERE status = 'pending' AND md_review_required = 'yes'
+    ORDER BY hours_elapsed DESC
+  tags: [utilization-management, md-referral, backlog, pack]

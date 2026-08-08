@@ -1,0 +1,17 @@
+# Governed SoR write-back adapters (ingestion-service inc12): OUTGOING
+# connections declared with skip_test + EMPTY secrets — the tenant completes
+# real credentials/endpoints in Data → Connections, and every write executes
+# proposal-mode with four-eyes (no autonomous SoR change). The host is a
+# placeholder the tenant replaces; nothing is called at install. Credentials
+# are NEVER declared here — auth is supplied by the tenant through the
+# connection's secret store. The payer's UM core (Pega/Predictal-class,
+# VirtualHealth/Helios-class, GuidingCare-class, or Facets/QNXT-class)
+# remains the system of record: only the HUMAN-APPROVED determination flows
+# back through its own API.
+- name: "UM platform determination write-back"
+  connector_type: http_api
+  direction: outgoing
+  config:
+    method: POST
+    url: "https://um-platform.example.invalid/api/v1/authorizations/determination"
+    headers: { Content-Type: "application/json" }

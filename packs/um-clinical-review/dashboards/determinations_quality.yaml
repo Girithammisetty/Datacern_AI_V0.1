@@ -1,0 +1,61 @@
+# Determinations & Appeals dashboard: signed-decision outcomes, who decided,
+# decision turnaround, and appeal overturns — the calibration surface for
+# shadow-mode agreement and the file-review evidence base.
+name: "Determinations & Appeals"
+module: insights
+semantic_model: um_review
+description: >-
+  Determination outcomes by LOB and month, decision mix, physician-signed
+  share and turnaround, and appeal overturn volumes.
+tags: [insurance, payer, utilization-management, determinations, appeals, pack]
+charts:
+  - name: "Determinations by LOB"
+    chart_type: vertical_bar_chart
+    description: "Signed determinations per line of business"
+    config:
+      x: { dimension: lob }
+      y: [ { measure: determination_count, agg_fn: count } ]
+    sources: [ { measure: determination_count } ]
+    w: 6
+    h: 4
+  - name: "Decision mix"
+    chart_type: pie_chart
+    description: "Approved / denied / partially approved"
+    config:
+      x: { dimension: decision }
+      y: [ { measure: determination_count, agg_fn: count } ]
+    sources: [ { measure: determination_count } ]
+    w: 6
+    h: 4
+  - name: "Determinations by month"
+    chart_type: line_chart
+    description: "Monthly signed-determination trend"
+    config:
+      x: { dimension: decision_month }
+      y: [ { measure: determination_count, agg_fn: count } ]
+    sources: [ { measure: determination_count } ]
+    w: 6
+    h: 4
+  - name: "Appeal overturns by LOB"
+    chart_type: vertical_bar_chart
+    description: "Overturned appeals per LOB — the first-pass completeness signal"
+    config:
+      x: { dimension: lob }
+      y: [ { measure: overturned_count, agg_fn: count } ]
+    sources: [ { measure: overturned_count } ]
+    w: 6
+    h: 4
+  - name: "Decider grid"
+    chart_type: grid_chart
+    description: "Determination volume and mean decision hours per deciding role (RN vs MD)"
+    config:
+      columns: [decided_by_role, determination_count, avg_determination_hours]
+      x: { dimension: decided_by_role }
+      y:
+        - { measure: determination_count, agg_fn: count }
+        - { measure: avg_determination_hours, agg_fn: avg }
+    sources:
+      - { measure: determination_count }
+      - { measure: avg_determination_hours }
+    w: 12
+    h: 4

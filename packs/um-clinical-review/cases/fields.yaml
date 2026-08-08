@@ -1,0 +1,85 @@
+# Typed custom case fields (case-service CASE-FR-022) — the UM review work
+# item's real adjudication attributes, typed so the case form validates them
+# and decision surfaces read them structurally instead of parsing notes.
+# data_type is IMMUTABLE after creation (case-service) — chosen deliberately.
+# Names are exact columns of the um-review-cases binding contract
+# (data/datasets.yaml) so field data and dataset agree.
+- name: lob
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Line of business"
+    options: [commercial_fi, commercial_aso, medicare, medicaid]
+    required: false
+- name: review_type
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Review type"
+    options: [preservice, concurrent, retrospective]
+    required: false
+- name: urgency
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Urgency tier"
+    options: [standard, urgent]
+    required: false
+- name: cpt_code
+  data_type: string
+  purpose: both
+  field_meta:
+    label: "Procedure code (CPT/HCPCS)"
+    required: false
+- name: criteria_source
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Governing criteria source"
+    options: [mcg, interqual, internal_policy, cms_ncd_lcd, state_medicaid]
+    required: false
+- name: policy_id
+  data_type: string
+  purpose: both
+  field_meta:
+    label: "Medical policy / guideline id"
+    required: false
+- name: clinical_info_status
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Clinical documentation status"
+    options: [complete, incomplete]
+    required: false
+- name: md_review_required
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Physician review required (plan rule)"
+    options: ["yes", "no"]
+    required: false
+- name: agent_recommendation
+  data_type: enum
+  purpose: both
+  field_meta:
+    label: "Agent recommendation"
+    options: [approve, refer_md, request_info]
+    required: false
+- name: agent_confidence
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Agent confidence"
+    required: false
+- name: turnaround_hours
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Hours elapsed on the regulatory clock"
+    required: false
+- name: window_hours
+  data_type: float
+  purpose: both
+  field_meta:
+    label: "Regulatory decision window (hours, plan-configured)"
+    required: false

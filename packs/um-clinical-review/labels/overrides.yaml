@@ -1,0 +1,3 @@
+# Per-tenant UI label overrides (identity-service, inc3) — domain-fluent
+# naming for the UM clinical review workspace.
+- { key: cases.title, value: "Clinical Review Worklist" }

@@ -1,0 +1,92 @@
+# Pack dataset BINDING CONTRACTS (no-dummy-data rule): the pack ships ZERO
+# seed data. Each entry declares the dataset the workflow needs and the exact
+# landing-shape columns it requires; at install the tenant binds it to a REAL
+# dataset (explicit dataset_bindings on the install request, or same-name
+# reuse), and pack-service validates the bound dataset exposes every required
+# column — failing closed with the missing list. Real data arrives through the
+# pack's governed source connectors (connections/sources.yaml — X12 278 PA
+# request drops, decided-case history extracts) or file upload.
+- identity: um_review_cases
+  name: um-review-cases
+  required_columns:
+    [case_id, member_id, provider_npi, requested_service, cpt_code, icd10_code,
+     submitted_month,
+     # value domain: lob = commercial_fi|commercial_aso|medicare|medicaid —
+     # matched literally by the LOB clock-escalation table, semantic filters,
+     # and verified queries; the LOB drives which criteria/authority hierarchy
+     # applies (never mixed across coverage types)
+     lob,
+     # value domain: review_type = preservice|concurrent|retrospective —
+     # matched literally by semantic filters and verified queries
+     review_type,
+     # value domain: urgency = urgent|standard — matched literally by both
+     # decision tables and verified queries
+     urgency,
+     # value domain: status = pending|approved|denied|withdrawn — matched
+     # literally by both decision tables and semantic filters
+     status,
+     turnaround_hours,
+     # window_hours carries the PLAN-CONFIGURED regulatory decision window for
+     # this case's LOB/urgency (e.g. expedited vs standard) so at-risk math is
+     # data-driven, not hardcoded
+     window_hours,
+     # value domain: clinical_info_status = complete|incomplete — matched
+     # literally by the review-triage table's records-request deferral rule
+     clinical_info_status,
+     # value domain: criteria_source = mcg|interqual|internal_policy|
+     # cms_ncd_lcd|state_medicaid — which criteria set governs this review
+     criteria_source,
+     policy_id,
+     # value domain: md_review_required = yes|no — plan rule that this case
+     # class requires physician-level review; read literally by triage
+     md_review_required,
+     # value domain: agent_recommendation = approve|refer_md|request_info —
+     # matched literally by the review-triage table
+     agent_recommendation,
+     agent_confidence]
+- identity: um_case_documents
+  name: um-case-documents
+  required_columns:
+    [document_id, case_id, doc_type,
+     # value domain: source_channel = portal|fax|sftp|mail — intake channel;
+     # fax/mail volumes are the documentation-quality dashboard's rework signal
+     source_channel,
+     received_month, page_count,
+     # value domain: ocr_status = ok|failed|pending — matched literally by
+     # semantic filters
+     ocr_status,
+     # value domain: contains_clinicals = yes|no — "is this actually clinical
+     # documentation for this request?" — matched literally by semantic
+     # filters and verified queries
+     contains_clinicals,
+     classification_confidence]
+- identity: um_policy_catalog
+  name: um-policy-catalog
+  required_columns:
+    [policy_id, policy_title,
+     # value domain: criteria_source = mcg|interqual|internal_policy|
+     # cms_ncd_lcd|state_medicaid — matched literally by verified queries
+     criteria_source,
+     lob_scope, effective_month,
+     # value domain: digitized = yes|no — whether the policy exists as
+     # executable criteria/questionnaire logic (the real-time readiness gap)
+     digitized,
+     procedure_code_count]
+- identity: um_determinations
+  name: um-determinations
+  required_columns:
+    [determination_id, case_id, lob, review_type, cpt_code,
+     # value domain: decision = approved|denied|partially_approved — matched
+     # literally by semantic filters and verified queries
+     decision,
+     # value domain: decided_by_role = rn|md — who signed the determination;
+     # matched literally by semantic filters (adverse determinations are
+     # clinician-signed by policy)
+     decided_by_role,
+     decision_month, turnaround_hours,
+     # value domain: appeal_filed = yes|no — matched literally by semantic
+     # filters
+     appeal_filed,
+     # value domain: appeal_outcome = upheld|overturned|na — matched literally
+     # by semantic filters and verified queries
+     appeal_outcome]

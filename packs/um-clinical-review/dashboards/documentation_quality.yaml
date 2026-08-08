@@ -1,0 +1,62 @@
+# Clinical Documentation Quality dashboard: the intake-integrity view — what
+# arrives on which channel, whether it is actually clinical content, and
+# where OCR fails. First-pass completeness is the appeal-overturn lever.
+name: "Clinical Documentation Quality"
+module: insights
+semantic_model: um_review
+description: >-
+  Inbound clinical documentation: volumes by document type and intake
+  channel, monthly trend, non-clinical attachment rate by channel, and OCR
+  health.
+tags: [insurance, payer, utilization-management, documents, pack]
+charts:
+  - name: "Documents by type"
+    chart_type: vertical_bar_chart
+    description: "Inbound document volume per document type"
+    config:
+      x: { dimension: doc_type }
+      y: [ { measure: document_count, agg_fn: count } ]
+    sources: [ { measure: document_count } ]
+    w: 6
+    h: 4
+  - name: "Intake channel mix"
+    chart_type: pie_chart
+    description: "Portal / fax / SFTP / mail — fax and mail volume is the modernization signal"
+    config:
+      x: { dimension: source_channel }
+      y: [ { measure: document_count, agg_fn: count } ]
+    sources: [ { measure: document_count } ]
+    w: 6
+    h: 4
+  - name: "Document intake by month"
+    chart_type: line_chart
+    description: "Monthly inbound document trend"
+    config:
+      x: { dimension: received_month }
+      y: [ { measure: document_count, agg_fn: count } ]
+    sources: [ { measure: document_count } ]
+    w: 6
+    h: 4
+  - name: "Non-clinical attachments by channel"
+    chart_type: vertical_bar_chart
+    description: "Documents that are not actual clinicals for the request, per intake channel"
+    config:
+      x: { dimension: source_channel }
+      y: [ { measure: missing_clinicals_count, agg_fn: count } ]
+    sources: [ { measure: missing_clinicals_count } ]
+    w: 6
+    h: 4
+  - name: "OCR health grid"
+    chart_type: grid_chart
+    description: "Document volume and mean page count per OCR status"
+    config:
+      columns: [ocr_status, document_count, avg_page_count]
+      x: { dimension: ocr_status }
+      y:
+        - { measure: document_count, agg_fn: count }
+        - { measure: avg_page_count, agg_fn: avg }
+    sources:
+      - { measure: document_count }
+      - { measure: avg_page_count }
+    w: 12
+    h: 4

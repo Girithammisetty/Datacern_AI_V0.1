@@ -1,0 +1,71 @@
+# Verified NL<->SQL queries (four-eyes approved at install). SQL uses
+# {{dataset('<name>')}} macros — the only table references query-service's
+# tenant-namespace guard admits. The at-risk query is data-driven: each
+# case's own plan-configured window_hours, never a hardcoded clock.
+- nl_text: "Which pending reviews are at risk against their regulatory clock?"
+  sql_text: >-
+    SELECT case_id, lob, urgency, requested_service, cpt_code,
+           round(cast(turnaround_hours AS double), 1) AS hours_elapsed,
+           round(cast(window_hours AS double)
+                 - cast(turnaround_hours AS double), 1) AS hours_remaining,
+           CASE
+             WHEN cast(turnaround_hours AS double) >= cast(window_hours AS double)
+               THEN 'overdue'
+             WHEN cast(turnaround_hours AS double) >= 0.75 * cast(window_hours AS double)
+               THEN 'at_risk'
+             ELSE 'on_track'
+           END AS clock_bucket
+    FROM {{dataset('um-review-cases')}}
+    WHERE status = 'pending'
+    ORDER BY hours_remaining ASC
+  model: um_review
+  tags: [clinical-review, sla, at-risk, pack]
+- nl_text: "What share of reviews needs a medical director, by line of business?"
+  sql_text: >-
+    SELECT lob,
+           count(*) AS reviews,
+           sum(CASE WHEN md_review_required = 'yes' THEN 1 ELSE 0 END) AS md_required,
+           round(sum(CASE WHEN md_review_required = 'yes' THEN 1 ELSE 0 END) * 1.0
+                 / nullif(count(*), 0), 4) AS md_referral_rate
+    FROM {{dataset('um-review-cases')}}
+    GROUP BY lob
+  model: um_review
+  tags: [clinical-review, md-referral, pack]
+- nl_text: "Which procedure codes have the highest appeal overturn rate?"
+  sql_text: >-
+    SELECT cpt_code,
+           sum(CASE WHEN appeal_filed = 'yes' THEN 1 ELSE 0 END) AS appeals,
+           sum(CASE WHEN appeal_outcome = 'overturned' THEN 1 ELSE 0 END) AS overturned,
+           round(sum(CASE WHEN appeal_outcome = 'overturned' THEN 1 ELSE 0 END) * 1.0
+                 / nullif(sum(CASE WHEN appeal_filed = 'yes' THEN 1 ELSE 0 END), 0), 4)
+             AS overturn_rate
+    FROM {{dataset('um-determinations')}}
+    GROUP BY cpt_code
+    ORDER BY overturn_rate DESC
+  model: um_review
+  tags: [appeals, overturns, pack]
+- nl_text: "How complete is the clinical documentation we receive, by intake channel?"
+  sql_text: >-
+    SELECT source_channel,
+           count(*) AS documents,
+           sum(CASE WHEN contains_clinicals = 'no' THEN 1 ELSE 0 END) AS non_clinical,
+           sum(CASE WHEN ocr_status = 'failed' THEN 1 ELSE 0 END) AS ocr_failed,
+           round(sum(CASE WHEN contains_clinicals = 'no' THEN 1 ELSE 0 END) * 1.0
+                 / nullif(count(*), 0), 4) AS non_clinical_rate
+    FROM {{dataset('um-case-documents')}}
+    GROUP BY source_channel
+    ORDER BY non_clinical_rate DESC
+  model: um_review
+  tags: [documents, completeness, intake, pack]
+- nl_text: "How much of our medical policy catalog is digitized to executable criteria, by criteria source?"
+  sql_text: >-
+    SELECT criteria_source,
+           count(*) AS policies,
+           sum(CASE WHEN digitized = 'yes' THEN 1 ELSE 0 END) AS digitized,
+           round(sum(CASE WHEN digitized = 'yes' THEN 1 ELSE 0 END) * 1.0
+                 / nullif(count(*), 0), 4) AS digitization_rate
+    FROM {{dataset('um-policy-catalog')}}
+    GROUP BY criteria_source
+    ORDER BY digitization_rate ASC
+  model: um_review
+  tags: [policy, digitization, real-time-readiness, pack]

@@ -1,0 +1,211 @@
+# um-clinical-review capability pack (BRD 76) — AI-prepared utilization
+# management (UM) clinical review for US health payers: prior-authorization,
+# concurrent, and retrospective medical-necessity reviews prepared by agents
+# and DECIDED by named clinicians. Derived from a real payer UM corpus
+# (multi-LOB Blue plan): LOB-aware criteria hierarchies, regulatory turnaround
+# clocks, documentation-completeness gating, and MD-referral routing.
+# Complements insurance-claims-payer (claims/denials/appeals analytics): this
+# pack owns the REVIEW-PREPARATION work item — the chart-to-criteria
+# assessment a clinician signs — not claim adjudication.
+# Product pack (no-dummy-data rule): ZERO seed data; datasets are binding
+# CONTRACTS resolved to the tenant's REAL data at install; cases arrive from
+# real rows via triggers/intake; eval golden sets are curated by the tenant
+# from its own adjudicated history.
+pack_manifest: 1
+name: um-clinical-review
+version: 1.0.0
+publisher: { id: pub-datacern, name: "Datacern Inc." }
+description: >-
+  Agent-prepared, clinician-decided utilization management review for US
+  health payers: typed clinical-review and MD-referral case schemas with
+  dispositions, deterministic review-triage and LOB turnaround-clock
+  escalation tables, a UM review KPI semantic model with three dashboards,
+  payer UM ontology and role catalog, domain-grounded review-preparation
+  copilot with guardrails (never proposes an adverse determination),
+  governed source/write-back connections (X12 278 intake, determination
+  write-back), and a determination-outcome training pipeline with its
+  governed model blueprint.
+categories: [insurance, health, payer, utilization-management, prior-auth, clinical-review]
+regulatory: [cms_4201_f, cms_0057_f, cms_2024_ma_ai_review, ncqa_um, state_ur_statutes, hipaa]
+# Regulatory/framework CONTROL MAPPINGS (A6). MAPPING AID ONLY — see the
+# disclaimer and PACK_AUTHORING_GUIDE.md "Control mappings". Every
+# `implemented` entry was verified against the cited code before being
+# written; `not_covered` entries record an honest gap instead of a claim.
+control_mappings:
+  disclaimer: >-
+    These control mappings identify specific Datacern platform controls that
+    support obligations named in EU AI Act, NIST AI RMF, and ISO/IEC 42001
+    provisions. They are a MAPPING AID for the tenant's own compliance
+    program — NOT a certification, attestation, audit finding, or legal
+    determination that this pack or the platform is compliant with any
+    regulation or standard. Whether a given framework applies to a specific
+    tenant/deployment is the tenant's own determination; consult qualified
+    counsel. Entries with status "not_covered" document a known gap, not an
+    implemented control.
+  mappings:
+    - framework: eu_ai_act
+      control_id: art_12
+      control_title: "Article 12 — Record-keeping (automatic logging)"
+      platform_control: >-
+        Every agent proposal, review disposition, and approval/rejection is
+        written to an append-only, tamper-evident audit trail: events are
+        chained per tenant-day and sealed batches are exported to Object-Lock
+        (WORM) storage under a compliance retention window, so the automatic
+        logs this article expects cannot be silently altered or deleted —
+        the audit posture a UM program evaluation or CMS program-integrity
+        review asks for.
+      evidence:
+        - "services/audit-service/internal/chain/chain.go — per-tenant-per-day tamper-evidence hash chain"
+        - "services/audit-service/internal/chstore/chstore.go — append-only ClickHouse audit_events store"
+        - "services/audit-service/internal/worm/worm.go — Object-Lock WORM export with compliance retention"
+      status: implemented
+    - framework: eu_ai_act
+      control_id: art_14
+      control_title: "Article 14 — Human oversight"
+      platform_control: >-
+        Agent-prepared review dispositions cannot take effect without a
+        distinct human approver: self-approval by the proposing agent, or by
+        the on-behalf-of trigger user, is rejected outright for high-risk
+        proposals. This pack's disposition catalog additionally reserves the
+        adverse-determination code for human clinicians — no decision table
+        or agent config in the pack ever proposes it.
+      evidence:
+        - "services/agent-runtime/app/proposals/service.py:_check_eligibility — four-eyes / distinct-approver invariant (ART-FR-044)"
+        - "packs/um-clinical-review/rbac/roles.yaml — ai.proposal.approve is granted only to human reviewer roles (UM Nurse Reviewer, Medical Director, Appeals & Grievances Analyst); the proposing agent never holds it"
+        - "packs/um-clinical-review/decisions/um_review_triage.yaml — no rule and no default_outcome proposes adverse_determination_md"
+      status: implemented
+    - framework: eu_ai_act
+      control_id: art_11_annex_iv
+      control_title: "Article 11 / Annex IV — Technical documentation"
+      platform_control: >-
+        No generated EU AI Act Annex IV technical-documentation kit ships
+        with this pack today. This is a documented gap, not an implemented
+        control.
+      evidence: []
+      status: not_covered
+    - framework: nist_ai_rmf
+      control_id: govern
+      control_title: >-
+        GOVERN function — accountability structures & human-oversight roles
+        (function-level; exact NIST subcategory numbering not asserted)
+      platform_control: >-
+        Distinct, named roles (Medical Director, UM Nurse Reviewer) hold the
+        only approval permissions in the tenant's RBAC catalog; the proposing
+        agent never holds ai.proposal.approve, and per-agent guardrail
+        envelopes bound what an agent may attempt before a human ever sees
+        the proposal.
+      evidence:
+        - "packs/um-clinical-review/rbac/roles.yaml — role catalog separating proposer from approver"
+        - "services/agent-runtime/app/proposals/service.py:_check_eligibility"
+        - "services/agent-runtime/app/domain/guardrail.py — per-agent security envelope"
+      status: implemented
+    - framework: nist_ai_rmf
+      control_id: measure
+      control_title: >-
+        MEASURE function — AI system testing & evaluation (function-level;
+        exact NIST subcategory numbering not asserted)
+      platform_control: >-
+        Model/agent changes pass through eval-service gates and canary
+        rollouts before promotion, and inbound case documents are screened
+        for prompt-injection signatures before being used as agent evidence,
+        with detected signatures surfaced to the human approver rather than
+        silently swallowed.
+      evidence:
+        - "services/eval-service/app/api/routes/gates.py"
+        - "services/eval-service/app/api/routes/canaries.py"
+        - "services/agent-runtime/app/graphs/evidence_guard.py — cross-domain prompt-injection (XPIA) detection"
+      status: implemented
+    - framework: nist_ai_rmf
+      control_id: manage
+      control_title: >-
+        MANAGE function — post-deployment monitoring & incident traceability
+        (function-level; exact NIST subcategory numbering not asserted)
+      platform_control: >-
+        The tamper-evident audit hash chain gives every proposal, decision,
+        and override a durable, queryable record that supports incident
+        investigation and post-deployment risk monitoring.
+      evidence:
+        - "services/audit-service/internal/chain/chain.go"
+        - "services/audit-service/internal/chstore/chstore.go"
+      status: implemented
+    - framework: iso_42001
+      control_id: clause_9_1
+      control_title: "Clause 9.1 — Monitoring, measurement, analysis and evaluation"
+      platform_control: >-
+        eval-service gates and canaries continuously evaluate agent/model
+        behavior against golden sets, and the audit hash chain provides the
+        queryable record this clause's monitoring/measurement expectation
+        needs.
+      evidence:
+        - "services/eval-service/app/api/routes/gates.py"
+        - "services/eval-service/app/api/routes/canaries.py"
+        - "services/audit-service/internal/chstore/chstore.go"
+      status: implemented
+    - framework: iso_42001
+      control_id: clause_8_1
+      control_title: "Clause 8.1 — Operational planning and control"
+      platform_control: >-
+        Deterministic decision tables (review triage, LOB turnaround-clock
+        escalation) plus per-agent guardrail envelopes and the four-eyes
+        approval gate are the operational controls that keep agent behavior
+        within planned bounds before any governed action executes.
+      evidence:
+        - "packs/um-clinical-review/decisions/um_review_triage.yaml"
+        - "packs/um-clinical-review/decisions/um_lob_clock_escalation.yaml"
+        - "services/agent-runtime/app/domain/guardrail.py"
+        - "services/agent-runtime/app/proposals/service.py:_check_eligibility"
+      status: implemented
+components:
+  datasets:
+    - { file: "data/datasets.yaml", identity: "datasets" }
+  semantic_models:
+    - { file: "semantic/um_review.yaml", identity: "um_review" }
+  verified_queries:
+    - { file: "queries/verified.yaml", identity: "canonical_questions" }
+  saved_queries:
+    - { file: "queries/saved.yaml", identity: "saved_queries" }
+  dashboards:
+    - { file: "dashboards/review_ops.yaml", identity: "review_ops" }
+    - { file: "dashboards/documentation_quality.yaml", identity: "documentation_quality" }
+    - { file: "dashboards/determinations_quality.yaml", identity: "determinations_quality" }
+  dispositions:
+    - { file: "cases/dispositions.yaml", identity: "dispositions" }
+  case_fields:
+    - { file: "cases/fields.yaml", identity: "review_fields" }
+  case_schemas:
+    - { file: "cases/schemas.yaml", identity: "review_schemas" }
+  ontology:
+    - { file: "ontology/entities.yaml", identity: "um_ontology" }
+  decision_models:
+    - { file: "decisions/um_review_triage.yaml", identity: "um_review_triage" }
+    - { file: "decisions/um_lob_clock_escalation.yaml", identity: "um_lob_clock_escalation" }
+  roles:
+    - { file: "rbac/roles.yaml", identity: "roles" }
+  agent_configs:
+    - { file: "agents/configs.yaml", identity: "agent_configs" }
+  guardrails:
+    - { file: "agents/guardrails.yaml", identity: "agent_guardrails" }
+  memories:
+    - { file: "memories/grounding.yaml", identity: "grounding" }
+  pipelines:
+    - { file: "pipelines/templates.yaml", identity: "pipelines" }
+  display_labels:
+    - { file: "labels/overrides.yaml", identity: "label_overrides" }
+  model_archetypes:
+    - { file: "models/archetypes.yaml", identity: "model_blueprints" }
+  write_adapters:
+    - { file: "connections/write_adapters.yaml", identity: "sor_writeback" }
+  connection_templates:
+    - { file: "connections/sources.yaml", identity: "source_feeds" }
+deferred:
+  - kind: agent_recipes
+    reason: >-
+      Bespoke LangGraph recipes for the chart-reader / criteria-matcher /
+      determination-drafter agent chain require agent-runtime graph-module
+      registration (a Core code surface), and page-anchored OCR extraction
+      over scanned clinical attachments additionally requires a
+      document-intelligence capability Core does not ship yet (BRD 76 §9).
+      This pack specializes the existing case-triage + analytics agents via
+      TenantAgentConfig prompt_params + tenant-scope RAG grounding instead;
+      the proposal-mode + four-eyes guarantees the recipes would need are
+      ALREADY enforced by agent-runtime for the existing agents.

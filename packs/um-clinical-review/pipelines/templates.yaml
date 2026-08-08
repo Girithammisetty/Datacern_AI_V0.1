@@ -1,0 +1,10 @@
+# Pipeline template expressed against the real pipeline-orchestrator
+# algorithm catalog: the determination-outcome classifier trained on the
+# tenant's own decided review history (the um-determinations binding
+# contract). Nightly correction-export / distillation workflows are a Core
+# roadmap surface, not faked here.
+- identity: um_outcome_classifier
+  name: "UM determination outcome classifier (xgboost)"
+  algorithm: xgboost
+  mode: train
+  dataset: um_determinations
