@@ -1,0 +1,63 @@
+# Clinical Review Ops dashboard: the live review worklist by LOB, status,
+# urgency aging against plan-configured windows, and MD referral load.
+name: "Clinical Review Ops"
+module: insights
+semantic_model: um_review
+description: >-
+  UM review operations: volumes by line of business and review type, status
+  mix, monthly intake trend, physician-referral load, and urgency-tier aging
+  against the regulatory clock.
+tags: [insurance, payer, utilization-management, clinical-review, pack]
+charts:
+  - name: "Reviews by line of business"
+    chart_type: vertical_bar_chart
+    description: "Review volume per LOB (each LOB carries its own authority hierarchy and clock)"
+    config:
+      x: { dimension: lob }
+      y: [ { measure: review_count, agg_fn: count } ]
+    sources: [ { measure: review_count } ]
+    w: 6
+    h: 4
+  - name: "Review status mix"
+    chart_type: pie_chart
+    description: "Pending / approved / denied / withdrawn"
+    config:
+      x: { dimension: case_status }
+      y: [ { measure: review_count, agg_fn: count } ]
+    sources: [ { measure: review_count } ]
+    w: 6
+    h: 4
+  - name: "Review intake by month"
+    chart_type: line_chart
+    description: "Monthly review intake trend"
+    config:
+      x: { dimension: submitted_month }
+      y: [ { measure: review_count, agg_fn: count } ]
+    sources: [ { measure: review_count } ]
+    w: 6
+    h: 4
+  - name: "Physician-review load by LOB"
+    chart_type: vertical_bar_chart
+    description: "Reviews the plan routes to physician-level review, per LOB"
+    config:
+      x: { dimension: lob }
+      y: [ { measure: md_required_count, agg_fn: count } ]
+    sources: [ { measure: md_required_count } ]
+    w: 6
+    h: 4
+  - name: "Urgency aging vs window"
+    chart_type: grid_chart
+    description: "Pending volume, mean elapsed clock hours, and mean plan-configured window per urgency tier"
+    config:
+      columns: [urgency, pending_review_count, avg_turnaround_hours, avg_window_hours]
+      x: { dimension: urgency }
+      y:
+        - { measure: pending_review_count, agg_fn: count }
+        - { measure: avg_turnaround_hours, agg_fn: avg }
+        - { measure: avg_window_hours, agg_fn: avg }
+    sources:
+      - { measure: pending_review_count }
+      - { measure: avg_turnaround_hours }
+      - { measure: avg_window_hours }
+    w: 12
+    h: 4

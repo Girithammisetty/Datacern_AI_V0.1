@@ -1,0 +1,13 @@
+# Disposition taxonomy for the UM clinical-review workflow, expressed in
+# case-service's disposition catalog. The adverse-determination code exists so
+# the HUMAN clinician can record it — no decision table or agent config in
+# this pack ever proposes it (see decisions/*.yaml and agents/configs.yaml):
+# an adverse determination always carries documented findings from a
+# qualified clinical reviewer.
+- { code: review_approved,          label: "Review approved — criteria met",              category: false_positive, requires_note: false }
+- { code: adverse_determination_md, label: "Adverse determination (clinician decision only)", category: true_positive,  requires_note: true }
+- { code: partially_approved,       label: "Partially approved — modified scope",          category: other,          requires_note: true }
+- { code: info_requested,           label: "Additional clinical information requested",    category: inconclusive,   requires_note: true }
+- { code: referred_md,              label: "Referred to medical director",                 category: inconclusive,   requires_note: false }
+- { code: prep_complete,            label: "Review preparation complete — ready for clinician", category: benign,    requires_note: false }
+- { code: review_withdrawn,         label: "Request withdrawn or dismissed",               category: other,          requires_note: true }

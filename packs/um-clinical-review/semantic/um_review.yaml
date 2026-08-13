@@ -1,0 +1,170 @@
+# Semantic model `um_review` — the UM review KPI catalog, expressed in the
+# Core semantic grammar (agg whitelist, single-equality measure filters,
+# derived expr_metric with nullif; join_paths left/many_to_one, acyclic).
+#
+# entity.table is main.<safe_relation(dataset name)> — the physical relation
+# query-service materializes; `dataset:` refs are rebound to live dataset
+# URNs by packctl at install. Numeric columns ingest as bronze strings, so
+# numeric measures cast(... as double).
+name: um_review
+description: >-
+  UM clinical review KPI model: review volumes and status by LOB / review
+  type / urgency, turnaround hours, documentation completeness and OCR
+  quality, MD referral load, determination outcomes, appeal overturn rate,
+  and medical-policy digitization coverage.
+definition:
+  entities:
+    - name: cases
+      dataset: um_review_cases
+      table: main.um_review_cases
+      primary_key: [case_id]
+      dataset_version_policy: { policy: latest }
+    - name: documents
+      dataset: um_case_documents
+      table: main.um_case_documents
+      primary_key: [document_id]
+      dataset_version_policy: { policy: latest }
+    - name: determinations
+      dataset: um_determinations
+      table: main.um_determinations
+      primary_key: [determination_id]
+      dataset_version_policy: { policy: latest }
+    - name: policies
+      dataset: um_policy_catalog
+      table: main.um_policy_catalog
+      primary_key: [policy_id]
+      dataset_version_policy: { policy: latest }
+  join_paths:
+    - name: documents_cases
+      from_entity: documents
+      to_entity: cases
+      join_type: left
+      cardinality: many_to_one
+      "on": [{ from_column: case_id, to_column: case_id }]
+    - name: determinations_cases
+      from_entity: determinations
+      to_entity: cases
+      join_type: left
+      cardinality: many_to_one
+      "on": [{ from_column: case_id, to_column: case_id }]
+    - name: cases_policies
+      from_entity: cases
+      to_entity: policies
+      join_type: left
+      cardinality: many_to_one
+      "on": [{ from_column: policy_id, to_column: policy_id }]
+  dimensions:
+    - { name: lob, entity: cases, type: categorical, column: lob }
+    - { name: review_type, entity: cases, type: categorical, column: review_type }
+    - { name: urgency, entity: cases, type: categorical, column: urgency }
+    - { name: case_status, entity: cases, type: categorical, column: status }
+    - { name: submitted_month, entity: cases, type: categorical, column: submitted_month }
+    - { name: criteria_source, entity: cases, type: categorical, column: criteria_source }
+    - { name: clinical_info_status, entity: cases, type: categorical, column: clinical_info_status }
+    - { name: md_review_required, entity: cases, type: categorical, column: md_review_required }
+    - { name: agent_recommendation, entity: cases, type: categorical, column: agent_recommendation }
+    - { name: cpt_code, entity: cases, type: categorical, column: cpt_code }
+    - { name: doc_type, entity: documents, type: categorical, column: doc_type }
+    - { name: source_channel, entity: documents, type: categorical, column: source_channel }
+    - { name: ocr_status, entity: documents, type: categorical, column: ocr_status }
+    - { name: contains_clinicals, entity: documents, type: categorical, column: contains_clinicals }
+    - { name: received_month, entity: documents, type: categorical, column: received_month }
+    - { name: decision, entity: determinations, type: categorical, column: decision }
+    - { name: decided_by_role, entity: determinations, type: categorical, column: decided_by_role }
+    - { name: decision_month, entity: determinations, type: categorical, column: decision_month }
+    - { name: appeal_outcome, entity: determinations, type: categorical, column: appeal_outcome }
+    - { name: policy_criteria_source, entity: policies, type: categorical, column: criteria_source }
+    - { name: policy_digitized, entity: policies, type: categorical, column: digitized }
+    - { name: policy_lob_scope, entity: policies, type: categorical, column: lob_scope }
+  measures:
+    - { name: review_count, entity: cases, agg: count,
+        description: "Number of UM review cases" }
+    - { name: pending_review_count, entity: cases, agg: count,
+        filters: "status = 'pending'",
+        description: "Reviews awaiting a determination" }
+    - { name: approved_review_count, entity: cases, agg: count,
+        filters: "status = 'approved'",
+        description: "Reviews in approved status" }
+    - { name: denied_review_count, entity: cases, agg: count,
+        filters: "status = 'denied'",
+        description: "Reviews in denied status" }
+    - { name: urgent_review_count, entity: cases, agg: count,
+        filters: "urgency = 'urgent'",
+        description: "Reviews on the expedited clock" }
+    - { name: incomplete_clinical_count, entity: cases, agg: count,
+        filters: "clinical_info_status = 'incomplete'",
+        description: "Reviews with an incomplete clinical file" }
+    - { name: md_required_count, entity: cases, agg: count,
+        filters: "md_review_required = 'yes'",
+        description: "Reviews the plan routes to physician-level review" }
+    - { name: agent_approve_rec_count, entity: cases, agg: count,
+        filters: "agent_recommendation = 'approve'",
+        description: "Reviews where agent preparation found criteria met" }
+    - { name: agent_refer_md_count, entity: cases, agg: count,
+        filters: "agent_recommendation = 'refer_md'",
+        description: "Reviews the agent escalated to a clinician" }
+    - { name: avg_turnaround_hours, entity: cases, agg: avg,
+        expr: "cast(turnaround_hours as double)", format: decimal,
+        description: "Average elapsed hours on the regulatory clock" }
+    - { name: avg_window_hours, entity: cases, agg: avg,
+        expr: "cast(window_hours as double)", format: decimal,
+        description: "Average plan-configured decision window (hours)" }
+    - { name: avg_agent_confidence, entity: cases, agg: avg,
+        expr: "cast(agent_confidence as double)", format: decimal,
+        description: "Mean agent preparation confidence" }
+    - { name: document_count, entity: documents, agg: count,
+        description: "Number of inbound clinical documents" }
+    - { name: missing_clinicals_count, entity: documents, agg: count,
+        filters: "contains_clinicals = 'no'",
+        description: "Documents that are not actual clinicals for the request" }
+    - { name: ocr_failed_count, entity: documents, agg: count,
+        filters: "ocr_status = 'failed'",
+        description: "Documents whose OCR failed" }
+    - { name: avg_page_count, entity: documents, agg: avg,
+        expr: "cast(page_count as double)", format: decimal,
+        description: "Average pages per document" }
+    - { name: determination_count, entity: determinations, agg: count,
+        description: "Signed determinations" }
+    - { name: denied_determination_count, entity: determinations, agg: count,
+        filters: "decision = 'denied'",
+        description: "Adverse determinations" }
+    - { name: md_decided_count, entity: determinations, agg: count,
+        filters: "decided_by_role = 'md'",
+        description: "Determinations signed by a physician" }
+    - { name: appealed_count, entity: determinations, agg: count,
+        filters: "appeal_filed = 'yes'",
+        description: "Determinations appealed" }
+    - { name: overturned_count, entity: determinations, agg: count,
+        filters: "appeal_outcome = 'overturned'",
+        description: "Appealed determinations overturned" }
+    - { name: avg_determination_hours, entity: determinations, agg: avg,
+        expr: "cast(turnaround_hours as double)", format: decimal,
+        description: "Average decision turnaround (hours)" }
+    - { name: policy_count, entity: policies, agg: count,
+        description: "Medical policies / guidelines in the catalog" }
+    - { name: digitized_policy_count, entity: policies, agg: count,
+        filters: "digitized = 'yes'",
+        description: "Policies digitized to executable criteria" }
+    - { name: avg_procedure_code_count, entity: policies, agg: avg,
+        expr: "cast(procedure_code_count as double)", format: decimal,
+        description: "Average procedure codes mapped per policy" }
+    - { name: md_referral_rate,
+        expr_metric: "md_required_count / nullif(review_count, 0)",
+        format: percent,
+        description: "Share of reviews requiring physician-level review" }
+    - { name: clinical_incomplete_rate,
+        expr_metric: "incomplete_clinical_count / nullif(review_count, 0)",
+        format: percent,
+        description: "Share of reviews arriving with incomplete clinicals" }
+    - { name: determination_denial_rate,
+        expr_metric: "denied_determination_count / nullif(determination_count, 0)",
+        format: percent,
+        description: "Adverse determinations over all determinations" }
+    - { name: appeal_overturn_rate,
+        expr_metric: "overturned_count / nullif(appealed_count, 0)",
+        format: percent,
+        description: "Appealed determinations overturned — the first-pass completeness signal" }
+    - { name: policy_digitization_rate,
+        expr_metric: "digitized_policy_count / nullif(policy_count, 0)",
+        format: percent,
+        description: "Policies digitized to executable criteria over all policies — the real-time readiness rate limiter" }

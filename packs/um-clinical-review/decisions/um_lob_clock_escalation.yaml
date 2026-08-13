@@ -1,0 +1,69 @@
+# Governed decision table (BRD 54) — LOB-aware STANDARD-review turnaround
+# escalation. Regulatory decision windows differ by line of business and are
+# ultimately plan-configured (the um-review-cases contract carries each
+# case's own window_hours); the literals below are conservative elapsed-hour
+# escalation thresholds per LOB, documented qualitatively in this pack's
+# grounding: state UR statutes for fully-insured commercial run on a
+# business-days clock (commonly 5 business days), Medicare Advantage standard
+# organization determinations run on a calendar-days clock with CMS-0057-F
+# tightening standard prior-auth windows on a phased 2026-2027 schedule, and
+# Medicaid windows follow the state contract. Urgent-tier escalation lives in
+# um_review_triage; this table covers the standard tier only, so the two
+# tables partition the clock work. It NEVER proposes
+# adverse_determination_md.
+- identity: um_lob_clock_escalation
+  name: "LOB turnaround-clock escalation table"
+  rules:
+    # Commercial fully-insured: state UR statutes commonly require standard
+    # determinations within ~5 business days of receiving necessary
+    # information — 120 elapsed hours is the conservative escalation floor.
+    - when:
+        - { column: lob, op: eq, value: commercial_fi }
+        - { column: urgency, op: eq, value: standard }
+        - { column: status, op: eq, value: pending }
+        - { column: turnaround_hours, op: gte, value: 120 }
+      then: { disposition_code: referred_md, severity: critical }
+      note: "Commercial FI standard review at the state-UR-statute window floor (~5 business days) — escalate to clinician decision now; clock breach is a compliance reportable"
+    # Medicaid: the state managed-care contract sets the window; escalate on
+    # the same conservative floor as commercial rather than assuming slack.
+    - when:
+        - { column: lob, op: eq, value: medicaid }
+        - { column: urgency, op: eq, value: standard }
+        - { column: status, op: eq, value: pending }
+        - { column: turnaround_hours, op: gte, value: 120 }
+      then: { disposition_code: referred_md, severity: critical }
+      note: "Medicaid standard review approaching the state-contract window — escalate; state contract and CMS-0057-F windows govern, configured per case via window_hours"
+    # Medicare Advantage: standard organization determinations run on a
+    # calendar-days clock (historically up to 14 calendar days; CMS-0057-F
+    # phases in a 7-calendar-day standard prior-auth window) — 168 elapsed
+    # hours (7 days) is the forward-compatible escalation floor.
+    - when:
+        - { column: lob, op: eq, value: medicare }
+        - { column: urgency, op: eq, value: standard }
+        - { column: status, op: eq, value: pending }
+        - { column: turnaround_hours, op: gte, value: 168 }
+      then: { disposition_code: referred_md, severity: critical }
+      note: "Medicare standard review at the 7-calendar-day floor (CMS-0057-F forward-compatible window) — escalate to clinician decision now"
+    # Self-funded (ASO/ERISA): the plan document governs; ERISA claims
+    # procedure sets outer bounds — escalate at 7 elapsed days so no plan
+    # variant is left to age silently.
+    - when:
+        - { column: lob, op: eq, value: commercial_aso }
+        - { column: urgency, op: eq, value: standard }
+        - { column: status, op: eq, value: pending }
+        - { column: turnaround_hours, op: gte, value: 168 }
+      then: { disposition_code: referred_md, severity: high }
+      note: "ASO standard review at 7 elapsed days — plan document/SPD governs the window; escalate for clinician decision and deadline verification"
+    # Early warning across every LOB: standard review halfway through the
+    # tightest common window with the file still incomplete is the case that
+    # becomes an overdue records-chase — surface it before it does.
+    - when:
+        - { column: urgency, op: eq, value: standard }
+        - { column: status, op: eq, value: pending }
+        - { column: clinical_info_status, op: eq, value: incomplete }
+        - { column: turnaround_hours, op: gte, value: 72 }
+      then: { disposition_code: info_requested, severity: high }
+      note: "Standard review 3+ days on the clock with an incomplete clinical file — repeat/escalate the records request before the window closes"
+  # Standard-tier cases inside every threshold need no escalation from this
+  # table; the low-severity default keeps them visible without noise.
+  default_outcome: { disposition_code: prep_complete, severity: low }

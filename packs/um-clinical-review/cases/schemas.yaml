@@ -1,0 +1,41 @@
+# Governed typed case schemas (case-service inc10): the two UM review work
+# items as named case TYPES binding their adjudication field sets, so intake
+# creates structurally-complete cases (not generic cases with prose notes).
+# Embedded field defs use {name, data_type, label, required}; names align with
+# cases/fields.yaml and the um-review-cases binding-contract columns.
+- schema_key: um_clinical_review
+  name: "UM clinical review"
+  description: >-
+    A utilization management medical-necessity review (preservice prior
+    authorization, concurrent, or retrospective) prepared against the
+    governing criteria source for its line of business and tracked on the
+    regulatory turnaround clock. Agents prepare the criteria-by-criteria
+    assessment; a named clinician decides. An adverse determination is never
+    proposed by an agent or decision table.
+  fields:
+    - { name: lob,                  data_type: enum,   label: "Line of business",                    required: true }
+    - { name: review_type,          data_type: enum,   label: "Review type",                         required: true }
+    - { name: urgency,              data_type: enum,   label: "Urgency tier",                        required: true }
+    - { name: cpt_code,             data_type: string, label: "Procedure code (CPT/HCPCS)",          required: true }
+    - { name: criteria_source,      data_type: enum,   label: "Governing criteria source",           required: false }
+    - { name: policy_id,            data_type: string, label: "Medical policy / guideline id",       required: false }
+    - { name: clinical_info_status, data_type: enum,   label: "Clinical documentation status",       required: false }
+    - { name: agent_recommendation, data_type: enum,   label: "Agent recommendation",                required: false }
+    - { name: agent_confidence,     data_type: float,  label: "Agent confidence",                    required: false }
+    - { name: turnaround_hours,     data_type: float,  label: "Hours elapsed on the regulatory clock", required: false }
+    - { name: window_hours,         data_type: float,  label: "Regulatory decision window (hours)",  required: false }
+- schema_key: um_md_referral
+  name: "Medical director referral"
+  description: >-
+    A physician-level review packet: the prepared case a nurse reviewer or
+    the triage table routed to a medical director because criteria were not
+    clearly met, the plan requires physician review for this class, or the
+    regulatory clock is at risk. Carries the question presented and the
+    evidence assembled so the physician's time is spent deciding.
+  fields:
+    - { name: lob,              data_type: enum,   label: "Line of business",              required: true }
+    - { name: urgency,          data_type: enum,   label: "Urgency tier",                  required: true }
+    - { name: cpt_code,         data_type: string, label: "Procedure code (CPT/HCPCS)",    required: true }
+    - { name: policy_id,        data_type: string, label: "Medical policy / guideline id", required: false }
+    - { name: criteria_source,  data_type: enum,   label: "Governing criteria source",     required: false }
+    - { name: turnaround_hours, data_type: float,  label: "Hours elapsed on the regulatory clock", required: false }

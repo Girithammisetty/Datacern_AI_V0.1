@@ -1,0 +1,77 @@
+# Governed decision table (BRD 54) — deterministic, explainable, no-LLM
+# first-cut triage over the UM clinical-review worklist. Columns are the
+# um-review-cases binding-contract columns (data/datasets.yaml), so the table
+# reads exactly what intake projects from the real dataset. It EXECUTES to
+# the same governed four-eyes proposal an agent produces: every matched case
+# becomes a case.apply_disposition proposal a human reviewer must approve —
+# the table proposes, a human decides. It NEVER proposes
+# adverse_determination_md: an adverse determination always carries
+# documented findings from a qualified human clinical reviewer (per this
+# pack's grounding on the CMS 2024 MA rule and NCQA UM practice).
+# Outcome disposition_codes are validated against this workspace's
+# disposition catalog at install time, so `dispositions` installs first.
+- identity: um_review_triage
+  name: "UM clinical review triage table"
+  rules:
+    # OVERDUE first: an urgent review past the expedited window. Expedited
+    # windows are plan-configured (window_hours carries the case's own
+    # window); 48h is the conservative floor across the regimes this pack's
+    # grounding documents (state UR statutes commonly 48h expedited; CMS MA
+    # expedited 72h) — a pending urgent review at 48h elapsed is either
+    # overdue or inside its final day everywhere.
+    - when:
+        - { column: urgency, op: eq, value: urgent }
+        - { column: status, op: eq, value: pending }
+        - { column: turnaround_hours, op: gte, value: 48 }
+      then: { disposition_code: referred_md, severity: critical }
+      note: "OVERDUE/at-limit — urgent review at or past the expedited window floor (48h; plan-configured per case via window_hours); clock breach is a compliance reportable, medical director immediately"
+    # Urgent review burning its expedited window — escalate ahead of queue
+    # order well before the floor.
+    - when:
+        - { column: urgency, op: eq, value: urgent }
+        - { column: status, op: eq, value: pending }
+        - { column: turnaround_hours, op: gte, value: 24 }
+      then: { disposition_code: referred_md, severity: high }
+      note: "Urgent review at-risk on the expedited clock (>=24h elapsed) — expedite clinician review ahead of queue order"
+    # Clinical file incomplete — the request is not decidable yet; propose the
+    # records request rather than letting it age toward the window. Appeals
+    # most often overturn on information that was never in the initial file:
+    # requesting NOW is the highest-leverage completeness fix.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: clinical_info_status, op: eq, value: incomplete }
+      then: { disposition_code: info_requested, severity: medium }
+      note: "Clinical documentation incomplete — request records from the provider now; the regulatory clock keeps running, and first-pass completeness is what prevents appeal overturns"
+    # Plan rule: this case class requires physician-level review — route it
+    # there directly, nurse-level preparation attached.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: md_review_required, op: eq, value: "yes" }
+      then: { disposition_code: referred_md, severity: high }
+      note: "Plan rule requires physician review for this service class — route to medical director with the prepared packet"
+    # The review-preparation agent flagged low confidence / criteria not
+    # clearly met — honor its escalation.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: agent_recommendation, op: eq, value: refer_md }
+      then: { disposition_code: referred_md, severity: high }
+      note: "Agent preparation found criteria not clearly met or confidence below threshold — a clinician must review; the agent never determines medical necessity"
+    # The agent found the file undecidable for missing documentation.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: agent_recommendation, op: eq, value: request_info }
+      then: { disposition_code: info_requested, severity: medium }
+      note: "Agent preparation identified specific missing clinical documentation — propose the records request naming what is missing"
+    # High-confidence agent-recommended approval on a standard request:
+    # approval is the only adverse-free outcome this table proposes, and the
+    # proposal still requires four-eyes human sign-off.
+    - when:
+        - { column: status, op: eq, value: pending }
+        - { column: urgency, op: eq, value: standard }
+        - { column: agent_recommendation, op: eq, value: approve }
+        - { column: agent_confidence, op: gte, value: 0.85 }
+      then: { disposition_code: review_approved, severity: medium }
+      note: "High-confidence criteria-met preparation (plan-configured confidence threshold) — propose approval; the reviewer confirms against the cited evidence"
+  # Nothing matched deterministically -> a human works it from the prepared
+  # packet; the table never proposes an adverse determination or guesses.
+  default_outcome: { disposition_code: referred_md, severity: low }

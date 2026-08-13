@@ -1,0 +1,37 @@
+# Governed source-connector templates (ingestion-service inc13): INCOMING
+# connections pre-declared with skip_test + EMPTY secrets, so the payer's
+# expected feeds exist as governed starting points the tenant completes with
+# real hosts/credentials in Data → Connections. Nothing is polled at install.
+#
+# X12 278 (prior-authorization request/response) decode rides Core's
+# standards-interop surface; the SFTP drop below is only the transport. The
+# decided-case history extract is the shadow-mode calibration feed — the
+# tenant's own adjudicated determinations (the um-determinations binding
+# contract) replayed for agreement measurement before any queue goes
+# assisted-live.
+- name: "X12 278 prior-auth request drop (SFTP)"
+  connector_type: sftp
+  direction: incoming
+  config:
+    host: "edi-gateway.example.invalid"
+    port: 22
+    username: datacern_ingest
+    root_directory: "/inbound/pa-278"
+- name: "UM platform case extract (S3)"
+  connector_type: s3
+  direction: incoming
+  config:
+    region: us-east-1
+    bucket: um-review-case-extracts
+    root_prefix: "daily/"
+    file_format: csv
+    glob: "*.csv"
+- name: "Decided-case history extract (S3)"
+  connector_type: s3
+  direction: incoming
+  config:
+    region: us-east-1
+    bucket: um-determination-history
+    root_prefix: "monthly/"
+    file_format: csv
+    glob: "*.csv"

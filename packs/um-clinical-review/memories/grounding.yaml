@@ -1,0 +1,121 @@
+# Tenant-scope RAG grounding records (memory-service). This is the UM domain
+# knowledge the review-preparation copilot retrieves when reasoning about a
+# case — authority hierarchies per line of business, turnaround-clock
+# regimes, documentation-completeness practice, and AI-governance rules.
+# Every record is factual domain reference material; numbers are stated
+# qualitatively where regimes vary by state/plan (Rule 1).
+- content: >-
+    Line-of-business authority hierarchies must never be mixed. For a
+    Medicaid-covered benefit, authority runs: federal/state Medicaid statute
+    and rules, then the state Medicaid managed-care contract and incorporated
+    manuals, then required accreditation standards, then agency guidance,
+    then internal SOPs — interpretation only as a last resort. For a
+    Medicare-covered benefit: Medicare statute and regulations, the CMS-plan
+    contract, CMS coverage authority (NCDs/LCDs) and manuals, then internal
+    SOPs. For commercial fully-insured: the state insurance/utilization-
+    review statute, then the benefit contract and the plan's medical policy.
+    For self-funded ASO: ERISA and the plan document/SPD govern. Coverage
+    controls authority — not the member's product branding. For dual/
+    integrated members, determine whether the benefit is Medicare-covered or
+    Medicaid-covered and apply that hierarchy alone.
+  tags: [lob_hierarchy, authority, methodology]
+  confidence: 0.95
+- content: >-
+    Medicare Advantage organization-determination clocks: expedited requests
+    must be decided within 72 hours; standard pre-service requests
+    historically within 14 calendar days. CMS-0057-F (Interoperability and
+    Prior Authorization) tightens standard prior-auth decisions toward a
+    7-calendar-day window and extends 72-hour-expedited / 7-day-standard
+    windows to Medicaid, CHIP, and Federally-facilitated Exchange QHP
+    issuers, with compliance phasing that begins January 1, 2026; it also
+    requires a specific reason with every prior-auth denial and phases in a
+    FHIR Prior Authorization API on a 2026-2027 schedule.
+  tags: [cms, turnaround, prior_auth, sla]
+  confidence: 0.95
+- content: >-
+    State utilization-review statutes govern fully-insured commercial
+    turnaround. Minnesota's UR chapter (Minn. Stat. ch. 62M) is a
+    representative regime: standard determinations are due within a small
+    number of business days after receipt of the request (plans commonly
+    operate to about 5 business days, with roughly 48 hours for expedited
+    review), and the statute prescribes who may review, notification
+    content, and appeal rights. The plan-configured window on each case —
+    not a hardcoded number — is authoritative for clock math, because state
+    regimes differ.
+  tags: [state_ur, commercial, turnaround]
+  confidence: 0.9
+- content: >-
+    CMS 2024 Medicare Advantage rule: an adverse determination (denial of
+    care) assisted by AI must be reviewed by a qualified human clinician
+    before issuance. The reviewing clinician must be identified in the case
+    record; AI systems draft rationale but never decide denials. Several
+    states are legislating the same principle for commercial and Medicaid
+    prior authorization, including restrictions on AI-only denials.
+  tags: [cms, ai_governance, adverse_determination]
+  confidence: 0.98
+- content: >-
+    NCQA Utilization Management accreditation standards require: written,
+    evidence-based clinical criteria applied consistently, reviewed at least
+    annually; collection of only the clinical information necessary for the
+    determination; denials of care for lack of medical necessity made by an
+    appropriately licensed clinical reviewer, with a peer-to-peer discussion
+    made available; and member/practitioner notification within defined
+    timeliness standards that is audited by file review. UM file-review
+    findings hinge on the documented evidence trail for each determination.
+  tags: [ncqa, um_standards, accreditation]
+  confidence: 0.9
+- content: >-
+    Appeals of utilization-review denials are most often overturned because
+    of clinical information that was not in the file at the time of the
+    initial determination — not because criteria were misapplied. First-pass
+    documentation completeness (naming exactly what is missing and
+    requesting it immediately) is therefore the highest-leverage quality
+    intervention in the review workflow, ahead of criteria-matching
+    accuracy.
+  tags: [appeals, documentation, completeness, practice]
+  confidence: 0.9
+- content: >-
+    Criteria sources in payer UM: licensed commercial criteria sets
+    (MCG/InterQual-class) cover common medical/surgical and behavioral
+    topics and are updated on an edition cycle; plan-authored internal
+    medical policies cover services the licensed sets do not, and custom
+    employer (ASO) variants; Medicare-covered benefits follow CMS NCDs/LCDs
+    where they exist; Medicaid-covered benefits follow the state's coverage
+    manuals. Each review must cite the criteria set and version actually
+    applied — an assessment against the wrong source or a stale edition is
+    a file-review finding.
+  tags: [criteria, mcg, interqual, medical_policy]
+  confidence: 0.9
+- content: >-
+    An adverse determination notice must state the specific reason for the
+    denial in language the member can understand, cite the criteria or
+    policy provision applied, and include appeal rights and timelines for
+    the member's coverage type; CMS-0057-F additionally requires a specific
+    denial reason on prior-auth denials for impacted coverage. Peer-to-peer
+    review should be offered to the requesting practitioner before an
+    adverse determination issues where required.
+  tags: [notices, denials, appeal_rights]
+  confidence: 0.9
+- content: >-
+    Gold-carding / provider "greenlighting" programs exempt consistently
+    high-performing providers from prior authorization for defined services,
+    based on their historical approval rates and outcomes; several states
+    mandate gold-card programs and industry commitments require plans to
+    expand them where data supports it. Running such a program requires
+    per-provider, per-service approval-rate evidence with an auditable
+    basis — the same determination history this pack's semantic model
+    governs.
+  tags: [gold_carding, greenlighting, provider_performance]
+  confidence: 0.85
+- content: >-
+    Payer prior-authorization modernization commitments (industry-wide,
+    CEO-attested in 2025) include reducing the volume of services subject to
+    prior authorization, honoring a previous plan's active prior
+    authorizations for a 90-day transition period when a member changes
+    plans, standardized electronic submission with defined clinical
+    documentation question sets, and a public target that a large majority
+    of complete electronic requests be answered in (near) real time in 2027.
+    Real-time answering depends on digitized, executable criteria — policy
+    digitization coverage is the rate limiter.
+  tags: [industry_commitments, real_time, policy_digitization]
+  confidence: 0.85
