@@ -1,7 +1,0 @@
-src_id,dst_id,edge_type,weight
-PTY-6002,PTY-6006,wire_transfer,0.91
-PTY-6006,PTY-6010,shared_director,0.76
-PTY-6002,PTY-6010,ownership,0.55
-PTY-6008,PTY-6012,shared_address,0.40
-PTY-6011,PTY-6009,wire_transfer,0.62
-PTY-6003,PTY-6012,shared_director,0.30

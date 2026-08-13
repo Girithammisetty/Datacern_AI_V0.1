@@ -1,7 +1,0 @@
-denial_id,claim_id,member_id,denial_reason_code,denial_reason_text,cpt_code,service_line,decision_by,decision_month,product_type,member_state,appealed
-DEN-3001,CLM-2001,MBR-10045,CO-50,Not medically necessary per clinical guidelines,29881,surgical,svc:auto-adjudication,2026-04,ppo,TX,yes
-DEN-3002,CLM-2003,MBR-10119,CO-197,Precertification/authorization absent,97110,therapy,svc:auto-adjudication,2026-05,ppo,OK,no
-DEN-3003,CLM-2004,MBR-10045,CO-50,Not medically necessary per clinical guidelines,29881,surgical,svc:auto-adjudication,2026-05,ppo,TX,yes
-DEN-3004,CLM-2006,MBR-10241,PR-204,Service not covered under member plan,72148,diagnostic,svc:auto-adjudication,2026-06,hmo,OK,yes
-DEN-3005,CLM-2008,MBR-10312,CO-151,Payment adjusted; info submitted does not support this many services,27447,surgical,svc:auto-adjudication,2026-06,epo,NM,yes
-DEN-3006,CLM-2010,MBR-10402,CO-50,Not medically necessary per clinical guidelines,29827,surgical,svc:auto-adjudication,2026-07,ppo,OK,no

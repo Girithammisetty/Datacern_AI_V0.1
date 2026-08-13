@@ -1,4 +1,0 @@
-# Generated demo datasets — derived output, not source. `gen_demo_data.py` is
-# seeded (20260724) so regenerating always produces byte-identical files, which
-# is also why a rehearsal and a live demo show the same numbers.
-data/
