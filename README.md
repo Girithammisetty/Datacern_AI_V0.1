@@ -4,10 +4,6 @@ Multi-tenant, multi-cloud, **agentic-AI-native** ML platform for governed decisi
 behind one GraphQL BFF and one web app, with a governance fabric (RLS tenancy,
 RBAC/OPA, four-eyes proposals, immutable audit) woven through every plane.
 
-- Architecture: [`docs/platform/PLATFORM_ARCHITECTURE.md`](docs/platform/PLATFORM_ARCHITECTURE.md)
-- Service specs (BRDs): [`docs/brd/`](docs/brd/) — start with [`00_MASTER_BRD.md`](docs/brd/00_MASTER_BRD.md)
-- Feature design notes: [`docs/design/`](docs/design/)
-- Repo-specific engineering rules: [`CONVENTIONS.md`](docs/platform/CONVENTIONS.md) · agent workflow: [`AGENTS_GUIDE.md`](docs/platform/AGENTS_GUIDE.md)
 
 ## Services
 
@@ -64,62 +60,3 @@ single source of truth for the CI build/test matrix and the Helm chart.
 | [bff-graphql](services/bff-graphql/README.md) | Node | 4000 | The single GraphQL endpoint for ui-web |
 | [ui-web](services/ui-web/README.md) | Node | 3000 | The web application |
 
-## Repository layout
-
-```
-Datacern_AI_V0.1/
-  services/       one directory per service (see the tables above)
-  libs/           shared libraries (go-common, py-common)
-  packs/          capability packs (vertical bundles) + packctl (materializer CLI)
-  deploy/
-    services.yaml           source of truth for CI matrix + Helm chart
-    docker-compose.dev.yml  local dev infrastructure
-    local/                  up.sh / down.sh — boot the full stack locally
-    e2e/                    end-to-end journey driver
-    terraform/, helm/       per-cloud (AWS/GCP/Azure) deploy
-  docs/           brd/ (service specs) · architecture/ · platform/ · design/
-                  initiatives/ (full-lifecycle change docs) · security/ · demo/
-  Makefile
-```
-
-## Local development
-
-```bash
-make dev-up        # start Postgres, Redis, Redpanda (Kafka), Keycloak, Temporal, OTel, MinIO, …
-make dev-down
-make test          # run all service test suites
-```
-
-Boot the full application stack (all services + BFF + UI, seeded, real local
-Ollama for LLM inference) with `deploy/local/up.sh` (and `down.sh` to tear down).
-Each service is also independently runnable — see its own `README.md` + `Makefile`.
-
-## Conventions
-
-Every service implements the shared requirements in
-[`docs/brd/00_MASTER_BRD.md`](docs/brd/00_MASTER_BRD.md): tenancy/RLS, JWT claims,
-the URN scheme `wr:<tenant>:<service>:<type>/<id>`, the error envelope, cursor
-pagination, outbox events, and OTel. Repo-specific rules live in
-[`CONVENTIONS.md`](docs/platform/CONVENTIONS.md).
-
-## Build status
-
-The platform has grown past the original 22 Core services specified in BRDs 01–22:
-**24 deployables** are built (the 22 above plus `tool-plane`'s two binaries), and
-capability delivery now runs through **72 BRDs** and the vertical pack fleet —
-ML-engineer agent, custom agents, decision modeling, outcome monitoring, entity
-resolution, the pack ecosystem, and the GTM/commercial increments (BRDs 66–72).
-See [`docs/brd/`](docs/brd/) for the spec set and [`docs/design/`](docs/design/)
-for feature design notes.
-
-**What is not built** is stated with the same precision: no customers, no
-production cloud deployment, no SOC 2 / HITRUST, and no third-party penetration
-test. The full list lives in
-[`docs/DATACERN_PARTNER_BRIEFING.md`](docs/DATACERN_PARTNER_BRIEFING.md) §3 and
-[`docs/security/SECURITY_POSTURE.md`](docs/security/SECURITY_POSTURE.md).
-
-The release-gating end-to-end journey lives in [`deploy/e2e/`](deploy/e2e/) and
-the live-stack Playwright suite in `services/ui-web/tests-live/` — both exercise
-the real stack (RS256 JWTs, OPA, MinIO/Iceberg, OpenSearch, Postgres RLS,
-Redpanda, a real local Ollama, Temporal), no mocks. CI (`.github/workflows/ci.yml`)
-runs per-service test/lint/build derived from `deploy/services.yaml`.
